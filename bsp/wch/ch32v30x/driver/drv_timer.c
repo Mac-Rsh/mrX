@@ -189,6 +189,7 @@ static int drv_timer_configure(struct mr_timer *timer, int state)
     NVIC_InitStructure.NVIC_IRQChannelCmd = state;
     NVIC_Init(&NVIC_InitStructure);
     TIM_ITConfig(timer_data->instance, TIM_IT_Update, state);
+    TIM_ClearITPendingBit(timer_data->instance, TIM_IT_Update);
     return MR_EOK;
 }
 
