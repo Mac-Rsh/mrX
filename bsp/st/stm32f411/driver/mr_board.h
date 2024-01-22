@@ -57,31 +57,37 @@ extern "C" {
         EXTI15_10_IRQn,                 \
     }
 
-#if !defined(GPIOD) && !defined(GPIOE)
-#define DRV_PIN_PORT_CONFIG             \
-    {                                   \
-        GPIOA,                          \
-        GPIOB,                          \
-        GPIOC,                          \
-    }
-#elif defined(GPIOE)
-#define DRV_PIN_PORT_CONFIG             \
-    {                                   \
-        GPIOA,                          \
-        GPIOB,                          \
-        GPIOC,                          \
-        GPIOD,                          \
-    }
+#ifdef GPIOD
+#define DRV_PIN_PORT_D                  GPIOD,
 #else
+#define DRV_PIN_PORT_D
+#endif /* GPIOD */
+#ifdef GPIOE
+#define DRV_PIN_PORT_E                  GPIOE,
+#else
+#define DRV_PIN_PORT_E
+#endif /* GPIOE */
+#ifdef GPIOF
+#define DRV_PIN_PORT_F                  GPIOF,
+#else
+#define DRV_PIN_PORT_F
+#endif /* GPIOF */
+#ifdef GPIOG
+#define DRV_PIN_PORT_G                  GPIOG,
+#else
+#define DRV_PIN_PORT_G
+#endif /* GPIOG */
+
 #define DRV_PIN_PORT_CONFIG             \
     {                                   \
         GPIOA,                          \
         GPIOB,                          \
         GPIOC,                          \
-        GPIOD,                          \
-        GPIOE,                          \
+        DRV_PIN_PORT_D                  \
+        DRV_PIN_PORT_E                  \
+        DRV_PIN_PORT_F                  \
+        DRV_PIN_PORT_G                  \
     }
-#endif /* GPIOD */
 
 #define DRV_PIN_CONFIG                  \
     {                                   \
