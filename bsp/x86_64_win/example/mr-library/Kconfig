@@ -1,0 +1,3 @@
+mainmenu "mr-library"
+
+source "source/*/Kconfig"

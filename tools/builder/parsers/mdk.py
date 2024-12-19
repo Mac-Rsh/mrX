@@ -48,18 +48,18 @@ class MdkParser(BaseParser):
     def _add_srcfiles(self, srcfiles: list[Path]):
         projdir = self.projfile.parent
         for srcfile in srcfiles:
-            group = Path(
+            gid = Path(
                 os.path.relpath(Path(srcfile).parent, projdir)).relative_to(
                 "..").as_posix()
             file = Path(os.path.relpath(srcfile, projdir))
 
-            # Add group if it doesn't exist
+            # Add gid if it doesn't exist
             groups_node = self.tree.find('.//Groups')
-            group_node = groups_node.find(f"./Group[GroupName='{group}']")
+            group_node = groups_node.find(f"./Group[GroupName='{gid}']")
             if group_node is None:
                 group_node = etree.SubElement(groups_node, "Group")
                 group_name_node = etree.SubElement(group_node, "GroupName")
-                group_name_node.text = group
+                group_name_node.text = gid
                 etree.SubElement(group_node, "Files")
 
             # Add file if it doesn't exist

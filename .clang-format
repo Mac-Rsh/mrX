@@ -4,7 +4,7 @@ AlignArrayOfStructures: Right
 AlignConsecutiveAssignments: false
 AlignConsecutiveBitFields: false
 AlignConsecutiveDeclarations: false
-AlignConsecutiveMacros: None
+AlignConsecutiveMacros: Consecutive
 AlignEscapedNewlines: Right 
 AlignOperands: AlignAfterOperator
 AlignTrailingComments: true
@@ -22,18 +22,18 @@ BinPackArguments: true
 BinPackParameters: true
 BitFieldColonSpacing: After
 BraceWrapping:
-  AfterCaseLabel: true
-  AfterClass: true
-  AfterControlStatement: Always
-  AfterEnum: true
-  AfterFunction: true
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: Never
+  AfterEnum: false
+  AfterFunction: false
   AfterNamespace: true
-  AfterStruct: true
-  AfterUnion: true
+  AfterStruct: false
+  AfterUnion: false
   AfterExternBlock: false
   BeforeCatch: false
   BeforeElse: false
-  BeforeLambdaBody: true
+  BeforeLambdaBody: false
   BeforeWhile: false
   IndentBraces: false
   SplitEmptyFunction: true
