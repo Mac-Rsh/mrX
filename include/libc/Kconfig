@@ -1,0 +1,130 @@
+menu "Libc"
+
+    # ASSERT
+    choice
+        prompt "Assertion"
+        default MR_USE_ASSERT
+
+        config MR_USE_LIBC_ASSERT
+            bool "Standard libc assert"
+            help
+              Use the standard libc assert for assertion checks.
+
+        config MR_USE_3PARTY_ASSERT
+            bool "3rd party assert"
+            help
+              Use a third-party assertion library for assertion checks.
+
+        config MR_USE_ASSERT
+            bool "Custom assert"
+            help
+              Use a custom assertion implementation for assertion checks.
+    endchoice
+
+    # ERRNO
+    choice
+        prompt "Errno"
+        default MR_USE_ERRNO
+
+        config MR_USE_LIBC_ERRNO
+            bool "Standard libc errno"
+            help
+              Use the standard libc errno for error handling.
+
+        config MR_USE_3PARTY_ERRNO
+            bool "3rd party errno"
+            help
+              Use a third-party errno library for error handling.
+
+        config MR_USE_ERRNO
+            bool "Custom errno"
+            help
+              Use a custom errno implementation for error handling.
+    endchoice
+
+    # MALLOC
+    choice
+        prompt "Malloc"
+        default MR_USE_MALLOC
+
+        config MR_USE_LIBC_MALLOC
+            bool "Standard libc malloc"
+            help
+              Use the standard libc malloc for memory allocation.
+
+        config MR_USE_3PARTY_MALLOC
+            bool "3rd party malloc"
+            help
+              Use a third-party malloc library for memory allocation.
+
+        config MR_USE_MALLOC
+            bool "Custom malloc"
+            help
+              Use a custom malloc implementation for memory allocation.
+    endchoice
+    config MR_CFG_HEAP_SIZE
+        depends on !MR_USE_MALLOC
+            int "Heap size"
+            default 4096
+            help
+              The size of the heap in bytes.
+
+    # PRINTFK
+    choice
+        prompt "Printfk"
+        default MR_USE_PRINTFK
+
+        config MR_USE_LIBC_PRINTFK
+            bool "Standard libc printfk"
+            help
+              Use the standard libc printfk for printing.
+
+        config MR_USE_3PARTY_PRINTFK
+            bool "3rd party printfk"
+            help
+              Use a third-party printfk library for printing.
+
+        config MR_USE_PRINTFK
+            bool "Custom printfk"
+            help
+              Use a custom printfk implementation for printing.
+    endchoice
+
+    # STRING
+    choice
+        prompt "String"
+        default MR_USE_STRING
+
+        config MR_USE_LIBC_STRING
+            bool "Standard libc string"
+            help
+              Use the standard libc string for string operations.
+
+        config MR_USE_3PARTY_STRING
+            bool "3rd party string"
+            help
+              Use a third-party string library for string operations.
+
+        config MR_USE_STRING
+            bool "Custom string"
+            help
+              Use a custom string implementation for string operations.
+    endchoice
+
+    # TYPES
+    choice
+        prompt "Types"
+        default MR_USE_TYPES
+
+        config MR_USE_LIBC_TYPES
+            bool "Standard libc types"
+            help
+              Use the standard libc types for custom types.
+
+        config MR_USE_TYPES
+            bool "Custom types"
+            help
+              Use a custom type implementation for custom types.
+    endchoice
+
+endmenu

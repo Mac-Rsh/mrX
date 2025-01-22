@@ -1,0 +1,17 @@
+menu "Kernel"
+
+    # CLOCK
+    config MR_CFG_CLOCK_HOOK_SIZE
+        int "Clock hook size"
+        default 4
+        help
+            This option controls the size of the clock hook.
+
+    # KOBJECT
+    config MR_CFG_KOBJECT_INAME_SIZE
+        int "Kobject inline name size"
+        default 16
+        help
+            This option controls the size of the inline name of the kobject.
+
+endmenu

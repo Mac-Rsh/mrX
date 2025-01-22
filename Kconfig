@@ -1,3 +1,4 @@
-mainmenu "mr-library"
+mainmenu "MR-X"
 
-source "source/*/Kconfig"
+    # MR-X
+    source "include/Kconfig"
