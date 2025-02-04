@@ -9,8 +9,8 @@
 #ifndef __MR_KOBJECT_H__
 #define __MR_KOBJECT_H__
 
-#include <kernel/mr_list.h>
-#include <kernel/mr_lockref.h>
+#include <kernel/mr_klist.h>
+#include <kernel/mr_kref.h>
 #include <libc/mr_errno.h>
 
 #ifdef __cplusplus
@@ -49,9 +49,9 @@ typedef struct mr_kobject {
     char iname[MR_CFG_KOBJECT_INAME_SIZE];
     struct mr_kobject *parent;
     mr_ktype_t *type;
-    mr_lockref_t ref;
-    mr_list_t entry;
-    mr_list_t list;
+    mr_klist_t entry;
+    mr_klist_t list;
+    mr_kref_t ref;
 } mr_kobject_t;
 
 /* Kset type */
@@ -84,10 +84,10 @@ void mr_ktype_init(mr_ktype_t *type, void (*release)(mr_kobject_t *));
 #define MR_KOBJECT_INIT(_kobj, _type)                                          \
     {                                                                          \
         .magic = MR_KOBJECT_MAGIC,                                             \
-        .name = {.str = (_kobj).iname, .len = 0, .hash = 0},                   \
-        .parent = &(_kobj), .type = (_type), .ref = MR_LOCKREF_INIT(),         \
-        .entry = MR_LIST_INIT((_kobj).entry),                                  \
-        .list = MR_LIST_INIT((_kobj).list)                                     \
+        .name = {.str = (_kobj)->iname, .len = 0, .hash = 0},                  \
+        .parent = (_kobj), .type = (_type),                                    \
+        .entry = MR_KLIST_INIT(&(_kobj)->entry),                               \
+        .list = MR_KLIST_INIT(&(_kobj)->list), .ref = MR_KREF_INIT()           \
     }
 
 /**
@@ -128,6 +128,16 @@ mr_err_t mr_kobject_add(mr_kobject_t *kobj, mr_kobject_t *parent,
 void mr_kobject_del(mr_kobject_t *kobj);
 
 /**
+ * @brief This function looks up a kobject.
+ *
+ * @param parent The parent kobject.
+ * @param fmt The format string(path).
+ * @param ... The format arguments.
+ * @return The kobject on success, or MR_NULL on failure.
+ */
+mr_kobject_t *mr_kobject_lookup(mr_kobject_t *parent, const char *fmt, ...);
+
+/**
  * @brief This function gets a kobject.
  *
  * @param kobj The kobject.
@@ -143,15 +153,29 @@ mr_kobject_t *mr_kobject_get(mr_kobject_t *kobj);
 void mr_kobject_put(mr_kobject_t *kobj);
 
 /**
+ * @brief This macro function gets the name of a kobject.
+ *
+ * @param _kobj The kobject.
+ * @return The name of the kobject.
+ */
+#define MR_KOBJECT_NAME(_kobj)          (((mr_kobject_t *)(_kobj))->name.str)
+
+/**
+ * @brief This macro function gets the parent of a kobject.
+ *
+ * @param _kobj The kobject.
+ * @return The parent of the kobject.
+ */
+#define MR_KOBJECT_PARENT(_kobj)        (((mr_kobject_t *)(_kobj))->parent)
+
+/**
  * @brief This macro function initializes a kset.
  *
  * @param _kset The kset.
  * @param _type The ktype.
  */
 #define MR_KSET_INIT(_kset, _type)                                             \
-    {                                                                          \
-        .parent = MR_KOBJECT_INIT((_kset).parent, (_type))                     \
-    }
+    { .parent = MR_KOBJECT_INIT(&(_kset)->parent, (_type)) }
 
 /**
  * @brief This function initializes a kset.
@@ -169,6 +193,14 @@ void mr_kset_init(mr_kset_t *kset, mr_ktype_t *type);
  * @returns 0 on success, or a negative error code on failure.
  */
 mr_err_t mr_kset_register(mr_kset_t *kset, const char *name);
+
+/**
+ * @brief This function finds a kset.
+ *
+ * @param name The name.
+ * @returns The kset on success, or MR_NULL on failure.
+ */
+mr_kset_t *mr_kset_find(const char *name);
 
 /** @} */
 

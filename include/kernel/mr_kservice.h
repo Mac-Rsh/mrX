@@ -9,8 +9,6 @@
 #ifndef __MR_SERVICE_H__
 #define __MR_SERVICE_H__
 
-#include <kernel/mr_compiler.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
@@ -89,6 +87,24 @@ extern "C" {
  * @param ... The arguments of the local variable.
  */
 #define MR_MAKE_LOCAL(_type, ...)       (&((_type){__VA_ARGS__}))
+
+/**
+ * @brief This macro function gets the minimum value.
+ *
+ * @param _a The first value.
+ * @param _b The second value.
+ * @return The minimum value.
+ */
+#define MR_MIN(_a, _b)                  (((_a) < (_b)) ? (_a) : (_b))
+
+/**
+ * @brief This macro function gets the maximum value.
+ *
+ * @param _a The first value.
+ * @param _b The second value.
+ * @return The maximum value.
+ */
+#define MR_MAX(_a, _b)                  (((_a) > (_b)) ? (_a) : (_b))
 
 /** @} */
 

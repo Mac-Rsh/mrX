@@ -15,7 +15,7 @@
 #elif defined(MR_USE_3PARTY_ASSERT)
 #include <3party/libc/mr_assert.h>
 #elif defined(MR_USE_ASSERT)
-#include <libc/mr_printfk.h>
+#include <libc/mr_kprintf.h>
 #endif /* defined(MR_USE_LIBC_ASSERT) */
 
 #ifdef __cplusplus
@@ -36,7 +36,7 @@ extern "C" {
 #define MR_ASSERT(_expr)                                                       \
     do {                                                                       \
         if (!(_expr)) {                                                        \
-            mr_printfk("%s:%d: %s\n", __FILE__, __LINE__, #_expr);             \
+            mr_kprintf("%s:%d: %s\n", __FILE__, __LINE__, #_expr);             \
             while (1) {                                                        \
             }                                                                  \
         }                                                                      \

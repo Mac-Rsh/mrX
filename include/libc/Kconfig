@@ -69,25 +69,25 @@ menu "Libc"
             help
               The size of the heap in bytes.
 
-    # PRINTFK
+    # STDIO
     choice
-        prompt "Printfk"
+        prompt "Stdio"
         default MR_USE_PRINTFK
 
-        config MR_USE_LIBC_PRINTFK
-            bool "Standard libc printfk"
+        config MR_USE_LIBC_STDIO
+            bool "Standard libc stdio"
             help
-              Use the standard libc printfk for printing.
+              Use the standard libc stdio for I/O operations.
 
-        config MR_USE_3PARTY_PRINTFK
-            bool "3rd party printfk"
+        config MR_USE_3PARTY_STDIO
+            bool "3rd party stdio"
             help
-              Use a third-party printfk library for printing.
+              Use a third-party stdio library for I/O operations.
 
-        config MR_USE_PRINTFK
-            bool "Custom printfk"
+        config MR_USE_STDIO
+            bool "Custom stdio"
             help
-              Use a custom printfk implementation for printing.
+              Use a custom stdio implementation for I/O operations.
     endchoice
 
     # STRING

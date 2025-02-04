@@ -9,7 +9,7 @@
 #ifndef __MR_ATOMIC_H__
 #define __MR_ATOMIC_H__
 
-#include <kernel/mr_compiler.h>
+#include <libc/mr_compiler.h>
 #include <libc/mr_types.h>
 #if !defined(__CC_ARM) && !defined(__GNUC__) && !defined(__clang__)
 #include <arch/mr_hw_irq.h>

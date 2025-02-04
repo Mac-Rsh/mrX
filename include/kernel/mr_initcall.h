@@ -9,7 +9,7 @@
 #ifndef __MR_INITCALL_H__
 #define __MR_INITCALL_H__
 
-#include <kernel/mr_compiler.h>
+#include <libc/mr_compiler.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,19 +27,19 @@ extern "C" {
 /* Initcall type */
 typedef struct mr_initcall {
     const char *name;
-    void (*fn)(void);
+    void (*entry)(void);
 } mr_initcall_t;
 
 /**
  * @brief This macro function defines an initcall.
  *
- * @param _fn The function of the initcall.
+ * @param _entry The function of the initcall.
  * @param _level The level of the initcall.
  */
-#define MR_INIT_EXPORT(_fn, _level)                                            \
-    MR_USED const mr_initcall_t __mr_initcall_##_fn MR_SECTION(                \
+#define MR_INIT_EXPORT(_entry, _level)                                         \
+    MR_USED const mr_initcall_t __mr_initcall_##_entry MR_SECTION(             \
         "mr_initcall." _level)                                                 \
-        = {#_fn, _fn}
+        = {.name = #_entry, .entry = (_entry)}
 
 /**
  * @brief This function does initcalls(kernel).

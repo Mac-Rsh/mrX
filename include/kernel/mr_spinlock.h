@@ -10,7 +10,7 @@
 #define __MR_SPINLOCK_H__
 
 #include <arch/mr_hw_irq.h>
-#include <kernel/mr_atomic.h>
+#include <libc/mr_atomic.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,29 +39,17 @@ MR_INLINE void mr_spinlock_init(mr_spinlock_t *lock) {
 }
 
 /**
- * @brief This function tries to lock a spinlock.
- *
- * @param lock The spinlock to lock.
- * @return MR_TRUE on success, MR_FALSE on failure.
- */
-MR_INLINE mr_bool_t mr_spinlock_trylock(mr_spinlock_t *lock) {
-    mr_spinlock_t unlock;
-
-    mr_spinlock_init(&unlock);
-    if (!mr_atomic_compare_exchange(lock, &unlock, 1)) {
-        return MR_FALSE;
-    }
-    return MR_TRUE;
-}
-
-/**
  * @brief This function locks a spinlock.
  *
  * @param lock The spinlock to lock.
  */
 MR_INLINE void mr_spinlock_lock(mr_spinlock_t *lock) {
-    while (!mr_spinlock_trylock(lock)) {
-    }
+    mr_atomic_t unlock;
+
+    do {
+        mr_atomic_init(&unlock, 0);
+        unlock = mr_atomic_compare_exchange(lock, &unlock, 1);
+    } while (!unlock);
 }
 
 /**
@@ -74,11 +62,10 @@ MR_INLINE void mr_spinlock_unlock(mr_spinlock_t *lock) {
 }
 
 /**
- * @brief This function locks a spinlock with IRQs disabled and returns the
- *        IRQ flags.
+ * @brief This function locks a spinlock with interrupts disabled.
  *
  * @param lock The spinlock to lock.
- * @return The IRQ flags.
+ * @return The interrupt mask.
  */
 MR_INLINE int mr_spinlock_lock_irqsave(mr_spinlock_t *lock) {
     int mask;
@@ -89,13 +76,13 @@ MR_INLINE int mr_spinlock_lock_irqsave(mr_spinlock_t *lock) {
 }
 
 /**
- * @brief This function unlocks a spinlock with IRQs disabled and restores the
- *        IRQ mask.
+ * @brief This function unlocks a spinlock with interrupts restored.
  *
  * @param lock The spinlock to unlock.
- * @param mask The IRQ mask.
+ * @param mask The interrupt mask.
  */
-MR_INLINE void mr_spinlock_unlock_irqrestore(mr_spinlock_t *lock, int mask) {
+MR_INLINE void mr_spinlock_unlock_irqrestore(mr_spinlock_t *lock, int mask)
+{
     mr_spinlock_unlock(lock);
     mr_hw_irq_restore(mask);
 }

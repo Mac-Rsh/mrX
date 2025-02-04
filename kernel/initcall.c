@@ -30,7 +30,7 @@ void mr_autoinit_kernel(void) {
     /* Run initcalls(kernel) */
     for (ic = &__mr_initcall_kernel_start; ic <= &__mr_initcall_kernel_end;
          ic++) {
-        ic->fn();
+        ic->entry();
     }
 }
 
@@ -40,6 +40,6 @@ void mr_autoinit(void) {
     /* Run initcalls(user) */
     for (ic = &__mr_initcall_user_start; ic <= &__mr_initcall_user_end;
          ic++) {
-        ic->fn();
+        ic->entry();
     }
 }
