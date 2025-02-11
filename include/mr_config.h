@@ -5,6 +5,7 @@
 extern "C" {
 #endif /* __cplusplus */
 
+#define MR_USE_LIBC_PRINTF
 
 #ifdef __cplusplus
 }

@@ -145,6 +145,25 @@ mr_err_t mr_kthread_exit(mr_kthread_t *kth);
 mr_kthread_t *mr_kthread_self(void);
 
 /**
+ * @brief This function get a kthread.
+ *
+ * @param kth The kthread.
+ * @return The kthread on success, or MR_NULL on failure.
+ */
+MR_INLINE mr_kthread_t *mr_kthread_get(mr_kthread_t *kth) {
+    return (mr_kthread_t *)mr_kobject_get((mr_kobject_t *)kth);
+}
+
+/**
+ * @brief This function put a kthread.
+ *
+ * @param kth The kthread.
+ */
+MR_INLINE void mr_kthread_put(mr_kthread_t *kth) {
+    mr_kobject_put((mr_kobject_t *)kth);
+}
+
+/**
  * @brief This function find a kthread.
  *
  * @param name The kthread name.

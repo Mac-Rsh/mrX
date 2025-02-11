@@ -34,6 +34,20 @@ MR_INLINE mr_err_t kthread_res_alloc(mr_kthread_t *kth, mr_size_t size) {
     return 0;
 }
 
+MR_INLINE void kthread_res_free(mr_kthread_t *kth) {
+    const void *res;
+
+    /* If resource is inline or takeover, not need to free */
+    res = ((kth->res != kth->ires) && (kth->entry)) ? kth->res : MR_NULL;
+    if (res) {
+        mr_free((void *)res);
+    }
+}
+
+MR_INLINE mr_bool_t kthread_is_takeover(mr_kthread_t *kth) {
+    return (kth->res != kth->ires) && (!kth->entry);
+}
+
 MR_INLINE mr_err_t kthread_init(mr_kthread_t *kth, const char *name,
                                 mr_ptr_t entry, mr_ptr_t args, void *stack,
                                 mr_size_t stack_size, mr_uint32_t priority,
@@ -47,30 +61,38 @@ MR_INLINE mr_err_t kthread_init(mr_kthread_t *kth, const char *name,
         return -MR_EINVAL;
     }
 
+    /* Non-takeover kthread need to initialize resources */
+    if (!kthread_is_takeover(kth)) {
+        /* Alloc resource */
+        ret = kthread_res_alloc(kth, type->size);
+        if (ret != 0) {
+            return ret;
+        }
+
+        /* Init kthread resource */
+        ret = MR_KOS_KTH_OPS(kos)->init((void *)kth->res, name, kth, stack,
+                                        stack_size, priority, tick);
+        if (ret != 0) {
+            kthread_res_free(kth);
+            return ret;
+        }
+    }
+
     /* Init kthread */
     kth->priority = priority;
     kth->tick = tick;
     kth->entry = entry;
     kth->args = args;
-    kth->os = kos;
-
-    /* Takeover kthread resources not need init. */
-    if (!kth->entry) {
-        return 0;
-    }
-
-    /* Alloc resource */
-    ret = kthread_res_alloc(kth, type->size);
-    if (ret != 0) {
-        return ret;
-    }
-
-    /* Init kthread resource */
-    return MR_KOS_KTH_OPS(kth->os)->init((void *)kth->res, name, kth, stack,
-                                         stack_size, priority, tick);
+    kth->os = mr_kos_get(kos);
+    return 0;
 }
 
 MR_INLINE mr_err_t kthread_del(mr_kthread_t *kth) {
+    /* Takeover kthread do not need to delete */
+    if (kthread_is_takeover(kth)) {
+        return 0;
+    }
+
     /* Delete kthread resource */
     return MR_KOS_KTH_OPS(kth->os)->del((void *)kth->res);
 }
@@ -84,7 +106,7 @@ MR_INLINE mr_err_t kthread_init_add(mr_kthread_t *kth, mr_ktype_t *ktype,
     mr_err_t ret;
 
     /* Get kos */
-    kos = mr_kos_get();
+    kos = mr_kos_get(mr_kos_find());
     if (!kos) {
         return -MR_ENOSYS;
     }
@@ -102,13 +124,15 @@ MR_INLINE mr_err_t kthread_init_add(mr_kthread_t *kth, mr_ktype_t *ktype,
     /* Add kobject to kroot */
     ret = mr_kobject_add((mr_kobject_t *)kth, (mr_kobject_t *)&kroot, name);
     if (ret != 0) {
+        mr_kos_put(kos);
         kthread_del(kth);
+        kthread_res_free(kth);
         goto _exit;
     }
 
 _exit:
     /* Put kos */
-    mr_kos_put();
+    mr_kos_put(kos);
     return ret;
 }
 
@@ -200,11 +224,20 @@ mr_err_t mr_kthread_del(mr_kthread_t *kth) {
 }
 
 MR_INLINE mr_err_t kthread_startup(mr_kthread_t *kth) {
-    /* Get kobject */
-    mr_kobject_get((mr_kobject_t *)kth);
+    mr_err_t ret;
+
+    /* Prevents run-time release(exit and cleanup) */
+    mr_kthread_get(kth);
+    mr_kthread_get(kth);
 
     /* Startup kthread resource */
-    return MR_KOS_KTH_OPS(kth->os)->startup((void *)kth->res);
+    ret = MR_KOS_KTH_OPS(kth->os)->startup((void *)kth->res);
+    if (ret != 0) {
+        mr_kthread_put(kth);
+        mr_kthread_put(kth);
+        return ret;
+    }
+    return 0;
 }
 
 mr_err_t mr_kthread_startup(mr_kthread_t *kth) {
@@ -237,7 +270,7 @@ MR_INLINE mr_err_t kthread_yield(void) {
     mr_err_t ret;
 
     /* Get kos */
-    kos = mr_kos_get();
+    kos = mr_kos_get(mr_kos_find());
     if (!kos) {
         return -MR_ENOSYS;
     }
@@ -246,7 +279,7 @@ MR_INLINE mr_err_t kthread_yield(void) {
     ret = MR_KOS_KTH_OPS(kos)->yield();
 
     /* Put kos */
-    mr_kos_put();
+    mr_kos_put(kos);
     return ret;
 }
 
@@ -275,7 +308,7 @@ MR_INLINE mr_err_t kthread_sleep(mr_tick_t tick) {
     mr_err_t ret;
 
     /* Get kos */
-    kos = mr_kos_get();
+    kos = mr_kos_get(mr_kos_find());
     if (!kos) {
         return -MR_ENOSYS;
     }
@@ -284,7 +317,7 @@ MR_INLINE mr_err_t kthread_sleep(mr_tick_t tick) {
     ret = MR_KOS_KTH_OPS(kos)->sleep(tick);
 
     /* Put kos */
-    mr_kos_put();
+    mr_kos_put(kos);
     return ret;
 }
 
@@ -294,8 +327,17 @@ mr_err_t mr_kthread_sleep(mr_tick_t tick) {
 }
 
 MR_INLINE mr_err_t kthread_exit(mr_kthread_t *kth) {
+    mr_err_t ret;
+
     /* Exit kthread resource */
-    return MR_KOS_KTH_OPS(kth->os)->exit((void *)kth->res);
+    ret = MR_KOS_KTH_OPS(kth->os)->exit((void *)kth->res);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Free runtime(exit) */
+    mr_kthread_put(kth);
+    return 0;
 }
 
 mr_err_t mr_kthread_exit(mr_kthread_t *kth) {
@@ -313,16 +355,16 @@ MR_INLINE mr_kthread_t *kthread_self(void) {
     mr_kos_t *kos;
 
     /* Get kos */
-    kos = mr_kos_get();
+    kos = mr_kos_get(mr_kos_find());
     if (!kos) {
         return MR_NULL;
     }
 
     /* Get kthread self */
-    ret = MR_KOS_KTH_OPS(mr_kos_get())->self();
+    ret = MR_KOS_KTH_OPS(kos)->self();
 
     /* Put kos */
-    mr_kos_put();
+    mr_kos_put(kos);
     return ret;
 }
 
@@ -342,8 +384,8 @@ void mr_kthread_cleanup(mr_kthread_t *kth) {
         return;
     }
 
-    /* Cleanup kthread */
-    mr_kobject_put((mr_kobject_t *)kth);
+    /* Free runtime(cleanup) */
+    mr_kthread_put(kth);
 }
 
 void mr_kthread_entry(mr_kthread_t *kth) {
@@ -354,23 +396,22 @@ void mr_kthread_entry(mr_kthread_t *kth) {
 
     /* Call kthread entry */
     ((void (*)(mr_kthread_t *, void *))kth->entry)(kth, kth->args);
+
+    /* Free runtime(exit) */
+    mr_kthread_put(kth);
 }
 
 MR_INLINE mr_kthread_t *kthread_release_kobj(mr_kobject_t *kobj) {
     mr_kthread_t *kth;
-    const void *res;
 
     /* Get kthread */
     kth = MR_CONTAINER_OF(kobj, mr_kthread_t, parent);
 
-    /* If resource is inline or takeover, not need to free */
-    res = ((kth->res != kth->ires) && (kth->entry)) ? kth->res : MR_NULL;
-    if (res) {
-        mr_free((void *)res);
-    }
+    /* Free kthread resource */
+    kthread_res_free(kth);
 
     /* Put kos */
-    mr_kos_put();
+    mr_kos_put(kth->os);
     return kth;
 }
 

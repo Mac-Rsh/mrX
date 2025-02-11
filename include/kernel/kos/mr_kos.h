@@ -54,23 +54,37 @@ typedef struct mr_kos {
 } mr_kos_t;
 
 /**
- * @brief This function registers kernel os.
+ * @brief This function registers a kernel os.
  *
  * @return 0 on success, or a negative error code on failure.
  */
-mr_err_t mr_kos_register(mr_kos_type_t *type);
+mr_err_t mr_kos_register(mr_kos_type_t *ktype);
 
 /**
- * @brief This function gets kernel os.
+ * @brief This function gets a kernel os.
+ *
+ * @param kos The kernel os.
+ * @return The kernel os on success, or MR_NULL on failure.
+ */
+MR_INLINE mr_kos_t *mr_kos_get(mr_kos_t *kos) {
+    return (mr_kos_t *)mr_kobject_get((mr_kobject_t *)kos);
+}
+
+/**
+ * @brief This function puts a kernel os.
+ *
+ * @param kos The kernel os.
+ */
+MR_INLINE void mr_kos_put(mr_kos_t *kos) {
+    mr_kobject_put((mr_kobject_t *)kos);
+}
+
+/**
+ * @brief This function finds a kernel os.
  *
  * @return The kernel os.
  */
-mr_kos_t *mr_kos_get(void);
-
-/**
- * @brief This function puts kernel os.
- */
-void mr_kos_put(void);
+mr_kos_t *mr_kos_find(void);
 
 /**
  * @brief This macro function gets the kthread operations of a kernel os.
