@@ -9,7 +9,7 @@
 #include <kernel/mr_kobject.h>
 #include <kernel/mr_spinlock.h>
 #include <libc/mr_malloc.h>
-#include <libc/mr_stdio.h>
+#include <libc/mr_printf.h>
 #include <libc/mr_string.h>
 
 /* Last-word definition */
@@ -188,9 +188,9 @@ MR_INLINE mr_err_t kobject_name_alloc(mr_kobject_t *kobj, const char *name) {
         s = kobj->iname;
     } else {
         s = mr_malloc(size + 1);
-    }
-    if (!s) {
-        return -MR_ENOMEM;
+        if (!s) {
+            return -MR_ENOMEM;
+        }
     }
 
     /* Copy name */

@@ -14,4 +14,10 @@ menu "Kernel"
         help
             This option controls the size of the inline name of the kobject.
 
+    # KTHREAD
+    config MR_CFG_KTHREAD_IRES_SIZE
+        int "Kthread inline resource size"
+        default 256
+        help
+            This option controls the size of the inline resource of the kthread.
 endmenu

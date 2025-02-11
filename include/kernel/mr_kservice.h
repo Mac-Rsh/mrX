@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_SERVICE_H__
-#define __MR_SERVICE_H__
+#ifndef __MR_KSERVICE_H__
+#define __MR_KSERVICE_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,7 +35,7 @@ extern "C" {
  * @param _array The array.
  * @return The size of the array.
  */
-#define MR_ARRAY_SIZE(_array)           (sizeof(_array) / sizeof(_array[0]))
+#define MR_ARRAY_SIZE(_array)           (sizeof(_array) / sizeof((_array)[0]))
 
 /**
  * @brief This macro function aligns a value upward.
@@ -112,4 +112,4 @@ extern "C" {
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_SERVICE_H__ */
+#endif /* __MR_KSERVICE_H__ */

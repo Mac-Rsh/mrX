@@ -5,11 +5,6 @@
 extern "C" {
 #endif /* __cplusplus */
 
-//#define MR_USE_THREAD
-#define MR_USE_LIBC_MALLOC
-#define MR_USE_ASSERT
-#define MR_USE_LIBC_ASSERT
-#define MR_USE_LIBC_STDIO
 
 #ifdef __cplusplus
 }

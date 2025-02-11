@@ -9,7 +9,7 @@
 #ifndef __MR_KPRINTF_H__
 #define __MR_KPRINTF_H__
 
-#include <libc/mr_stdio.h>
+#include <libc/mr_printf.h>
 
 #ifdef __cplusplus
 extern "C" {

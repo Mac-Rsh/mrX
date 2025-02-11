@@ -20,8 +20,8 @@ extern "C" {
  * @{
  */
 
-/* Lockref type */
-typedef mr_atomic_t mr_kref_t;
+/* Kref type */
+typedef mr_atomic_t                     mr_kref_t;
 
 /**
  * @brief This macro function initializes a kref.

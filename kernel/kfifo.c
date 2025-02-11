@@ -44,7 +44,7 @@ mr_uint32_t mr_kfifo_in(mr_kfifo_t *kfifo, const void *buf, mr_uint32_t size) {
     mr_memcpy(kfifo->buf + (kfifo->in & (kfifo->size - 1)), buf, s);
 
     /* In start of kfifo */
-    mr_memcpy(kfifo->buf, buf + s, size - s);
+    mr_memcpy(kfifo->buf, (mr_uint8_t *)buf + s, size - s);
 
     /* Update in index */
     kfifo->in += size;
@@ -95,6 +95,6 @@ mr_uint32_t mr_kfifo_peek(mr_kfifo_t *kfifo, void *buf, mr_uint32_t size) {
     mr_memcpy(buf, kfifo->buf + (kfifo->out & (kfifo->size - 1)), s);
 
     /* Out start of kfifo */
-    mr_memcpy(buf + s, kfifo->buf, size - s);
+    mr_memcpy((mr_uint8_t *)buf + s, kfifo->buf, size - s);
     return size;
 }

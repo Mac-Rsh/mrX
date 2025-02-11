@@ -36,16 +36,16 @@ typedef struct mr_kname {
 
 /* Ktype type */
 typedef struct mr_ktype {
-    void (*release)(struct mr_kobject *kobj);
+    void (*release)(struct mr_kobject *);
 } mr_ktype_t;
 
 /* Kobject type */
 typedef struct mr_kobject {
     mr_uint32_t magic;
     mr_kname_t name;
-#ifndef MR_CFG_KOBJECT_INAME_SIZE
+#if !defined(MR_CFG_KOBJECT_INAME_SIZE)
 #define MR_CFG_KOBJECT_INAME_SIZE       (16)
-#endif /* !MR_CFG_KOBJECT_INAME_SIZE */
+#endif /* !defined(MR_CFG_KOBJECT_INAME_SIZE) */
     char iname[MR_CFG_KOBJECT_INAME_SIZE];
     struct mr_kobject *parent;
     mr_ktype_t *type;
@@ -65,7 +65,7 @@ typedef struct mr_kset {
  * @param _release The release function.
  */
 #define MR_KTYPE_INIT(_release)                                                \
-    { .release = _release }
+    { .release = (_release) }
 
 /**
  * @brief This function initializes a ktype.
@@ -159,6 +159,16 @@ void mr_kobject_put(mr_kobject_t *kobj);
  * @return The name of the kobject.
  */
 #define MR_KOBJECT_NAME(_kobj)          (((mr_kobject_t *)(_kobj))->name.str)
+
+/**
+ * @brief This macro function gets the length of a kobject name.
+ *
+ * @param _kobj The kobject.
+ * @return The length of the kobject name.
+ *
+ * @note The name length includes the null terminator('\0').
+ */
+#define MR_KOBJECT_NAME_LEN(_kobj)      (((mr_kobject_t *)(_kobj))->name.len)
 
 /**
  * @brief This macro function gets the parent of a kobject.

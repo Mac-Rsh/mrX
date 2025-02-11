@@ -38,6 +38,7 @@ typedef int                             mr_err_t;
 #define MR_EBUSY                        EBUSY
 #define MR_EEXIST                       EEXIST
 #define MR_EINVAL                       EINVAL
+#define MR_ENOSYS                       ENOSYS
 #define MR_ETIMEDOUT                    ETIMEDOUT
 #elif defined(MR_USE_3PARTY_ERRNO)
 /* In '3party/libc/mr_errno.h' */
@@ -50,6 +51,7 @@ typedef int                             mr_err_t;
 #define MR_EBUSY                        16
 #define MR_EEXIST                       17
 #define MR_EINVAL                       22
+#define MR_ENOSYS                       40
 #define MR_ETIMEDOUT                    116
 #endif /* defined(MR_USE_LIBC_ERRNO) */
 

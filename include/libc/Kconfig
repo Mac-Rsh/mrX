@@ -74,7 +74,7 @@ menu "Libc"
         prompt "Stdio"
         default MR_USE_PRINTFK
 
-        config MR_USE_LIBC_STDIO
+        config MR_USE_LIBC_PRINTF
             bool "Standard libc stdio"
             help
               Use the standard libc stdio for I/O operations.

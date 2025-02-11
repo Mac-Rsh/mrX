@@ -1,0 +1,177 @@
+/**
+ * @copyright (c) 2024, MacRsh
+ *
+ * @license SPDX-License-Identifier: Apache-2.0
+ *
+ * @date 2024-09-06        MacRsh        First version
+ */
+
+#ifndef __MR_KTHREAD_H__
+#define __MR_KTHREAD_H__
+
+#include <kernel/kos/mr_kos.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+/**
+ * @addtogroup Kthread
+ * @{
+ */
+
+/* Kthread type */
+typedef struct mr_kthread {
+    mr_kobject_t parent;
+    const void *res;
+#if !defined(MR_CFG_KTHREAD_IRES_SIZE)
+#define MR_CFG_KTHREAD_IRES_SIZE        (256)
+#endif /* !defined(MR_CFG_KTHREAD_IRES_SIZE) */
+    mr_uint8_t ires[MR_CFG_KTHREAD_IRES_SIZE];
+    mr_uint32_t priority;
+    mr_tick_t tick;
+    mr_ptr_t entry;
+    mr_ptr_t args;
+    mr_kos_t *os;
+} mr_kthread_t;
+
+/**
+ * @brief This function initialize a kthread.
+ *
+ * @param kth The kthread.
+ * @param name The kthread name.
+ * @param entry The kthread entry.
+ * @param args The kthread arguments.
+ * @param stack The kthread stack.
+ * @param stack_size The kthread stack size.
+ * @param priority The kthread priority.
+ * @param tick The kthread time slice.
+ * @return 0 on success, or a negative error code on failure.
+ */
+mr_err_t mr_kthread_init(mr_kthread_t *kth, const char *name,
+                         void (*entry)(mr_kthread_t *, void *), void *args,
+                         void *stack, mr_size_t stack_size,
+                         mr_uint32_t priority, mr_tick_t tick);
+
+/**
+ * @brief This function create a kthread.
+ *
+ * @param name The kthread name.
+ * @param entry The kthread entry.
+ * @param args The kthread arguments.
+ * @param stack_size The kthread stack size.
+ * @param priority The kthread priority.
+ * @param tick The kthread time slice.
+ * @return The kthread on success, or NULL on failure.
+ */
+mr_kthread_t *mr_kthread_create(const char *name,
+                                void (*entry)(mr_kthread_t *, void *),
+                                void *args, mr_size_t stack_size,
+                                mr_uint32_t priority, mr_tick_t tick);
+
+/**
+ * @brief This function takeover a kthread.
+ *
+ * @param kth The kthread.
+ * @param name The kthread name.
+ * @param priority The kthread priority.
+ * @param tick The kthread time slice.
+ * @return 0 on success, or a negative error code on failure.
+ */
+mr_err_t mr_kthread_takeover(mr_kthread_t *kth, const char *name,
+                             const void *res, mr_uint32_t priority,
+                             mr_tick_t tick);
+
+/**
+ * @brief This function delete a kthread.
+ *
+ * @param kth The kthread.
+ * @return 0 on success, or a negative error code on failure.
+ */
+mr_err_t mr_kthread_del(mr_kthread_t *kth);
+
+/**
+ * @brief This function startup a kthread.
+ *
+ * @param kth The kthread.
+ * @return 0 on success, or a negative error code on failure.
+ */
+mr_err_t mr_kthread_startup(mr_kthread_t *kth);
+
+/**
+ * @brief This function resume a kthread.
+ *
+ * @param kth The kthread.
+ * @return 0 on success, or a negative error code on failure.
+ */
+mr_err_t mr_kthread_resume(mr_kthread_t *kth);
+
+/**
+ * @brief This function yield the current kthread.
+ *
+ * @return 0 on success, or a negative error code on failure.
+ */
+mr_err_t mr_kthread_yield(void);
+
+/**
+ * @brief This function suspend a kthread.
+ *
+ * @param kth The kthread.
+ * @return 0 on success, or a negative error code on failure.
+ */
+mr_err_t mr_kthread_suspend(mr_kthread_t *kth);
+
+/**
+ * @brief This function sleep a kthread.
+ *
+ * @param tick The sleep time slice.
+ * @return 0 on success, or a negative error code on failure.
+ */
+mr_err_t mr_kthread_sleep(mr_tick_t tick);
+
+/**
+ * @brief This function exit a kthread.
+ *
+ * @param kth The kthread.
+ * @return 0 on success, or a negative error code on failure.
+ */
+mr_err_t mr_kthread_exit(mr_kthread_t *kth);
+
+/**
+ * @brief This function get the current kthread.
+ *
+ * @return The current kthread.
+ */
+mr_kthread_t *mr_kthread_self(void);
+
+/**
+ * @brief This function find a kthread.
+ *
+ * @param name The kthread name.
+ * @return The kthread on success, or MR_NULL on failure.
+ */
+mr_kthread_t *mr_kthread_find(const char *name);
+
+/**
+ * @brief This function cleanup a kthread.
+ *
+ * @param kth The kthread.
+ */
+void mr_kthread_cleanup(mr_kthread_t *kth);
+
+/**
+ * @brief This function is the kthread entry.
+ *
+ * @param kth The kthread.
+ *
+ * @note User does not need to call this function.
+ */
+void mr_kthread_entry(mr_kthread_t *kth);
+
+/** @} */
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* __MR_KTHREAD_H__ */

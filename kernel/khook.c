@@ -23,7 +23,6 @@ void mr_khook_init(mr_khook_t *khook, mr_ptr_t *entry, mr_size_t size) {
 
 mr_err_t mr_khook_add(mr_khook_t *khook, mr_ptr_t entry) {
     mr_err_t ret;
-    mr_size_t i;
     int mask;
 
     /* Check arguments */

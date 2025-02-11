@@ -72,7 +72,6 @@ mr_ktimer_t *mr_ktimer_create(const char *name,
     /* Init and add ktimer */
     ret = ktimer_init_add(ktimer, &ktype2, name, (mr_ptr_t)entry, args, tick);
     if (ret != 0) {
-        /* Free ktimer */
         mr_free(ktimer);
         return MR_NULL;
     }
@@ -246,13 +245,13 @@ MR_INLINE void ktimer_timeout_check(void) {
         mr_klist_move(&ktimer->list, &list);
 
         /* Unlock */
-        mr_spinlock_unlock(&klock);
+        mr_spinlock_unlock_irqrestore(&klock, mask);
 
         /* Call ktimer entry */
         ((void (*)(mr_ktimer_t *, void *))ktimer->entry)(ktimer, ktimer->args);
 
         /* Lock */
-        mr_spinlock_lock(&klock);
+        mask = mr_spinlock_lock_irqsave(&klock);
 
         /* Check that the ktimer has not been moved */
         if (mr_klist_is_empty(&list)) {

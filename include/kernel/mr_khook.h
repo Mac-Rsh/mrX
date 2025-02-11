@@ -9,7 +9,7 @@
 #ifndef __MR_KHOOK_H__
 #define __MR_KHOOK_H__
 
-#include "mr_spinlock.h"
+#include <kernel/mr_spinlock.h>
 #include <libc/mr_errno.h>
 
 #ifdef __cplusplus

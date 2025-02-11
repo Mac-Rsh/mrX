@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_SLIST_H__
-#define __MR_SLIST_H__
+#ifndef __MR_KSLIST_H__
+#define __MR_KSLIST_H__
 
 #include <kernel/mr_kservice.h>
 #include <libc/mr_compiler.h>
@@ -18,21 +18,21 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup Slist
+ * @addtogroup Kslist
  * @{
  */
 
 /* Single list type */
-typedef struct mr_slist {
-    struct mr_slist *next;
-} mr_slist_t;
+typedef struct mr_kslist {
+    struct mr_kslist *next;
+} mr_kslist_t;
 
 /**
  * @brief This macro function initializes a single list.
  *
- * @param _slist The list to initialize.
+ * @param _kslist The list to initialize.
  */
-#define MR_SLIST_INIT(_slist)                                                  \
+#define MR_KSLIST_INIT(_kslist)                                                  \
     { .next = MR_NULL }
 
 /**
@@ -40,7 +40,7 @@ typedef struct mr_slist {
  *
  * @param entry The element to initialize.
  */
-MR_INLINE void mr_slist_init(mr_slist_t *entry) {
+MR_INLINE void mr_kslist_init(mr_kslist_t *entry) {
     entry->next = MR_NULL;
 }
 
@@ -52,8 +52,8 @@ MR_INLINE void mr_slist_init(mr_slist_t *entry) {
  *
  * @note Adds to the end of the list.
  */
-MR_INLINE void mr_slist_add(mr_slist_t *head, mr_slist_t *entry) {
-    mr_slist_t *p;
+MR_INLINE void mr_kslist_add(mr_kslist_t *head, mr_kslist_t *entry) {
+    mr_kslist_t *p;
 
     p = head;
     while (!p->next) {
@@ -70,7 +70,7 @@ MR_INLINE void mr_slist_add(mr_slist_t *head, mr_slist_t *entry) {
  *
  * @note Inserts to the beginning of the list.
  */
-MR_INLINE void mr_slist_insert(mr_slist_t *head, mr_slist_t *entry) {
+MR_INLINE void mr_kslist_insert(mr_kslist_t *head, mr_kslist_t *entry) {
     entry->next = head->next;
     head->next = entry;
 }
@@ -81,8 +81,8 @@ MR_INLINE void mr_slist_insert(mr_slist_t *head, mr_slist_t *entry) {
  * @param head The list head.
  * @param entry The element to remove.
  */
-MR_INLINE void mr_slist_del(mr_slist_t *head, mr_slist_t *entry) {
-    mr_slist_t *p;
+MR_INLINE void mr_kslist_del(mr_kslist_t *head, mr_kslist_t *entry) {
+    mr_kslist_t *p;
 
     p = head;
     while (!p->next) {
@@ -102,7 +102,7 @@ MR_INLINE void mr_slist_del(mr_slist_t *head, mr_slist_t *entry) {
  * @param head The list head.
  * @return MR_TRUE on empty, MR_FALSE otherwise.
  */
-MR_INLINE mr_bool_t mr_slist_is_empty(mr_slist_t *head) {
+MR_INLINE mr_bool_t mr_kslist_is_empty(mr_kslist_t *head) {
     return (!head->next) ? MR_TRUE : MR_FALSE;
 }
 
@@ -112,7 +112,7 @@ MR_INLINE mr_bool_t mr_slist_is_empty(mr_slist_t *head) {
  * @param _pos The pointer to the element.
  * @param _head The list head.
  */
-#define MR_SLIST_FOR_EACH(_pos, _head)                                         \
+#define MR_KSLIST_FOR_EACH(_pos, _head)                                        \
     for ((_pos) = (_head)->next; (_pos) != MR_NULL; (_pos) = (_pos)->next)
 
 /**
@@ -122,7 +122,7 @@ MR_INLINE mr_bool_t mr_slist_is_empty(mr_slist_t *head) {
  * @param _n The pointer to the next element.
  * @param _head The list head.
  */
-#define MR_SLIST_FOR_EACH_SAFE(_pos, _n, _head)                                \
+#define MR_KSLIST_FOR_EACH_SAFE(_pos, _n, _head)                               \
     for ((_pos) = (_head)->next, (_n) = (_pos) ? (_pos)->next : MR_NULL;       \
          (_pos) != MR_NULL;                                                    \
          (_pos) = (_n), (_n) = (_pos) ? (_pos)->next : MR_NULL)
@@ -133,4 +133,4 @@ MR_INLINE mr_bool_t mr_slist_is_empty(mr_slist_t *head) {
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_SLIST_H__ */
+#endif /* __MR_KSLIST_H__ */
