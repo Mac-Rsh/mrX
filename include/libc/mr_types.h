@@ -41,6 +41,7 @@ typedef signed char                     mr_int8_t;
 typedef signed short                    mr_int16_t;
 typedef signed int                      mr_int32_t;
 typedef signed long long                mr_int64_t;
+typedef long long                       mr_ssize_t;
 #define MR_INT8_MAX                     (127)
 #define MR_INT16_MAX                    (32767)
 #define MR_INT32_MAX                    (2147483647U)
@@ -65,7 +66,6 @@ typedef unsigned short                  mr_uint16_t;
 typedef unsigned int                    mr_uint32_t;
 typedef unsigned long long              mr_uint64_t;
 typedef unsigned long long              mr_size_t;
-typedef long long                       mr_ssize_t;
 #define MR_UINT8_MAX                    (255)
 #define MR_UINT16_MAX                   (65535)
 #define MR_UINT32_MAX                   (4294967295)

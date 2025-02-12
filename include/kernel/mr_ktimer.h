@@ -22,7 +22,7 @@ extern "C" {
  */
 
 /* Periodic definition */
-#define MR_KTIMER_PERIODIC              (1U << 31)
+#define MR_KTIMER_PERIODIC (1U << 31)
 
 /* Ktimer type */
 typedef struct mr_ktimer {
@@ -45,8 +45,8 @@ typedef struct mr_ktimer {
  * @returns 0 on success, or a negative error code on failure.
  */
 mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
-                        void (*entry)(mr_ktimer_t *, void *), void *args,
-                        mr_tick_t tick);
+                        void (*entry)(mr_ktimer_t *ktimer, void *args),
+                        void *args, mr_tick_t tick);
 
 /**
  * @brief This function create a timer.
@@ -58,8 +58,8 @@ mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
  * @return The timer on success, or MR_NULL on failure.
  */
 mr_ktimer_t *mr_ktimer_create(const char *name,
-                              void (*entry)(mr_ktimer_t *, void *), void *args,
-                              mr_tick_t tick);
+                              void (*entry)(mr_ktimer_t *ktimer, void *args),
+                              void *args, mr_tick_t tick);
 
 /**
  * @brief This function delete a ktimer.

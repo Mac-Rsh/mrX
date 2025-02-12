@@ -104,9 +104,9 @@ mr_err_t mr_kmap_add(mr_kmap_t *kmap, mr_uint32_t key, void *value) {
     if (!node) {
         return -MR_ENOMEM;
     }
+    node->next = kmap->b[index];
     node->key = key;
     node->value = value;
-    node->next = kmap->b[index];
     kmap->b[index] = node;
     kmap->count++;
     return 0;

@@ -137,8 +137,8 @@ _exit:
 }
 
 mr_err_t mr_kthread_init(mr_kthread_t *kth, const char *name,
-                         void (*entry)(mr_kthread_t *, void *), void *args,
-                         void *stack, mr_size_t stack_size,
+                         void (*entry)(mr_kthread_t *kth, void *args),
+                         void *args, void *stack, mr_size_t stack_size,
                          mr_uint32_t priority, mr_tick_t tick) {
     /* Check arguments */
     if ((!kth) || (MR_KOBJECT_IS_INITED(kth)) || (!name) || (!entry) || (!stack)
@@ -152,7 +152,7 @@ mr_err_t mr_kthread_init(mr_kthread_t *kth, const char *name,
 }
 
 mr_kthread_t *mr_kthread_create(const char *name,
-                                void (*entry)(mr_kthread_t *, void *),
+                                void (*entry)(mr_kthread_t *kth, void *args),
                                 void *args, mr_size_t stack_size,
                                 mr_uint32_t priority, mr_tick_t tick) {
     mr_kthread_t *kth;
@@ -226,14 +226,12 @@ mr_err_t mr_kthread_del(mr_kthread_t *kth) {
 MR_INLINE mr_err_t kthread_startup(mr_kthread_t *kth) {
     mr_err_t ret;
 
-    /* Prevents run-time release(exit and cleanup) */
-    mr_kthread_get(kth);
+    /* Prevents run-time release */
     mr_kthread_get(kth);
 
     /* Startup kthread resource */
     ret = MR_KOS_KTH_OPS(kth->os)->startup((void *)kth->res);
     if (ret != 0) {
-        mr_kthread_put(kth);
         mr_kthread_put(kth);
         return ret;
     }
@@ -327,17 +325,8 @@ mr_err_t mr_kthread_sleep(mr_tick_t tick) {
 }
 
 MR_INLINE mr_err_t kthread_exit(mr_kthread_t *kth) {
-    mr_err_t ret;
-
     /* Exit kthread resource */
-    ret = MR_KOS_KTH_OPS(kth->os)->exit((void *)kth->res);
-    if (ret != 0) {
-        return ret;
-    }
-
-    /* Free runtime(exit) */
-    mr_kthread_put(kth);
-    return 0;
+    return MR_KOS_KTH_OPS(kth->os)->exit((void *)kth->res);
 }
 
 mr_err_t mr_kthread_exit(mr_kthread_t *kth) {
@@ -384,7 +373,7 @@ void mr_kthread_cleanup(mr_kthread_t *kth) {
         return;
     }
 
-    /* Free runtime(cleanup) */
+    /* Free runtime */
     mr_kthread_put(kth);
 }
 
@@ -396,9 +385,6 @@ void mr_kthread_entry(mr_kthread_t *kth) {
 
     /* Call kthread entry */
     ((void (*)(mr_kthread_t *, void *))kth->entry)(kth, kth->args);
-
-    /* Free runtime(exit) */
-    mr_kthread_put(kth);
 }
 
 MR_INLINE mr_kthread_t *kthread_release_kobj(mr_kobject_t *kobj) {

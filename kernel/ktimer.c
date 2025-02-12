@@ -7,14 +7,14 @@
  */
 
 #include <kernel/mr_initcall.h>
+#include <kernel/mr_kspinlock.h>
 #include <kernel/mr_ktimer.h>
-#include <kernel/mr_spinlock.h>
 #include <libc/mr_malloc.h>
 
 static mr_ktype_t ktype1, ktype2;
 static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
 static mr_klist_t klist = MR_KLIST_INIT(&klist);
-static mr_spinlock_t klock = MR_SPINLOCK_INIT();
+static mr_kspinlock_t klock = MR_KSPINLOCK_INIT();
 
 MR_INLINE void ktimer_init(mr_ktimer_t *ktimer, mr_ptr_t entry, void *args,
                            mr_tick_t tick) {
@@ -40,8 +40,8 @@ MR_INLINE mr_err_t ktimer_init_add(mr_ktimer_t *ktimer, mr_ktype_t *ktype,
 }
 
 mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
-                        void (*entry)(mr_ktimer_t *, void *), void *args,
-                        mr_tick_t tick) {
+                        void (*entry)(mr_ktimer_t *ktimer, void *args),
+                        void *args, mr_tick_t tick) {
     /* Check arguments */
     if ((!ktimer) || (MR_KOBJECT_IS_INITED(ktimer)) || (!name) || (!entry)
         || (tick == 0)) {
@@ -53,8 +53,8 @@ mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
 }
 
 mr_ktimer_t *mr_ktimer_create(const char *name,
-                              void (*entry)(mr_ktimer_t *, void *), void *args,
-                              mr_tick_t tick) {
+                              void (*entry)(mr_ktimer_t *ktimer, void *args),
+                              void *args, mr_tick_t tick) {
     mr_ktimer_t *ktimer;
     mr_err_t ret;
 
@@ -82,7 +82,7 @@ MR_INLINE void ktimer_del(mr_ktimer_t *ktimer) {
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&klock);
+    mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Already deleted */
     if (mr_klist_is_empty(&ktimer->list)) {
@@ -93,7 +93,7 @@ MR_INLINE void ktimer_del(mr_ktimer_t *ktimer) {
     mr_klist_del(&ktimer->list);
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&klock, mask);
+    mr_kspinlock_unlock_irqrestore(&klock, mask);
 }
 
 mr_err_t mr_ktimer_del(mr_ktimer_t *ktimer) {
@@ -139,13 +139,13 @@ MR_INLINE void ktimer_start(mr_ktimer_t *ktimer) {
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&klock);
+    mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Insert ktimer into ktimer list */
     ktimer_insert(ktimer);
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&klock, mask);
+    mr_kspinlock_unlock_irqrestore(&klock, mask);
 }
 
 mr_err_t mr_ktimer_start(mr_ktimer_t *ktimer) {
@@ -174,13 +174,13 @@ MR_INLINE void ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&klock);
+    mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Set init tick */
     ktimer->init_tick = tick;
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&klock, mask);
+    mr_kspinlock_unlock_irqrestore(&klock, mask);
 }
 
 mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
@@ -227,7 +227,7 @@ MR_INLINE void ktimer_timeout_check(void) {
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&klock);
+    mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Check timeout ktimer */
     while (!mr_klist_is_empty(&klist)) {
@@ -245,13 +245,13 @@ MR_INLINE void ktimer_timeout_check(void) {
         mr_klist_move(&ktimer->list, &list);
 
         /* Unlock */
-        mr_spinlock_unlock_irqrestore(&klock, mask);
+        mr_kspinlock_unlock_irqrestore(&klock, mask);
 
         /* Call ktimer entry */
         ((void (*)(mr_ktimer_t *, void *))ktimer->entry)(ktimer, ktimer->args);
 
         /* Lock */
-        mask = mr_spinlock_lock_irqsave(&klock);
+        mask = mr_kspinlock_lock_irqsave(&klock);
 
         /* Check that the ktimer has not been moved */
         if (mr_klist_is_empty(&list)) {
@@ -267,7 +267,7 @@ MR_INLINE void ktimer_timeout_check(void) {
     }
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&klock, mask);
+    mr_kspinlock_unlock_irqrestore(&klock, mask);
 }
 
 MR_INLINE void mr_ktimer_kset_init(void) {

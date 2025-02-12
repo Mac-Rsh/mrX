@@ -50,15 +50,15 @@ MR_INLINE void mr_kref_get(mr_kref_t *kref) {
  * @brief This function puts a kref.
  *
  * @param kref The kref to put.
- * @param release The release function to call.
+ * @param rel The release function to call.
  * @return MR_TRUE on end of lifecycle, MR_FALSE otherwise.
  */
-MR_INLINE mr_bool_t mr_kref_put(mr_kref_t *kref, void (*release)(mr_kref_t *)) {
+MR_INLINE mr_bool_t mr_kref_put(mr_kref_t *kref, void (*rel)(mr_kref_t *ref)) {
     mr_atomic_t ret;
 
     ret = mr_atomic_fetch_sub(kref, 1);
-    if ((ret == 1) && (release != MR_NULL)) {
-        release(kref);
+    if ((ret == 1) && (rel != MR_NULL)) {
+        rel(kref);
         return MR_TRUE;
     }
     return MR_FALSE;

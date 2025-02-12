@@ -32,7 +32,7 @@ typedef struct mr_kslist {
  *
  * @param _kslist The list to initialize.
  */
-#define MR_KSLIST_INIT(_kslist)                                                  \
+#define MR_KSLIST_INIT(_kslist)                                                \
     { .next = MR_NULL }
 
 /**

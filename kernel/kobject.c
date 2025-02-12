@@ -7,7 +7,7 @@
  */
 
 #include <kernel/mr_kobject.h>
-#include <kernel/mr_spinlock.h>
+#include <kernel/mr_kspinlock.h>
 #include <libc/mr_malloc.h>
 #include <libc/mr_printf.h>
 #include <libc/mr_string.h>
@@ -17,10 +17,10 @@
 #define LWORD_DOT2                      (0x2e2e)
 
 /* Root kset */
-static mr_spinlock_t klock = MR_SPINLOCK_INIT();
+static mr_kspinlock_t klock = MR_KSPINLOCK_INIT();
 static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
 
-void mr_ktype_init(mr_ktype_t *type, void (*release)(mr_kobject_t *)) {
+void mr_ktype_init(mr_ktype_t *type, void (*release)(mr_kobject_t *kobj)) {
     /* Check arguments */
     if (!type) {
         return;
@@ -204,24 +204,31 @@ MR_INLINE void path_free(const char *path) {
     mr_free((char *)path);
 }
 
-MR_INLINE mr_err_t kobject_add(mr_kobject_t *kobj, mr_kobject_t **parent,
+MR_INLINE mr_err_t kobject_add(mr_kobject_t *kobj, mr_kobject_t *parent,
                                const char *path) {
     mr_err_t ret;
 
     /* Lookup path in parent */
-    if (kobject_lookup_path(parent, &path, *parent)) {
+    if (kobject_lookup_path(&parent, &path, parent)) {
         return -MR_EEXIST;
+    }
+
+    /* Get parent */
+    parent = mr_kobject_get(parent);
+    if (!parent) {
+        return -MR_ENOENT;
     }
 
     /* Allocate name */
     ret = kobject_name_alloc(kobj, path);
     if (ret != 0) {
+        mr_kobject_put(parent);
         return ret;
     }
 
     /* Add kobject to parent */
-    kobj->parent = mr_kobject_get(*parent);
-    mr_klist_add(&(*parent)->list, &kobj->entry);
+    kobj->parent = parent;
+    mr_klist_add(&parent->list, &kobj->entry);
     return 0;
 }
 
@@ -232,7 +239,7 @@ MR_INLINE mr_err_t kobject_add_varg(mr_kobject_t *kobj, mr_kobject_t *parent,
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&klock);
+    mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Already added */
     if (!mr_klist_is_empty(&kobj->entry)) {
@@ -247,13 +254,13 @@ MR_INLINE mr_err_t kobject_add_varg(mr_kobject_t *kobj, mr_kobject_t *parent,
     }
 
     /* Add kobject to parent */
-    ret = kobject_add(kobj, &parent, path);
+    ret = kobject_add(kobj, parent, path);
 
     /* Free path */
     path_free(path);
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&klock, mask);
+    mr_kspinlock_unlock_irqrestore(&klock, mask);
     return ret;
 }
 
@@ -279,7 +286,7 @@ MR_INLINE void kobject_del(mr_kobject_t *kobj) {
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&klock);
+    mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Already deleted */
     if (mr_klist_is_empty(&kobj->entry)) {
@@ -290,7 +297,7 @@ MR_INLINE void kobject_del(mr_kobject_t *kobj) {
     mr_klist_del(&kobj->entry);
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&klock, mask);
+    mr_kspinlock_unlock_irqrestore(&klock, mask);
 }
 
 void mr_kobject_del(mr_kobject_t *kobj) {
@@ -314,7 +321,7 @@ MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&klock);
+    mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Allocate path */
     ret = path_alloc_varg(fmt, args, &path);
@@ -333,7 +340,7 @@ MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
     path_free(path2);
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&klock, mask);
+    mr_kspinlock_unlock_irqrestore(&klock, mask);
     return kobj;
 }
 

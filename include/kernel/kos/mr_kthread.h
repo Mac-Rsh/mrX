@@ -49,8 +49,8 @@ typedef struct mr_kthread {
  * @return 0 on success, or a negative error code on failure.
  */
 mr_err_t mr_kthread_init(mr_kthread_t *kth, const char *name,
-                         void (*entry)(mr_kthread_t *, void *), void *args,
-                         void *stack, mr_size_t stack_size,
+                         void (*entry)(mr_kthread_t *kth, void *args),
+                         void *args, void *stack, mr_size_t stack_size,
                          mr_uint32_t priority, mr_tick_t tick);
 
 /**
@@ -65,7 +65,7 @@ mr_err_t mr_kthread_init(mr_kthread_t *kth, const char *name,
  * @return The kthread on success, or NULL on failure.
  */
 mr_kthread_t *mr_kthread_create(const char *name,
-                                void (*entry)(mr_kthread_t *, void *),
+                                void (*entry)(mr_kthread_t *kth, void *args),
                                 void *args, mr_size_t stack_size,
                                 mr_uint32_t priority, mr_tick_t tick);
 

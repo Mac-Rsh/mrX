@@ -24,9 +24,9 @@ extern "C" {
 
 /* Knode type */
 typedef struct mr_knode {
+    struct mr_knode *next;
     mr_uint32_t key;
     void *value;
-    struct mr_knode *next;
 } mr_knode_t;
 
 /* Kmap type */

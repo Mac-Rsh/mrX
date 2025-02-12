@@ -12,7 +12,7 @@
 
 static mr_atomic_t kclock;
 #if !defined(MR_CFG_KCLOCK_HOOK_SIZE)
-#define MR_CFG_KCLOCK_HOOK_SIZE         (4)
+#define MR_CFG_KCLOCK_HOOK_SIZE         (8)
 #endif /* !defined(MR_CFG_KCLOCK_HOOK_SIZE) */
 #if defined(MR_USE_THREAD) && (MR_CFG_KCLOCK_HOOK_SIZE < 2)
 #error "If use thread, clock hook size must >= 2"

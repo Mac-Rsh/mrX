@@ -23,15 +23,16 @@ extern "C" {
 
 /* Kthread operations type */
 typedef struct mr_kthread_ops {
-    mr_err_t (*init)(void *, const char *, void *, void *, mr_size_t,
-                     mr_uint32_t, mr_tick_t);
-    mr_err_t (*del)(void *);
-    mr_err_t (*startup)(void *);
-    mr_err_t (*resume)(void *);
+    mr_err_t (*init)(void *res, const char *name, void *kth, void *stack,
+                     mr_size_t stack_size, mr_uint32_t priority,
+                     mr_tick_t tick);
+    mr_err_t (*del)(void *res);
+    mr_err_t (*startup)(void *res);
+    mr_err_t (*resume)(void *res);
     mr_err_t (*yield)(void);
-    mr_err_t (*suspend)(void *);
+    mr_err_t (*suspend)(void *res);
     mr_err_t (*sleep)(mr_tick_t tick);
-    mr_err_t (*exit)(void *);
+    mr_err_t (*exit)(void *res);
     void *(*self)(void);
 } mr_kthread_ops_t;
 

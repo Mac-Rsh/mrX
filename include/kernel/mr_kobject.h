@@ -36,7 +36,7 @@ typedef struct mr_kname {
 
 /* Ktype type */
 typedef struct mr_ktype {
-    void (*release)(struct mr_kobject *);
+    void (*release)(struct mr_kobject *kobj);
 } mr_ktype_t;
 
 /* Kobject type */
@@ -73,7 +73,7 @@ typedef struct mr_kset {
  * @param type The ktype.
  * @param release The release function.
  */
-void mr_ktype_init(mr_ktype_t *type, void (*release)(mr_kobject_t *));
+void mr_ktype_init(mr_ktype_t *type, void (*release)(mr_kobject_t *kobj));
 
 /**
  * @brief This macro function initializes a kobject.
