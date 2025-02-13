@@ -184,12 +184,19 @@ mr_kthread_t *mr_kthread_create(const char *name,
 MR_INLINE mr_err_t kthread_takeover(mr_kthread_t *kth, const char *name,
                                     const void *res, mr_uint32_t priority,
                                     mr_tick_t tick) {
+    mr_err_t ret;
+
     /* Takeover kthread resource */
     kth->res = res;
 
     /* Init and add kthread */
-    return kthread_init_add(kth, &ktype1, name, MR_NULL, MR_NULL, MR_NULL, 0,
-                            priority, tick);
+    ret = kthread_init_add(kth, &ktype1, name, MR_NULL, MR_NULL, MR_NULL, 0,
+                           priority, tick);
+    if (ret == 0) {
+        /* Prevents run-time release */
+        mr_kthread_get(kth);
+    }
+    return ret;
 }
 
 mr_err_t mr_kthread_takeover(mr_kthread_t *kth, const char *name,
