@@ -9,8 +9,11 @@
 #ifndef __MR_KTIMER_H__
 #define __MR_KTIMER_H__
 
+#include <mr_config.h>
+#if defined(MR_USE_KTIMER)
 #include <kernel/mr_kclock.h>
 #include <kernel/mr_kobject.h>
+#endif /* defined(MR_USE_KTIMER) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,8 +24,9 @@ extern "C" {
  * @{
  */
 
+#if defined(MR_USE_KTIMER)
 /* Periodic definition */
-#define MR_KTIMER_PERIODIC (1U << 31)
+#define MR_KTIMER_PERIODIC              (1U << 31)
 
 /* Ktimer type */
 typedef struct mr_ktimer {
@@ -95,6 +99,34 @@ mr_err_t mr_ktimer_stop(mr_ktimer_t *ktimer);
  * @note If the ktimer is running, it will be stopped.
  */
 mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick);
+
+/**
+ * @brief This function find a ktimer.
+ *
+ * @param name The ktimer name.
+ * @return The ktimer on success, or MR_NULL on failure.
+ */
+mr_ktimer_t *mr_ktimer_find(const char *name);
+
+/**
+ * @brief This function get a ktimer.
+ *
+ * @param ktimer The ktimer.
+ * @return The ktimer on success, or MR_NULL on failure.
+ */
+MR_INLINE mr_ktimer_t *mr_ktimer_get(mr_ktimer_t *ktimer) {
+    return (mr_ktimer_t *)mr_kobject_get((mr_kobject_t *)ktimer);
+}
+
+/**
+ * @brief This function put a ktimer.
+ *
+ * @param ktimer The ktimer.
+ */
+MR_INLINE void mr_ktimer_put(mr_ktimer_t *ktimer) {
+    mr_kobject_put((mr_kobject_t *)ktimer);
+}
+#endif /* defined(MR_USE_KTIMER) */
 
 /** @} */
 

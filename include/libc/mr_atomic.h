@@ -13,7 +13,7 @@
 #include <libc/mr_types.h>
 #if !defined(__CC_ARM) && !defined(__GNUC__) && !defined(__clang__)
 #include <arch/mr_hw_irq.h>
-#endif /* defined(__CC_ARM) || defined(__GNUC__) || defined(__clang__) */
+#endif /* !defined(__CC_ARM) && !defined(__GNUC__) && !defined(__clang__) */
 
 #ifdef __cplusplus
 extern "C" {

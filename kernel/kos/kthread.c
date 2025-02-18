@@ -7,12 +7,18 @@
  */
 
 #include <kernel/kos/mr_kthread.h>
+#if defined(MR_USE_KOS)
 #include <kernel/mr_initcall.h>
 #include <libc/mr_malloc.h>
 #include <libc/mr_string.h>
 
+/* Kthread ktype */
 static mr_ktype_t ktype1, ktype2;
+/* Kthread kset */
 static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
+
+/* Kthread ops macro */
+#define KOS_KTHREAD_OPS(_kos)           ((_kos)->type->kth_type->ops)
 
 MR_INLINE mr_err_t kthread_res_alloc(mr_kthread_t *kth, mr_size_t size) {
     void *res;
@@ -70,8 +76,8 @@ MR_INLINE mr_err_t kthread_init(mr_kthread_t *kth, const char *name,
         }
 
         /* Init kthread resource */
-        ret = MR_KOS_KTH_OPS(kos)->init((void *)kth->res, name, kth, stack,
-                                        stack_size, priority, tick);
+        ret = KOS_KTHREAD_OPS(kos)->init((void *)kth->res, name, kth, stack,
+                                         stack_size, priority, tick);
         if (ret != 0) {
             kthread_res_free(kth);
             return ret;
@@ -94,7 +100,7 @@ MR_INLINE mr_err_t kthread_del(mr_kthread_t *kth) {
     }
 
     /* Delete kthread resource */
-    return MR_KOS_KTH_OPS(kth->os)->del((void *)kth->res);
+    return KOS_KTHREAD_OPS(kth->os)->del((void *)kth->res);
 }
 
 MR_INLINE mr_err_t kthread_init_add(mr_kthread_t *kth, mr_ktype_t *ktype,
@@ -237,7 +243,7 @@ MR_INLINE mr_err_t kthread_startup(mr_kthread_t *kth) {
     mr_kthread_get(kth);
 
     /* Startup kthread resource */
-    ret = MR_KOS_KTH_OPS(kth->os)->startup((void *)kth->res);
+    ret = KOS_KTHREAD_OPS(kth->os)->startup((void *)kth->res);
     if (ret != 0) {
         mr_kthread_put(kth);
         return ret;
@@ -257,7 +263,7 @@ mr_err_t mr_kthread_startup(mr_kthread_t *kth) {
 
 MR_INLINE mr_err_t kthread_resume(mr_kthread_t *kth) {
     /* Resume kthread resource */
-    return MR_KOS_KTH_OPS(kth->os)->resume((void *)kth->res);
+    return KOS_KTHREAD_OPS(kth->os)->resume((void *)kth->res);
 }
 
 mr_err_t mr_kthread_resume(mr_kthread_t *kth) {
@@ -281,7 +287,7 @@ MR_INLINE mr_err_t kthread_yield(void) {
     }
 
     /* Yield kthread resource */
-    ret = MR_KOS_KTH_OPS(kos)->yield();
+    ret = KOS_KTHREAD_OPS(kos)->yield();
 
     /* Put kos */
     mr_kos_put(kos);
@@ -295,7 +301,7 @@ mr_err_t mr_kthread_yield(void) {
 
 MR_INLINE mr_err_t kthread_suspend(mr_kthread_t *kth) {
     /* Suspend kthread resource */
-    return MR_KOS_KTH_OPS(kth->os)->suspend((void *)kth->res);
+    return KOS_KTHREAD_OPS(kth->os)->suspend((void *)kth->res);
 }
 
 mr_err_t mr_kthread_suspend(mr_kthread_t *kth) {
@@ -319,7 +325,7 @@ MR_INLINE mr_err_t kthread_sleep(mr_tick_t tick) {
     }
 
     /* Sleep kthread resource */
-    ret = MR_KOS_KTH_OPS(kos)->sleep(tick);
+    ret = KOS_KTHREAD_OPS(kos)->sleep(tick);
 
     /* Put kos */
     mr_kos_put(kos);
@@ -333,7 +339,7 @@ mr_err_t mr_kthread_sleep(mr_tick_t tick) {
 
 MR_INLINE mr_err_t kthread_exit(mr_kthread_t *kth) {
     /* Exit kthread resource */
-    return MR_KOS_KTH_OPS(kth->os)->exit((void *)kth->res);
+    return KOS_KTHREAD_OPS(kth->os)->exit((void *)kth->res);
 }
 
 mr_err_t mr_kthread_exit(mr_kthread_t *kth) {
@@ -357,7 +363,7 @@ MR_INLINE mr_kthread_t *kthread_self(void) {
     }
 
     /* Get kthread self */
-    ret = MR_KOS_KTH_OPS(kos)->self();
+    ret = KOS_KTHREAD_OPS(kos)->self();
 
     /* Put kos */
     mr_kos_put(kos);
@@ -367,11 +373,6 @@ MR_INLINE mr_kthread_t *kthread_self(void) {
 mr_kthread_t *mr_kthread_self(void) {
     /* Get kthread self */
     return kthread_self();
-}
-
-mr_kthread_t *mr_kthread_find(const char *name) {
-    /* Lookup kthread in kroot */
-    return (mr_kthread_t *)mr_kobject_lookup((mr_kobject_t *)&kroot, name);
 }
 
 void mr_kthread_cleanup(mr_kthread_t *kth) {
@@ -385,13 +386,18 @@ void mr_kthread_cleanup(mr_kthread_t *kth) {
 }
 
 void mr_kthread_entry(mr_kthread_t *kth) {
-    /* Check entry */
-    if (!kth->entry) {
+    /* Check arguments */
+    if ((!kth) || (!MR_KOBJECT_IS_INITED(kth)) || (!kth->entry)) {
         return;
     }
 
     /* Call kthread entry */
     ((void (*)(mr_kthread_t *, void *))kth->entry)(kth, kth->args);
+}
+
+mr_kthread_t *mr_kthread_find(const char *name) {
+    /* Lookup kthread in kroot */
+    return (mr_kthread_t *)mr_kobject_lookup((mr_kobject_t *)&kroot, name);
 }
 
 MR_INLINE mr_kthread_t *kthread_release_kobj(mr_kobject_t *kobj) {
@@ -416,7 +422,7 @@ MR_INLINE void kthread_release1_kobj(mr_kobject_t *kobj) {
 MR_INLINE void kthread_release2_kobj(mr_kobject_t *kobj) {
     mr_kthread_t *kth;
 
-    /* Release kobject */
+    /* Release kthread */
     kth = kthread_release_kobj(kobj);
 
     /* Free kthread */
@@ -432,3 +438,4 @@ MR_INLINE void mr_kthread_kset_init(void) {
     mr_ktype_init(&ktype2, kthread_release2_kobj);
 }
 MR_INIT_EXPORT(mr_kthread_kset_init, MR_INIT_LEVEL_KERNEL);
+#endif /* defined(MR_USE_KOS) */

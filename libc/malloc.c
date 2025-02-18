@@ -9,15 +9,16 @@
 #include <libc/mr_malloc.h>
 #if (!defined(MR_USE_LIBC_MALLOC)) && (!defined(MR_USE_3PARTY_MALLOC))
 #include <arch/mr_hw_irq.h>
-#include <libc/mr_string.h>
 
 #if !defined(MR_CFG_HEAP_SIZE)
 #define MR_CFG_HEAP_SIZE                (4 * 1024)
 #endif /* !defined(MR_CFG_HEAP_SIZE) */
-#if (MR_CFG_HEAP_SIZE < 16)
+#if (MR_CFG_HEAP_SIZE < 24)
 #error "Heap size is too small(must >= 16)"
 #endif /* MR_CFG_HEAP_SIZE */
+/* Heap memory */
 static mr_uint8_t heap[MR_CFG_HEAP_SIZE];
+/* Heap block head */
 static mr_memblk_t blk_head = {.size = 1};
 
 /* Heap magic number */
@@ -170,7 +171,8 @@ mr_size_t mr_malloc_usable_size(void *mem) {
 
 void *mr_calloc(mr_size_t num, mr_size_t size) {
     mr_size_t total;
-    void *memory;
+    mr_size_t i;
+    void *mem;
 
     /* Calculate the total size */
     total = num * size;
@@ -178,20 +180,23 @@ void *mr_calloc(mr_size_t num, mr_size_t size) {
         return MR_NULL;
     }
 
-    /* Allocate memory */
-    memory = mr_malloc(total);
-    if (memory == MR_NULL) {
-        /* Not enough memory */
+    /* Allocate mem */
+    mem = mr_malloc(total);
+    if (mem == MR_NULL) {
+        /* Not enough mem */
         return MR_NULL;
     }
 
-    /* Initialize the memory to 0 */
-    mr_memset(memory, 0, total);
-    return memory;
+    /* Initialize the mem to 0 */
+    for (i = 0; i < total; i++) {
+        ((mr_uint8_t *)mem)[i] = 0;
+    }
+    return mem;
 }
 
 void *mr_realloc(void *mem, mr_size_t size) {
     mr_size_t old_size;
+    mr_size_t i;
     void *new;
 
     /* Get the old size */
@@ -205,7 +210,9 @@ void *mr_realloc(void *mem, mr_size_t size) {
     }
 
     /* Copy the memory data to the new memory */
-    mr_memcpy(new, mem, old_size);
+    for (i = 0; i < old_size; i++) {
+        ((mr_uint8_t *)new)[i] = ((mr_uint8_t *)mem)[i];
+    }
     mr_free(mem);
     return new;
 }

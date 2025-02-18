@@ -6,15 +6,20 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
+#include <kernel/mr_ktimer.h>
+#if defined(MR_USE_KTIMER)
 #include <kernel/mr_initcall.h>
 #include <kernel/mr_kspinlock.h>
-#include <kernel/mr_ktimer.h>
 #include <libc/mr_malloc.h>
 
+/* Ktimer ktype */
 static mr_ktype_t ktype1, ktype2;
-static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
+/* Ktimer list */
 static mr_klist_t klist = MR_KLIST_INIT(&klist);
+/* Ktimer lock */
 static mr_kspinlock_t klock = MR_KSPINLOCK_INIT();
+/* Ktimer kset */
+static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
 
 MR_INLINE void ktimer_init(mr_ktimer_t *ktimer, mr_ptr_t entry, void *args,
                            mr_tick_t tick) {
@@ -84,14 +89,11 @@ MR_INLINE void ktimer_del(mr_ktimer_t *ktimer) {
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
 
-    /* Already deleted */
-    if (mr_klist_is_empty(&ktimer->list)) {
-        goto _exit;
+    /* Remove ktimer from ktimer list */
+    if (!mr_klist_is_empty(&ktimer->list)) {
+        mr_klist_del(&ktimer->list);
     }
 
-    /* Remove ktimer from ktimer list */
-    mr_klist_del(&ktimer->list);
-_exit:
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
 }
@@ -176,6 +178,11 @@ MR_INLINE void ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
 
+    /* Remove ktimer from ktimer list */
+    if (!mr_klist_is_empty(&ktimer->list)) {
+        mr_klist_del(&ktimer->list);
+    }
+
     /* Set init tick */
     ktimer->init_tick = tick;
 
@@ -189,15 +196,17 @@ mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
         return -MR_EINVAL;
     }
 
-    /* Delete ktimer */
-    ktimer_del(ktimer);
-
     /* Set ktimer tick */
     ktimer_tick_set(ktimer, tick);
     return 0;
 }
 
-MR_INLINE void ktimer_release1_kobj(mr_kobject_t *kobj) {
+mr_ktimer_t *mr_ktimer_find(const char *name) {
+    /* Lookup ktimer in kroot */
+    return (mr_ktimer_t *)mr_kobject_lookup((mr_kobject_t *)&kroot, name);
+}
+
+MR_INLINE mr_ktimer_t *ktimer_release_kobj(mr_kobject_t *kobj) {
     mr_ktimer_t *ktimer;
 
     /* Get ktimer */
@@ -205,16 +214,19 @@ MR_INLINE void ktimer_release1_kobj(mr_kobject_t *kobj) {
 
     /* Delete ktimer */
     ktimer_del(ktimer);
+    return ktimer;
+}
+
+MR_INLINE void ktimer_release1_kobj(mr_kobject_t *kobj) {
+    /* Release ktimer */
+    ktimer_release_kobj(kobj);
 }
 
 MR_INLINE void ktimer_release2_kobj(mr_kobject_t *kobj) {
     mr_ktimer_t *ktimer;
 
-    /* Get ktimer */
-    ktimer = MR_CONTAINER_OF(kobj, mr_ktimer_t, parent);
-
-    /* Delete ktimer */
-    ktimer_del(ktimer);
+    /* Release ktimer */
+    ktimer = ktimer_release_kobj(kobj);
 
     /* Free ktimer */
     mr_free(ktimer);
@@ -223,8 +235,10 @@ MR_INLINE void ktimer_release2_kobj(mr_kobject_t *kobj) {
 MR_INLINE void ktimer_timeout_check(void) {
     mr_ktimer_t *ktimer;
     mr_klist_t list;
-    mr_tick_t tick;
     int mask;
+
+    /* Operation list */
+    mr_klist_init(&list);
 
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
@@ -233,15 +247,13 @@ MR_INLINE void ktimer_timeout_check(void) {
     while (!mr_klist_is_empty(&klist)) {
         ktimer = MR_KLIST_ENTRY(klist.next, mr_ktimer_t, list);
 
-        /* Get current tick */
-        tick = mr_kclock_tick();
-        if ((tick - ktimer->timeout_tick) >= (MR_TICK_MAX / 2)) {
+        /* Check timeout tick */
+        if ((mr_kclock_tick() - ktimer->timeout_tick) >= (MR_TICK_MAX / 2)) {
             /* There will be no timeout ktimer after that */
             break;
         }
 
         /* Move ktimer into operation list */
-        mr_klist_init(&list);
         mr_klist_move(&ktimer->list, &list);
 
         /* Unlock */
@@ -288,3 +300,4 @@ MR_INLINE void mr_ktimer_kset_init(void) {
     mr_kclock_hook_add(ktimer_timeout_check);
 }
 MR_INIT_EXPORT(mr_ktimer_kset_init, MR_INIT_LEVEL_KERNEL);
+#endif /* defined(MR_USE_KTIMER) */

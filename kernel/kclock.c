@@ -17,7 +17,9 @@ static mr_atomic_t kclock;
 #if defined(MR_USE_THREAD) && (MR_CFG_KCLOCK_HOOK_SIZE < 2)
 #error "If use thread, clock hook size must >= 2"
 #endif /* defined(MR_USE_THREAD) && (MR_CFG_KCLOCK_HOOK_SIZE < 2) */
+/* Clock hook entry */
 static mr_ptr_t kentry[MR_CFG_KCLOCK_HOOK_SIZE];
+/* Clock hook */
 static mr_khook_t khook = MR_KHOOK_INIT(kentry, MR_CFG_KCLOCK_HOOK_SIZE);
 
 MR_INLINE void kclock_hook(void) {

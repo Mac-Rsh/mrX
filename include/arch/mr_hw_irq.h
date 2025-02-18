@@ -24,6 +24,9 @@
  * @brief This function saves the current interrupt mask.
  *
  * @return The current interrupt mask.
+ *
+ * @note User implementation.
+ * @note Need to clear the hardware interrupt mask.
  */
 int mr_hw_irq_save(void);
 
@@ -31,6 +34,8 @@ int mr_hw_irq_save(void);
  * @brief This function restores the interrupt mask.
  *
  * @param mask The interrupt mask to restore.
+ *
+ * @note User implementation.
  */
 void mr_hw_irq_restore(int mask);
 

@@ -44,7 +44,7 @@ typedef struct mr_kobject {
     mr_uint32_t magic;
     mr_kname_t name;
 #if !defined(MR_CFG_KOBJECT_INAME_SIZE)
-#define MR_CFG_KOBJECT_INAME_SIZE       (16)
+#define MR_CFG_KOBJECT_INAME_SIZE       (8)
 #endif /* !defined(MR_CFG_KOBJECT_INAME_SIZE) */
     char iname[MR_CFG_KOBJECT_INAME_SIZE];
     struct mr_kobject *parent;

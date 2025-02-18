@@ -9,8 +9,11 @@
 #ifndef __MR_KOS_H__
 #define __MR_KOS_H__
 
+#include <mr_config.h>
+#if defined(MR_USE_KOS)
 #include <kernel/mr_kclock.h>
 #include <kernel/mr_kobject.h>
+#endif /* defined(MR_USE_KOS) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,6 +24,7 @@ extern "C" {
  * @{
  */
 
+#if defined(MR_USE_KOS)
 /* Kthread operations type */
 typedef struct mr_kthread_ops {
     mr_err_t (*init)(void *res, const char *name, void *kth, void *stack,
@@ -86,14 +90,7 @@ MR_INLINE void mr_kos_put(mr_kos_t *kos) {
  * @return The kernel os.
  */
 mr_kos_t *mr_kos_find(void);
-
-/**
- * @brief This macro function gets the kthread operations of a kernel os.
- *
- * @param _kos The kernel os.
- * @return The kthread operations of the kernel os.
- */
-#define MR_KOS_KTH_OPS(_kos)            ((_kos)->type->kth_type->ops)
+#endif /* defined(MR_USE_KOS) */
 
 /** @} */
 

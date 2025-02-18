@@ -126,6 +126,10 @@ char *mr_strerror(int errnum) {
             error = "Invalid argument";
             break;
         }
+        case MR_ENOSYS: {
+            error = "Function not implemented";
+            break;
+        }
         case MR_ETIMEDOUT: {
             error = "Connection timed out";
             break;
@@ -144,6 +148,18 @@ mr_size_t mr_strlen(const char *s) {
         return 0;
     }
     for (len = 0; *s != '\0'; s++) {
+        len++;
+    }
+    return len;
+}
+
+mr_size_t mr_strnlen(const char *s, mr_size_t size) {
+    mr_size_t len;
+
+    if (!s) {
+        return 0;
+    }
+    for (len = 0; (len < size) && (*s != '\0'); s++) {
         len++;
     }
     return len;

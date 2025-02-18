@@ -9,7 +9,10 @@
 #ifndef __MR_KTHREAD_H__
 #define __MR_KTHREAD_H__
 
+#include <mr_config.h>
+#if defined(MR_USE_KOS)
 #include <kernel/kos/mr_kos.h>
+#endif /* defined(MR_USE_KOS) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,6 +23,7 @@ extern "C" {
  * @{
  */
 
+#if defined(MR_USE_KOS)
 /* Kthread type */
 typedef struct mr_kthread {
     mr_kobject_t parent;
@@ -145,6 +149,30 @@ mr_err_t mr_kthread_exit(mr_kthread_t *kth);
 mr_kthread_t *mr_kthread_self(void);
 
 /**
+ * @brief This function cleanup a kthread.
+ *
+ * @param kth The kthread.
+ */
+void mr_kthread_cleanup(mr_kthread_t *kth);
+
+/**
+ * @brief This function is the kthread entry.
+ *
+ * @param kth The kthread.
+ *
+ * @note User does not need to call this function.
+ */
+void mr_kthread_entry(mr_kthread_t *kth);
+
+/**
+ * @brief This function find a kthread.
+ *
+ * @param name The kthread name.
+ * @return The kthread on success, or MR_NULL on failure.
+ */
+mr_kthread_t *mr_kthread_find(const char *name);
+
+/**
  * @brief This function get a kthread.
  *
  * @param kth The kthread.
@@ -162,30 +190,7 @@ MR_INLINE mr_kthread_t *mr_kthread_get(mr_kthread_t *kth) {
 MR_INLINE void mr_kthread_put(mr_kthread_t *kth) {
     mr_kobject_put((mr_kobject_t *)kth);
 }
-
-/**
- * @brief This function find a kthread.
- *
- * @param name The kthread name.
- * @return The kthread on success, or MR_NULL on failure.
- */
-mr_kthread_t *mr_kthread_find(const char *name);
-
-/**
- * @brief This function cleanup a kthread.
- *
- * @param kth The kthread.
- */
-void mr_kthread_cleanup(mr_kthread_t *kth);
-
-/**
- * @brief This function is the kthread entry.
- *
- * @param kth The kthread.
- *
- * @note User does not need to call this function.
- */
-void mr_kthread_entry(mr_kthread_t *kth);
+#endif /* defined(MR_USE_KOS) */
 
 /** @} */
 

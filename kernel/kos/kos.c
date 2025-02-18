@@ -7,7 +7,9 @@
  */
 
 #include <kernel/kos/mr_kos.h>
+#if defined(MR_USE_KOS)
 
+/* Kos */
 static mr_kos_t kroot;
 
 MR_INLINE void kos_init(mr_kos_t *os, mr_kos_type_t *ktype) {
@@ -41,3 +43,4 @@ mr_kos_t *mr_kos_find(void) {
     /* Find kos in kroot */
     return &kroot;
 }
+#endif /* defined(MR_USE_KOS) */

@@ -12,13 +12,14 @@
 #include <libc/mr_printf.h>
 #include <libc/mr_string.h>
 
+/* Kobject lock */
+static mr_kspinlock_t klock = MR_KSPINLOCK_INIT();
+/* Kobject kset */
+static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
+
 /* Last-word definition */
 #define LWORD_DOT                       (0x2e)
 #define LWORD_DOT2                      (0x2e2e)
-
-/* Root kset */
-static mr_kspinlock_t klock = MR_KSPINLOCK_INIT();
-static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
 
 void mr_ktype_init(mr_ktype_t *type, void (*release)(mr_kobject_t *kobj)) {
     /* Check arguments */

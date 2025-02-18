@@ -127,6 +127,15 @@ char *mr_strerror(int errnum);
 mr_size_t mr_strlen(const char *s);
 
 /**
+ * @brief This function returns the length of the string.
+ *
+ * @param s The string.
+ * @param size The maximum length of the string.
+ * @return The length of the string.
+ */
+mr_size_t mr_strnlen(const char *s, mr_size_t size);
+
+/**
  * @brief This function compares the first size bytes of s1 and s2.
  *
  * @param s1 The first string.
