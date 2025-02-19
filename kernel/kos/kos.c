@@ -18,9 +18,9 @@ MR_INLINE void kos_init(mr_kos_t *os, mr_kos_type_t *ktype) {
 }
 
 MR_INLINE mr_err_t kos_init_register(mr_kos_t *kos, const char *name,
-                                     mr_kos_type_t *ktype) {
+                                     mr_kos_type_t *type) {
     /* Init kos */
-    kos_init(kos, ktype);
+    kos_init(kos, type);
 
     /* Init kset */
     mr_kset_init((mr_kset_t *)kos, MR_NULL);

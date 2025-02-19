@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_SPINLOCK_H__
-#define __MR_SPINLOCK_H__
+#ifndef __MR_KSPINLOCK_H__
+#define __MR_KSPINLOCK_H__
 
 #include <arch/mr_hw_irq.h>
 #include <libc/mr_atomic.h>
@@ -102,4 +102,4 @@ MR_INLINE mr_bool_t mr_kspinlock_is_locked(mr_kspinlock_t *klock) {
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_SPINLOCK_H__ */
+#endif /* __MR_KSPINLOCK_H__ */

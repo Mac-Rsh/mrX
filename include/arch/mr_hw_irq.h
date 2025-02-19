@@ -9,8 +9,6 @@
 #ifndef __MR_HW_IRQ_H__
 #define __MR_HW_IRQ_H__
 
-#include <libc/mr_types.h>
-
 #ifdef __cplusplus
 "C" {
 #endif /* __cplusplus */

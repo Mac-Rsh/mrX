@@ -78,6 +78,7 @@ mr_kthread_t *mr_kthread_create(const char *name,
  *
  * @param kth The kthread.
  * @param name The kthread name.
+ * @param res The kthread resource.
  * @param priority The kthread priority.
  * @param tick The kthread time slice.
  * @return 0 on success, or a negative error code on failure.
@@ -152,6 +153,9 @@ mr_kthread_t *mr_kthread_self(void);
  * @brief This function cleanup a kthread.
  *
  * @param kth The kthread.
+ *
+ * @note User does not need to call this function.
+ * @note Developer adaptation required.
  */
 void mr_kthread_cleanup(mr_kthread_t *kth);
 
@@ -161,6 +165,7 @@ void mr_kthread_cleanup(mr_kthread_t *kth);
  * @param kth The kthread.
  *
  * @note User does not need to call this function.
+ * @note Developer adaptation required.
  */
 void mr_kthread_entry(mr_kthread_t *kth);
 

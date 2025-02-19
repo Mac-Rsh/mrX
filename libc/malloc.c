@@ -30,12 +30,12 @@ static void heap_insert_block(mr_memblk_t *blk) {
     mr_memblk_t *prev;
 
     /* Search for the previous blk */
-    for (prev = &blk_head; (prev->next != MR_NULL) && (prev->next < blk);
+    for (prev = &blk_head; prev->next && (prev->next < blk);
          prev = prev->next) {
     }
 
     /* Insert the blk */
-    if (prev->next != MR_NULL) {
+    if (prev->next) {
         /* Merge with the previous blk */
         if ((void *)(((mr_uint8_t *)prev) + sizeof(mr_memblk_t) + prev->size)
             == (void *)blk) {
@@ -82,7 +82,7 @@ void *mr_malloc(mr_size_t size) {
     }
 
     /* Check size and res mem */
-    if ((blk_head.next == MR_NULL) || (size == 0)) {
+    if ((!blk_head.next) || (size == 0)) {
         mem = MR_NULL;
         goto _exit;
     }
@@ -93,7 +93,7 @@ void *mr_malloc(mr_size_t size) {
     /* Search for and take blocks that match the criteria */
     for (prev = &blk_head, blk = prev->next; blk->size < size;
          prev = blk, blk = blk->next) {
-        if (blk->next == MR_NULL) {
+        if (!blk->next) {
             mem = MR_NULL;
             goto _exit;
         }
@@ -130,8 +130,8 @@ void mr_free(void *mem) {
     mr_memblk_t *blk;
     int mask;
 
-    /* Check mem */
-    if (mem == MR_NULL) {
+    /* Check arguments */
+    if (!mem) {
         return;
     }
 
@@ -155,8 +155,8 @@ void mr_free(void *mem) {
 mr_size_t mr_malloc_usable_size(void *mem) {
     mr_memblk_t *blk;
 
-    /* Check mem */
-    if (mem == MR_NULL) {
+    /* Check arguments */
+    if (!mem) {
         return 0;
     }
 
@@ -182,7 +182,7 @@ void *mr_calloc(mr_size_t num, mr_size_t size) {
 
     /* Allocate mem */
     mem = mr_malloc(total);
-    if (mem == MR_NULL) {
+    if (!mem) {
         /* Not enough mem */
         return MR_NULL;
     }
@@ -204,7 +204,7 @@ void *mr_realloc(void *mem, mr_size_t size) {
 
     /* Reallocate memory */
     new = mr_malloc(size);
-    if (new == MR_NULL) {
+    if (!new) {
         /* Not enough memory */
         return MR_NULL;
     }
