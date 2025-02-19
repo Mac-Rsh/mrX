@@ -18,11 +18,11 @@
 #define MOD_SPECIAL                     (1 << 5)
 #define MOD_LARGE                       (1 << 6)
 
-static char *format_number(char *str, char *end, int modifier, int width,
-                           int precision, char effector, int base,
+static char *format_number(char *str, char *end, mr_uint32_t modifier,
+                           int width, int precision, char effector, int base,
                            mr_uint64_t num) {
-    const static char small_digits[] = "0123456789abcdef";
-    const static char large_digits[] = "0123456789ABCDEF";
+    static const char small_digits[] = "0123456789abcdef";
+    static const char large_digits[] = "0123456789ABCDEF";
     char fill, sign, tmp[64];
     const char *digits;
     int i;
@@ -205,9 +205,9 @@ static char *format_number(char *str, char *end, int modifier, int width,
 }
 
 int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
-    int modifier, width, precision, base;
+    int width, precision, len, i, base;
+    mr_uint32_t modifier;
     char *str, *end, *s;
-    mr_size_t len, i;
     mr_uint64_t num;
     char effector;
 
@@ -374,6 +374,8 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
             case 'd':
             case 'i': {
                 modifier |= MOD_SIGN;
+                base = 10;
+                break;
             }
             case 'u': {
                 base = 10;
@@ -382,6 +384,8 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
             /* Hexadecimal */
             case 'X': {
                 modifier |= MOD_LARGE;
+                base = 16;
+                break;
             }
             case 'x': {
                 base = 16;
@@ -404,9 +408,12 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
             case 'G':
             case 'E':
             case 'F': {
-                mr_va_arg(args, mr_f64_t);
+                num = mr_va_arg(args, mr_f64_t);
+                /* Remind you */
+                goto _default;
             }
             default: {
+_default:
                 /* Not supported symbol */
                 if (str < end) {
                     *str = '%';
