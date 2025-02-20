@@ -50,10 +50,6 @@ MR_INLINE void kthread_res_free(mr_kthread_t *kth) {
     }
 }
 
-MR_INLINE mr_bool_t kthread_is_takeover(mr_kthread_t *kth) {
-    return (kth->res != kth->ires) && (!kth->entry);
-}
-
 MR_INLINE mr_err_t kthread_init(mr_kthread_t *kth, const char *name,
                                 mr_ptr_t entry, mr_ptr_t args, void *stack,
                                 mr_size_t stack_size, mr_uint32_t priority,
@@ -68,7 +64,7 @@ MR_INLINE mr_err_t kthread_init(mr_kthread_t *kth, const char *name,
     }
 
     /* Non-takeover kthread need to initialize resources */
-    if (!kthread_is_takeover(kth)) {
+    if (entry) {
         /* Alloc resource */
         ret = kthread_res_alloc(kth, type->size);
         if (ret != 0) {
@@ -85,6 +81,7 @@ MR_INLINE mr_err_t kthread_init(mr_kthread_t *kth, const char *name,
     }
 
     /* Init kthread */
+    kth->runtime = 0;
     kth->priority = priority;
     kth->tick = tick;
     kth->entry = entry;
@@ -94,8 +91,8 @@ MR_INLINE mr_err_t kthread_init(mr_kthread_t *kth, const char *name,
 }
 
 MR_INLINE mr_err_t kthread_del(mr_kthread_t *kth) {
-    /* Takeover kthread do not need to delete */
-    if (kthread_is_takeover(kth)) {
+    /* Takeover kthread do not need to delete resources */
+    if (!kth->entry) {
         return 0;
     }
 
@@ -133,7 +130,6 @@ MR_INLINE mr_err_t kthread_init_add(mr_kthread_t *kth, mr_ktype_t *ktype,
         mr_kos_put(kos);
         kthread_del(kth);
         kthread_res_free(kth);
-        goto _exit;
     }
 
 _exit:
@@ -187,6 +183,12 @@ mr_kthread_t *mr_kthread_create(const char *name,
     return kth;
 }
 
+MR_INLINE void kthread_runtime_enter(mr_kthread_t *kth) {
+    /* Only enter run-time need get kthread */
+    mr_kthread_get(kth);
+    mr_kref_get(&kth->runtime);
+}
+
 MR_INLINE mr_err_t kthread_takeover(mr_kthread_t *kth, const char *name,
                                     const void *res, mr_uint32_t priority,
                                     mr_tick_t tick) {
@@ -199,8 +201,8 @@ MR_INLINE mr_err_t kthread_takeover(mr_kthread_t *kth, const char *name,
     ret = kthread_init_add(kth, &ktype1, name, MR_NULL, MR_NULL, MR_NULL, 0,
                            priority, tick);
     if (ret == 0) {
-        /* Prevents run-time release */
-        mr_kthread_get(kth);
+        /* Takeover kthread have been started, enter run-time */
+        kthread_runtime_enter(kth);
     }
     return ret;
 }
@@ -236,16 +238,32 @@ mr_err_t mr_kthread_del(mr_kthread_t *kth) {
     return 0;
 }
 
+MR_INLINE void kthread_runtime_release(mr_kref_t *ref) {
+    mr_kthread_t *kth;
+
+    /* Get kthread */
+    kth = MR_CONTAINER_OF(ref, mr_kthread_t, runtime);
+
+    /* Put kthread */
+    mr_kthread_put(kth);
+}
+
+MR_INLINE void kthread_runtime_exit(mr_kthread_t *kth) {
+    /* Not need to put kthread */
+    mr_kref_put(&kth->runtime, kthread_runtime_release);
+}
+
 MR_INLINE mr_err_t kthread_startup(mr_kthread_t *kth) {
     mr_err_t ret;
 
-    /* Prevents run-time release */
-    mr_kthread_get(kth);
+    /* Enter run-time */
+    kthread_runtime_enter(kth);
 
     /* Startup kthread resource */
     ret = KOS_KTHREAD_OPS(kth->os)->startup((void *)kth->res);
     if (ret != 0) {
-        mr_kthread_put(kth);
+        /* Exit run-time */
+        kthread_runtime_exit(kth);
         return ret;
     }
     return 0;
@@ -381,8 +399,11 @@ void mr_kthread_cleanup(mr_kthread_t *kth) {
         return;
     }
 
-    /* Free runtime */
-    mr_kthread_put(kth);
+    /* Exit run-time */
+    kthread_runtime_exit(kth);
+
+    /* Delete kobject */
+    mr_kobject_del((mr_kobject_t *)kth);
 }
 
 void mr_kthread_entry(mr_kthread_t *kth) {

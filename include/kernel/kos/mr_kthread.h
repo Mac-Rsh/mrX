@@ -27,6 +27,7 @@ extern "C" {
 /* Kthread type */
 typedef struct mr_kthread {
     mr_kobject_t parent;
+    mr_kref_t runtime;
     const void *res;
 #if !defined(MR_CFG_KTHREAD_IRES_SIZE)
 #define MR_CFG_KTHREAD_IRES_SIZE        (256)
@@ -78,7 +79,7 @@ mr_kthread_t *mr_kthread_create(const char *name,
  *
  * @param kth The kthread.
  * @param name The kthread name.
- * @param res The kthread resource.
+ * @param res The kthread resources.
  * @param priority The kthread priority.
  * @param tick The kthread time slice.
  * @return 0 on success, or a negative error code on failure.

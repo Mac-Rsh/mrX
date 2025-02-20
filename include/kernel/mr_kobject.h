@@ -111,7 +111,6 @@ void mr_kobject_init(mr_kobject_t *kobj, mr_ktype_t *type);
  * @brief This function adds a kobject.
  *
  * @param kobj The kobject.
- * @param parent The parent kobject.
  * @param fmt The format string(path).
  * @param ... The format arguments.
  * @returns 0 on success, or a negative error code on failure.
