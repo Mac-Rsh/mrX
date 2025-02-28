@@ -11,7 +11,8 @@
 
 #include <mr_config.h>
 #if defined(MR_USE_KOS)
-#include <kernel/kos/mr_kos.h>
+#include <kernel/mr_kclock.h>
+#include <kernel/mr_kobject.h>
 #endif /* defined(MR_USE_KOS) */
 
 #ifdef __cplusplus
@@ -27,18 +28,18 @@ extern "C" {
 /* Kthread type */
 typedef struct mr_kthread {
     mr_kobject_t parent;
-    mr_kref_t runtime;
-    const void *res;
-#if !defined(MR_CFG_KTHREAD_IRES_SIZE)
-#define MR_CFG_KTHREAD_IRES_SIZE        (256)
-#endif /* !defined(MR_CFG_KTHREAD_IRES_SIZE) */
-    mr_uint8_t ires[MR_CFG_KTHREAD_IRES_SIZE];
-    mr_uint32_t priority;
-    mr_tick_t tick;
+    mr_ptr_t thread;
     mr_ptr_t entry;
     mr_ptr_t args;
-    mr_kos_t *os;
 } mr_kthread_t;
+
+/**
+ * @brief This macro function checks if a kthread is initialized.
+ *
+ * @param _kth The kthread.
+ * @return MR_TRUE if the kthread is initialized, MR_FALSE otherwise.
+ */
+#define MR_KTHREAD_IS_INITED(_kth)      MR_KOBJECT_IS_INITED(_kth)
 
 /**
  * @brief This function initialize a kthread.
@@ -47,7 +48,6 @@ typedef struct mr_kthread {
  * @param name The kthread name.
  * @param entry The kthread entry.
  * @param args The kthread arguments.
- * @param stack The kthread stack.
  * @param stack_size The kthread stack size.
  * @param priority The kthread priority.
  * @param tick The kthread time slice.
@@ -55,8 +55,8 @@ typedef struct mr_kthread {
  */
 mr_err_t mr_kthread_init(mr_kthread_t *kth, const char *name,
                          void (*entry)(mr_kthread_t *kth, void *args),
-                         void *args, void *stack, mr_size_t stack_size,
-                         mr_uint32_t priority, mr_tick_t tick);
+                         void *args, mr_size_t stack_size, mr_uint32_t priority,
+                         mr_tick_t tick);
 
 /**
  * @brief This function create a kthread.
@@ -67,7 +67,7 @@ mr_err_t mr_kthread_init(mr_kthread_t *kth, const char *name,
  * @param stack_size The kthread stack size.
  * @param priority The kthread priority.
  * @param tick The kthread time slice.
- * @return The kthread on success, or NULL on failure.
+ * @return The kthread on success, or MR_NULL on failure.
  */
 mr_kthread_t *mr_kthread_create(const char *name,
                                 void (*entry)(mr_kthread_t *kth, void *args),
@@ -75,18 +75,21 @@ mr_kthread_t *mr_kthread_create(const char *name,
                                 mr_uint32_t priority, mr_tick_t tick);
 
 /**
+ * @brief This macro function checks if a kthread is a takeover.
+ * @param _kth The kthread.
+ * @return MR_TRUE if the kthread is a takeover, MR_FALSE otherwise.
+ */
+#define MR_KTHREAD_IS_TAKEOVER(_kth)    (!((mr_kthread_t *)(_kth))->entry)
+
+/**
  * @brief This function takeover a kthread.
  *
  * @param kth The kthread.
  * @param name The kthread name.
- * @param res The kthread resources.
- * @param priority The kthread priority.
- * @param tick The kthread time slice.
+ * @param thread The takeover thread.
  * @return 0 on success, or a negative error code on failure.
  */
-mr_err_t mr_kthread_takeover(mr_kthread_t *kth, const char *name,
-                             const void *res, mr_uint32_t priority,
-                             mr_tick_t tick);
+mr_err_t mr_kthread_takeover(mr_kthread_t *kth, const char *name, void *thread);
 
 /**
  * @brief This function delete a kthread.
@@ -136,29 +139,11 @@ mr_err_t mr_kthread_suspend(mr_kthread_t *kth);
 mr_err_t mr_kthread_sleep(mr_tick_t tick);
 
 /**
- * @brief This function exit a kthread.
- *
- * @param kth The kthread.
- * @return 0 on success, or a negative error code on failure.
- */
-mr_err_t mr_kthread_exit(mr_kthread_t *kth);
-
-/**
  * @brief This function get the current kthread.
  *
  * @return The current kthread.
  */
 mr_kthread_t *mr_kthread_self(void);
-
-/**
- * @brief This function cleanup a kthread.
- *
- * @param kth The kthread.
- *
- * @note User does not need to call this function.
- * @note Developer adaptation required.
- */
-void mr_kthread_cleanup(mr_kthread_t *kth);
 
 /**
  * @brief This function is the kthread entry.

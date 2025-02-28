@@ -6,6 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
+#include <mr_config.h>
+#if defined(MR_USE_ENTRY)
 #include <kernel/mr_initcall.h>
 
 MR_INLINE void entry(void) {
@@ -31,3 +33,4 @@ int $Sub$$main(void) {
     return 0;
 }
 #endif /* defined(__GNUC__) || defined(__clang__) */
+#endif /* defined(MR_USE_ENTRY) */

@@ -6,15 +6,15 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_HW_IRQ_H__
-#define __MR_HW_IRQ_H__
+#ifndef __MR_PORT_IRQ_H__
+#define __MR_PORT_IRQ_H__
 
 #ifdef __cplusplus
 "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup IRQ hardware interface
+ * @addtogroup Port-IRQ
  * @{
  */
 
@@ -26,7 +26,7 @@
  * @note User implementation.
  * @note Need to clear the hardware interrupt mask.
  */
-int mr_hw_irq_save(void);
+extern int mr_port_irq_save(void);
 
 /**
  * @brief This function restores the interrupt mask.
@@ -35,7 +35,7 @@ int mr_hw_irq_save(void);
  *
  * @note User implementation.
  */
-void mr_hw_irq_restore(int mask);
+extern void mr_port_irq_restore(int mask);
 
 /** @} */
 
@@ -43,4 +43,4 @@ void mr_hw_irq_restore(int mask);
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_HW_IRQ_H__ */
+#endif /* __MR_PORT_IRQ_H__ */

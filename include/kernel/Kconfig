@@ -1,23 +1,41 @@
-menu "Kernel"
-
-    # CLOCK
-    config MR_CFG_CLOCK_HOOK_SIZE
-        int "Clock hook size"
+menu "Kernel options"
+    # ENTRY
+    config MR_USE_ENTRY
+        bool "Use entry"
+        default n
+        help
+            This option controls whether to use entry.
+    # KCLOCK
+    config MR_CFG_KCLOCK_HOOK_SIZE
+        int "Kclock hook size"
         default 4
+        range 1 32
         help
             This option controls the size of the clock hook.
-
     # KOBJECT
     config MR_CFG_KOBJECT_INAME_SIZE
         int "Kobject inline name size"
         default 16
+        range 4 256
         help
             This option controls the size of the inline name of the kobject.
-
-    # KTHREAD
-    config MR_CFG_KTHREAD_IRES_SIZE
-        int "Kthread inline resource size"
-        default 256
+    # KPRINTF
+    config MR_USE_KPRINTF
+        bool "Use kprintf"
+        default n
         help
-            This option controls the size of the inline resource of the kthread.
+            This option controls whether to use kprintf.
+    config MR_CFG_KPRINTF_BUF_SIZE
+        depends on MR_USE_KPRINTF
+        int "Kprintf buffer size"
+        default 128
+        range 8 65535
+        help
+            This option controls the buffer size of the kprintf.
+    # TIMER
+    config MR_USE_KTIMER
+        bool "Use ktimer"
+        default n
+        help
+            This option controls whether to use ktimer.
 endmenu

@@ -39,6 +39,14 @@ typedef struct mr_ktimer {
 } mr_ktimer_t;
 
 /**
+ * @brief This macro function checks if a ktimer is initialized.
+ *
+ * @param _ktimer The ktimer.
+ * @return MR_TRUE if the ktimer is initialized, MR_FALSE otherwise.
+ */
+#define MR_KTIMER_IS_INITED(_ktimer)    MR_KOBJECT_IS_INITED(_ktimer)
+
+/**
  * @brief This function initialize a ktimer.
  *
  * @param ktimer The ktimer.

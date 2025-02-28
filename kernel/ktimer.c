@@ -48,7 +48,7 @@ mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
                         void (*entry)(mr_ktimer_t *ktimer, void *args),
                         void *args, mr_tick_t tick) {
     /* Check arguments */
-    if ((!ktimer) || (MR_KOBJECT_IS_INITED(ktimer)) || (!name) || (!entry)
+    if ((!ktimer) || MR_KTIMER_IS_INITED(ktimer) || (!name) || (!entry)
         || (tick == 0)) {
         return -MR_EINVAL;
     }
@@ -100,7 +100,7 @@ MR_INLINE void ktimer_del(mr_ktimer_t *ktimer) {
 
 mr_err_t mr_ktimer_del(mr_ktimer_t *ktimer) {
     /* Check arguments */
-    if ((!ktimer) || (!MR_KOBJECT_IS_INITED(ktimer))) {
+    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer))) {
         return -MR_EINVAL;
     }
 
@@ -152,7 +152,7 @@ MR_INLINE void ktimer_start(mr_ktimer_t *ktimer) {
 
 mr_err_t mr_ktimer_start(mr_ktimer_t *ktimer) {
     /* Check arguments */
-    if ((!ktimer) || (!MR_KOBJECT_IS_INITED(ktimer))) {
+    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer))) {
         return -MR_EINVAL;
     }
 
@@ -163,7 +163,7 @@ mr_err_t mr_ktimer_start(mr_ktimer_t *ktimer) {
 
 mr_err_t mr_ktimer_stop(mr_ktimer_t *ktimer) {
     /* Check arguments */
-    if ((!ktimer) || (!MR_KOBJECT_IS_INITED(ktimer))) {
+    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer))) {
         return -MR_EINVAL;
     }
 
@@ -192,7 +192,7 @@ MR_INLINE void ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
 
 mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
     /* Check arguments */
-    if ((!ktimer) || (!MR_KOBJECT_IS_INITED(ktimer)) || (tick == 0)) {
+    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer)) || (tick == 0)) {
         return -MR_EINVAL;
     }
 
@@ -288,7 +288,7 @@ MR_INLINE void mr_ktimer_kset_init(void) {
     /* Register kset */
     ret = mr_kset_register(&kroot, "timer");
     if (ret != 0) {
-        /* It won't entry the kclock, so it won't start */
+        /* It won't hook the kclock, so it won't start */
         return;
     }
 

@@ -20,7 +20,7 @@ extern "C" {
 
 /* Compiler specific attributes */
 #if defined(__GNUC__) || defined(__clang__) || defined(__CC_ARM)
-#define MR_SECTION(x)                   __attribute__((section(x)))
+#define MR_SECTION(_x)                  __attribute__((section(_x)))
 #define MR_USED                         __attribute__((used))
 #define MR_WEAK                         __attribute__((weak))
 #define MR_INLINE                       static __inline

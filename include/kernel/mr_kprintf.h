@@ -12,7 +12,6 @@
 #include <mr_config.h>
 #if defined(MR_USE_KPRINTF)
 #include <libc/mr_errno.h>
-#include <libc/mr_printf.h>
 #endif /* defined(MR_USE_KPRINTF) */
 
 #ifdef __cplusplus
@@ -33,15 +32,6 @@ extern "C" {
  * @return The number of characters printed.
  */
 int mr_kprintf(const char *fmt, ...);
-
-/**
- * @brief This function outputs a formatted string.
- *
- * @param buf The buffer.
- * @param size The buffer size.
- * @return The number of characters printed.
- */
-int mr_kprintf_output(const char *buf, mr_size_t size);
 #endif /* defined(MR_USE_KPRINTF) */
 
 /** @} */

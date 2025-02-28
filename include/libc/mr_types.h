@@ -43,7 +43,7 @@ typedef signed int                      mr_int32_t;
 typedef signed long long                mr_int64_t;
 #define MR_INT8_MAX                     (127)
 #define MR_INT16_MAX                    (32767)
-#define MR_INT32_MAX                    (2147483647U)
+#define MR_INT32_MAX                    (2147483647)
 #define MR_INT64_MAX                    (9223372036854775807LL)
 #endif /* defined(MR_USE_LIBC_TYPES) */
 
@@ -80,7 +80,7 @@ typedef long long                       mr_ssize_t;
 typedef unsigned int                    mr_size_t;
 typedef int                             mr_ssize_t;
 #endif /* defined(MR_USE_ARCH_64BIT) */
-#endif /* defined(MR_USE_ARCH_64BIT) */
+#endif /* defined(MR_USE_LIBC_TYPES) */
 
 /* Boolean type */
 #if defined(MR_USE_LIBC_TYPES)

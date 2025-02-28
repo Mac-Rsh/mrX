@@ -39,7 +39,7 @@ MR_INLINE void kname_init(mr_kname_t *kname) {
 
 void mr_kobject_init(mr_kobject_t *kobj, mr_ktype_t *type) {
     /* Check arguments */
-    if ((!kobj) || (MR_KOBJECT_IS_INITED(kobj))) {
+    if ((!kobj) || MR_KOBJECT_IS_INITED(kobj)) {
         return;
     }
 

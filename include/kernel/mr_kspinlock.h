@@ -9,8 +9,8 @@
 #ifndef __MR_KSPINLOCK_H__
 #define __MR_KSPINLOCK_H__
 
-#include <arch/mr_hw_irq.h>
 #include <libc/mr_atomic.h>
+#include <port/mr_port_irq.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -70,7 +70,7 @@ MR_INLINE void mr_kspinlock_unlock(mr_kspinlock_t *klock) {
 MR_INLINE int mr_kspinlock_lock_irqsave(mr_kspinlock_t *klock) {
     int mask;
 
-    mask = mr_hw_irq_save();
+    mask = mr_port_irq_save();
     mr_kspinlock_lock(klock);
     return mask;
 }
@@ -83,7 +83,7 @@ MR_INLINE int mr_kspinlock_lock_irqsave(mr_kspinlock_t *klock) {
  */
 MR_INLINE void mr_kspinlock_unlock_irqrestore(mr_kspinlock_t *klock, int mask) {
     mr_kspinlock_unlock(klock);
-    mr_hw_irq_restore(mask);
+    mr_port_irq_restore(mask);
 }
 
 /**

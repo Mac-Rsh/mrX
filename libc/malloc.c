@@ -8,7 +8,7 @@
 
 #include <libc/mr_malloc.h>
 #if (!defined(MR_USE_LIBC_MALLOC)) && (!defined(MR_USE_3PARTY_MALLOC))
-#include <arch/mr_hw_irq.h>
+#include <port/mr_port_irq.h>
 
 #if !defined(MR_CFG_HEAP_SIZE)
 #define MR_CFG_HEAP_SIZE                (4 * 1024)
@@ -69,7 +69,7 @@ void *mr_malloc(mr_size_t size) {
     int mask;
 
     /* Disable interrupt */
-    mask = mr_hw_irq_save();
+    mask = mr_port_irq_save();
 
     /* Initialize the heap block */
     if (blk_head.size != 0) {
@@ -122,7 +122,7 @@ void *mr_malloc(mr_size_t size) {
 
 _exit:
     /* Enable interrupt */
-    mr_hw_irq_restore(mask);
+    mr_port_irq_restore(mask);
     return mem;
 }
 
@@ -136,7 +136,7 @@ void mr_free(void *mem) {
     }
 
     /* Disable interrupt */
-    mask = mr_hw_irq_save();
+    mask = mr_port_irq_save();
 
     /* Check the blk */
     blk = (mr_memblk_t *)((mr_uint8_t *)mem - sizeof(mr_memblk_t));
@@ -149,7 +149,7 @@ void mr_free(void *mem) {
     }
 
     /* Enable interrupt */
-    mr_hw_irq_restore(mask);
+    mr_port_irq_restore(mask);
 }
 
 mr_size_t mr_malloc_usable_size(void *mem) {

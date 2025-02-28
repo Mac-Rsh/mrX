@@ -1,5 +1,4 @@
-menu "Libc"
-
+menu "Libc options"
     # ASSERT
     choice
         prompt "Assertion"
@@ -20,7 +19,6 @@ menu "Libc"
             help
               Use a custom assertion implementation for assertion checks.
     endchoice
-
     # ERRNO
     choice
         prompt "Errno"
@@ -41,7 +39,6 @@ menu "Libc"
             help
               Use a custom errno implementation for error handling.
     endchoice
-
     # MALLOC
     choice
         prompt "Malloc"
@@ -63,33 +60,32 @@ menu "Libc"
               Use a custom malloc implementation for memory allocation.
     endchoice
     config MR_CFG_HEAP_SIZE
-        depends on !MR_USE_MALLOC
+        depends on !MR_USE_LIBC_MALLOC
             int "Heap size"
             default 4096
+            range 24 2147483647
             help
               The size of the heap in bytes.
-
-    # STDIO
+    # PRINTF
     choice
-        prompt "Stdio"
+        prompt "Printf"
         default MR_USE_PRINTFK
 
         config MR_USE_LIBC_PRINTF
-            bool "Standard libc stdio"
+            bool "Standard libc printf"
             help
-              Use the standard libc stdio for I/O operations.
+              Use the standard libc printf for printing.
 
-        config MR_USE_3PARTY_STDIO
-            bool "3rd party stdio"
+        config MR_USE_3PARTY_PRINTF
+            bool "3rd party printf"
             help
-              Use a third-party stdio library for I/O operations.
+              Use a third-party printf library for printing.
 
-        config MR_USE_STDIO
-            bool "Custom stdio"
+        config MR_USE_PRINTF
+            bool "Custom printf"
             help
-              Use a custom stdio implementation for I/O operations.
+              Use a custom printf implementation for printing.
     endchoice
-
     # STRING
     choice
         prompt "String"
@@ -110,7 +106,6 @@ menu "Libc"
             help
               Use a custom string implementation for string operations.
     endchoice
-
     # TYPES
     choice
         prompt "Types"
@@ -126,5 +121,4 @@ menu "Libc"
             help
               Use a custom type implementation for custom types.
     endchoice
-
 endmenu

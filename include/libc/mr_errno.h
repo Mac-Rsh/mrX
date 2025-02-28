@@ -43,16 +43,16 @@ typedef int                             mr_err_t;
 #elif defined(MR_USE_3PARTY_ERRNO)
 /* In '3party/libc/mr_errno.h' */
 #else
-#define MR_EPERM                        1
-#define MR_ENOENT                       2
-#define MR_EIO                          5
-#define MR_EAGAIN                       11
-#define MR_ENOMEM                       12
-#define MR_EBUSY                        16
-#define MR_EEXIST                       17
-#define MR_EINVAL                       22
-#define MR_ENOSYS                       40
-#define MR_ETIMEDOUT                    116
+#define MR_EPERM                        (1)
+#define MR_ENOENT                       (2)
+#define MR_EIO                          (5)
+#define MR_EAGAIN                       (11)
+#define MR_ENOMEM                       (12)
+#define MR_EBUSY                        (16)
+#define MR_EEXIST                       (17)
+#define MR_EINVAL                       (22)
+#define MR_ENOSYS                       (40)
+#define MR_ETIMEDOUT                    (116)
 #endif /* defined(MR_USE_LIBC_ERRNO) */
 
 /** @} */

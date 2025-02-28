@@ -26,7 +26,7 @@ mr_err_t mr_khook_add(mr_khook_t *khook, mr_ptr_t entry) {
     int mask;
 
     /* Check arguments */
-    if (!khook) {
+    if ((!khook) || (!entry)) {
         return -MR_EINVAL;
     }
 

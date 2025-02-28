@@ -8,7 +8,8 @@
 
 #include <kernel/mr_kprintf.h>
 #if defined(MR_USE_KPRINTF)
-#include <libc/mr_types.h>
+#include <libc/mr_printf.h>
+#include <port/mr_port_output.h>
 
 int mr_kprintf(const char *fmt, ...) {
 #if !defined(MR_CFG_KPRINTF_BUF_SIZE)
@@ -29,6 +30,6 @@ int mr_kprintf(const char *fmt, ...) {
     mr_va_end(args);
 
     /* Output string */
-    return mr_kprintf_output(buf, ret);
+    return mr_port_output(buf, ret);
 }
 #endif /* defined(MR_USE_KPRINTF) */
