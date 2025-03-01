@@ -96,6 +96,8 @@ mr_err_t mr_kthread_takeover(mr_kthread_t *kth, const char *name, void *thread);
  *
  * @param kth The kthread.
  * @return 0 on success, or a negative error code on failure.
+ *
+ * @note If kthread is MR_NULL, delete kthread self.
  */
 mr_err_t mr_kthread_del(mr_kthread_t *kth);
 
@@ -127,6 +129,8 @@ mr_err_t mr_kthread_yield(void);
  *
  * @param kth The kthread.
  * @return 0 on success, or a negative error code on failure.
+ *
+ * @note If kthread is MR_NULL, suspend kthread self.
  */
 mr_err_t mr_kthread_suspend(mr_kthread_t *kth);
 

@@ -22,6 +22,7 @@ extern "C" {
 
 /* Initcall level definition */
 #define MR_INIT_LEVEL_KERNEL            "1"
+#define MR_INIT_LEVEL_KOS               "1.1"
 #define MR_INIT_LEVEL_USER(_level)      "2."_level
 
 /* Initcall type */

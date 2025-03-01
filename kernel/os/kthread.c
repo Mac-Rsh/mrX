@@ -24,7 +24,7 @@ MR_INLINE mr_err_t kthread_init(mr_kthread_t *kth, const char *name,
     mr_ptr_t thread;
 
     /* Create kthread */
-    if (!MR_KTHREAD_IS_TAKEOVER(kth)) {
+    if (entry) {
         thread = mr_port_thread_create(name, kth, stack_size, priority, tick);
         if (!thread) {
             return -MR_ENOMEM;
@@ -137,6 +137,11 @@ mr_err_t mr_kthread_takeover(mr_kthread_t *kth, const char *name,
 }
 
 mr_err_t mr_kthread_del(mr_kthread_t *kth) {
+    /* If kthread is null, delete kthread self */
+    if (!kth) {
+        kth = mr_kthread_self();
+    }
+
     /* Check arguments */
     if ((!kth) || (!MR_KTHREAD_IS_INITED(kth))) {
         return -MR_EINVAL;
@@ -173,6 +178,11 @@ mr_err_t mr_kthread_yield(void) {
 }
 
 mr_err_t mr_kthread_suspend(mr_kthread_t *kth) {
+    /* If kthread is null, suspend kthread self */
+    if (!kth) {
+        kth = mr_kthread_self();
+    }
+
     /* Check arguments */
     if ((!kth) || (!MR_KTHREAD_IS_INITED(kth))) {
         return -MR_EINVAL;

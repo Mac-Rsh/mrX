@@ -1,6 +1,7 @@
 menu "Kernel options"
     # ENTRY
     config MR_USE_ENTRY
+        depends on !MR_USE_KOS
         bool "Use entry"
         default n
         help
