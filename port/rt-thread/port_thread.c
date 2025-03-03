@@ -101,7 +101,11 @@ mr_err_t mr_port_thread_del(void *thread) {
     rt_err_t ret;
 
     /* Delete thread */
-    ret = rt_thread_delete(thread);
+    if (rt_object_is_systemobject((rt_object_t)thread) == RT_TRUE) {
+        ret = rt_thread_detach(thread);
+    } else {
+        ret = rt_thread_delete(thread);
+    }
 
     /* Shift error code */
     return err_shift(ret);
