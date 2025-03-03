@@ -5,7 +5,7 @@ menu "OS options"
         default n
         help
             This option controls whether to use kernel os.
-
+    # KTHREAD
     config MR_CFG_KTHREAD_ITHREAD_SIZE
         depends on MR_USE_KOS
         int "Kthread inline thread size"
@@ -13,4 +13,18 @@ menu "OS options"
         range 4 1024
         help
             This option controls the size of the inline thread of the kthread.
+    # KMUTEX
+    config MR_USE_KMUTEX
+        depends on MR_USE_KOS
+        bool "Use kernel mutex"
+        default n
+        help
+            This option controls whether to use kernel mutex.
+    config MR_CFG_KTHREAD_ITHREAD_SIZE
+        depends on MR_USE_KMUTEX
+        int "Kmutex inline mutex size"
+        default 64
+        range 4 1024
+        help
+            This option controls the size of the inline mutex of the kmutex.
 endmenu

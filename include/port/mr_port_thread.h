@@ -91,7 +91,7 @@ extern mr_err_t mr_port_thread_resume(void *thread);
  *
  * @note User implementation.
  */
-extern mr_err_t mr_port_thread_yield();
+extern mr_err_t mr_port_thread_yield(void);
 
 /**
  * @brief This function suspends a thread.
