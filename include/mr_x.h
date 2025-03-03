@@ -51,6 +51,7 @@
 
 #include <port/mr_port_irq.h>
 #include <port/mr_port_output.h>
+#include <port/mr_port_thread.h>
 
 /** @} */
 

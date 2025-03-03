@@ -1,0 +1,16 @@
+menu "OS options"
+    # KOS
+    config MR_USE_KOS
+        bool "Use kernel os"
+        default n
+        help
+            This option controls whether to use kernel os.
+
+    config MR_CFG_KTHREAD_ITHREAD_SIZE
+        depends on MR_USE_KOS
+        int "Kthread inline thread size"
+        default 256
+        range 4 1024
+        help
+            This option controls the size of the inline thread of the kthread.
+endmenu

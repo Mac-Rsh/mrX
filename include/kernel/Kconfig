@@ -39,4 +39,6 @@ menu "Kernel options"
         default n
         help
             This option controls whether to use ktimer.
+    # OS
+    source "include/kernel/os/Kconfig"
 endmenu

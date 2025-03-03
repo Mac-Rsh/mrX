@@ -67,6 +67,25 @@ static void thread_entry(void *kthread) {
     mr_kthread_entry(kthread);
 }
 
+mr_err_t mr_port_thread_init(void *thread, const char *name, void *kthread,
+                             void *stack, mr_size_t stack_size,
+                             mr_uint32_t priority, mr_tick_t tick) {
+    rt_err_t ret;
+
+    /* Check inline thread size */
+    if (MR_CFG_KTHREAD_ITHREAD_SIZE < sizeof(struct rt_thread)) {
+        ret = -RT_ENOMEM;
+        return err_shift(ret);
+    }
+
+    /* Init thread */
+    ret = rt_thread_init(thread, name, thread_entry, kthread, stack, stack_size,
+                         priority, tick);
+
+    /* Shift error code */
+    return err_shift(ret);
+}
+
 void *mr_port_thread_create(const char *name, void *kthread,
                             mr_size_t stack_size, mr_uint32_t priority,
                             mr_tick_t tick) {

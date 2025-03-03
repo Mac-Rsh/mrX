@@ -100,6 +100,15 @@ void mr_ktype_init(mr_ktype_t *type, void (*release)(mr_kobject_t *kobj));
     (((mr_kobject_t *)(_kobj))->magic == MR_KOBJECT_MAGIC)
 
 /**
+ * @brief This macro function checks if a kobject is released.
+ *
+ * @param _kobj The kobject.
+ * @return MR_TRUE if the kobject is released, MR_FALSE otherwise.
+ */
+#define MR_KOBJECT_IS_RELEASED(_kobj)                                          \
+    (((mr_kobject_t *)(_kobj))->magic == (~MR_KOBJECT_MAGIC))
+
+/**
  * @brief This function initializes a kobject.
  *
  * @param kobj The kobject.

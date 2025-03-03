@@ -29,6 +29,10 @@ extern "C" {
 typedef struct mr_kthread {
     mr_kobject_t parent;
     mr_ptr_t thread;
+#if !defined(MR_CFG_KTHREAD_ITHREAD_SIZE)
+#define MR_CFG_KTHREAD_ITHREAD_SIZE     (256)
+#endif /* !defined(MR_CFG_KTHREAD_ITHREAD_SIZE) */
+    mr_uint8_t ithread[MR_CFG_KTHREAD_ITHREAD_SIZE];
     mr_ptr_t entry;
     mr_ptr_t args;
 } mr_kthread_t;
@@ -55,8 +59,8 @@ typedef struct mr_kthread {
  */
 mr_err_t mr_kthread_init(mr_kthread_t *kth, const char *name,
                          void (*entry)(mr_kthread_t *kth, void *args),
-                         void *args, mr_size_t stack_size, mr_uint32_t priority,
-                         mr_tick_t tick);
+                         void *args, void *stack, mr_size_t stack_size,
+                         mr_uint32_t priority, mr_tick_t tick);
 
 /**
  * @brief This function create a kthread.

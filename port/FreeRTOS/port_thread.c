@@ -12,8 +12,8 @@
 #include "task.h"
 #include <port/mr_port_thread.h>
 
-static mr_err_t err_shift(BaseType_t xReturn) {
-    switch (xReturn) {
+static mr_err_t err_shift(BaseType_t ret) {
+    switch (ret) {
         case pdPASS: {
             return 0;
         }
@@ -33,39 +33,76 @@ static mr_err_t err_shift(BaseType_t xReturn) {
     }
 }
 
-static void Task_Entry(void *kthread) {
+static void task_entry(void *kthread) {
     mr_kthread_entry(kthread);
+}
+
+static void task_arguments_shift(mr_size_t *stack_size, mr_uint32_t *priority) {
+    /* Shift stack size */
+    *stack_size /= sizeof(StackType_t);
+
+    /* Shift priority(Low to High) */
+    if (*priority > (configMAX_PRIORITIES - 1)) {
+        *priority = configMAX_PRIORITIES - 1;
+    }
+    *priority = (configMAX_PRIORITIES - 1) - (*priority);
+}
+
+mr_err_t mr_port_thread_init(void *thread, const char *name, void *kthread,
+                             void *stack, mr_size_t stack_size,
+                             mr_uint32_t priority, mr_tick_t tick) {
+    BaseType_t ret;
+
+    /* Check inline thread size */
+    if (MR_CFG_KTHREAD_ITHREAD_SIZE < sizeof(StaticTask_t)) {
+        ret = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
+        return err_shift(ret);
+    }
+
+    /* Shift arguments */
+    task_arguments_shift(&stack_size, &priority);
+
+    /* Init thread */
+#if (configSUPPORT_STATIC_ALLOCATION == 0)
+#error "Please set 'configSUPPORT_STATIC_ALLOCATION' to '1'"
+#endif /* (configSUPPORT_STATIC_ALLOCATION == 0) */
+    thread = xTaskCreateStatic(task_entry, name, stack_size, kthread, priority,
+                               stack, thread);
+    if (!thread) {
+        ret = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
+    } else {
+        /* Set kthread as task tag */
+#if (configUSE_APPLICATION_TASK_TAG == 0)
+#error "Please set 'configUSE_APPLICATION_TASK_TAG' to '1'"
+#endif /* (configUSE_APPLICATION_TASK_TAG == 0) */
+        vTaskSetApplicationTaskTag(thread, kthread);
+        ret = pdPASS;
+    }
+
+    /* Shift error code */
+    return err_shift(ret);
 }
 
 void *mr_port_thread_create(const char *name, void *kthread,
                             mr_size_t stack_size, mr_uint32_t priority,
                             mr_tick_t tick) {
     TaskHandle_t thread;
-    BaseType_t xReturn;
+    BaseType_t ret;
 
-    /* Shift priority(Low to High) */
-    if (priority > (configMAX_PRIORITIES - 1)) {
-        priority = configMAX_PRIORITIES - 1;
-    }
-    priority = (configMAX_PRIORITIES - 1) - priority;
+    /* Shift arguments */
+    task_arguments_shift(&stack_size, &priority);
 
     /* Create thread */
 #if (configSUPPORT_DYNAMIC_ALLOCATION == 0)
 #error "Please set 'configSUPPORT_DYNAMIC_ALLOCATION' to '1'"
 #endif /* (configSUPPORT_DYNAMIC_ALLOCATION == 0) */
-    xReturn = xTaskCreate((TaskFunction_t)Task_Entry, (const char *)name,
-                          (uint16_t)stack_size, (void *)kthread,
-                          (UBaseType_t)priority, &thread);
-    if (xReturn == pdPASS) {
-        /* Set kthread as task tag */
-#if (configUSE_APPLICATION_TASK_TAG == 0)
-#error "Please set 'configUSE_APPLICATION_TASK_TAG' to '1'"
-#endif /* (configUSE_APPLICATION_TASK_TAG == 0) */
+    ret = xTaskCreate(task_entry, name, stack_size, kthread, priority, &thread);
+    if (ret == pdPASS) {
         vTaskSetApplicationTaskTag(thread, kthread);
     }
 
     /* Shift error code */
-    return err_shift(xReturn) == 0 ? thread : MR_NULL;
+    return err_shift(ret) == 0 ? thread : MR_NULL;
 }
 
 mr_err_t mr_port_thread_del(void *thread) {

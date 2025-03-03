@@ -21,6 +21,24 @@ extern "C" {
  */
 
 /**
+ * @brief This function initializes a thread.
+ *
+ * @param thread The thread to be initialized.
+ * @param kthread The kthread to thread arguments.
+ * @param stack The thread stack.
+ * @param stack_size The thread stack size.
+ * @param priority The thread priority.
+ * @param tick The thread time slice.
+ * @return 0 on success, or a negative error code on failure.
+ *
+ * @note User implementation.
+ */
+extern mr_err_t mr_port_thread_init(void *thread, const char *name,
+                                    void *kthread, void *stack,
+                                    mr_size_t stack_size, mr_uint32_t priority,
+                                    mr_tick_t tick);
+
+/**
  * @brief This function creates a thread.
  *
  * @param name The thread name.
@@ -29,6 +47,8 @@ extern "C" {
  * @param priority The thread priority.
  * @param tick The thread time slice.
  * @return The thread on success, or MR_NULL on failure.
+ *
+ * @note User implementation.
  */
 extern void *mr_port_thread_create(const char *name, void *kthread,
                                    mr_size_t stack_size, mr_uint32_t priority,
@@ -39,6 +59,8 @@ extern void *mr_port_thread_create(const char *name, void *kthread,
  *
  * @param thread The thread to be deleted.
  * @return 0 on success, or a negative error code on failure.
+ *
+ * @note User implementation.
  */
 extern mr_err_t mr_port_thread_del(void *thread);
 
@@ -47,6 +69,8 @@ extern mr_err_t mr_port_thread_del(void *thread);
  *
  * @param thread The thread to be started.
  * @return 0 on success, or a negative error code on failure.
+ *
+ * @note User implementation.
  */
 extern mr_err_t mr_port_thread_startup(void *thread);
 
@@ -55,6 +79,8 @@ extern mr_err_t mr_port_thread_startup(void *thread);
  *
  * @param thread The thread to be resumed.
  * @return 0 on success, or a negative error code on failure.
+ *
+ * @note User implementation.
  */
 extern mr_err_t mr_port_thread_resume(void *thread);
 
@@ -62,6 +88,8 @@ extern mr_err_t mr_port_thread_resume(void *thread);
  * @brief This function suspends the current thread.
  *
  * @return 0 on success, or a negative error code on failure.
+ *
+ * @note User implementation.
  */
 extern mr_err_t mr_port_thread_yield();
 
@@ -70,6 +98,8 @@ extern mr_err_t mr_port_thread_yield();
  *
  * @param thread The thread to be suspended.
  * @return 0 on success, or a negative error code on failure.
+ *
+ * @note User implementation.
  */
 extern mr_err_t mr_port_thread_suspend(void *thread);
 
@@ -78,6 +108,8 @@ extern mr_err_t mr_port_thread_suspend(void *thread);
  *
  * @param tick The thread time slice.
  * @return 0 on success, or a negative error code on failure.
+ *
+ * @note User implementation.
  */
 extern mr_err_t mr_port_thread_sleep(mr_tick_t tick);
 
@@ -85,6 +117,8 @@ extern mr_err_t mr_port_thread_sleep(mr_tick_t tick);
  * @brief This function returns the current thread arguments.
  *
  * @return The current thread arguments(kthread).
+ *
+ * @note User implementation.
  */
 extern void *mr_port_thread_self(void);
 

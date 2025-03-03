@@ -18,22 +18,38 @@ static mr_ktype_t ktype1, ktype2;
 static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
 
 MR_INLINE mr_err_t kthread_init(mr_kthread_t *kth, const char *name,
-                                mr_ptr_t entry, mr_ptr_t args,
+                                mr_ptr_t entry, mr_ptr_t args, mr_ptr_t stack,
                                 mr_size_t stack_size, mr_uint32_t priority,
                                 mr_tick_t tick) {
     mr_ptr_t thread;
+    mr_err_t ret;
 
-    /* Create kthread */
-    if (entry) {
+    /* Check entry */
+    if (!entry) {
+        /* Takeover thread */
+        thread = kth->thread;
+        goto _init;
+    }
+
+    /* Check stack */
+    if (!stack) {
+        /* Create thread */
         thread = mr_port_thread_create(name, kth, stack_size, priority, tick);
         if (!thread) {
             return -MR_ENOMEM;
         }
-    } else {
-        /* Takeover kthread do not need to delete */
-        thread = kth->thread;
+        goto _init;
     }
 
+    /* Init thread */
+    ret = mr_port_thread_init(kth->ithread, name, kth, stack, stack_size,
+                              priority, tick);
+    thread = kth->ithread;
+    if (ret != 0) {
+        return ret;
+    }
+
+_init:
     /* Init kthread */
     kth->thread = thread;
     kth->entry = entry;
@@ -53,12 +69,14 @@ MR_INLINE mr_err_t kthread_del(mr_kthread_t *kth) {
 
 MR_INLINE mr_err_t kthread_init_add(mr_kthread_t *kth, mr_ktype_t *ktype,
                                     const char *name, mr_ptr_t entry,
-                                    mr_ptr_t args, mr_size_t stack_size,
-                                    mr_uint32_t priority, mr_tick_t tick) {
+                                    mr_ptr_t args, mr_ptr_t stack,
+                                    mr_size_t stack_size, mr_uint32_t priority,
+                                    mr_tick_t tick) {
     mr_err_t ret;
 
     /* Init kthread */
-    ret = kthread_init(kth, name, entry, args, stack_size, priority, tick);
+    ret = kthread_init(kth, name, entry, args, stack, stack_size, priority,
+                       tick);
     if (ret != 0) {
         return ret;
     }
@@ -76,15 +94,21 @@ MR_INLINE mr_err_t kthread_init_add(mr_kthread_t *kth, mr_ktype_t *ktype,
 
 mr_err_t mr_kthread_init(mr_kthread_t *kth, const char *name,
                          void (*entry)(mr_kthread_t *kth, void *args),
-                         void *args, mr_size_t stack_size, mr_uint32_t priority,
-                         mr_tick_t tick) {
+                         void *args, void *stack, mr_size_t stack_size,
+                         mr_uint32_t priority, mr_tick_t tick) {
     /* Check arguments */
-    if ((!kth) || MR_KTHREAD_IS_INITED(kth) || (!name) || (!entry) || (!tick)) {
+    if ((!kth) || MR_KTHREAD_IS_INITED(kth) || (!name) || (!entry) || (!stack)
+        || (!stack_size) || (!tick)) {
         return -MR_EINVAL;
     }
 
+    /* Static threads cannot be reused */
+    if (MR_KOBJECT_IS_RELEASED(kth)) {
+        return -MR_EBUSY;
+    }
+
     /* Init and add kthread */
-    return kthread_init_add(kth, &ktype1, name, (mr_ptr_t)entry, args,
+    return kthread_init_add(kth, &ktype1, name, (mr_ptr_t)entry, args, stack,
                             stack_size, priority, tick);
 }
 
@@ -96,7 +120,7 @@ mr_kthread_t *mr_kthread_create(const char *name,
     mr_err_t ret;
 
     /* Check arguments */
-    if ((!name) || (!entry) || (!tick)) {
+    if ((!name) || (!entry) || (!stack_size) || (!tick)) {
         return MR_NULL;
     }
 
@@ -107,7 +131,7 @@ mr_kthread_t *mr_kthread_create(const char *name,
     }
 
     /* Init and add kthread */
-    ret = kthread_init_add(kth, &ktype2, name, (mr_ptr_t)entry, args,
+    ret = kthread_init_add(kth, &ktype2, name, (mr_ptr_t)entry, args, MR_NULL,
                            stack_size, priority, tick);
     if (ret != 0) {
         mr_free(kth);
@@ -122,7 +146,8 @@ MR_INLINE mr_err_t kthread_takeover(mr_kthread_t *kth, const char *name,
     kth->thread = thread;
 
     /* Init and add kthread */
-    return kthread_init_add(kth, &ktype1, name, MR_NULL, MR_NULL, 0, 0, 0);
+    return kthread_init_add(kth, &ktype1, name, MR_NULL, MR_NULL, MR_NULL, 0, 0,
+                            0);
 }
 
 mr_err_t mr_kthread_takeover(mr_kthread_t *kth, const char *name,
