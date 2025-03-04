@@ -409,6 +409,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
             case 'E':
             case 'F': {
                 num = mr_va_arg(args, mr_f64_t);
+                (void)num;
                 /* Remind you */
                 goto _default;
             }

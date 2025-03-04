@@ -7,41 +7,39 @@
  */
 
 #include <kernel/mr_initcall.h>
+#include <libc/mr_atomic.h>
 
 /* Init status definition */
-#define INIT_STATUS_NO                  (0)
-#define INIT_STATUS_START               (1)
-#define INIT_STATUS_END                 (2)
+#define INIT_STATUS_UNINIT              (0)
+#define INIT_STATUS_INITED              (1)
 
 /* Kernel and user init status */
-static int kstatus = INIT_STATUS_NO;
-static int ustatus = INIT_STATUS_NO;
+static mr_atomic_t kstatus = MR_ATOMIC_INIT(INIT_STATUS_UNINIT);
+static mr_atomic_t ustatus = MR_ATOMIC_INIT(INIT_STATUS_UNINIT);
 
 MR_INLINE void kernel_start(void) {
-    kstatus = INIT_STATUS_START;
 }
 MR_INIT_EXPORT(kernel_start, "0.end");
 
 MR_INLINE void kernel_end(void) {
-    kstatus = INIT_STATUS_END;
 }
 MR_INIT_EXPORT(kernel_end, "1.end");
 
 MR_INLINE void user_start(void) {
-    ustatus = INIT_STATUS_START;
 }
 MR_INIT_EXPORT(user_start, "1.end");
 
 MR_INLINE void user_end(void) {
-    ustatus = INIT_STATUS_END;
 }
 MR_INIT_EXPORT(user_end, "9.end");
 
 void mr_autoinit_kernel(void) {
     const mr_initcall_t *ic;
+    mr_atomic_t inited;
 
     /* Check kernel init status */
-    if (kstatus != INIT_STATUS_NO) {
+    mr_atomic_store(&inited, INIT_STATUS_UNINIT);
+    if (!mr_atomic_compare_exchange(&kstatus, &inited, INIT_STATUS_INITED)) {
         /* Kernel already init */
         return;
     }
@@ -55,15 +53,14 @@ void mr_autoinit_kernel(void) {
 
 void mr_autoinit(void) {
     const mr_initcall_t *ic;
+    mr_atomic_t inited;
 
-    /* Check kernel init status */
-    if (kstatus == INIT_STATUS_NO) {
-        /* Kernel not init, do it */
-        mr_autoinit_kernel();
-    }
+    /* Run autoinit(kernel) */
+    mr_autoinit_kernel();
 
     /* Check user init status */
-    if (ustatus != INIT_STATUS_NO) {
+    mr_atomic_store(&inited, INIT_STATUS_UNINIT);
+    if (!mr_atomic_compare_exchange(&ustatus, &inited, INIT_STATUS_INITED)) {
         /* User already init */
         return;
     }

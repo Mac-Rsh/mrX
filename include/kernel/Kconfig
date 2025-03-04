@@ -10,7 +10,7 @@ menu "Kernel options"
     config MR_CFG_KCLOCK_HOOK_SIZE
         int "Kclock hook size"
         default 4
-        range 1 32
+        range 2 32
         help
             This option controls the size of the clock hook.
     # KOBJECT

@@ -24,6 +24,7 @@
 #include <kernel/mr_kservice.h>
 #include <kernel/mr_kspinlock.h>
 #include <kernel/mr_ktimer.h>
+#include <kernel/os/mr_kmutex.h>
 #include <kernel/os/mr_kthread.h>
 
 /** @} */
@@ -49,6 +50,7 @@
  * @{
  */
 
+#include <port/mr_port_assert.h>
 #include <port/mr_port_irq.h>
 #include <port/mr_port_output.h>
 #include <port/mr_port_thread.h>

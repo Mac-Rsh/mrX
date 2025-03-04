@@ -73,13 +73,13 @@ typedef unsigned long long              mr_uint64_t;
 typedef size_t                          mr_size_t;
 typedef ssize_t                         mr_ssize_t;
 #else
-#if defined(MR_USE_ARCH_64BIT)
+#if defined(MR_USE_64BIT)
 typedef unsigned long long              mr_size_t;
 typedef long long                       mr_ssize_t;
 #else
 typedef unsigned int                    mr_size_t;
 typedef int                             mr_ssize_t;
-#endif /* defined(MR_USE_ARCH_64BIT) */
+#endif /* defined(MR_USE_64BIT) */
 #endif /* defined(MR_USE_LIBC_TYPES) */
 
 /* Boolean type */

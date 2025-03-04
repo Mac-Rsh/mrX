@@ -12,7 +12,7 @@
 #include <libc/mr_compiler.h>
 #include <libc/mr_types.h>
 #if !defined(__CC_ARM) && !defined(__GNUC__) && !defined(__clang__)
-#include <arch/mr_hw_irq.h>
+#include <port/mr_port_irq.h>
 #endif /* !defined(__CC_ARM) && !defined(__GNUC__) && !defined(__clang__) */
 
 #ifdef __cplusplus
@@ -58,9 +58,9 @@ MR_INLINE mr_atomic_t mr_atomic_load(volatile mr_atomic_t *atomic) {
     MR_UNUSED(mask);
     tmp = __atomic_load_n(atomic, __ATOMIC_SEQ_CST);
 #else
-    mask = mr_hw_irq_save();
+    mask = mr_port_irq_save();
     tmp = *atomic;
-    mr_hw_irq_restore(mask);
+    mr_port_irq_restore(mask);
 #endif /* defined(__CC_ARM) || defined(__GNUC__) || defined(__clang__) */
     return tmp;
 }
@@ -78,9 +78,9 @@ MR_INLINE void mr_atomic_store(volatile mr_atomic_t *atomic, mr_atomic_t val) {
     MR_UNUSED(mask);
     __atomic_store_n(atomic, val, __ATOMIC_SEQ_CST);
 #else
-    mask = mr_hw_irq_save();
+    mask = mr_port_irq_save();
     *atomic = val;
-    mr_hw_irq_restore(mask);
+    mr_port_irq_restore(mask);
 #endif /* defined(__CC_ARM) || defined(__GNUC__) || defined(__clang__) */
 }
 
@@ -100,10 +100,10 @@ MR_INLINE mr_atomic_t mr_atomic_exchange(volatile mr_atomic_t *atomic,
     MR_UNUSED(mask);
     tmp = __atomic_exchange_n(atomic, val, __ATOMIC_SEQ_CST);
 #else
-    mask = mr_hw_irq_save();
+    mask = mr_port_irq_save();
     tmp = *atomic;
     *atomic = val;
-    mr_hw_irq_restore(mask);
+    mr_port_irq_restore(mask);
 #endif /* defined(__CC_ARM) || defined(__GNUC__) || defined(__clang__) */
     return tmp;
 }
@@ -126,13 +126,13 @@ MR_INLINE mr_bool_t mr_atomic_compare_exchange(volatile mr_atomic_t *atomic,
     return __atomic_compare_exchange_n(atomic, old_val, new_val, MR_FALSE,
                                        __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 #else
-    mask = mr_hw_irq_save();
+    mask = mr_port_irq_save();
     if (*atomic != *old_val) {
-        mr_hw_irq_restore(mask);
+        mr_port_irq_restore(mask);
         return MR_FALSE;
     }
     *atomic = new_val;
-    mr_hw_irq_restore(mask);
+    mr_port_irq_restore(mask);
     return MR_TRUE;
 #endif /* defined(__CC_ARM) || defined(__GNUC__) || defined(__clang__) */
 }
@@ -153,10 +153,10 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_add(volatile mr_atomic_t *atomic,
     MR_UNUSED(mask);
     tmp = __atomic_fetch_add(atomic, val, __ATOMIC_SEQ_CST);
 #else
-    mask = mr_hw_irq_save();
+    mask = mr_port_irq_save();
     tmp = *atomic;
     *atomic += val;
-    mr_hw_irq_restore(mask);
+    mr_port_irq_restore(mask);
 #endif /* defined(__CC_ARM) || defined(__GNUC__) || defined(__clang__) */
     return tmp;
 }
@@ -177,10 +177,10 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_sub(volatile mr_atomic_t *atomic,
     MR_UNUSED(mask);
     tmp = __atomic_fetch_sub(atomic, val, __ATOMIC_SEQ_CST);
 #else
-    mask = mr_hw_irq_save();
+    mask = mr_port_irq_save();
     tmp = *atomic;
     *atomic -= val;
-    mr_hw_irq_restore(mask);
+    mr_port_irq_restore(mask);
 #endif /* defined(__CC_ARM) || defined(__GNUC__) || defined(__clang__) */
     return tmp;
 }
@@ -201,10 +201,10 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_and(volatile mr_atomic_t *atomic,
     MR_UNUSED(mask);
     tmp = __atomic_fetch_and(atomic, val, __ATOMIC_SEQ_CST);
 #else
-    mask = mr_hw_irq_save();
+    mask = mr_port_irq_save();
     tmp = *atomic;
     *atomic &= val;
-    mr_hw_irq_restore(mask);
+    mr_port_irq_restore(mask);
 #endif /* defined(__CC_ARM) || defined(__GNUC__) || defined(__clang__) */
     return tmp;
 }
@@ -225,10 +225,10 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_or(volatile mr_atomic_t *atomic,
     MR_UNUSED(mask);
     tmp = __atomic_fetch_or(atomic, val, __ATOMIC_SEQ_CST);
 #else
-    mask = mr_hw_irq_save();
+    mask = mr_port_irq_save();
     tmp = *atomic;
     *atomic |= val;
-    mr_hw_irq_restore(mask);
+    mr_port_irq_restore(mask);
 #endif /* defined(__CC_ARM) || defined(__GNUC__) || defined(__clang__) */
     return tmp;
 }

@@ -121,4 +121,9 @@ menu "Libc options"
             help
               Use a custom type implementation for custom types.
     endchoice
+    config MR_USE_64BIT
+        bool "Use 64-bit"
+        default n
+        help
+            This option controls whether to use 64-bit.
 endmenu

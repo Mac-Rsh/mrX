@@ -14,7 +14,7 @@
 #define MR_CFG_HEAP_SIZE                (4 * 1024)
 #endif /* !defined(MR_CFG_HEAP_SIZE) */
 #if (MR_CFG_HEAP_SIZE < 24)
-#error "Heap size is too small(must >= 16)"
+#error "Heap size is too small(must >= 24)"
 #endif /* MR_CFG_HEAP_SIZE */
 /* Heap memory */
 static mr_uint8_t heap[MR_CFG_HEAP_SIZE];
@@ -30,8 +30,10 @@ static void heap_insert_block(mr_memblk_t *blk) {
     mr_memblk_t *prev;
 
     /* Search for the previous blk */
-    for (prev = &blk_head; prev->next && (prev->next < blk);
-         prev = prev->next) {
+    for (prev = &blk_head; prev->next; prev = prev->next) {
+        if (prev->next >= blk) {
+            break;
+        }
     }
 
     /* Insert the blk */
