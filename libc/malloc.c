@@ -31,9 +31,10 @@ static void heap_insert_block(mr_memblk_t *blk) {
 
     /* Search for the previous blk */
     for (prev = &blk_head; prev->next; prev = prev->next) {
-        if (prev->next >= blk) {
-            break;
+        if (prev->next < blk) {
+            continue;
         }
+        break;
     }
 
     /* Insert the blk */

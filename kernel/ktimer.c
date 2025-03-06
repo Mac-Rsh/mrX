@@ -11,6 +11,11 @@
 #include <kernel/mr_initcall.h>
 #include <kernel/mr_kspinlock.h>
 #include <libc/mr_malloc.h>
+#if defined(MR_USE_KTIMER_ATTR)
+#include <libc/mr_printf.h>
+#include <libc/mr_scanf.h>
+#include <libc/mr_string.h>
+#endif /* defined(MR_USE_KTIMER_ATTR) */
 
 /* Ktimer ktype */
 static mr_ktype_t ktype1, ktype2;
@@ -282,7 +287,94 @@ MR_INLINE void ktimer_timeout_check(void) {
     mr_kspinlock_unlock_irqrestore(&klock, mask);
 }
 
+#if defined(MR_USE_KTIMER_ATTR)
+MR_INLINE mr_ssize_t ktimer_attr_show(struct mr_kobject *kobj,
+                                      struct mr_kattr *attr, char *buf,
+                                      mr_size_t size) {
+    mr_uint32_t tick, mode, status;
+    mr_ktimer_t *ktimer;
+
+    /* Get ktimer */
+    ktimer = MR_CONTAINER_OF(kobj, mr_ktimer_t, parent);
+    tick = ktimer->init_tick & ~MR_KTIMER_PERIODIC;
+    mode = ((ktimer->init_tick & MR_KTIMER_PERIODIC) != 0);
+    status = !mr_klist_is_empty(&ktimer->list);
+
+    /* Show tick */
+    if (!mr_strcmp(attr->name, "tick")) {
+        return mr_snprintf(buf, size, "%u", tick);
+    }
+
+    /* Show mode */
+    if (!mr_strcmp(attr->name, "mode")) {
+        return mr_snprintf(buf, size, "%u", mode);
+    }
+
+    /* Show status */
+    return mr_snprintf(buf, size, "%u", status);
+}
+
+MR_INLINE mr_ssize_t ktimer_attr_store(struct mr_kobject *kobj,
+                                       struct mr_kattr *attr, const char *buf,
+                                       mr_size_t size) {
+    mr_uint32_t tick, mode;
+    mr_ktimer_t *ktimer;
+    int input;
+
+    /* Get ktimer */
+    ktimer = MR_CONTAINER_OF(kobj, mr_ktimer_t, parent);
+    tick = ktimer->init_tick & ~MR_KTIMER_PERIODIC;
+    mode = ktimer->init_tick & MR_KTIMER_PERIODIC;
+
+    /* Parse 'input' */
+    if (mr_sscanf(buf, "%d", &input) != 1) {
+        return -MR_EINVAL;
+    }
+
+    /* Store tick */
+    if (!mr_strcmp(attr->name, "tick")) {
+        /* Check 'input' */
+        if (input <= 0) {
+            return -MR_EINVAL;
+        }
+
+        /* Set ktimer tick */
+        tick = input | mode;
+        return mr_ktimer_tick_set(ktimer, tick);
+    }
+
+    /* Store mode */
+    if (!mr_strcmp(attr->name, "mode")) {
+        if ((input != 0) && (input != 1)) {
+            return -MR_EINVAL;
+        }
+
+        /* Set ktimer mode */
+        mode = tick | (input ? MR_KTIMER_PERIODIC : 0);
+        return mr_ktimer_tick_set(ktimer, mode);
+    }
+
+    /* Store status */
+    if (input == 0) {
+        return mr_ktimer_stop(ktimer);
+    }
+    if (input == 1) {
+        return mr_ktimer_start(ktimer);
+    }
+    return -MR_EINVAL;
+}
+#endif /* defined(MR_USE_KTIMER_ATTR) */
+
 MR_INLINE void mr_ktimer_kset_init(void) {
+#if defined(MR_USE_KTIMER_ATTR)
+    static mr_kattr_t attr[]
+        = {MR_KATTR_INIT("tick", ktimer_attr_show, ktimer_attr_store),
+           MR_KATTR_INIT("mode", ktimer_attr_show, ktimer_attr_store),
+           MR_KATTR_INIT("status", ktimer_attr_show, ktimer_attr_store)};
+    static mr_kattr_t *attrs[] = {&attr[0], &attr[1], &attr[2], MR_NULL};
+#else
+    static mr_kattr_t *attrs[] = {MR_NULL};
+#endif /* defined(MR_USE_KTIMER_ATTR) */
     mr_err_t ret;
 
     /* Register kset */
@@ -293,8 +385,8 @@ MR_INLINE void mr_ktimer_kset_init(void) {
     }
 
     /* Init ktype */
-    mr_ktype_init(&ktype1, ktimer_release1_kobj);
-    mr_ktype_init(&ktype2, ktimer_release2_kobj);
+    mr_ktype_init(&ktype1, "timer", ktimer_release1_kobj, attrs);
+    mr_ktype_init(&ktype2, "timer", ktimer_release2_kobj, attrs);
 
     /* Add kclock entry */
     mr_kclock_hook_add(ktimer_timeout_check);

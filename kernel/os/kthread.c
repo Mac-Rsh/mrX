@@ -273,12 +273,17 @@ MR_INLINE void kthread_release2_kobj(mr_kobject_t *kobj) {
 }
 
 MR_INLINE void mr_kthread_kset_init(void) {
+    mr_err_t ret;
+
     /* Register kset */
-    mr_kset_register(&kroot, "thread");
+    ret = mr_kset_register(&kroot, "thread");
+    if (ret != 0) {
+        return;
+    }
 
     /* Init ktype */
-    mr_ktype_init(&ktype1, kthread_release1_kobj);
-    mr_ktype_init(&ktype2, kthread_release2_kobj);
+    mr_ktype_init(&ktype1, "thread", kthread_release1_kobj, MR_NULL);
+    mr_ktype_init(&ktype2, "thread", kthread_release2_kobj, MR_NULL);
 }
 MR_INIT_EXPORT(mr_kthread_kset_init, MR_INIT_LEVEL_KERNEL);
 #endif /* defined(MR_USE_KOS) */

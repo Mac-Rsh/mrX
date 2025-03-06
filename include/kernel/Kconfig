@@ -33,12 +33,23 @@ menu "Kernel options"
         range 8 65535
         help
             This option controls the buffer size of the kprintf.
+    config MR_USE_KPRINTF_SAFE
+        depends on MR_USE_KPRINTF
+        bool "Use kprintf safe"
+        default n
+        help
+            This option controls whether to use kprintf safe.
     # TIMER
     config MR_USE_KTIMER
         bool "Use ktimer"
         default n
         help
             This option controls whether to use ktimer.
+    config MR_USE_KTIMER_ATTR
+        bool "Use ktimer attribute"
+        default n
+        help
+            This option controls whether to use ktimer attribute.
     # OS
     source "include/kernel/os/Kconfig"
 endmenu

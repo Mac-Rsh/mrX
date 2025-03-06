@@ -69,7 +69,7 @@ menu "Libc options"
     # PRINTF
     choice
         prompt "Printf"
-        default MR_USE_PRINTFK
+        default MR_USE_PRINTF
 
         config MR_USE_LIBC_PRINTF
             bool "Standard libc printf"
@@ -85,6 +85,26 @@ menu "Libc options"
             bool "Custom printf"
             help
               Use a custom printf implementation for printing.
+    endchoice
+    # SCANF
+    choice
+        prompt "Scanf"
+        default MR_USE_SCANF
+
+        config MR_USE_LIBC_SCANF
+            bool "Standard libc scanf"
+            help
+              Use the standard libc scanf for scanf.
+
+        config MR_USE_3PARTY_SCANF
+            bool "3rd party scanf"
+            help
+              Use a third-party scanf library for scanf.
+
+        config MR_USE_SCANF
+            bool "Custom scanf"
+            help
+              Use a custom scanf implementation for scanf.
     endchoice
     # STRING
     choice
@@ -121,6 +141,7 @@ menu "Libc options"
             help
               Use a custom type implementation for custom types.
     endchoice
+    # 64BIT
     config MR_USE_64BIT
         bool "Use 64-bit"
         default n

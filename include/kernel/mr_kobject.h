@@ -34,9 +34,20 @@ typedef struct mr_kname {
     mr_uint32_t hash;
 } mr_kname_t;
 
+/* Kattr type */
+typedef struct mr_kattr {
+    const char *name;
+    mr_ssize_t (*show)(struct mr_kobject *kobj, struct mr_kattr *attr,
+                       char *buf, mr_size_t size);
+    mr_ssize_t (*store)(struct mr_kobject *kobj, struct mr_kattr *attr,
+                        const char *buf, mr_size_t size);
+} mr_kattr_t;
+
 /* Ktype type */
 typedef struct mr_ktype {
+    const char *name;
     void (*release)(struct mr_kobject *kobj);
+    mr_kattr_t **attrs;
 } mr_ktype_t;
 
 /* Kobject type */
@@ -60,20 +71,35 @@ typedef struct mr_kset {
 } mr_kset_t;
 
 /**
+ * @brief This macro function initializes a kattr.
+ *
+ * @param _name The name.
+ * @param _show The show function.
+ * @param _store The store function.
+ */
+#define MR_KATTR_INIT(_name, _show, _store)                                    \
+    {.name = (_name), .show = (_show), .store = (_store)}
+
+/**
  * @brief This macro function initializes a ktype.
  *
+ * @param _name The name.
  * @param _release The release function.
+ * @param _attrs The attributes.
  */
-#define MR_KTYPE_INIT(_release)                                                \
-    { .release = (_release) }
+#define MR_KTYPE_INIT(_name, _release, _attrs)                                 \
+    {.name = (_name), .release = (_release), .attrs = (_attrs)}
 
 /**
  * @brief This function initializes a ktype.
  *
  * @param type The ktype.
+ * @param name The name.
  * @param release The release function.
+ * @param attrs The attributes.
  */
-void mr_ktype_init(mr_ktype_t *type, void (*release)(mr_kobject_t *kobj));
+void mr_ktype_init(mr_ktype_t *type, const char *name,
+                   void (*release)(mr_kobject_t *kobj), mr_kattr_t **attrs);
 
 /**
  * @brief This macro function initializes a kobject.
@@ -89,6 +115,14 @@ void mr_ktype_init(mr_ktype_t *type, void (*release)(mr_kobject_t *kobj));
         .entry = MR_KLIST_INIT(&(_kobj)->entry),                               \
         .list = MR_KLIST_INIT(&(_kobj)->list), .ref = MR_KREF_INIT()           \
     }
+
+/**
+ * @brief This function initializes a kobject.
+ *
+ * @param kobj The kobject.
+ * @param type The ktype.
+ */
+void mr_kobject_init(mr_kobject_t *kobj, mr_ktype_t *type);
 
 /**
  * @brief This macro function checks if a kobject is initialized.
@@ -107,14 +141,6 @@ void mr_ktype_init(mr_ktype_t *type, void (*release)(mr_kobject_t *kobj));
  */
 #define MR_KOBJECT_IS_RELEASED(_kobj)                                          \
     (((mr_kobject_t *)(_kobj))->magic == (~MR_KOBJECT_MAGIC))
-
-/**
- * @brief This function initializes a kobject.
- *
- * @param kobj The kobject.
- * @param type The ktype.
- */
-void mr_kobject_init(mr_kobject_t *kobj, mr_ktype_t *type);
 
 /**
  * @brief This function adds a kobject.
@@ -163,6 +189,36 @@ mr_kobject_t *mr_kobject_get(mr_kobject_t *kobj);
 void mr_kobject_put(mr_kobject_t *kobj);
 
 /**
+ * @brief This function gets the value of an attribute.
+ *
+ * @param kobj The kobject.
+ * @param name The name of the attribute.
+ * @param buf The buffer to store the value.
+ * @param size The size of the buffer.
+ * @return The length of the value on success, or a negative error code on
+ * failure.
+ *
+ * @note Set buf to MR_NULL to get the length of the value.
+ */
+mr_ssize_t mr_kobject_attr_show(mr_kobject_t *kobj, const char *name, char *buf,
+                                mr_size_t size);
+
+/**
+ * @brief This function sets the value of an attribute.
+ *
+ * @param kobj The kobject.
+ * @param name The name of the attribute.
+ * @param buf The buffer to store the value.
+ * @param size The size of the buffer.
+ * @return The length of the value on success, or a negative error code on
+ * failure.
+ *
+ * @note Set buf to MR_NULL to get the length of the value.
+ */
+mr_ssize_t mr_kobject_attr_store(mr_kobject_t *kobj, const char *name,
+                                 const char *buf, mr_size_t size);
+
+/**
  * @brief This macro function gets the name of a kobject.
  *
  * @param _kobj The kobject.
@@ -187,6 +243,18 @@ void mr_kobject_put(mr_kobject_t *kobj);
  * @return The parent of the kobject.
  */
 #define MR_KOBJECT_PARENT(_kobj)        (((mr_kobject_t *)(_kobj))->parent)
+
+/**
+ * @brief This macro function gets the type of a kobject.
+ *
+ * @param _kobj The kobject.
+ * @return The type name of the kobject.
+ *
+ * @note If the kobject has no type, it returns MR_NULL.
+ */
+#define MR_KOBJECT_TYPE(_kobj)                                                 \
+    (((mr_kobject_t *)(_kobj))->type ? ((mr_kobject_t *)(_kobj))->type->name   \
+                                     : MR_NULL)
 
 /**
  * @brief This macro function initializes a kset.

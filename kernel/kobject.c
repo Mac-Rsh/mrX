@@ -21,14 +21,17 @@ static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
 #define LWORD_DOT                       (0x2e)
 #define LWORD_DOT2                      (0x2e2e)
 
-void mr_ktype_init(mr_ktype_t *type, void (*release)(mr_kobject_t *kobj)) {
+void mr_ktype_init(mr_ktype_t *type, const char *name,
+                   void (*release)(mr_kobject_t *kobj), mr_kattr_t **attrs) {
     /* Check arguments */
     if (!type) {
         return;
     }
 
     /* Init ktype */
+    type->name = name;
     type->release = release;
+    type->attrs = attrs;
 }
 
 MR_INLINE void kname_init(mr_kname_t *kname) {
@@ -128,7 +131,15 @@ MR_INLINE mr_kobject_t *kobject_lookup_path(mr_kobject_t **last,
     mr_kname_t kname;
     const char *name;
 
-    for (name = *path; *name != '\0';) {
+    /* Skip leading '/' */
+    for (name = (*path); *name != '\0'; name++) {
+        if (*name == '/') {
+            continue;
+        }
+        break;
+    }
+
+    while (*name != '\0') {
         /* Skip leading '/' */
         while (*name == '/') {
             name++;
@@ -420,6 +431,71 @@ void mr_kobject_put(mr_kobject_t *kobj) {
     mr_kref_put(&kobj->ref, kobject_release_ref);
 }
 
+MR_INLINE mr_kattr_t *kobject_attr_lookup(mr_kobject_t *kobj, const char *name) {
+    mr_kattr_t **attrs;
+    mr_size_t i;
+
+    /* Check type and attrs */
+    if ((!kobj->type) || (!kobj->type->attrs)) {
+        return MR_NULL;
+    }
+
+    /* Lookup attribute */
+    attrs = kobj->type->attrs;
+    for (i = 0; attrs[i]; i++) {
+        /* Match name */
+        if (mr_strcmp(name, attrs[i]->name)) {
+            continue;
+        }
+
+        /* Found */
+        return attrs[i];
+    }
+
+    /* Not found */
+    return MR_NULL;
+}
+
+mr_ssize_t mr_kobject_attr_show(mr_kobject_t *kobj, const char *name, char *buf,
+                                mr_size_t size) {
+    mr_kattr_t *attr;
+
+    /* Check arguments */
+    if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj)) || (!name)
+        || ((!buf) && (size > 0))) {
+        return -MR_EINVAL;
+    }
+
+    /* Lookup attribute */
+    attr = kobject_attr_lookup(kobj, name);
+    if (!attr) {
+        return -MR_ENOENT;
+    }
+
+    /* Show attribute */
+    return attr->show(kobj, attr, buf, size);
+}
+
+mr_ssize_t mr_kobject_attr_store(mr_kobject_t *kobj, const char *name,
+                                 const char *buf, mr_size_t size) {
+    mr_kattr_t *attr;
+
+    /* Check arguments */
+    if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj)) || (!name)
+        || ((!buf) && (size > 0))) {
+        return -MR_EINVAL;
+        }
+
+    /* Lookup attribute */
+    attr = kobject_attr_lookup(kobj, name);
+    if (!attr) {
+        return -MR_ENOENT;
+    }
+
+    /* Store attribute */
+    return attr->store(kobj, attr, buf, size);
+}
+
 void mr_kset_init(mr_kset_t *kset, mr_ktype_t *type) {
     /* Init kset */
     mr_kobject_init((mr_kobject_t *)kset, type);
@@ -429,6 +505,7 @@ mr_err_t mr_kset_register(mr_kset_t *kset, const char *name) {
     /* Add kset to kroot */
     return mr_kobject_add((mr_kobject_t *)kset, (mr_kobject_t *)&kroot, name);
 }
+
 
 mr_kset_t *mr_kset_find(const char *name) {
     /* Lookup kset in kroot */

@@ -21,7 +21,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup Stdio
+ * @addtogroup Printf
  * @{
  */
 

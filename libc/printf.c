@@ -328,8 +328,11 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
                 }
 
                 /* Get string length */
-                for (len = 0; (s[len] != '\0') && (len < precision); len++) {
-                    s++;
+                for (len = 0; len != precision; len++) {
+                    if (s[len] != '\0') {
+                        continue;
+                    }
+                    break;
                 }
 
                 /* Flush right */
@@ -483,17 +486,21 @@ int mr_vsprintf(char *buf, const char *fmt, mr_va_list args) {
 
 int mr_snprintf(char *buf, mr_size_t size, const char *fmt, ...) {
     mr_va_list args;
+    int ret;
 
     mr_va_start(args, fmt);
-    return mr_vsnprintf(buf, size, fmt, args);
+    ret = mr_vsnprintf(buf, size, fmt, args);
     mr_va_end(args);
+    return ret;
 }
 
 int mr_sprintf(char *buf, const char *fmt, ...) {
     mr_va_list args;
+    int ret;
 
     mr_va_start(args, fmt);
-    return mr_vsprintf(buf, fmt, args);
+    ret = mr_vsprintf(buf, fmt, args);
     mr_va_end(args);
+    return ret;
 }
 #endif /* !defined(MR_USE_LIBC_PRINTF) && !defined(MR_USE_3PARTY_PRINTF) */

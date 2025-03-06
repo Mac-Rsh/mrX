@@ -161,12 +161,17 @@ MR_INLINE void kmutex_release2_kobj(mr_kobject_t *kobj) {
 }
 
 MR_INLINE void mr_kmutex_kset_init(void) {
+    mr_err_t ret;
+
     /* Register kset */
-    mr_kset_register(&kroot, "mutex");
+    ret = mr_kset_register(&kroot, "mutex");
+    if (ret != 0) {
+        return;
+    }
 
     /* Init ktype */
-    mr_ktype_init(&ktype1, kmutex_release1_kobj);
-    mr_ktype_init(&ktype2, kmutex_release2_kobj);
+    mr_ktype_init(&ktype1, "mutex", kmutex_release1_kobj, MR_NULL);
+    mr_ktype_init(&ktype2, "mutex", kmutex_release2_kobj, MR_NULL);
 }
 MR_INIT_EXPORT(mr_kmutex_kset_init, MR_INIT_LEVEL_KERNEL);
 #endif /* defined(MR_USE_KOS) && defined(MR_USE_KMUTEX) */

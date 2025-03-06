@@ -52,6 +52,7 @@ typedef struct mr_kthread {
  * @param name The kthread name.
  * @param entry The kthread entry.
  * @param args The kthread arguments.
+ * @param stack The kthread stack.
  * @param stack_size The kthread stack size.
  * @param priority The kthread priority.
  * @param tick The kthread time slice.
