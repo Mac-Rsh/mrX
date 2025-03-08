@@ -57,7 +57,8 @@ void mr_kobject_init(mr_kobject_t *kobj, mr_ktype_t *type) {
 }
 
 MR_INLINE mr_err_t path_alloc_varg(const char *fmt, mr_va_list args,
-                                   const char **path) {
+                                   const char **path, char *ipath,
+                                   mr_size_t ipath_len) {
     int path_len;
 
     /* Get path length */
@@ -67,9 +68,14 @@ MR_INLINE mr_err_t path_alloc_varg(const char *fmt, mr_va_list args,
     }
 
     /* Allocate path */
-    *path = mr_malloc(path_len + 1);
-    if (!(*path)) {
-        return -MR_ENOMEM;
+    if (path_len < ipath_len) {
+        /* Use inline path if possible */
+        *path = ipath;
+    } else {
+        *path = mr_malloc(path_len + 1);
+        if (!(*path)) {
+            return -MR_ENOMEM;
+        }
     }
 
     /* Format path */
@@ -212,7 +218,11 @@ MR_INLINE mr_err_t kobject_name_alloc(mr_kobject_t *kobj, const char *name) {
     return 0;
 }
 
-MR_INLINE void path_free(const char *path) {
+MR_INLINE void path_free(const char *path, char *ipath) {
+    if (path == ipath) {
+        /* Inline path not need to free */
+        return;
+    }
     mr_free((char *)path);
 }
 
@@ -246,6 +256,7 @@ MR_INLINE mr_err_t kobject_add(mr_kobject_t *kobj, mr_kobject_t *parent,
 
 MR_INLINE mr_err_t kobject_add_varg(mr_kobject_t *kobj, mr_kobject_t *parent,
                                     const char *fmt, mr_va_list args) {
+    char ipath[MR_CFG_KOBJECT_INAME_SIZE * 2];
     const char *path;
     mr_err_t ret;
     int mask;
@@ -260,7 +271,7 @@ MR_INLINE mr_err_t kobject_add_varg(mr_kobject_t *kobj, mr_kobject_t *parent,
     }
 
     /* Allocate path */
-    ret = path_alloc_varg(fmt, args, &path);
+    ret = path_alloc_varg(fmt, args, &path, ipath, sizeof(ipath));
     if (ret != 0) {
         goto _exit;
     }
@@ -269,7 +280,7 @@ MR_INLINE mr_err_t kobject_add_varg(mr_kobject_t *kobj, mr_kobject_t *parent,
     ret = kobject_add(kobj, parent, path);
 
     /* Free path */
-    path_free(path);
+    path_free(path, ipath);
 _exit:
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
@@ -327,6 +338,7 @@ void mr_kobject_del(mr_kobject_t *kobj) {
 
 MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
                                             const char *fmt, mr_va_list args) {
+    char ipath[MR_CFG_KOBJECT_INAME_SIZE * 2];
     const char *path, *path2;
     mr_kobject_t *kobj;
     mr_err_t ret;
@@ -336,7 +348,7 @@ MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
     mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Allocate path */
-    ret = path_alloc_varg(fmt, args, &path);
+    ret = path_alloc_varg(fmt, args, &path, ipath, sizeof(ipath));
     if (ret != 0) {
         kobj = MR_NULL;
         goto _exit;
@@ -349,7 +361,7 @@ MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
     kobj = kobject_lookup_path(&parent, &path, parent);
 
     /* Free path */
-    path_free(path2);
+    path_free(path2, ipath);
 _exit:
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
@@ -431,7 +443,8 @@ void mr_kobject_put(mr_kobject_t *kobj) {
     mr_kref_put(&kobj->ref, kobject_release_ref);
 }
 
-MR_INLINE mr_kattr_t *kobject_attr_lookup(mr_kobject_t *kobj, const char *name) {
+MR_INLINE mr_kattr_t *kobject_attr_lookup(mr_kobject_t *kobj,
+                                          const char *name) {
     mr_kattr_t **attrs;
     mr_size_t i;
 
@@ -484,7 +497,7 @@ mr_ssize_t mr_kobject_attr_store(mr_kobject_t *kobj, const char *name,
     if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj)) || (!name)
         || ((!buf) && (size > 0))) {
         return -MR_EINVAL;
-        }
+    }
 
     /* Lookup attribute */
     attr = kobject_attr_lookup(kobj, name);
@@ -505,7 +518,6 @@ mr_err_t mr_kset_register(mr_kset_t *kset, const char *name) {
     /* Add kset to kroot */
     return mr_kobject_add((mr_kobject_t *)kset, (mr_kobject_t *)&kroot, name);
 }
-
 
 mr_kset_t *mr_kset_find(const char *name) {
     /* Lookup kset in kroot */

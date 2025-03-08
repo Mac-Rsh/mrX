@@ -45,6 +45,14 @@ extern "C" {
 #define MR_ASSERT(_expr)                ((void)0)
 #endif /* defined(MR_USE_LIBC_ASSERT) */
 
+/**
+ * @brief This macro function defines a static assert.
+ *
+ * @param _expr The expression.
+ */
+#define MR_STATIC_ASSERT(_expr)                                                \
+    typedef char __mr_static_assert[(_expr) ? 1 : -1];
+
 /** @} */
 
 #ifdef __cplusplus

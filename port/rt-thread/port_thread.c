@@ -73,10 +73,7 @@ mr_err_t mr_port_thread_init(void *thread, const char *name, void *kthread,
     rt_err_t ret;
 
     /* Check inline thread size */
-    if (MR_CFG_KTHREAD_ITHREAD_SIZE < sizeof(struct rt_thread)) {
-        ret = -RT_ENOMEM;
-        return err_shift(ret);
-    }
+    MR_STATIC_ASSERT(MR_CFG_KTHREAD_ITHREAD_SIZE >= sizeof(struct rt_thread));
 
     /* Init thread */
     ret = rt_thread_init(thread, name, thread_entry, kthread, stack, stack_size,
@@ -185,5 +182,5 @@ static void mr_main_thread_takeover(void) {
     main->parameter = &kth;
     mr_kthread_takeover(&kth, "main", main);
 }
-MR_INIT_EXPORT(mr_main_thread_takeover, MR_INIT_LEVEL_KOS);
+MR_INIT_EXPORT(mr_main_thread_takeover, MR_INIT_LEVEL_USER("0"));
 #endif /* defined(MR_USE_KOS) */

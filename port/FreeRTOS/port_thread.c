@@ -10,6 +10,7 @@
 #if defined(MR_USE_KOS)
 #include "FreeRTOS.h"
 #include "task.h"
+#include <libc/mr_assert.h>
 #include <port/mr_port_thread.h>
 
 static mr_err_t err_shift(BaseType_t ret) {
@@ -54,10 +55,7 @@ mr_err_t mr_port_thread_init(void *thread, const char *name, void *kthread,
     BaseType_t ret;
 
     /* Check inline thread size */
-    if (MR_CFG_KTHREAD_ITHREAD_SIZE < sizeof(StaticTask_t)) {
-        ret = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
-        return err_shift(ret);
-    }
+    MR_STATIC_ASSERT(MR_CFG_KTHREAD_ITHREAD_SIZE >= sizeof(StaticTask_t));
 
     /* Shift arguments */
     task_arguments_shift(&stack_size, &priority);

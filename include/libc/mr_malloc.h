@@ -41,6 +41,7 @@ typedef struct mr_memblk {
     mr_size_t size;
 } mr_memblk_t;
 #endif /* !defined(MR_USE_3PARTY_MALLOC) */
+
 /**
  * @brief This function allocates memory.
  *

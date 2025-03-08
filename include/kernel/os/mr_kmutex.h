@@ -27,7 +27,7 @@ extern "C" {
 #if defined(MR_USE_KOS) && defined(MR_USE_KMUTEX)
 /* Kmutex type */
 typedef struct mr_kmutex {
-    struct mr_kobject parent;
+    mr_kobject_t parent;
     mr_ptr_t mutex;
 #if !defined(MR_CFG_KMUTEX_IMUTEX_SIZE)
 #define MR_CFG_KMUTEX_IMUTEX_SIZE       (64)

@@ -24,6 +24,7 @@
 #include <kernel/mr_kservice.h>
 #include <kernel/mr_kspinlock.h>
 #include <kernel/mr_ktimer.h>
+#include <kernel/mr_kversion.h>
 #include <kernel/os/mr_kmutex.h>
 #include <kernel/os/mr_kthread.h>
 

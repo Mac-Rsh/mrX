@@ -24,6 +24,7 @@ extern "C" {
  * @brief This function initializes a thread.
  *
  * @param thread The thread to be initialized.
+ * @param name The thread name.
  * @param kthread The kthread to thread arguments.
  * @param stack The thread stack.
  * @param stack_size The thread stack size.
