@@ -16,6 +16,7 @@
 
 #include <kernel/mr_initcall.h>
 #include <kernel/mr_kclock.h>
+#include <kernel/mr_kfifo.h>
 #include <kernel/mr_khook.h>
 #include <kernel/mr_klist.h>
 #include <kernel/mr_kobject.h>

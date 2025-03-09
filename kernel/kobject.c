@@ -235,16 +235,9 @@ MR_INLINE mr_err_t kobject_add(mr_kobject_t *kobj, mr_kobject_t *parent,
         return -MR_EEXIST;
     }
 
-    /* Get parent */
-    parent = mr_kobject_get(parent);
-    if (!parent) {
-        return -MR_ENOENT;
-    }
-
     /* Allocate name */
     ret = kobject_name_alloc(kobj, path);
     if (ret != 0) {
-        mr_kobject_put(parent);
         return ret;
     }
 
@@ -260,6 +253,12 @@ MR_INLINE mr_err_t kobject_add_varg(mr_kobject_t *kobj, mr_kobject_t *parent,
     const char *path;
     mr_err_t ret;
     int mask;
+
+    /* Get parent */
+    parent = mr_kobject_get(parent);
+    if (!parent) {
+        return -MR_EINVAL;
+    }
 
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
@@ -284,6 +283,11 @@ MR_INLINE mr_err_t kobject_add_varg(mr_kobject_t *kobj, mr_kobject_t *parent,
 _exit:
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
+
+    /* Put parent */
+    if (ret != 0) {
+        mr_kobject_put(parent);
+    }
     return ret;
 }
 
@@ -311,14 +315,12 @@ MR_INLINE void kobject_del(mr_kobject_t *kobj) {
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
 
-    /* Already deleted */
-    if (mr_klist_is_empty(&kobj->entry)) {
-        goto _exit;
+    /* Check kobject is deleted */
+    if (!mr_klist_is_empty(&kobj->entry)) {
+        /* Remove kobject from parent */
+        mr_klist_del(&kobj->entry);
     }
 
-    /* Remove kobject from parent */
-    mr_klist_del(&kobj->entry);
-_exit:
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
 }
@@ -344,6 +346,12 @@ MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
     mr_err_t ret;
     int mask;
 
+    /* Get parent */
+    parent = mr_kobject_get(parent);
+    if (!parent) {
+        return MR_NULL;
+    }
+
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
 
@@ -365,6 +373,9 @@ MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
 _exit:
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
+
+    /* Put parent */
+    mr_kobject_put(parent);
     return kobj;
 }
 

@@ -94,8 +94,9 @@ MR_INLINE void ktimer_del(mr_ktimer_t *ktimer) {
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
 
-    /* Remove ktimer from ktimer list */
+    /* Check ktimer is deleted */
     if (!mr_klist_is_empty(&ktimer->list)) {
+        /* Remove ktimer from timer list */
         mr_klist_del(&ktimer->list);
     }
 
@@ -118,15 +119,15 @@ mr_err_t mr_ktimer_del(mr_ktimer_t *ktimer) {
 }
 
 MR_INLINE void ktimer_insert(mr_ktimer_t *ktimer) {
-    mr_tick_t tick;
     mr_ktimer_t *t;
+    mr_tick_t tick;
     mr_klist_t *l;
 
     /* Set timeout tick */
     tick = ktimer->init_tick & ~MR_KTIMER_PERIODIC;
     ktimer->timeout_tick = mr_kclock_tick() + tick;
 
-    /* Insert ktimer into ktimer list */
+    /* Insert ktimer into timer list */
     MR_KLIST_FOR_EACH(l, &klist) {
         t = MR_KLIST_ENTRY(l, mr_ktimer_t, list);
         if ((ktimer->timeout_tick - t->timeout_tick) < (MR_TICK_MAX / 2)) {
@@ -148,7 +149,7 @@ MR_INLINE void ktimer_start(mr_ktimer_t *ktimer) {
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
 
-    /* Insert ktimer into ktimer list */
+    /* Insert ktimer into timer list */
     ktimer_insert(ktimer);
 
     /* Unlock */
@@ -183,7 +184,7 @@ MR_INLINE void ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
 
-    /* Remove ktimer from ktimer list */
+    /* Remove ktimer from timer list */
     if (!mr_klist_is_empty(&ktimer->list)) {
         mr_klist_del(&ktimer->list);
     }

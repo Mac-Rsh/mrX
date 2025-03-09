@@ -25,7 +25,7 @@ extern "C" {
  */
 
 #if defined(MR_USE_KTIMER)
-/* Periodic definition */
+/* Ktimer periodic definition */
 #define MR_KTIMER_PERIODIC              (1U << 31)
 
 /* Ktimer type */
@@ -61,13 +61,13 @@ mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
                         void *args, mr_tick_t tick);
 
 /**
- * @brief This function create a timer.
+ * @brief This function create a ktimer.
  *
- * @param name The timer name.
- * @param entry The timer entry.
- * @param args The timer args.
- * @param tick The timer tick.
- * @return The timer on success, or MR_NULL on failure.
+ * @param name The ktimer name.
+ * @param entry The ktimer entry.
+ * @param args The ktimer args.
+ * @param tick The ktimer tick.
+ * @return The ktimer on success, or MR_NULL on failure.
  */
 mr_ktimer_t *mr_ktimer_create(const char *name,
                               void (*entry)(mr_ktimer_t *ktimer, void *args),
@@ -107,6 +107,16 @@ mr_err_t mr_ktimer_stop(mr_ktimer_t *ktimer);
  * @note If the ktimer is running, it will be stopped.
  */
 mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick);
+
+/**
+ * @brief This function check if a ktimer is running.
+ *
+ * @param ktimer The ktimer.
+ * @return MR_TRUE if the ktimer is running, MR_FALSE otherwise.
+ */
+MR_INLINE mr_bool_t mr_ktimer_is_running(mr_ktimer_t *ktimer) {
+    return mr_klist_is_empty(&ktimer->list);
+}
 
 /**
  * @brief This function find a ktimer.
