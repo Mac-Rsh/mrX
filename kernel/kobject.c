@@ -341,8 +341,8 @@ void mr_kobject_del(mr_kobject_t *kobj) {
 MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
                                             const char *fmt, mr_va_list args) {
     char ipath[MR_CFG_KOBJECT_INAME_SIZE * 2];
+    mr_kobject_t *parent2, *kobj;
     const char *path, *path2;
-    mr_kobject_t *kobj;
     mr_err_t ret;
     int mask;
 
@@ -350,6 +350,9 @@ MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
     parent = mr_kobject_get(parent);
     if (!parent) {
         return MR_NULL;
+    } else {
+        /* Save parent for put */
+        parent2 = parent;
     }
 
     /* Lock */
@@ -375,7 +378,7 @@ _exit:
     mr_kspinlock_unlock_irqrestore(&klock, mask);
 
     /* Put parent */
-    mr_kobject_put(parent);
+    mr_kobject_put(parent2);
     return kobj;
 }
 

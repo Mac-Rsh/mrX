@@ -241,6 +241,8 @@ MR_INLINE void ktimer_release2_kobj(mr_kobject_t *kobj) {
 MR_INLINE void ktimer_timeout_check(void) {
     mr_ktimer_t *ktimer;
     mr_klist_t list;
+    mr_ptr_t entry;
+    mr_ptr_t args;
     int mask;
 
     /* Operation list */
@@ -262,11 +264,15 @@ MR_INLINE void ktimer_timeout_check(void) {
         /* Move ktimer into operation list */
         mr_klist_move(&ktimer->list, &list);
 
+        /* Save ktimer entry and args */
+        entry = ktimer->entry;
+        args = ktimer->args;
+
         /* Unlock */
         mr_kspinlock_unlock_irqrestore(&klock, mask);
 
         /* Call ktimer entry */
-        ((void (*)(mr_ktimer_t *, void *))ktimer->entry)(ktimer, ktimer->args);
+        ((void (*)(mr_ktimer_t *, void *))entry)(ktimer, args);
 
         /* Lock */
         mask = mr_kspinlock_lock_irqsave(&klock);

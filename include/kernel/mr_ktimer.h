@@ -109,14 +109,12 @@ mr_err_t mr_ktimer_stop(mr_ktimer_t *ktimer);
 mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick);
 
 /**
- * @brief This function check if a ktimer is running.
+ * @brief This macro function gets the tick of a ktimer.
  *
  * @param ktimer The ktimer.
- * @return MR_TRUE if the ktimer is running, MR_FALSE otherwise.
+ * @return The tick of the ktimer.
  */
-MR_INLINE mr_bool_t mr_ktimer_is_running(mr_ktimer_t *ktimer) {
-    return mr_klist_is_empty(&ktimer->list);
-}
+#define MR_KTIMER_TICK(_ktimer)         (((mr_ktimer_t *)(_ktimer))->init_tick)
 
 /**
  * @brief This function find a ktimer.

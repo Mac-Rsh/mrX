@@ -50,6 +50,13 @@ menu "Kernel options"
         default n
         help
             This option controls whether to use ktimer attribute.
+    # WORKQUEUE
+    config MR_USE_KWORKQUEUE
+        depends on MR_USE_KTIMER
+        bool "Use kworkqueue"
+        default n
+        help
+            This option controls whether to use kworkqueue.
     # OS
     source "include/kernel/os/Kconfig"
 endmenu
