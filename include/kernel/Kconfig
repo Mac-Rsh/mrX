@@ -16,7 +16,7 @@ menu "Kernel options"
     # KOBJECT
     config MR_CFG_KOBJECT_INAME_SIZE
         int "Kobject inline name size"
-        default 16
+        default 8
         range 4 256
         help
             This option controls the size of the inline name of the kobject.

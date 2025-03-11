@@ -35,6 +35,7 @@ typedef struct mr_kworkqueue {
 /* Kwork type */
 typedef struct mr_kwork {
     mr_klist_t list;
+    mr_ptr_t kqueue;
     mr_tick_t tick;
     mr_ptr_t entry;
     mr_ptr_t args;
@@ -142,6 +143,29 @@ mr_err_t mr_kworkqueue_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork);
  */
 mr_err_t mr_kworkqueue_delayed_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork,
                                     mr_tick_t tick);
+
+/**
+ * @brief This function schedule a kwork.
+ *
+ * @param kwork The kwork.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The kwork must have worked in a kworkqueue and has not been manually
+ * deleted.
+ */
+mr_err_t mr_kwork_schedule(mr_kwork_t *kwork);
+
+/**
+ * @brief This function schedule a kdelayed-work.
+ *
+ * @param kwork The kdelayed-work.
+ * @param tick The kdelayed-work tick.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The kwork must have worked in a kworkqueue and has not been manually
+ * deleted.
+ */
+mr_err_t mr_kwork_delayed_schedule(mr_kwork_t *kwork, mr_tick_t tick);
 
 #if defined(MR_USE_KWORKQUEUE_HOOK)
 /**
