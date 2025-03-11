@@ -54,7 +54,7 @@ typedef struct mr_ktimer {
  * @param entry The ktimer entry.
  * @param args The ktimer args.
  * @param tick The ktimer tick(period: 'tick | MR_KTIMER_PERIODIC').
- * @returns 0 on success, or a negative error code on failure.
+ * @returns 0 on success, a negative error code on failure.
  */
 mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
                         void (*entry)(mr_ktimer_t *ktimer, void *args),
@@ -67,7 +67,7 @@ mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
  * @param entry The ktimer entry.
  * @param args The ktimer args.
  * @param tick The ktimer tick.
- * @return The ktimer on success, or MR_NULL on failure.
+ * @return The ktimer on success, MR_NULL on failure.
  */
 mr_ktimer_t *mr_ktimer_create(const char *name,
                               void (*entry)(mr_ktimer_t *ktimer, void *args),
@@ -77,7 +77,7 @@ mr_ktimer_t *mr_ktimer_create(const char *name,
  * @brief This function delete a ktimer.
  *
  * @param ktimer The ktimer.
- * @return 0 on success, or a negative error code on failure.
+ * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_ktimer_del(mr_ktimer_t *ktimer);
 
@@ -85,7 +85,7 @@ mr_err_t mr_ktimer_del(mr_ktimer_t *ktimer);
  * @brief This function start a ktimer.
  *
  * @param ktimer The ktimer.
- * @return 0 on success, or a negative error code on failure.
+ * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_ktimer_start(mr_ktimer_t *ktimer);
 
@@ -93,7 +93,7 @@ mr_err_t mr_ktimer_start(mr_ktimer_t *ktimer);
  * @brief This function stop a ktimer.
  *
  * @param ktimer The ktimer.
- * @return 0 on success, or a negative error code on failure.
+ * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_ktimer_stop(mr_ktimer_t *ktimer);
 
@@ -102,7 +102,7 @@ mr_err_t mr_ktimer_stop(mr_ktimer_t *ktimer);
  *
  * @param ktimer The ktimer.
  * @param tick The ktimer tick.
- * @return 0 on success, or a negative error code on failure.
+ * @return 0 on success, a negative error code on failure.
  *
  * @note If the ktimer is running, it will be stopped.
  */
@@ -120,7 +120,7 @@ mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick);
  * @brief This function find a ktimer.
  *
  * @param name The ktimer name.
- * @return The ktimer on success, or MR_NULL on failure.
+ * @return The ktimer on success, MR_NULL on failure.
  */
 mr_ktimer_t *mr_ktimer_find(const char *name);
 
@@ -128,7 +128,7 @@ mr_ktimer_t *mr_ktimer_find(const char *name);
  * @brief This function get a ktimer.
  *
  * @param ktimer The ktimer.
- * @return The ktimer on success, or MR_NULL on failure.
+ * @return The ktimer on success, MR_NULL on failure.
  */
 MR_INLINE mr_ktimer_t *mr_ktimer_get(mr_ktimer_t *ktimer) {
     return (mr_ktimer_t *)mr_kobject_get((mr_kobject_t *)ktimer);

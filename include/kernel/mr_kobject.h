@@ -102,6 +102,15 @@ void mr_ktype_init(mr_ktype_t *type, const char *name,
                    void (*release)(mr_kobject_t *kobj), mr_kattr_t **attrs);
 
 /**
+ * @brief This macro function checks if a kobject is initialized.
+ *
+ * @param _kobj The kobject.
+ * @return MR_TRUE if the kobject is initialized, MR_FALSE otherwise.
+ */
+#define MR_KOBJECT_IS_INITED(_kobj)                                            \
+    (((mr_kobject_t *)(_kobj))->magic == MR_KOBJECT_MAGIC)
+
+/**
  * @brief This macro function initializes a kobject.
  *
  * @param _kobj The kobject.
@@ -125,13 +134,16 @@ void mr_ktype_init(mr_ktype_t *type, const char *name,
 void mr_kobject_init(mr_kobject_t *kobj, mr_ktype_t *type);
 
 /**
- * @brief This macro function checks if a kobject is initialized.
+ * @brief This function adds a kobject.
  *
- * @param _kobj The kobject.
- * @return MR_TRUE if the kobject is initialized, MR_FALSE otherwise.
+ * @param kobj The kobject.
+ * @param parent The parent kobject.
+ * @param fmt The format string(path).
+ * @param ... The format arguments.
+ * @returns 0 on success, a negative error code on failure.
  */
-#define MR_KOBJECT_IS_INITED(_kobj)                                            \
-    (((mr_kobject_t *)(_kobj))->magic == MR_KOBJECT_MAGIC)
+mr_err_t mr_kobject_add(mr_kobject_t *kobj, mr_kobject_t *parent,
+                        const char *fmt, ...);
 
 /**
  * @brief This macro function checks if a kobject is released.
@@ -141,18 +153,6 @@ void mr_kobject_init(mr_kobject_t *kobj, mr_ktype_t *type);
  */
 #define MR_KOBJECT_IS_RELEASED(_kobj)                                          \
     (((mr_kobject_t *)(_kobj))->magic == (~MR_KOBJECT_MAGIC))
-
-/**
- * @brief This function adds a kobject.
- *
- * @param kobj The kobject.
- * @param parent The parent kobject.
- * @param fmt The format string(path).
- * @param ... The format arguments.
- * @returns 0 on success, or a negative error code on failure.
- */
-mr_err_t mr_kobject_add(mr_kobject_t *kobj, mr_kobject_t *parent,
-                        const char *fmt, ...);
 
 /**
  * @brief This function deletes a kobject.
@@ -169,7 +169,7 @@ void mr_kobject_del(mr_kobject_t *kobj);
  * @param parent The parent kobject.
  * @param fmt The format string(path).
  * @param ... The format arguments.
- * @return The kobject on success, or MR_NULL on failure.
+ * @return The kobject on success, MR_NULL on failure.
  */
 mr_kobject_t *mr_kobject_lookup(mr_kobject_t *parent, const char *fmt, ...);
 
@@ -177,7 +177,7 @@ mr_kobject_t *mr_kobject_lookup(mr_kobject_t *parent, const char *fmt, ...);
  * @brief This function gets a kobject.
  *
  * @param kobj The kobject.
- * @returns The kobject on success, or MR_NULL on failure.
+ * @returns The kobject on success, MR_NULL on failure.
  */
 mr_kobject_t *mr_kobject_get(mr_kobject_t *kobj);
 
@@ -195,7 +195,7 @@ void mr_kobject_put(mr_kobject_t *kobj);
  * @param name The name of the attribute.
  * @param buf The buffer to store the value.
  * @param size The size of the buffer.
- * @return The length of the value on success, or a negative error code on
+ * @return The length of the value on success, a negative error code on
  * failure.
  *
  * @note Set buf to MR_NULL to get the length of the value.
@@ -210,7 +210,7 @@ mr_ssize_t mr_kobject_attr_show(mr_kobject_t *kobj, const char *name, char *buf,
  * @param name The name of the attribute.
  * @param buf The buffer to store the value.
  * @param size The size of the buffer.
- * @return The length of the value on success, or a negative error code on
+ * @return The length of the value on success, a negative error code on
  * failure.
  *
  * @note Set buf to MR_NULL to get the length of the value.
@@ -278,7 +278,7 @@ void mr_kset_init(mr_kset_t *kset, mr_ktype_t *type);
  *
  * @param kset The kset.
  * @param name The name.
- * @returns 0 on success, or a negative error code on failure.
+ * @returns 0 on success, a negative error code on failure.
  */
 mr_err_t mr_kset_register(mr_kset_t *kset, const char *name);
 
@@ -286,7 +286,7 @@ mr_err_t mr_kset_register(mr_kset_t *kset, const char *name);
  * @brief This function finds a kset.
  *
  * @param name The name.
- * @returns The kset on success, or MR_NULL on failure.
+ * @returns The kset on success, MR_NULL on failure.
  */
 mr_kset_t *mr_kset_find(const char *name);
 

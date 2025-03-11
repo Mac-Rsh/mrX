@@ -39,7 +39,7 @@ menu "Kernel options"
         default n
         help
             This option controls whether to use kprintf safe.
-    # TIMER
+    # KTIMER
     config MR_USE_KTIMER
         bool "Use ktimer"
         default n
@@ -50,13 +50,17 @@ menu "Kernel options"
         default n
         help
             This option controls whether to use ktimer attribute.
-    # WORKQUEUE
+    # KWORKQUEUE
     config MR_USE_KWORKQUEUE
         depends on MR_USE_KTIMER
         bool "Use kworkqueue"
         default n
         help
             This option controls whether to use kworkqueue.
-    # OS
-    source "include/kernel/os/Kconfig"
+    config MR_USE_KWORKQUEUE_HOOK
+        depends on MR_USE_KWORKQUEUE
+        bool "Use kworkqueue hook"
+        default n
+        help
+            This option controls whether to use kworkqueue hook.
 endmenu

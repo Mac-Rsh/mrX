@@ -27,8 +27,6 @@
 #include <kernel/mr_ktimer.h>
 #include <kernel/mr_kversion.h>
 #include <kernel/mr_kworkqueue.h>
-#include <kernel/os/mr_kmutex.h>
-#include <kernel/os/mr_kthread.h>
 
 /** @} */
 
@@ -43,6 +41,7 @@
 #include <libc/mr_errno.h>
 #include <libc/mr_malloc.h>
 #include <libc/mr_printf.h>
+#include <libc/mr_scanf.h>
 #include <libc/mr_string.h>
 #include <libc/mr_types.h>
 

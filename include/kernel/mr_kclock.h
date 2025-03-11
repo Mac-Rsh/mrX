@@ -43,7 +43,7 @@ mr_tick_t mr_kclock_tick(void);
  * @brief This function adds a hook to the clock.
  * 
  * @param entry The hook entry.
- * @return 0 on success, or a negative error code on failure.
+ * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_kclock_hook_add(void (*entry)(void));
 

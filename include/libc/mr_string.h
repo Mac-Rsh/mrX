@@ -88,7 +88,7 @@ void *mr_memset(void *dst, int c, mr_size_t size);
  * @param s The string to search.
  * @param c The byte to search.
  * @param size The number of bytes to search.
- * @return The pointer to the first occurrence of c in s, or MR_NULL if not found.
+ * @return The pointer to the first occurrence of c in s, MR_NULL if not found.
  */
 void *mr_memchr(const void *s, int c, mr_size_t size);
 
@@ -160,7 +160,7 @@ char *mr_strncpy(char *dst, const char *src, mr_size_t size);
  *
  * @param s The string to search.
  * @param c The byte to search.
- * @return The pointer to the first occurrence of c in s, or MR_NULL if not found.
+ * @return The pointer to the first occurrence of c in s, MR_NULL if not found.
  */
 char *mr_strchr(const char *s, int c);
 #endif /* defined(MR_USE_LIBC_STRING) */

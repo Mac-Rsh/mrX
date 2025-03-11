@@ -57,7 +57,7 @@ void mr_khook_init(mr_khook_t *khook, mr_ptr_t *entry, mr_size_t size);
  *
  * @param khook The khook.
  * @param entry The entry.
- * @returns 0 on success, or a negative error code on failure.
+ * @returns 0 on success, a negative error code on failure.
  */
 mr_err_t mr_khook_add(mr_khook_t *khook, mr_ptr_t entry);
 

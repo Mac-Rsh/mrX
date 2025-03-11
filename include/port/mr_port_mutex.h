@@ -25,7 +25,7 @@ extern "C" {
  *
  * @param mutex The mutex to be initialized.
  * @param name The mutex name.
- * @return 0 on success, or a negative error code on failure.
+ * @return 0 on success, a negative error code on failure.
  *
  * @note User implementation.
  */
@@ -35,7 +35,7 @@ extern mr_err_t mr_port_mutex_init(void *mutex, const char *name);
  * @brief This function deletes a mutex.
  *
  * @param mutex The mutex to be deleted.
- * @return 0 on success, or a negative error code on failure.
+ * @return 0 on success, a negative error code on failure.
  *
  * @note User implementation.
  */
@@ -46,7 +46,7 @@ extern mr_err_t mr_port_mutex_del(void *mutex);
  *
  * @param mutex The mutex to be taken.
  * @param timeout The timeout(tick).
- * @return 0 on success, or a negative error code on failure.
+ * @return 0 on success, a negative error code on failure.
  *
  * @note User implementation.
  */
@@ -56,7 +56,7 @@ extern mr_err_t mr_port_mutex_take(void *mutex, mr_tick_t timeout);
  * @brief This function gives a mutex.
  *
  * @param mutex The mutex to be given.
- * @return 0 on success, or a negative error code on failure.
+ * @return 0 on success, a negative error code on failure.
  *
  * @note User implementation.
  */
