@@ -1,7 +1,6 @@
 menu "Kernel options"
     # ENTRY
     config MR_USE_ENTRY
-        depends on !MR_USE_KOS
         bool "Use entry"
         default n
         help
@@ -23,7 +22,7 @@ menu "Kernel options"
     # KPRINTF
     config MR_USE_KPRINTF
         bool "Use kprintf"
-        default n
+        default y
         help
             This option controls whether to use kprintf.
     config MR_CFG_KPRINTF_BUF_SIZE
@@ -42,7 +41,7 @@ menu "Kernel options"
     # KTIMER
     config MR_USE_KTIMER
         bool "Use ktimer"
-        default n
+        default y
         help
             This option controls whether to use ktimer.
     config MR_USE_KTIMER_ATTR
@@ -54,7 +53,7 @@ menu "Kernel options"
     config MR_USE_KWORKQUEUE
         depends on MR_USE_KTIMER
         bool "Use kworkqueue"
-        default n
+        default y
         help
             This option controls whether to use kworkqueue.
     config MR_USE_KWORKQUEUE_HOOK

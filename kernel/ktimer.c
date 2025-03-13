@@ -372,7 +372,7 @@ MR_INLINE mr_ssize_t ktimer_attr_store(struct mr_kobject *kobj,
 }
 #endif /* defined(MR_USE_KTIMER_ATTR) */
 
-MR_INLINE void mr_ktimer_kset_init(void) {
+void mr_ktimer_kernel_init(void) {
 #if defined(MR_USE_KTIMER_ATTR)
     static mr_kattr_t attr[]
         = {MR_KATTR_INIT("tick", ktimer_attr_show, ktimer_attr_store),
@@ -398,5 +398,4 @@ MR_INLINE void mr_ktimer_kset_init(void) {
     /* Add kclock entry */
     mr_kclock_hook_add(ktimer_timeout_check);
 }
-MR_INIT_EXPORT(mr_ktimer_kset_init, MR_INIT_LEVEL_KERNEL);
 #endif /* defined(MR_USE_KTIMER) */

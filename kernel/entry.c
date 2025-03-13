@@ -7,14 +7,14 @@
  */
 
 #include <mr_config.h>
-#if defined(MR_USE_ENTRY) && !defined(MR_USE_KOS)
+#if defined(MR_USE_ENTRY)
 #include <kernel/mr_initcall.h>
 
 MR_INLINE void entry(void) {
     extern int main(void);
 
-    /* Run autoinit(kernel) */
-    mr_autoinit_kernel();
+    /* Kernel init */
+    mr_kernel_init();
 
     /* Run main */
     main();
@@ -33,4 +33,4 @@ int $Sub$$main(void) {
     return 0;
 }
 #endif /* defined(__GNUC__) || defined(__clang__) */
-#endif /* defined(MR_USE_ENTRY) && !defined(MR_USE_KOS) */
+#endif /* defined(MR_USE_ENTRY) */

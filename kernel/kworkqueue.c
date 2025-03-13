@@ -82,7 +82,8 @@ MR_INLINE void kqueue_timer_entry(mr_ktimer_t *ktimer, void *args) {
         mr_kworkqueue_get(kqueue);
 #if defined(MR_USE_KWORKQUEUE_HOOK)
         if (kqueue->wakeup) {
-            ((void (*)(mr_kworkqueue_t *))kqueue->wakeup)(kqueue);
+            ((void (*)(mr_kworkqueue_t *, void *))kqueue->wakeup)(kqueue,
+                                                                  kqueue->args);
         }
 #endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
     }
@@ -255,7 +256,8 @@ MR_INLINE void kqueue_execute(mr_kworkqueue_t *kqueue) {
     mr_kworkqueue_put(kqueue);
 #if defined(MR_USE_KWORKQUEUE_HOOK)
     if (kqueue->suspend) {
-        ((void (*)(mr_kworkqueue_t *))kqueue->suspend)(kqueue);
+        ((void (*)(mr_kworkqueue_t *, void *))kqueue->suspend)(kqueue,
+                                                               kqueue->args);
     }
 #endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
 }
@@ -281,6 +283,7 @@ mr_err_t mr_kwork_init(mr_kwork_t *kwork,
 
     /* Init kwork */
     mr_klist_init(&kwork->list);
+    kwork->kqueue = MR_NULL;
     kwork->entry = entry;
     kwork->args = args;
     return 0;
@@ -299,6 +302,7 @@ MR_INLINE void kwork_del(mr_kwork_t *kwork) {
     }
 
     /* Mark kwork as deleted */
+    kwork->kqueue = MR_NULL;
     kwork->entry = MR_NULL;
 
     /* Unlock */
@@ -346,6 +350,7 @@ MR_INLINE mr_err_t kqueue_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork) {
 
     /* Add kwork to kworkqueue list */
     mr_klist_add(&kqueue->list, &kwork->list);
+    kwork->kqueue = kqueue;
 
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
@@ -357,7 +362,8 @@ MR_INLINE mr_err_t kqueue_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork) {
 #if defined(MR_USE_KWORKQUEUE_HOOK)
         if (kqueue->wakeup) {
             /* Call kworkqueue wakeup hook */
-            ((void (*)(mr_kworkqueue_t *))kqueue->wakeup)(kqueue);
+            ((void (*)(mr_kworkqueue_t *, void *))kqueue->wakeup)(kqueue,
+                                                                  kqueue->args);
         }
 #endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
     }
@@ -433,6 +439,9 @@ _set:
         mr_ktimer_tick_set(&kqueue->timer, tick | MR_KTIMER_PERIODIC);
         mr_ktimer_start(&kqueue->timer);
     }
+
+    /* Mark kwork as in kworkqueue */
+    kwork->kqueue = kqueue;
     ret = 0;
 _exit:
     /* Unlock */
@@ -452,9 +461,57 @@ mr_err_t mr_kworkqueue_delayed_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork,
     return kqueue_delayed_work(kqueue, kwork, tick);
 }
 
+mr_err_t mr_kwork_schedule(mr_kwork_t *kwork) {
+    mr_kworkqueue_t *kqueue;
+    mr_err_t ret;
+
+    /* Check arguments */
+    if ((!kwork) || (!MR_KWORK_IS_INITED(kwork)) || (!kwork->kqueue)) {
+        return -MR_EINVAL;
+    }
+
+    /* Get kworkqueue */
+    kqueue = mr_kworkqueue_get(kwork->kqueue);
+    if (!kqueue) {
+        return -MR_EINVAL;
+    }
+
+    /* Schedule kwork to the used kworkqueue */
+    ret = mr_kworkqueue_work(kwork->kqueue, kwork);
+
+    /* Put kworkqueue */
+    mr_kworkqueue_put(kqueue);
+    return ret;
+}
+
+mr_err_t mr_kwork_delayed_schedule(mr_kwork_t *kwork, mr_tick_t tick) {
+    mr_kworkqueue_t *kqueue;
+    mr_err_t ret;
+
+    /* Check arguments */
+    if ((!kwork) || (!MR_KWORK_IS_INITED(kwork)) || (!kwork->kqueue)
+        || (tick == 0)) {
+        return -MR_EINVAL;
+    }
+
+    /* Get kworkqueue */
+    kqueue = mr_kworkqueue_get(kwork->kqueue);
+    if (!kqueue) {
+        return -MR_EINVAL;
+    }
+
+    /* Schedule kwork to the used kworkqueue */
+    ret = mr_kworkqueue_delayed_work(kwork->kqueue, kwork, tick);
+
+    /* Put kworkqueue */
+    mr_kworkqueue_put(kqueue);
+    return ret;
+}
+
 #if defined(MR_USE_KWORKQUEUE_HOOK)
-mr_err_t mr_kworkqueue_wakeup_hook_set(mr_kworkqueue_t *kqueue,
-                                       void (*hook)(mr_kworkqueue_t *)) {
+mr_err_t mr_kworkqueue_hook_wakeup_set(mr_kworkqueue_t *kqueue,
+                                       void (*hook)(mr_kworkqueue_t *,
+                                                    void *)) {
     /* Check arguments */
     if ((!kqueue) || (!MR_KWORKQUEUE_IS_INITED(kqueue))) {
         return -MR_EINVAL;
@@ -465,8 +522,9 @@ mr_err_t mr_kworkqueue_wakeup_hook_set(mr_kworkqueue_t *kqueue,
     return 0;
 }
 
-mr_err_t mr_kworkqueue_suspend_hook_set(mr_kworkqueue_t *kqueue,
-                                        void (*hook)(mr_kworkqueue_t *)) {
+mr_err_t mr_kworkqueue_hook_suspend_set(mr_kworkqueue_t *kqueue,
+                                        void (*hook)(mr_kworkqueue_t *,
+                                                     void *)) {
     /* Check arguments */
     if ((!kqueue) || (!MR_KWORKQUEUE_IS_INITED(kqueue))) {
         return -MR_EINVAL;
@@ -474,6 +532,18 @@ mr_err_t mr_kworkqueue_suspend_hook_set(mr_kworkqueue_t *kqueue,
 
     /* Set kworkqueue suspend hook */
     kqueue->suspend = hook;
+    return 0;
+}
+
+mr_err_t mr_kworkqueue_hook_args_set(mr_kworkqueue_t *kqueue, void *args)
+{
+    /* Check arguments */
+    if ((!kqueue) || (!MR_KWORKQUEUE_IS_INITED(kqueue))) {
+        return -MR_EINVAL;
+    }
+
+    /* Set kworkqueue hook args */
+    kqueue->args = args;
     return 0;
 }
 #endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
@@ -509,7 +579,7 @@ MR_INLINE void kqueue_release2_kobj(mr_kobject_t *kobj) {
     mr_free(kqueue);
 }
 
-MR_INLINE void mr_kworkqueue_kset_init(void) {
+void mr_kworkqueue_kernel_init(void) {
     static mr_kattr_t *attrs[] = {MR_NULL};
     mr_err_t ret;
 
@@ -523,5 +593,4 @@ MR_INLINE void mr_kworkqueue_kset_init(void) {
     mr_ktype_init(&ktype1, "workqueue", kqueue_release1_kobj, attrs);
     mr_ktype_init(&ktype2, "workqueue", kqueue_release2_kobj, attrs);
 }
-MR_INIT_EXPORT(mr_kworkqueue_kset_init, MR_INIT_LEVEL_KERNEL);
 #endif /* defined(MR_USE_KWORKQUEUE) && defined(MR_USE_KTIMER) */

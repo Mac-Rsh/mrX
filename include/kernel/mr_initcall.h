@@ -21,8 +21,7 @@ extern "C" {
  */
 
 /* Initcall level definition */
-#define MR_INIT_LEVEL_KERNEL            "1"
-#define MR_INIT_LEVEL_USER(_level)      "2."_level
+#define MR_INIT_LEVEL_USER(_level)      "1."_level
 
 /* Initcall type */
 typedef struct mr_initcall {
@@ -46,12 +45,14 @@ typedef struct mr_initcall {
  *
  * @note User does not need to call this function.
  */
-void mr_autoinit_kernel(void);
+void mr_kernel_init(void);
 
 /**
  * @brief This function does initcalls(user).
+ *
+ * @note If the kernel does not start, it will start here.
  */
-void mr_autoinit(void);
+void mr_user_init(void);
 
 /** @} */
 

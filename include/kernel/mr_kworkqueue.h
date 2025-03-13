@@ -29,6 +29,7 @@ typedef struct mr_kworkqueue {
 #if defined(MR_USE_KWORKQUEUE_HOOK)
     mr_ptr_t suspend;
     mr_ptr_t wakeup;
+    mr_ptr_t args;
 #endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
 } mr_kworkqueue_t;
 
@@ -100,8 +101,8 @@ mr_err_t mr_kworkqueue_execute(mr_kworkqueue_t *kqueue);
  */
 #define MR_KWORK_INIT(_kwork, _entry, _args)                                   \
     {                                                                          \
-        .list = MR_KLIST_INIT(&(_kwork)->list), .tick = 0, .entry = (_entry),  \
-        .args = (_args)                                                        \
+        .list = MR_KLIST_INIT(&(_kwork)->list), .kqueue = MR_NULL, .tick = 0,  \
+        .entry = (_entry), .args = (_args)                                     \
     }
 
 /**
@@ -175,8 +176,9 @@ mr_err_t mr_kwork_delayed_schedule(mr_kwork_t *kwork, mr_tick_t tick);
  * @param hook The kworkqueue wakeup hook.
  * @return 0 on success, a negative error code on failure.
  */
-mr_err_t mr_kworkqueue_wakeup_hook_set(mr_kworkqueue_t *kqueue,
-                                       void (*hook)(mr_kworkqueue_t *));
+mr_err_t mr_kworkqueue_hook_wakeup_set(mr_kworkqueue_t *kqueue,
+                                       void (*hook)(mr_kworkqueue_t *,
+                                                    void *));
 
 /**
  * @brief This function set a kworkqueue suspend hook.
@@ -185,8 +187,18 @@ mr_err_t mr_kworkqueue_wakeup_hook_set(mr_kworkqueue_t *kqueue,
  * @param hook The kworkqueue suspend hook.
  * @return 0 on success, a negative error code on failure.
  */
-mr_err_t mr_kworkqueue_suspend_hook_set(mr_kworkqueue_t *kqueue,
-                                        void (*hook)(mr_kworkqueue_t *));
+mr_err_t mr_kworkqueue_hook_suspend_set(mr_kworkqueue_t *kqueue,
+                                        void (*hook)(mr_kworkqueue_t *,
+                                                     void *));
+
+/**
+ * @brief This function set a kworkqueue hook args.
+ *
+ * @param kqueue The kworkqueue.
+ * @param args The hook args.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_kworkqueue_hook_args_set(mr_kworkqueue_t *kqueue, void *args);
 #endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
 
 /**

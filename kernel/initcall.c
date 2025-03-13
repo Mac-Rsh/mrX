@@ -9,64 +9,57 @@
 #include <kernel/mr_initcall.h>
 #include <libc/mr_atomic.h>
 
-/* Init status definition */
-#define INIT_STATUS_UNINIT              (0)
-#define INIT_STATUS_INITED              (1)
-
 /* Kernel and user init status */
-static mr_atomic_t kstatus = MR_ATOMIC_INIT(INIT_STATUS_UNINIT);
-static mr_atomic_t ustatus = MR_ATOMIC_INIT(INIT_STATUS_UNINIT);
+static mr_atomic_t kstatus = MR_ATOMIC_INIT(MR_FALSE);
+static mr_atomic_t ustatus = MR_ATOMIC_INIT(MR_FALSE);
 
-MR_INLINE void kernel_start(void) {
+MR_INLINE void start(void) {
 }
-MR_INIT_EXPORT(kernel_start, "0.end");
+MR_INIT_EXPORT(start, "0.end");
 
-MR_INLINE void kernel_end(void) {
+MR_INLINE void end(void) {
 }
-MR_INIT_EXPORT(kernel_end, "1.end");
+MR_INIT_EXPORT(end, "9.end");
 
-MR_INLINE void user_start(void) {
-}
-MR_INIT_EXPORT(user_start, "1.end");
-
-MR_INLINE void user_end(void) {
-}
-MR_INIT_EXPORT(user_end, "9.end");
-
-void mr_autoinit_kernel(void) {
-    const mr_initcall_t *ic;
+void mr_kernel_init(void) {
     mr_atomic_t inited;
 
     /* Check kernel init status */
-    mr_atomic_store(&inited, INIT_STATUS_UNINIT);
-    if (!mr_atomic_compare_exchange(&kstatus, &inited, INIT_STATUS_INITED)) {
+    mr_atomic_store(&inited, MR_FALSE);
+    if (!mr_atomic_compare_exchange(&kstatus, &inited, MR_TRUE)) {
         /* Kernel already init */
         return;
     }
 
-    /* Run initcalls(kernel) */
-    for (ic = &__mr_initcall_kernel_start; ic <= &__mr_initcall_kernel_end;
-         ic++) {
-        ic->entry();
-    }
+    /* Kernel init */
+#if defined(MR_USE_KTIMER)
+    /* Init ktimer */
+    extern void mr_ktimer_kernel_init(void);
+    mr_ktimer_kernel_init();
+#endif /* defined(MR_USE_KTIMER) */
+#if defined(MR_USE_KWORKQUEUE)
+    /* Init kworkqueue */
+    extern void mr_kworkqueue_kernel_init(void);
+    mr_kworkqueue_kernel_init();
+#endif /* defined(MR_USE_KWORKQUEUE) */
 }
 
-void mr_autoinit(void) {
-    const mr_initcall_t *ic;
+void mr_user_init(void) {
+    const mr_initcall_t *call;
     mr_atomic_t inited;
 
-    /* Run autoinit(kernel) */
-    mr_autoinit_kernel();
+    /* Kernel */
+    mr_kernel_init();
 
     /* Check user init status */
-    mr_atomic_store(&inited, INIT_STATUS_UNINIT);
-    if (!mr_atomic_compare_exchange(&ustatus, &inited, INIT_STATUS_INITED)) {
+    mr_atomic_store(&inited, MR_FALSE);
+    if (!mr_atomic_compare_exchange(&ustatus, &inited, MR_TRUE)) {
         /* User already init */
         return;
     }
 
-    /* Run initcalls(user) */
-    for (ic = &__mr_initcall_user_start; ic <= &__mr_initcall_user_end; ic++) {
-        ic->entry();
+    /* Execute initcalls */
+    for (call = &__mr_initcall_start; call <= &__mr_initcall_end; call++) {
+        call->entry();
     }
 }
