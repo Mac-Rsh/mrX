@@ -17,7 +17,7 @@
 /* MR-X kernel version definition */
 #define MR_KVERSION_MAJOR               1
 #define MR_KVERSION_MINOR               0
-#define MR_KVERSION_PATCH               1
+#define MR_KVERSION_PATCH               0
 
 /**
  * @brief This macro function constructs a kernel version code.
