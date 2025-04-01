@@ -15,6 +15,7 @@ int mr_sscanf(const char *buf, const char *fmt, ...) {
     mr_va_list args;
     int ret;
 
+    /* Scan string */
     mr_va_start(args, fmt);
     ret = vsscanf(buf, fmt, args);
     mr_va_end(args);

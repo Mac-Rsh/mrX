@@ -14,7 +14,7 @@
 
 /* Kobject lock */
 static mr_kspinlock_t klock = MR_KSPINLOCK_INIT();
-/* Kobject kset */
+/* Kobject set */
 static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
 
 /* Last-word definition */
@@ -22,7 +22,7 @@ static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
 #define LWORD_DOT2                      (0x2e2e)
 
 void mr_ktype_init(mr_ktype_t *type, const char *name,
-                   void (*release)(mr_kobject_t *kobj), mr_kattr_t **attrs) {
+                   mr_kobject_release_t *release, mr_kattr_t **attrs) {
     /* Check arguments */
     if (!type) {
         return;
@@ -35,6 +35,7 @@ void mr_ktype_init(mr_ktype_t *type, const char *name,
 }
 
 MR_INLINE void kname_init(mr_kname_t *kname) {
+    /* Init kname */
     kname->str = MR_NULL;
     kname->len = 0;
     kname->hash = 0;
@@ -56,15 +57,20 @@ void mr_kobject_init(mr_kobject_t *kobj, mr_ktype_t *type) {
     kobj->magic = MR_KOBJECT_MAGIC;
 }
 
-MR_INLINE mr_err_t path_alloc_varg(const char *fmt, mr_va_list args,
+MR_INLINE mr_err_t path_varg_alloc(const char *fmt, mr_va_list args,
                                    const char **path, char *ipath,
                                    mr_size_t ipath_len) {
-    int path_len;
+    mr_size_t path_len;
+    int ret;
 
     /* Get path length */
-    path_len = mr_vsnprintf(MR_NULL, 0, fmt, args);
-    if (path_len < 0) {
+    ret = mr_vsnprintf(MR_NULL, 0, fmt, args);
+    if (ret < 0) {
+        /* Format error */
         return -MR_EINVAL;
+    } else {
+        /* Save path length */
+        path_len = (mr_size_t)ret;
     }
 
     /* Allocate path */
@@ -72,6 +78,7 @@ MR_INLINE mr_err_t path_alloc_varg(const char *fmt, mr_va_list args,
         /* Use inline path if possible */
         *path = ipath;
     } else {
+        /* Use dynamic path instead */
         *path = mr_malloc(path_len + 1);
         if (!(*path)) {
             return -MR_ENOMEM;
@@ -87,27 +94,28 @@ MR_INLINE const char *kname_hash(mr_kname_t *kname, const char *name,
                                  mr_uint32_t *lword) {
     mr_uint32_t hash;
 
+    /* Hash name */
     for (kname->str = name, hash = 5381, *lword = 0;
          (*name != '\0') && (*name != '/'); name++) {
-        hash = ((hash << 5) + hash) ^ (*name);
-        *lword = (*lword << 8) + (*name);
+        hash = ((hash << 5) + hash) ^ ((mr_uint8_t)(*name));
+        *lword = (*lword << 8) + ((mr_uint8_t)(*name));
     }
-    kname->len = name - kname->str;
+    kname->len = (mr_uint32_t)(name - kname->str);
     kname->hash = hash;
     return name;
 }
 
 MR_INLINE mr_bool_t kname_match(mr_kname_t *kn1, mr_kname_t *kn2) {
-    if (kn1->hash != kn2->hash) {
+    /* Check hash and length */
+    if ((kn1->hash != kn2->hash) || (kn1->len != kn2->len)) {
         return MR_FALSE;
     }
-    if (kn1->len != kn2->len) {
-        return MR_FALSE;
-    }
+
+    /* Check string(hash possible conflicts) */
     return mr_strncmp(kn1->str, kn2->str, kn1->len) == 0;
 }
 
-MR_INLINE mr_kobject_t *kobject_lookup_kname(mr_kobject_t *last,
+MR_INLINE mr_kobject_t *kobject_kname_lookup(mr_kobject_t *last,
                                              mr_kname_t *kname) {
     mr_kobject_t *kobj;
     mr_klist_t *l;
@@ -129,7 +137,7 @@ MR_INLINE mr_kobject_t *kobject_lookup_kname(mr_kobject_t *last,
     return MR_NULL;
 }
 
-MR_INLINE mr_kobject_t *kobject_lookup_path(mr_kobject_t **last,
+MR_INLINE mr_kobject_t *kobject_path_lookup(mr_kobject_t **last,
                                             const char **path,
                                             mr_kobject_t *root) {
     mr_kobject_t *kobj;
@@ -172,7 +180,7 @@ MR_INLINE mr_kobject_t *kobject_lookup_path(mr_kobject_t **last,
             }
             default: {
                 /* Handle 'other' */
-                kobj = kobject_lookup_kname(*last, &kname);
+                kobj = kobject_kname_lookup(*last, &kname);
                 if (!kobj) {
                     /* Not found */
                     return MR_NULL;
@@ -205,6 +213,7 @@ MR_INLINE mr_err_t kobject_name_alloc(mr_kobject_t *kobj, const char *name) {
         /* Use inline name if possible */
         s = kobj->iname;
     } else {
+        /* Use dynamic name instead */
         s = mr_malloc(size + 1);
         if (!s) {
             return -MR_ENOMEM;
@@ -223,6 +232,8 @@ MR_INLINE void path_free(const char *path, char *ipath) {
         /* Inline path not need to free */
         return;
     }
+
+    /* Free path */
     mr_free((char *)path);
 }
 
@@ -231,7 +242,7 @@ MR_INLINE mr_err_t kobject_add(mr_kobject_t *kobj, mr_kobject_t *parent,
     mr_err_t ret;
 
     /* Lookup path in parent */
-    if (kobject_lookup_path(&parent, &path, parent)) {
+    if (kobject_path_lookup(&parent, &path, parent)) {
         return -MR_EEXIST;
     }
 
@@ -247,7 +258,7 @@ MR_INLINE mr_err_t kobject_add(mr_kobject_t *kobj, mr_kobject_t *parent,
     return 0;
 }
 
-MR_INLINE mr_err_t kobject_add_varg(mr_kobject_t *kobj, mr_kobject_t *parent,
+MR_INLINE mr_err_t kobject_varg_add(mr_kobject_t *kobj, mr_kobject_t *parent,
                                     const char *fmt, mr_va_list args) {
     char ipath[MR_CFG_KOBJECT_INAME_SIZE * 2];
     const char *path;
@@ -270,7 +281,7 @@ MR_INLINE mr_err_t kobject_add_varg(mr_kobject_t *kobj, mr_kobject_t *parent,
     }
 
     /* Allocate path */
-    ret = path_alloc_varg(fmt, args, &path, ipath, sizeof(ipath));
+    ret = path_varg_alloc(fmt, args, &path, ipath, sizeof(ipath));
     if (ret != 0) {
         goto _exit;
     }
@@ -296,15 +307,14 @@ mr_err_t mr_kobject_add(mr_kobject_t *kobj, mr_kobject_t *parent,
     mr_va_list args;
     mr_err_t ret;
 
-    /* Check arguments */
-    if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj)) || (!parent)
-        || (!MR_KOBJECT_IS_INITED(parent)) || (!fmt)) {
+    /* Check arguments(parent checked in 'kobject_varg_add') */
+    if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj)) || (!fmt)) {
         return -MR_EINVAL;
     }
 
     /* Add kobject to parent */
     mr_va_start(args, fmt);
-    ret = kobject_add_varg(kobj, parent, fmt, args);
+    ret = kobject_varg_add(kobj, parent, fmt, args);
     mr_va_end(args);
     return ret;
 }
@@ -338,7 +348,7 @@ void mr_kobject_del(mr_kobject_t *kobj) {
     mr_kobject_put(kobj);
 }
 
-MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
+MR_INLINE mr_kobject_t *kobject_varg_lookup(mr_kobject_t *parent,
                                             const char *fmt, mr_va_list args) {
     char ipath[MR_CFG_KOBJECT_INAME_SIZE * 2];
     mr_kobject_t *parent2, *kobj;
@@ -351,7 +361,7 @@ MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
     if (!parent) {
         return MR_NULL;
     } else {
-        /* Save parent for put */
+        /* Save parent for put(parent changes with the search) */
         parent2 = parent;
     }
 
@@ -359,7 +369,7 @@ MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
     mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Allocate path */
-    ret = path_alloc_varg(fmt, args, &path, ipath, sizeof(ipath));
+    ret = path_varg_alloc(fmt, args, &path, ipath, sizeof(ipath));
     if (ret != 0) {
         kobj = MR_NULL;
         goto _exit;
@@ -369,7 +379,7 @@ MR_INLINE mr_kobject_t *kobject_lookup_varg(mr_kobject_t *parent,
     }
 
     /* Lookup kobject for path */
-    kobj = kobject_lookup_path(&parent, &path, parent);
+    kobj = kobject_path_lookup(&parent, &path, parent);
 
     /* Free path */
     path_free(path2, ipath);
@@ -386,26 +396,31 @@ mr_kobject_t *mr_kobject_lookup(mr_kobject_t *parent, const char *fmt, ...) {
     mr_kobject_t *kobj;
     mr_va_list args;
 
-    /* Check arguments */
-    if ((!parent) || (!MR_KOBJECT_IS_INITED(parent)) || (!fmt)) {
+    /* Check arguments(parent checked in 'kobject_varg_lookup') */
+    if (!fmt) {
         return MR_NULL;
     }
 
     /* Lookup kobject from parent */
     mr_va_start(args, fmt);
-    kobj = kobject_lookup_varg(parent, fmt, args);
+    kobj = kobject_varg_lookup(parent, fmt, args);
     mr_va_end(args);
     return kobj;
 }
 
 mr_kobject_t *mr_kobject_get(mr_kobject_t *kobj) {
+    mr_bool_t ret;
+
     /* Check arguments */
     if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj))) {
         return MR_NULL;
     }
 
     /* Get kobject */
-    mr_kref_get(&kobj->ref);
+    ret = mr_kref_get(&kobj->ref);
+    if (ret != MR_TRUE) {
+        return MR_NULL;
+    }
     return kobj;
 }
 
@@ -419,7 +434,7 @@ MR_INLINE void kobject_release(mr_kobject_t *kobj) {
     }
 }
 
-MR_INLINE void kobject_release_ref(mr_kref_t *ref) {
+MR_INLINE void kobject_ref_release(mr_kref_t *ref) {
     mr_kobject_t *kobj, *parent;
     const char *name;
 
@@ -454,7 +469,7 @@ void mr_kobject_put(mr_kobject_t *kobj) {
     }
 
     /* Put kobject */
-    mr_kref_put(&kobj->ref, kobject_release_ref);
+    mr_kref_put(&kobj->ref, kobject_ref_release);
 }
 
 MR_INLINE mr_kattr_t *kobject_attr_lookup(mr_kobject_t *kobj,
@@ -470,7 +485,7 @@ MR_INLINE mr_kattr_t *kobject_attr_lookup(mr_kobject_t *kobj,
     /* Lookup attribute */
     attrs = kobj->type->attrs;
     for (i = 0; attrs[i]; i++) {
-        /* Match name */
+        /* Match attribute */
         if (mr_strcmp(name, attrs[i]->name)) {
             continue;
         }

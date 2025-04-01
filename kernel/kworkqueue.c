@@ -7,24 +7,46 @@
  */
 
 #include <kernel/mr_kworkqueue.h>
-#if defined(MR_USE_KWORKQUEUE) && defined(MR_USE_KTIMER)
+#if defined(MR_USE_KWORKQUEUE)
 #include <kernel/mr_initcall.h>
 #include <kernel/mr_kspinlock.h>
 #include <libc/mr_malloc.h>
 
-/* Kworkqueue ktype */
+/* Kworkqueue type */
 static mr_ktype_t ktype1, ktype2;
 /* Kworkqueue lock */
 static mr_kspinlock_t klock = MR_KSPINLOCK_INIT();
-/* Kworkqueue kset */
+/* Kworkqueue set */
 static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
+
+MR_INLINE void kqueue_wakeup(mr_kworkqueue_t *kqueue) {
+    mr_atomic_t no_running;
+
+    /* Check is need wakeup */
+    mr_atomic_init(&no_running, MR_FALSE);
+    if (!mr_atomic_compare_exchange(&kqueue->running, &no_running, MR_TRUE)) {
+        /* No need wakeup */
+        return;
+    }
+
+    /* Get kworkqueue run-time(work) */
+    mr_kworkqueue_get(kqueue);
+
+    /* Wakeup kworkqueue */
+#if defined(MR_USE_KWORKQUEUE_HOOK)
+    if (kqueue->wakeup) {
+        ((mr_kworkqueue_hook_t *)kqueue->wakeup)(kqueue, kqueue->args);
+    }
+#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
+}
 
 MR_INLINE void kqueue_timer_entry(mr_ktimer_t *ktimer, void *args) {
     mr_kworkqueue_t *kqueue;
     mr_kwork_t *kwork;
-    mr_bool_t wakeup;
     mr_tick_t tick;
     int mask;
+
+    MR_UNUSED(args);
 
     /* Get kworkqueue */
     kqueue = mr_kworkqueue_get(MR_CONTAINER_OF(ktimer, mr_kworkqueue_t, timer));
@@ -37,17 +59,11 @@ MR_INLINE void kqueue_timer_entry(mr_ktimer_t *ktimer, void *args) {
     mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Check timeout kwork */
-    for (wakeup = MR_FALSE, tick = 0; !mr_klist_is_empty(&kqueue->tlist);) {
+    for (tick = 0; !mr_klist_is_empty(&kqueue->tlist);) {
         kwork = MR_CONTAINER_OF(kqueue->tlist.next, mr_kwork_t, list);
 
         /* Check timeout tick */
         if ((mr_kclock_tick() - kwork->tick) < (MR_TICK_MAX / 2)) {
-            /* Check kworkqueue is started(work) for the first time */
-            if (mr_klist_is_empty(&kqueue->list)) {
-                /* Need wakeup */
-                wakeup = MR_TRUE;
-            }
-
             /* Move kwork to kworkqueue work list */
             mr_klist_move(&kwork->list, &kqueue->list);
             continue;
@@ -76,17 +92,8 @@ MR_INLINE void kqueue_timer_entry(mr_ktimer_t *ktimer, void *args) {
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
 
-    /* Check is need wakeup */
-    if (wakeup) {
-        /* Get kworkqueue run-time(work) */
-        mr_kworkqueue_get(kqueue);
-#if defined(MR_USE_KWORKQUEUE_HOOK)
-        if (kqueue->wakeup) {
-            ((void (*)(mr_kworkqueue_t *, void *))kqueue->wakeup)(kqueue,
-                                                                  kqueue->args);
-        }
-#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
-    }
+    /* Wakeup kworkqueue */
+    kqueue_wakeup(kqueue);
 
     /* Put kworkqueue */
     mr_kworkqueue_put(kqueue);
@@ -102,6 +109,7 @@ MR_INLINE mr_err_t kqueue_init(mr_kworkqueue_t *kqueue, const char *name) {
     }
 
     /* Init kworkqueue */
+    mr_atomic_init(&kqueue->running, MR_FALSE);
     mr_atomic_init(&kqueue->dying, MR_FALSE);
     mr_klist_init(&kqueue->tlist);
     mr_klist_init(&kqueue->list);
@@ -113,7 +121,7 @@ MR_INLINE mr_err_t kqueue_init(mr_kworkqueue_t *kqueue, const char *name) {
 }
 
 MR_INLINE void kqueue_del(mr_kworkqueue_t *kqueue) {
-    mr_kwork_t *w;
+    mr_kwork_t *kwork;
     int mask;
 
     /* Delete kworkqueue timer */
@@ -127,14 +135,14 @@ MR_INLINE void kqueue_del(mr_kworkqueue_t *kqueue) {
 
     /* Remove kwork from kworkqueue timer list */
     while (!mr_klist_is_empty(&kqueue->tlist)) {
-        w = MR_KLIST_ENTRY(&kqueue->tlist.next, mr_kwork_t, list);
-        mr_klist_del(&w->list);
+        kwork = MR_KLIST_ENTRY(&kqueue->tlist.next, mr_kwork_t, list);
+        mr_klist_del(&kwork->list);
     }
 
     /* Remove kwork from kworkqueue list */
     while (!mr_klist_is_empty(&kqueue->list)) {
-        w = MR_KLIST_ENTRY(&kqueue->list.next, mr_kwork_t, list);
-        mr_klist_del(&w->list);
+        kwork = MR_KLIST_ENTRY(&kqueue->list.next, mr_kwork_t, list);
+        mr_klist_del(&kwork->list);
     }
 
     /* Unlock */
@@ -210,9 +218,29 @@ mr_err_t mr_kworkqueue_del(mr_kworkqueue_t *kqueue) {
     return 0;
 }
 
+MR_INLINE void kqueue_suspend(mr_kworkqueue_t *kqueue) {
+    mr_atomic_t running;
+
+    /* Check is need suspend */
+    mr_atomic_init(&running, MR_TRUE);
+    if (!mr_atomic_compare_exchange(&kqueue->running, &running, MR_FALSE)) {
+        return;
+    }
+
+    /* Put kworkqueue run-time(work) */
+    mr_kworkqueue_put(kqueue);
+
+    /* Suspend kworkqueue */
+#if defined(MR_USE_KWORKQUEUE_HOOK)
+    if (kqueue->suspend) {
+        ((mr_kworkqueue_hook_t *)kqueue->suspend)(kqueue, kqueue->args);
+    }
+#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
+}
+
 MR_INLINE void kqueue_execute(mr_kworkqueue_t *kqueue) {
+    mr_kwork_entry_t *entry;
     mr_kwork_t *kwork;
-    mr_ptr_t entry;
     void *args;
     int mask;
 
@@ -235,6 +263,11 @@ MR_INLINE void kqueue_execute(mr_kworkqueue_t *kqueue) {
         /* Remove kwork from kworkqueue list */
         mr_klist_del(&kwork->list);
 
+        /* Check kwork is deleted */
+        if (!kwork->entry) {
+            continue;
+        }
+
         /* Save kwork entry and args */
         entry = kwork->entry;
         args = kwork->args;
@@ -243,7 +276,7 @@ MR_INLINE void kqueue_execute(mr_kworkqueue_t *kqueue) {
         mr_kspinlock_unlock_irqrestore(&klock, mask);
 
         /* Call kwork entry */
-        ((void (*)(mr_kwork_t *, void *))entry)(kwork, args);
+        entry(kwork, args);
 
         /* Lock */
         mask = mr_kspinlock_lock_irqsave(&klock);
@@ -252,14 +285,8 @@ MR_INLINE void kqueue_execute(mr_kworkqueue_t *kqueue) {
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
 
-    /* Put kworkqueue run-time(work) */
-    mr_kworkqueue_put(kqueue);
-#if defined(MR_USE_KWORKQUEUE_HOOK)
-    if (kqueue->suspend) {
-        ((void (*)(mr_kworkqueue_t *, void *))kqueue->suspend)(kqueue,
-                                                               kqueue->args);
-    }
-#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
+    /* Suspend kworkqueue */
+    kqueue_suspend(kqueue);
 }
 
 mr_err_t mr_kworkqueue_execute(mr_kworkqueue_t *kqueue) {
@@ -273,9 +300,7 @@ mr_err_t mr_kworkqueue_execute(mr_kworkqueue_t *kqueue) {
     return 0;
 }
 
-mr_err_t mr_kwork_init(mr_kwork_t *kwork,
-                       void (*entry)(mr_kwork_t *kwork, void *args),
-                       void *args) {
+mr_err_t mr_kwork_init(mr_kwork_t *kwork, mr_kwork_entry_t *entry, void *args) {
     /* Check arguments */
     if ((!kwork) || (!entry)) {
         return -MR_EINVAL;
@@ -295,14 +320,13 @@ MR_INLINE void kwork_del(mr_kwork_t *kwork) {
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
 
-    /* Check kwork is deleted */
-    if (!mr_klist_is_empty(&kwork->list)) {
+    /* Check kwork is working */
+    if (MR_KWORK_IS_WORKING(kwork)) {
         /* Remove kwork from kworkqueue list */
         mr_klist_del(&kwork->list);
     }
 
     /* Mark kwork as deleted */
-    kwork->kqueue = MR_NULL;
     kwork->entry = MR_NULL;
 
     /* Unlock */
@@ -321,7 +345,6 @@ mr_err_t mr_kwork_del(mr_kwork_t *kwork) {
 }
 
 MR_INLINE mr_err_t kqueue_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork) {
-    mr_bool_t wakeup;
     mr_err_t ret;
     int mask;
 
@@ -329,7 +352,7 @@ MR_INLINE mr_err_t kqueue_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork) {
     mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Check kwork is working */
-    if (!mr_klist_is_empty(&kwork->list)) {
+    if (MR_KWORK_IS_WORKING(kwork)) {
         ret = -MR_EBUSY;
         goto _exit;
     }
@@ -340,14 +363,6 @@ MR_INLINE mr_err_t kqueue_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork) {
         goto _exit;
     }
 
-    /* Check kworkqueue is started(work) for the first time */
-    if (mr_klist_is_empty(&kqueue->list)) {
-        /* Need wakeup */
-        wakeup = MR_TRUE;
-    } else {
-        wakeup = MR_FALSE;
-    }
-
     /* Add kwork to kworkqueue list */
     mr_klist_add(&kqueue->list, &kwork->list);
     kwork->kqueue = kqueue;
@@ -355,18 +370,8 @@ MR_INLINE mr_err_t kqueue_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork) {
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
 
-    /* Check is need wakeup */
-    if (wakeup) {
-        /* Get kworkqueue run-time(work) */
-        mr_kworkqueue_get(kqueue);
-#if defined(MR_USE_KWORKQUEUE_HOOK)
-        if (kqueue->wakeup) {
-            /* Call kworkqueue wakeup hook */
-            ((void (*)(mr_kworkqueue_t *, void *))kqueue->wakeup)(kqueue,
-                                                                  kqueue->args);
-        }
-#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
-    }
+    /* Wakeup kworkqueue */
+    kqueue_wakeup(kqueue);
     return 0;
 _exit:
     /* Unlock */
@@ -396,7 +401,7 @@ MR_INLINE mr_err_t kqueue_delayed_work(mr_kworkqueue_t *kqueue,
     mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Check kwork is working */
-    if (!mr_klist_is_empty(&kwork->list)) {
+    if (MR_KWORK_IS_WORKING(kwork)) {
         ret = -MR_EBUSY;
         goto _exit;
     }
@@ -510,8 +515,7 @@ mr_err_t mr_kwork_delayed_schedule(mr_kwork_t *kwork, mr_tick_t tick) {
 
 #if defined(MR_USE_KWORKQUEUE_HOOK)
 mr_err_t mr_kworkqueue_hook_wakeup_set(mr_kworkqueue_t *kqueue,
-                                       void (*hook)(mr_kworkqueue_t *,
-                                                    void *)) {
+                                       mr_kworkqueue_hook_t *hook) {
     /* Check arguments */
     if ((!kqueue) || (!MR_KWORKQUEUE_IS_INITED(kqueue))) {
         return -MR_EINVAL;
@@ -523,8 +527,7 @@ mr_err_t mr_kworkqueue_hook_wakeup_set(mr_kworkqueue_t *kqueue,
 }
 
 mr_err_t mr_kworkqueue_hook_suspend_set(mr_kworkqueue_t *kqueue,
-                                        void (*hook)(mr_kworkqueue_t *,
-                                                     void *)) {
+                                        mr_kworkqueue_hook_t *hook) {
     /* Check arguments */
     if ((!kqueue) || (!MR_KWORKQUEUE_IS_INITED(kqueue))) {
         return -MR_EINVAL;
@@ -535,8 +538,7 @@ mr_err_t mr_kworkqueue_hook_suspend_set(mr_kworkqueue_t *kqueue,
     return 0;
 }
 
-mr_err_t mr_kworkqueue_hook_args_set(mr_kworkqueue_t *kqueue, void *args)
-{
+mr_err_t mr_kworkqueue_hook_args_set(mr_kworkqueue_t *kqueue, void *args) {
     /* Check arguments */
     if ((!kqueue) || (!MR_KWORKQUEUE_IS_INITED(kqueue))) {
         return -MR_EINVAL;
@@ -553,7 +555,7 @@ mr_kworkqueue_t *mr_kworkqueue_find(const char *name) {
     return (mr_kworkqueue_t *)mr_kobject_lookup((mr_kobject_t *)&kroot, name);
 }
 
-MR_INLINE mr_kworkqueue_t *kqueue_release_kobj(mr_kobject_t *kobj) {
+MR_INLINE mr_kworkqueue_t *kqueue_kobj_release(mr_kobject_t *kobj) {
     mr_kworkqueue_t *kqueue;
 
     /* Get kworkqueue */
@@ -564,16 +566,16 @@ MR_INLINE mr_kworkqueue_t *kqueue_release_kobj(mr_kobject_t *kobj) {
     return kqueue;
 }
 
-MR_INLINE void kqueue_release1_kobj(mr_kobject_t *kobj) {
+MR_INLINE void kqueue_kobj_release1(mr_kobject_t *kobj) {
     /* Release kworkqueue */
-    kqueue_release_kobj(kobj);
+    kqueue_kobj_release(kobj);
 }
 
-MR_INLINE void kqueue_release2_kobj(mr_kobject_t *kobj) {
+MR_INLINE void kqueue_kobj_release2(mr_kobject_t *kobj) {
     mr_kworkqueue_t *kqueue;
 
     /* Release kworkqueue */
-    kqueue = kqueue_release_kobj(kobj);
+    kqueue = kqueue_kobj_release(kobj);
 
     /* Free kworkqueue */
     mr_free(kqueue);
@@ -581,16 +583,12 @@ MR_INLINE void kqueue_release2_kobj(mr_kobject_t *kobj) {
 
 void mr_kworkqueue_kernel_init(void) {
     static mr_kattr_t *attrs[] = {MR_NULL};
-    mr_err_t ret;
-
-    /* Register kset */
-    ret = mr_kset_register(&kroot, "workqueue");
-    if (ret != 0) {
-        return;
-    }
 
     /* Init ktype */
-    mr_ktype_init(&ktype1, "workqueue", kqueue_release1_kobj, attrs);
-    mr_ktype_init(&ktype2, "workqueue", kqueue_release2_kobj, attrs);
+    mr_ktype_init(&ktype1, "workqueue", kqueue_kobj_release1, attrs);
+    mr_ktype_init(&ktype2, "workqueue", kqueue_kobj_release2, attrs);
+
+    /* Register kset */
+    mr_kset_register(&kroot, "workqueue");
 }
-#endif /* defined(MR_USE_KWORKQUEUE) && defined(MR_USE_KTIMER) */
+#endif /* defined(MR_USE_KWORKQUEUE) */

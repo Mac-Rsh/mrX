@@ -7,15 +7,18 @@
  */
 
 #include <kernel/mr_khook.h>
+#include <kernel/mr_kspinlock.h>
+
+/* Khook lock */
+static mr_kspinlock_t klock = MR_KSPINLOCK_INIT();
 
 void mr_khook_init(mr_khook_t *khook, mr_ptr_t *entry, mr_size_t size) {
     /* Check arguments */
-    if ((!khook) || ((!entry) && (size == 0))) {
+    if ((!khook) || ((!entry) && (size > 0))) {
         return;
     }
 
     /* Initialize khook */
-    mr_kspinlock_init(&khook->lock);
     khook->entry = entry;
     khook->size = size;
     khook->next = 0;
@@ -31,7 +34,7 @@ mr_err_t mr_khook_add(mr_khook_t *khook, mr_ptr_t entry) {
     }
 
     /* Lock khook */
-    mask = mr_kspinlock_lock_irqsave(&khook->lock);
+    mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Add entry to khook */
     if (khook->next < khook->size) {
@@ -43,6 +46,6 @@ mr_err_t mr_khook_add(mr_khook_t *khook, mr_ptr_t entry) {
     }
 
     /* Unlock khook */
-    mr_kspinlock_unlock_irqrestore(&khook->lock, mask);
+    mr_kspinlock_unlock_irqrestore(&klock, mask);
     return ret;
 }

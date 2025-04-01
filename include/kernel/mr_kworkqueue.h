@@ -10,19 +10,22 @@
 #define __MR_KWORKQUEUE_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_KWORKQUEUE) && defined(MR_USE_KTIMER)
+#if defined(MR_USE_KWORKQUEUE)
 #include <kernel/mr_ktimer.h>
-#endif /* defined(MR_USE_KWORKQUEUE) && defined(MR_USE_KTIMER) */
+#endif /* defined(MR_USE_KWORKQUEUE) */
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
-#if defined(MR_USE_KWORKQUEUE) && defined(MR_USE_KTIMER)
+#if defined(MR_USE_KWORKQUEUE)
+struct mr_kwork;
+
 /* Kworkqueue type */
 typedef struct mr_kworkqueue {
     mr_kobject_t parent;
     mr_ktimer_t timer;
+    mr_atomic_t running;
     mr_atomic_t dying;
     mr_klist_t tlist;
     mr_klist_t list;
@@ -33,14 +36,22 @@ typedef struct mr_kworkqueue {
 #endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
 } mr_kworkqueue_t;
 
+/* Kwork entry type */
+typedef void (mr_kwork_entry_t)(struct mr_kwork *kwork, void *args);
+
 /* Kwork type */
 typedef struct mr_kwork {
     mr_klist_t list;
     mr_ptr_t kqueue;
     mr_tick_t tick;
-    mr_ptr_t entry;
+    mr_kwork_entry_t *entry;
     mr_ptr_t args;
 } mr_kwork_t;
+
+#if defined(MR_USE_KWORKQUEUE_HOOK)
+/* Kworkqueue hook type */
+typedef void (mr_kworkqueue_hook_t)(mr_kworkqueue_t *kqueue, void *args);
+#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
 
 /**
  * @brief This macro function checks if a kworkqueue is initialized.
@@ -52,7 +63,7 @@ typedef struct mr_kwork {
     MR_KOBJECT_IS_INITED(_kqueue)
 
 /**
- * @brief This function initialize a kworkqueue.
+ * @brief This function initializes a kworkqueue.
  *
  * @param kqueue The kworkqueue.
  * @param name The kworkqueue name.
@@ -93,29 +104,28 @@ mr_err_t mr_kworkqueue_execute(mr_kworkqueue_t *kqueue);
 #define MR_KWORK_IS_INITED(_kwork)      ((_kwork)->entry != MR_NULL)
 
 /**
- * @brief This macro function initialize a kwork.
+ * @brief This macro function initializes a kwork.
  *
  * @param _kwork The kwork.
  * @param _entry The kwork entry.
  * @param _args The kwork args.
  */
 #define MR_KWORK_INIT(_kwork, _entry, _args)                                   \
-    {                                                                          \
-        .list = MR_KLIST_INIT(&(_kwork)->list), .kqueue = MR_NULL, .tick = 0,  \
-        .entry = (_entry), .args = (_args)                                     \
-    }
+    {.list = MR_KLIST_INIT(&(_kwork)->list),                                   \
+     .kqueue = MR_NULL,                                                        \
+     .tick = 0,                                                                \
+     .entry = (_entry),                                                        \
+     .args = (_args)}
 
 /**
- * @brief This function initialize a kwork.
+ * @brief This function initializes a kwork.
  *
  * @param kwork The kwork.
  * @param entry The kwork entry.
  * @param args The kwork args.
  * @return 0 on success, a negative error code on failure.
  */
-mr_err_t mr_kwork_init(mr_kwork_t *kwork,
-                       void (*entry)(mr_kwork_t *kwork, void *args),
-                       void *args);
+mr_err_t mr_kwork_init(mr_kwork_t *kwork, mr_kwork_entry_t *entry, void *args);
 
 /**
  * @brief This function delete a kwork.
@@ -124,6 +134,14 @@ mr_err_t mr_kwork_init(mr_kwork_t *kwork,
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_kwork_del(mr_kwork_t *kwork);
+
+/**
+ * @brief This macro function checks if a kwork is working.
+ *
+ * @param _kwork The kwork.
+ * @return MR_TRUE if the kwork is working, MR_FALSE otherwise.
+ */
+#define MR_KWORK_IS_WORKING(_kwork)     (!mr_klist_is_empty(&(_kwork)->list))
 
 /**
  * @brief This function add a kwork to a kworkqueue.
@@ -135,11 +153,11 @@ mr_err_t mr_kwork_del(mr_kwork_t *kwork);
 mr_err_t mr_kworkqueue_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork);
 
 /**
- * @brief This function add a kdelayed-work to a kworkqueue.
+ * @brief This function add a delayed-kwork to a kworkqueue.
  *
  * @param kqueue The kworkqueue.
- * @param kwork The kdelayed-work.
- * @param tick The kdelayed-work tick.
+ * @param kwork The delayed-kwork.
+ * @param tick The delayed-kwork tick.
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_kworkqueue_delayed_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork,
@@ -157,10 +175,10 @@ mr_err_t mr_kworkqueue_delayed_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork,
 mr_err_t mr_kwork_schedule(mr_kwork_t *kwork);
 
 /**
- * @brief This function schedule a kdelayed-work.
+ * @brief This function schedule a delayed-kwork.
  *
- * @param kwork The kdelayed-work.
- * @param tick The kdelayed-work tick.
+ * @param kwork The delayed-kwork.
+ * @param tick The delayed-kwork tick.
  * @return 0 on success, a negative error code on failure.
  *
  * @note The kwork must have worked in a kworkqueue and has not been manually
@@ -175,10 +193,11 @@ mr_err_t mr_kwork_delayed_schedule(mr_kwork_t *kwork, mr_tick_t tick);
  * @param kqueue The kworkqueue.
  * @param hook The kworkqueue wakeup hook.
  * @return 0 on success, a negative error code on failure.
+ *
+ * @note Use a semaphore with an initial value of 0 as the hook.
  */
 mr_err_t mr_kworkqueue_hook_wakeup_set(mr_kworkqueue_t *kqueue,
-                                       void (*hook)(mr_kworkqueue_t *,
-                                                    void *));
+                                       mr_kworkqueue_hook_t *hook);
 
 /**
  * @brief This function set a kworkqueue suspend hook.
@@ -186,10 +205,11 @@ mr_err_t mr_kworkqueue_hook_wakeup_set(mr_kworkqueue_t *kqueue,
  * @param kqueue The kworkqueue.
  * @param hook The kworkqueue suspend hook.
  * @return 0 on success, a negative error code on failure.
+ *
+ * @note Use a semaphore with an initial value of 0 as the hook.
  */
 mr_err_t mr_kworkqueue_hook_suspend_set(mr_kworkqueue_t *kqueue,
-                                        void (*hook)(mr_kworkqueue_t *,
-                                                     void *));
+                                        mr_kworkqueue_hook_t *hook);
 
 /**
  * @brief This function set a kworkqueue hook args.
@@ -227,7 +247,7 @@ MR_INLINE mr_kworkqueue_t *mr_kworkqueue_get(mr_kworkqueue_t *kqueue) {
 MR_INLINE void mr_kworkqueue_put(mr_kworkqueue_t *kqueue) {
     mr_kobject_put((mr_kobject_t *)kqueue);
 }
-#endif /* defined(MR_USE_KWORKQUEUE) && defined(MR_USE_KTIMER) */
+#endif /* defined(MR_USE_KWORKQUEUE) */
 
 #ifdef __cplusplus
 }

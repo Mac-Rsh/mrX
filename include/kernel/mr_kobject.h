@@ -23,14 +23,14 @@ extern "C" {
  */
 
 /* Kobject magic number */
-#define MR_KOBJECT_MAGIC                (0x6d722d58)
+#define MR_KOBJECT_MAGIC                (0x6d722d58U)
 
 struct mr_kobject;
 
 /* Kname type */
 typedef struct mr_kname {
     const char *str;
-    mr_size_t len;
+    mr_uint32_t len;
     mr_uint32_t hash;
 } mr_kname_t;
 
@@ -43,10 +43,13 @@ typedef struct mr_kattr {
                         const char *buf, mr_size_t size);
 } mr_kattr_t;
 
+/* Kobject release type */
+typedef void(mr_kobject_release_t)(struct mr_kobject *kobj);
+
 /* Ktype type */
 typedef struct mr_ktype {
     const char *name;
-    void (*release)(struct mr_kobject *kobj);
+    mr_kobject_release_t *release;
     mr_kattr_t **attrs;
 } mr_ktype_t;
 
@@ -99,7 +102,7 @@ typedef struct mr_kset {
  * @param attrs The attributes.
  */
 void mr_ktype_init(mr_ktype_t *type, const char *name,
-                   void (*release)(mr_kobject_t *kobj), mr_kattr_t **attrs);
+                   mr_kobject_release_t *release, mr_kattr_t **attrs);
 
 /**
  * @brief This macro function checks if a kobject is initialized.
@@ -119,10 +122,12 @@ void mr_ktype_init(mr_ktype_t *type, const char *name,
 #define MR_KOBJECT_INIT(_kobj, _type)                                          \
     {                                                                          \
         .magic = MR_KOBJECT_MAGIC,                                             \
-        .name = {.str = (_kobj)->iname, .len = 0, .hash = 0},                  \
-        .parent = (_kobj), .type = (_type),                                    \
+        .name = {.str = MR_NULL, .len = 0, .hash = 0},                         \
+        .parent = (_kobj),                                                     \
+        .type = (_type),                                                       \
         .entry = MR_KLIST_INIT(&(_kobj)->entry),                               \
-        .list = MR_KLIST_INIT(&(_kobj)->list), .ref = MR_KREF_INIT()           \
+        .list = MR_KLIST_INIT(&(_kobj)->list),                                 \
+        .ref = MR_KREF_INIT()                                                  \
     }
 
 /**
@@ -240,17 +245,18 @@ mr_ssize_t mr_kobject_attr_store(mr_kobject_t *kobj, const char *name,
  * @brief This macro function gets the parent of a kobject.
  *
  * @param _kobj The kobject.
- * @return The parent of the kobject.
+ * @return The parent kobject on success, MR_NULL on failure.
  */
-#define MR_KOBJECT_PARENT(_kobj)        (((mr_kobject_t *)(_kobj))->parent)
+#define MR_KOBJECT_PARENT(_kobj)                                               \
+    (((mr_kobject_t *)(_kobj))->parent != ((mr_kobject_t *)(_kobj))            \
+         ? ((mr_kobject_t *)(_kobj))->parent                                   \
+         : MR_NULL)
 
 /**
- * @brief This macro function gets the type of a kobject.
+ * @brief This macro function gets the type of kobject.
  *
  * @param _kobj The kobject.
- * @return The type name of the kobject.
- *
- * @note If the kobject has no type, it returns MR_NULL.
+ * @return The type name on success, MR_NULL on failure.
  */
 #define MR_KOBJECT_TYPE(_kobj)                                                 \
     (((mr_kobject_t *)(_kobj))->type ? ((mr_kobject_t *)(_kobj))->type->name   \
@@ -263,7 +269,7 @@ mr_ssize_t mr_kobject_attr_store(mr_kobject_t *kobj, const char *name,
  * @param _type The ktype.
  */
 #define MR_KSET_INIT(_kset, _type)                                             \
-    { .parent = MR_KOBJECT_INIT(&(_kset)->parent, (_type)) }
+    {.parent = MR_KOBJECT_INIT(&(_kset)->parent, (_type))}
 
 /**
  * @brief This function initializes a kset.

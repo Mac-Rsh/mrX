@@ -126,6 +126,12 @@ menu "Libc options"
             help
               Use a custom string implementation for string operations.
     endchoice
+    config MR_USE_STRING_SAFE
+        depends on MR_USE_STRING
+            bool "Use string safe"
+            default y
+            help
+              This option controls whether to use string safe(NULL check).
     # TYPES
     choice
         prompt "Types"

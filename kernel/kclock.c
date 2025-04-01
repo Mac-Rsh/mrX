@@ -10,20 +10,21 @@
 #include <kernel/mr_khook.h>
 #include <libc/mr_atomic.h>
 
+/* Kclock tick */
 static mr_atomic_t kclock;
+/* Kclock hook entry */
 #if !defined(MR_CFG_KCLOCK_HOOK_SIZE)
 #define MR_CFG_KCLOCK_HOOK_SIZE         (4)
 #endif /* !defined(MR_CFG_KCLOCK_HOOK_SIZE) */
 #if defined(MR_USE_KTIMER) && (MR_CFG_KCLOCK_HOOK_SIZE < 2)
 #error "If use ktimer, clock hook size must >= 2"
 #endif /* defined(MR_USE_KTIMER) && (MR_CFG_KCLOCK_HOOK_SIZE < 2) */
-/* Clock hook entry */
 static mr_ptr_t kentry[MR_CFG_KCLOCK_HOOK_SIZE];
-/* Clock hook */
+/* Kclock hook */
 static mr_khook_t khook = MR_KHOOK_INIT(kentry, MR_CFG_KCLOCK_HOOK_SIZE);
 
 MR_INLINE void kclock_hook(void) {
-    void (*entry)(void);
+    mr_kclock_hook_t *entry;
     mr_size_t i;
 
     /* Each hooks */
@@ -38,7 +39,7 @@ MR_INLINE void kclock_hook(void) {
 }
 
 void mr_kclock_increase(mr_tick_t tick) {
-    /* Clock increase */
+    /* Kclock increase */
     mr_atomic_fetch_add(&kclock, (mr_atomic_t)tick);
 
     /* Call hooks */
@@ -50,7 +51,7 @@ mr_tick_t mr_kclock_tick(void) {
     return (mr_tick_t)mr_atomic_load(&kclock);
 }
 
-mr_err_t mr_kclock_hook_add(void (*entry)(void)) {
+mr_err_t mr_kclock_hook_add(mr_kclock_hook_t *entry) {
     /* Add entry to khook */
-    return mr_khook_add(&khook, entry);
+    return mr_khook_add(&khook, (mr_ptr_t)entry);
 }

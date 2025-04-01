@@ -24,8 +24,8 @@
 #include <kernel/mr_kservice.h>
 #include <kernel/mr_kspinlock.h>
 #include <kernel/mr_ktimer.h>
-#include <kernel/mr_kversion.h>
 #include <kernel/mr_kworkqueue.h>
+#include <kernel/mr_version.h>
 
 /** @} */
 

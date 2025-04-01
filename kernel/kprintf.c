@@ -16,13 +16,14 @@
 
 int mr_kprintf(const char *fmt, ...) {
 #if !defined(MR_CFG_KPRINTF_BUF_SIZE)
-#define MR_CFG_KPRINTF_BUF_SIZE         (128)
+#define MR_CFG_KPRINTF_BUF_SIZE         (64)
 #endif /* !defined(MR_CFG_KPRINTF_BUF_SIZE) */
 #if !defined(MR_USE_KPRINTF_SAFE)
     static char buf[MR_CFG_KPRINTF_BUF_SIZE];
 #else
     char *buf;
 #endif /* !defined(MR_USE_KPRINTF_SAFE) */
+    mr_size_t output_size;
     mr_va_list args;
     int ret;
 
@@ -43,9 +44,16 @@ int mr_kprintf(const char *fmt, ...) {
     mr_va_start(args, fmt);
     ret = mr_vsnprintf(buf, MR_CFG_KPRINTF_BUF_SIZE, fmt, args);
     mr_va_end(args);
+    if (ret < 0) {
+        ret = -MR_EINVAL;
+        goto _exit;
+    } else {
+        output_size = (mr_size_t)ret;
+    }
 
     /* Output string */
-    ret = mr_port_output(buf, ret);
+    ret = mr_port_output(buf, output_size);
+_exit:
 #if defined(MR_USE_KPRINTF_SAFE)
     mr_free(buf);
 #endif /* defined(MR_USE_KPRINTF_SAFE) */

@@ -10,13 +10,13 @@
 #if (!defined(MR_USE_LIBC_PRINTF)) && (!defined(MR_USE_3PARTY_PRINTF))
 
 /* Modifier definition */
-#define MOD_ZEROPAD                     (1 << 0)
-#define MOD_SIGN                        (1 << 1)
-#define MOD_PLUS                        (1 << 2)
-#define MOD_SPACE                       (1 << 3)
-#define MOD_LEFT                        (1 << 4)
-#define MOD_SPECIAL                     (1 << 5)
-#define MOD_LARGE                       (1 << 6)
+#define MOD_ZEROPAD                     (1U << 0)
+#define MOD_SIGN                        (1U << 1)
+#define MOD_PLUS                        (1U << 2)
+#define MOD_SPACE                       (1U << 3)
+#define MOD_LEFT                        (1U << 4)
+#define MOD_SPECIAL                     (1U << 5)
+#define MOD_LARGE                       (1U << 6)
 
 static char *format_number(char *str, char *end, mr_uint32_t modifier,
                            int width, int precision, char effector, int base,
@@ -41,7 +41,7 @@ static char *format_number(char *str, char *end, mr_uint32_t modifier,
             case 'L': {
                 if ((mr_int64_t)num < 0) {
                     sign = '-';
-                    num = (mr_uint64_t)-num;
+                    num = -num;
                 }
                 break;
             }
@@ -100,8 +100,8 @@ static char *format_number(char *str, char *end, mr_uint32_t modifier,
     /* Number */
     digits = (modifier & MOD_LARGE) ? large_digits : small_digits;
     for (i = 0; (num != 0) || (i == 0); i++) {
-        tmp[i] = digits[num % base];
-        num /= base;
+        tmp[i] = digits[num % (mr_uint64_t)base];
+        num /= (mr_uint64_t)base;
     }
     if (i > precision) {
         precision = i;
@@ -219,7 +219,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
         size = 0;
     }
 
-    for (str = buf, end = str + size; *fmt; fmt++) {
+    for (str = buf, end = (str + size); *fmt; fmt++) {
         /* Common character */
         if (*fmt != '%') {
             if (str < end) {
@@ -411,9 +411,8 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
             case 'G':
             case 'E':
             case 'F': {
-                num = mr_va_arg(args, mr_f64_t);
+                num = (mr_uint64_t)mr_va_arg(args, mr_f64_t);
                 (void)num;
-                /* Remind you */
                 goto _default;
             }
             default: {
@@ -448,7 +447,7 @@ _default:
             case 'z': {
                 num = mr_va_arg(args, mr_size_t);
                 if (modifier & MOD_SIGN) {
-                    num = (mr_ssize_t)num;
+                    num = (mr_uint64_t)((mr_ssize_t)num);
                 }
                 break;
             }
@@ -456,7 +455,7 @@ _default:
             case 'H': {
                 num = (mr_uint16_t)mr_va_arg(args, mr_int32_t);
                 if (modifier & MOD_SIGN) {
-                    num = (mr_int16_t)num;
+                    num = (mr_uint64_t)((mr_int16_t)num);
                 }
                 break;
             }
@@ -481,6 +480,7 @@ _default:
 }
 
 int mr_vsprintf(char *buf, const char *fmt, mr_va_list args) {
+    /* Format string no limit */
     return mr_vsnprintf(buf, (mr_size_t)-1, fmt, args);
 }
 
@@ -488,6 +488,7 @@ int mr_snprintf(char *buf, mr_size_t size, const char *fmt, ...) {
     mr_va_list args;
     int ret;
 
+    /* Format string with limit */
     mr_va_start(args, fmt);
     ret = mr_vsnprintf(buf, size, fmt, args);
     mr_va_end(args);
@@ -498,6 +499,7 @@ int mr_sprintf(char *buf, const char *fmt, ...) {
     mr_va_list args;
     int ret;
 
+    /* Format string no limit */
     mr_va_start(args, fmt);
     ret = mr_vsprintf(buf, fmt, args);
     mr_va_end(args);

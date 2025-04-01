@@ -8,6 +8,7 @@
 
 #include <libc/mr_malloc.h>
 #if (!defined(MR_USE_LIBC_MALLOC)) && (!defined(MR_USE_3PARTY_MALLOC))
+#include <libc/mr_string.h>
 #include <port/mr_port_irq.h>
 
 #if !defined(MR_CFG_HEAP_SIZE)
@@ -22,7 +23,7 @@ static mr_uint8_t heap[MR_CFG_HEAP_SIZE];
 static mr_memblk_t blk_head = {.size = 1};
 
 /* Heap magic number */
-#define HEAP_MAGIC                      (0x6d722d58)
+#define HEAP_MAGIC                      (0x6d722d58U)
 /* Heap align macro function */
 #define HEAP_ALIGN(_val, _ali)          (((_val) + (_ali)-1) & ~((_ali)-1))
 
@@ -84,7 +85,7 @@ void *mr_malloc(mr_size_t size) {
         blk_head.size = 0;
     }
 
-    /* Check size and res mem */
+    /* Check memory and size */
     if ((!blk_head.next) || (size == 0)) {
         mem = MR_NULL;
         goto _exit;
@@ -102,7 +103,7 @@ void *mr_malloc(mr_size_t size) {
         }
     }
 
-    /* Allocate mem */
+    /* Allocate memory */
     mem = ((mr_uint8_t *)blk + sizeof(mr_memblk_t));
     res = blk->size - size;
     prev->next = blk->next;
@@ -174,7 +175,6 @@ mr_size_t mr_malloc_usable_size(void *mem) {
 
 void *mr_calloc(mr_size_t num, mr_size_t size) {
     mr_size_t total;
-    mr_size_t i;
     void *mem;
 
     /* Calculate the total size */
@@ -183,23 +183,20 @@ void *mr_calloc(mr_size_t num, mr_size_t size) {
         return MR_NULL;
     }
 
-    /* Allocate mem */
+    /* Allocate memory */
     mem = mr_malloc(total);
     if (!mem) {
-        /* Not enough mem */
+        /* Not enough memory */
         return MR_NULL;
     }
 
-    /* Initialize the mem to 0 */
-    for (i = 0; i < total; i++) {
-        ((mr_uint8_t *)mem)[i] = 0;
-    }
+    /* Set the memory to 0 */
+    mr_memset(mem, 0, total);
     return mem;
 }
 
 void *mr_realloc(void *mem, mr_size_t size) {
     mr_size_t old_size;
-    mr_size_t i;
     void *new;
 
     /* Get the old size */
@@ -213,10 +210,10 @@ void *mr_realloc(void *mem, mr_size_t size) {
     }
 
     /* Copy the memory data to the new memory */
-    for (i = 0; i < old_size; i++) {
-        ((mr_uint8_t *)new)[i] = ((mr_uint8_t *)mem)[i];
-    }
+    mr_memcpy(new, mem, old_size < size ? old_size : size);
+
+    /* Free the old memory */
     mr_free(mem);
     return new;
 }
-#endif /* (!defined(MR_USE_LIBC_MALLOC)) && (!defined(MR_USE_3PARTY_MALLOC)) */
+#endif /* !defined(MR_USE_LIBC_MALLOC) && !defined(MR_USE_3PARTY_MALLOC) */

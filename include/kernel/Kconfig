@@ -28,7 +28,7 @@ menu "Kernel options"
     config MR_CFG_KPRINTF_BUF_SIZE
         depends on MR_USE_KPRINTF
         int "Kprintf buffer size"
-        default 128
+        default 64
         range 8 65535
         help
             This option controls the buffer size of the kprintf.

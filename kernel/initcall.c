@@ -25,13 +25,12 @@ void mr_kernel_init(void) {
     mr_atomic_t inited;
 
     /* Check kernel init status */
-    mr_atomic_store(&inited, MR_FALSE);
+    mr_atomic_init(&inited, MR_FALSE);
     if (!mr_atomic_compare_exchange(&kstatus, &inited, MR_TRUE)) {
         /* Kernel already init */
         return;
     }
 
-    /* Kernel init */
 #if defined(MR_USE_KTIMER)
     /* Init ktimer */
     extern void mr_ktimer_kernel_init(void);
@@ -42,6 +41,11 @@ void mr_kernel_init(void) {
     extern void mr_kworkqueue_kernel_init(void);
     mr_kworkqueue_kernel_init();
 #endif /* defined(MR_USE_KWORKQUEUE) */
+#if defined(MR_USE_IRQ)
+    /* Init irq */
+    extern void mr_irq_kernel_init(void);
+    mr_irq_kernel_init();
+#endif /* defined(MR_USE_IRQ) */
 }
 
 void mr_user_init(void) {
@@ -52,7 +56,7 @@ void mr_user_init(void) {
     mr_kernel_init();
 
     /* Check user init status */
-    mr_atomic_store(&inited, MR_FALSE);
+    mr_atomic_init(&inited, MR_FALSE);
     if (!mr_atomic_compare_exchange(&ustatus, &inited, MR_TRUE)) {
         /* User already init */
         return;

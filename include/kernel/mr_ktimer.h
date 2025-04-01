@@ -38,6 +38,9 @@ typedef struct mr_ktimer {
     mr_ptr_t args;
 } mr_ktimer_t;
 
+/* Ktimer entry type */
+typedef void (mr_ktimer_entry)(mr_ktimer_t *ktimer, void *args);
+
 /**
  * @brief This macro function checks if a ktimer is initialized.
  *
@@ -47,7 +50,7 @@ typedef struct mr_ktimer {
 #define MR_KTIMER_IS_INITED(_ktimer)    MR_KOBJECT_IS_INITED(_ktimer)
 
 /**
- * @brief This function initialize a ktimer.
+ * @brief This function initializes a ktimer.
  *
  * @param ktimer The ktimer.
  * @param name The ktimer name.
@@ -57,8 +60,7 @@ typedef struct mr_ktimer {
  * @returns 0 on success, a negative error code on failure.
  */
 mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
-                        void (*entry)(mr_ktimer_t *ktimer, void *args),
-                        void *args, mr_tick_t tick);
+                        mr_ktimer_entry *entry, void *args, mr_tick_t tick);
 
 /**
  * @brief This function create a ktimer.
@@ -69,8 +71,7 @@ mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
  * @param tick The ktimer tick.
  * @return The ktimer on success, MR_NULL on failure.
  */
-mr_ktimer_t *mr_ktimer_create(const char *name,
-                              void (*entry)(mr_ktimer_t *ktimer, void *args),
+mr_ktimer_t *mr_ktimer_create(const char *name, mr_ktimer_entry *entry,
                               void *args, mr_tick_t tick);
 
 /**

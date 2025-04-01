@@ -11,77 +11,181 @@
 #include <libc/mr_errno.h>
 
 void *mr_memccpy(void *dst, const void *src, int c, mr_size_t size) {
-    register const char *s;
-    register char *d;
+    const char *s;
+    char *d;
 
+#if defined(MR_USE_STRING_SAFE)
+    /* Check arguments */
+    if ((!dst) || (!src)) {
+        return MR_NULL;
+    }
+#endif /* defined(MR_USE_STRING_SAFE) */
+
+    /* Copy bytes */
     for (d = dst, s = src; size > 0; size--) {
         (*d++) = *s;
+
+        /* Match character */
         if (*s == c) {
-            return (void *)d;
+            return d;
         }
         s++;
     }
-    return dst;
+    return MR_NULL;
 }
 
 int mr_memcmp(const void *m1, const void *m2, mr_size_t size) {
-    register const char *s1;
-    register const char *s2;
+    const char *s1, *s2;
 
+#if defined(MR_USE_STRING_SAFE)
+    /* Check arguments */
+    if ((!m1) || (!m2)) {
+        return 0;
+    }
+#endif /* defined(MR_USE_STRING_SAFE) */
+
+    /* Compare bytes */
     for (s1 = m1, s2 = m2; size > 0; size--) {
-        if (*s1 != *s2) {
-            return *s1 - *s2;
+        if (*s1 == *s2) {
+            s1++;
+            s2++;
+            continue;
         }
-        s1++;
-        s2++;
+        return *s1 - *s2;
     }
     return 0;
 }
 
 void *mr_memcpy(void *dst, const void *src, mr_size_t size) {
-    register const char *s;
-    register char *d;
+    const mr_uint8_t align = sizeof(mr_uintptr_t) - 1;
+    const char *s;
+    char *d;
 
-    for (d = dst, s = src; size > 0; size--) {
-        (*d++) = (*s++);
+#if defined(MR_USE_STRING_SAFE)
+    /* Check arguments */
+    if ((!dst) || (!src)) {
+        return MR_NULL;
+    }
+#endif /* defined(MR_USE_STRING_SAFE) */
+
+    /* Check dst and src alignment */
+    if (((mr_uintptr_t)dst & align) || ((mr_uintptr_t)src & align)) {
+        /* Copy unaligned bytes */
+        for (d = dst, s = src; size > 0; size--) {
+            (*d++) = (*s++);
+        }
+    } else {
+        /* Copy aligned bytes */
+        for (d = dst, s = src; (size >= sizeof(mr_uintptr_t));
+             size -= sizeof(mr_uintptr_t)) {
+            *(mr_uintptr_t *)d = *(mr_uintptr_t *)s;
+            d += sizeof(mr_uintptr_t);
+            s += sizeof(mr_uintptr_t);
+        }
+
+        /* Copy unaligned bytes */
+        while (size--) {
+            (*d++) = (*s++);
+        }
     }
     return dst;
 }
 
 void *mr_memset(void *dst, int c, mr_size_t size) {
-    register char *d;
+    const mr_uint8_t align = sizeof(mr_uintptr_t) - 1;
+    mr_uintptr_t pattern;
+    char *d;
 
-    for (d = dst; size > 0; size--) {
+#if defined(MR_USE_STRING_SAFE)
+    /* Check arguments */
+    if (!dst) {
+        return MR_NULL;
+    }
+#endif /* defined(MR_USE_STRING_SAFE) */
+
+    /* Make pattern(aligned) */
+    pattern = (mr_uint8_t)c;
+    pattern |= pattern << 8;
+    pattern |= pattern << 16;
+    pattern |= pattern << 24;
+#if defined(MR_USE_64BIT)
+    pattern |= pattern << 32;
+    pattern |= pattern << 40;
+    pattern |= pattern << 48;
+    pattern |= pattern << 56;
+#endif /* defined(MR_USE_64BIT) */
+
+    /* Copy unaligned bytes */
+    for (d = dst; (size > 0) && ((mr_uintptr_t)d & align); size--) {
+        (*d++) = (char)c;
+    }
+
+    /* Copy aligned bytes */
+    while (size >= sizeof(mr_uintptr_t)) {
+        *(mr_uintptr_t *)d = pattern;
+        d += sizeof(mr_uintptr_t);
+        size -= sizeof(mr_uintptr_t);
+    }
+
+    /* Copy unaligned bytes */
+    while (size--) {
         (*d++) = (char)c;
     }
     return dst;
 }
 
 void *mr_memchr(const void *s, int c, mr_size_t size) {
-    register const char *p;
+    const char *p;
 
+#if defined(MR_USE_STRING_SAFE)
+    /* Check arguments */
+    if (!s) {
+        return MR_NULL;
+    }
+#endif /* defined(MR_USE_STRING_SAFE) */
+
+    /* Search bytes */
     for (p = s; size > 0; size--) {
-        if (*p == c) {
-            return (void *)p;
+        if (*p != c) {
+            p++;
+            continue;
         }
-        p++;
+        return (void *)p;
     }
     return MR_NULL;
 }
 
 int mr_strcmp(const char *s1, const char *s2) {
-    for (; *s1 == *s2; s1++, s2++) {
-        if (*s1 == '\0') {
-            return 0;
+#if defined(MR_USE_STRING_SAFE)
+    /* Check arguments */
+    if ((!s1) || (!s2)) {
+        return 0;
+    }
+#endif /* defined(MR_USE_STRING_SAFE) */
+
+    /* Compare bytes */
+    while (*s1 == *s2) {
+        if (*s1 != '\0') {
+            s1++, s2++;
+            continue;
         }
+        return 0;
     }
     return *s1 - *s2;
 }
 
 char *mr_strcpy(char *dst, const char *src) {
-    register char *d;
+    char *d;
 
-    for (d = dst; (*d++ = *src++) != '\0';) {
+#if defined(MR_USE_STRING_SAFE)
+    /* Check arguments */
+    if ((!dst) || (!src)) {
+        return MR_NULL;
+    }
+#endif /* defined(MR_USE_STRING_SAFE) */
+
+    /* Copy bytes */
+    for (d = dst; ((*d++) = (*src++)) != '\0';) {
     }
     return dst;
 }
@@ -144,9 +248,14 @@ char *mr_strerror(int errnum) {
 mr_size_t mr_strlen(const char *s) {
     mr_size_t len;
 
+#if defined(MR_USE_STRING_SAFE)
+    /* Check arguments */
     if (!s) {
         return 0;
     }
+#endif /* defined(MR_USE_STRING_SAFE) */
+
+    /* Count bytes */
     for (len = 0; *s != '\0'; s++) {
         len++;
     }
@@ -156,9 +265,14 @@ mr_size_t mr_strlen(const char *s) {
 mr_size_t mr_strnlen(const char *s, mr_size_t size) {
     mr_size_t len;
 
+#if defined(MR_USE_STRING_SAFE)
+    /* Check arguments */
     if (!s) {
         return 0;
     }
+#endif /* defined(MR_USE_STRING_SAFE) */
+
+    /* Count bytes */
     for (len = 0; (len < size) && (*s != '\0'); s++) {
         len++;
     }
@@ -166,15 +280,24 @@ mr_size_t mr_strnlen(const char *s, mr_size_t size) {
 }
 
 int mr_strncmp(const char *s1, const char *s2, mr_size_t size) {
+    /* Check arguments */
     return mr_memcmp(s1, s2, size);
 }
 
 char *mr_strncpy(char *dst, const char *src, mr_size_t size) {
-    mr_memccpy(dst, src, '\0', size);
+    char *d;
+
+    /* Copy bytes */
+    d = mr_memccpy(dst, src, '\0', size);
+    if (d) {
+        /* Fill with '\0' */
+        mr_memset(d, '\0', size - (mr_size_t)(d - dst));
+    }
     return dst;
 }
 
 char *mr_strchr(const char *s, int c) {
+    /* Search bytes */
     return mr_memchr(s, c, mr_strlen(s) + 1);
 }
-#endif /* (!defined(MR_USE_LIBC_STRING)) && (!defined(MR_USE_3PARTY_STRING)) */
+#endif /* !defined(MR_USE_LIBC_STRING)) && (!defined(MR_USE_3PARTY_STRING) */

@@ -9,8 +9,8 @@
 #ifndef __MR_KHOOK_H__
 #define __MR_KHOOK_H__
 
-#include <kernel/mr_kspinlock.h>
 #include <libc/mr_errno.h>
+#include <libc/mr_types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,26 +23,22 @@ extern "C" {
 
 /* Khook type */
 typedef struct mr_khook {
-    mr_kspinlock_t lock;
     mr_ptr_t *entry;
     mr_size_t size;
     mr_size_t next;
 } mr_khook_t;
 
 /**
- * @brief This macro function initialize a hook.
+ * @brief This macro function initializes a hook.
  *
  * @param _entry The hook entry.
  * @param _size The size of the entry pointers.
  */
 #define MR_KHOOK_INIT(_entry, _size)                                           \
-    {                                                                          \
-        .lock = MR_KSPINLOCK_INIT(), .entry = (_entry), .size = (_size),       \
-        .next = 0                                                              \
-    }
+    {.entry = (_entry), .size = (_size), .next = 0}
 
 /**
- * @brief This function initialize a khook.
+ * @brief This function initializes a khook.
  *
  * @param khook The khook.
  * @param entry The entry pointers.
@@ -53,7 +49,7 @@ typedef struct mr_khook {
 void mr_khook_init(mr_khook_t *khook, mr_ptr_t *entry, mr_size_t size);
 
 /**
- * @brief This function add a entry to the khook.
+ * @brief This function add an entry to the khook.
  *
  * @param khook The khook.
  * @param entry The entry.

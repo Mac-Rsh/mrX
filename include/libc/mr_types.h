@@ -64,7 +64,7 @@ typedef unsigned int                    mr_uint32_t;
 typedef unsigned long long              mr_uint64_t;
 #define MR_UINT8_MAX                    (255)
 #define MR_UINT16_MAX                   (65535)
-#define MR_UINT32_MAX                   (4294967295)
+#define MR_UINT32_MAX                   (4294967295U)
 #define MR_UINT64_MAX                   (18446744073709551615ULL)
 #endif /* defined(MR_USE_LIBC_TYPES) */
 
@@ -118,11 +118,12 @@ typedef va_list                         mr_va_list;
 #define mr_va_end(_a)                   va_end(_a)
 #else
 typedef char *                          mr_va_list;
-#define mr_va_start(_a, _l)             ((_a) = (mr_va_list)&(_l) + sizeof(_l))
-#define __mr_va_align(_p, _t)                                                  \
-    ((mr_va_list)(((mr_size_t)(_p) + sizeof(_t) - 1) & ~(sizeof(_t) - 1)))
+#define __mr_va_align(_t)                                                      \
+    ((sizeof(_t) + (sizeof(mr_ptr_t) - 1)) & (~(sizeof(mr_ptr_t) - 1)))
+#define mr_va_start(_a, _l)                                                    \
+    ((_a) = (mr_va_list) & (_l) + __mr_va_align(_l))
 #define mr_va_arg(_a, _t)                                                      \
-    ((_a) = __mr_va_align(_a, _t) + sizeof(_t), *(_t *)((_a) - sizeof(_t)))
+    ((_a) += __mr_va_align(_t), *(_t *)((_a)-__mr_va_align(_t)))
 #define mr_va_end(_a)                   ((_a) = (mr_va_list)0)
 #endif /* defined(MR_USE_LIBC_TYPES) */
 

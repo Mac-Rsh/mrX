@@ -17,13 +17,13 @@
 #include <libc/mr_string.h>
 #endif /* defined(MR_USE_KTIMER_ATTR) */
 
-/* Ktimer ktype */
+/* Ktimer type */
 static mr_ktype_t ktype1, ktype2;
 /* Ktimer list */
 static mr_klist_t klist = MR_KLIST_INIT(&klist);
 /* Ktimer lock */
 static mr_kspinlock_t klock = MR_KSPINLOCK_INIT();
-/* Ktimer kset */
+/* Ktimer set */
 static mr_kset_t kroot = MR_KSET_INIT(&kroot, MR_NULL);
 
 MR_INLINE void ktimer_init(mr_ktimer_t *ktimer, mr_ptr_t entry, void *args,
@@ -50,8 +50,7 @@ MR_INLINE mr_err_t ktimer_init_add(mr_ktimer_t *ktimer, mr_ktype_t *ktype,
 }
 
 mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
-                        void (*entry)(mr_ktimer_t *ktimer, void *args),
-                        void *args, mr_tick_t tick) {
+                        mr_ktimer_entry *entry, void *args, mr_tick_t tick) {
     /* Check arguments */
     if ((!ktimer) || MR_KTIMER_IS_INITED(ktimer) || (!name) || (!entry)
         || (tick == 0)) {
@@ -59,11 +58,10 @@ mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
     }
 
     /* Init and add ktimer */
-    return ktimer_init_add(ktimer, &ktype1, name, (mr_ptr_t)entry, args, tick);
+    return ktimer_init_add(ktimer, &ktype1, name, entry, args, tick);
 }
 
-mr_ktimer_t *mr_ktimer_create(const char *name,
-                              void (*entry)(mr_ktimer_t *ktimer, void *args),
+mr_ktimer_t *mr_ktimer_create(const char *name, mr_ktimer_entry *entry,
                               void *args, mr_tick_t tick) {
     mr_ktimer_t *ktimer;
     mr_err_t ret;
@@ -80,7 +78,7 @@ mr_ktimer_t *mr_ktimer_create(const char *name,
     }
 
     /* Init and add ktimer */
-    ret = ktimer_init_add(ktimer, &ktype2, name, (mr_ptr_t)entry, args, tick);
+    ret = ktimer_init_add(ktimer, &ktype2, name, entry, args, tick);
     if (ret != 0) {
         mr_free(ktimer);
         return MR_NULL;
@@ -212,7 +210,7 @@ mr_ktimer_t *mr_ktimer_find(const char *name) {
     return (mr_ktimer_t *)mr_kobject_lookup((mr_kobject_t *)&kroot, name);
 }
 
-MR_INLINE mr_ktimer_t *ktimer_release_kobj(mr_kobject_t *kobj) {
+MR_INLINE mr_ktimer_t *ktimer_kobj_release(mr_kobject_t *kobj) {
     mr_ktimer_t *ktimer;
 
     /* Get ktimer */
@@ -223,26 +221,26 @@ MR_INLINE mr_ktimer_t *ktimer_release_kobj(mr_kobject_t *kobj) {
     return ktimer;
 }
 
-MR_INLINE void ktimer_release1_kobj(mr_kobject_t *kobj) {
+MR_INLINE void ktimer_kobj_release1(mr_kobject_t *kobj) {
     /* Release ktimer */
-    ktimer_release_kobj(kobj);
+    ktimer_kobj_release(kobj);
 }
 
-MR_INLINE void ktimer_release2_kobj(mr_kobject_t *kobj) {
+MR_INLINE void ktimer_kobj_release2(mr_kobject_t *kobj) {
     mr_ktimer_t *ktimer;
 
     /* Release ktimer */
-    ktimer = ktimer_release_kobj(kobj);
+    ktimer = ktimer_kobj_release(kobj);
 
     /* Free ktimer */
     mr_free(ktimer);
 }
 
 MR_INLINE void ktimer_timeout_check(void) {
+    mr_ktimer_entry *entry;
     mr_ktimer_t *ktimer;
     mr_klist_t list;
-    mr_ptr_t entry;
-    mr_ptr_t args;
+    void *args;
     int mask;
 
     /* Operation list */
@@ -272,7 +270,7 @@ MR_INLINE void ktimer_timeout_check(void) {
         mr_kspinlock_unlock_irqrestore(&klock, mask);
 
         /* Call ktimer entry */
-        ((void (*)(mr_ktimer_t *, void *))entry)(ktimer, args);
+        entry(ktimer, args);
 
         /* Lock */
         mask = mr_kspinlock_lock_irqsave(&klock);
@@ -328,6 +326,8 @@ MR_INLINE mr_ssize_t ktimer_attr_store(struct mr_kobject *kobj,
     mr_ktimer_t *ktimer;
     int input;
 
+    MR_UNUSED(size);
+
     /* Get ktimer */
     ktimer = MR_CONTAINER_OF(kobj, mr_ktimer_t, parent);
     tick = ktimer->init_tick & ~MR_KTIMER_PERIODIC;
@@ -346,7 +346,7 @@ MR_INLINE mr_ssize_t ktimer_attr_store(struct mr_kobject *kobj,
         }
 
         /* Set ktimer tick */
-        tick = input | mode;
+        tick = (mr_uint32_t)input | mode;
         return mr_ktimer_tick_set(ktimer, tick);
     }
 
@@ -384,16 +384,16 @@ void mr_ktimer_kernel_init(void) {
 #endif /* defined(MR_USE_KTIMER_ATTR) */
     mr_err_t ret;
 
+    /* Init ktype */
+    mr_ktype_init(&ktype1, "timer", ktimer_kobj_release1, attrs);
+    mr_ktype_init(&ktype2, "timer", ktimer_kobj_release2, attrs);
+
     /* Register kset */
     ret = mr_kset_register(&kroot, "timer");
     if (ret != 0) {
         /* It won't hook the kclock, so it won't start */
         return;
     }
-
-    /* Init ktype */
-    mr_ktype_init(&ktype1, "timer", ktimer_release1_kobj, attrs);
-    mr_ktype_init(&ktype2, "timer", ktimer_release2_kobj, attrs);
 
     /* Add kclock entry */
     mr_kclock_hook_add(ktimer_timeout_check);

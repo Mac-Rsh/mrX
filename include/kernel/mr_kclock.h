@@ -25,6 +25,9 @@ extern "C" {
 typedef mr_uint32_t                     mr_tick_t;
 #define MR_TICK_MAX                     MR_UINT32_MAX
 
+/* Clock hook type */
+typedef void (mr_kclock_hook_t)(void);
+
 /**
  * @brief This function increases the clock tick.
  *
@@ -45,7 +48,7 @@ mr_tick_t mr_kclock_tick(void);
  * @param entry The hook entry.
  * @return 0 on success, a negative error code on failure.
  */
-mr_err_t mr_kclock_hook_add(void (*entry)(void));
+mr_err_t mr_kclock_hook_add(mr_kclock_hook_t *entry);
 
 /** @} */
 
