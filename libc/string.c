@@ -289,7 +289,7 @@ char *mr_strncpy(char *dst, const char *src, mr_size_t size) {
 
     /* Copy bytes */
     d = mr_memccpy(dst, src, '\0', size);
-    if (d) {
+    if (d > dst) {
         /* Fill with '\0' */
         mr_memset(d, '\0', size - (mr_size_t)(d - dst));
     }
