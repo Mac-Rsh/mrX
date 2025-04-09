@@ -32,7 +32,7 @@ typedef struct mr_khook {
  * @brief This macro function initializes a hook.
  *
  * @param _entry The hook entry.
- * @param _size The size of the entry pointers.
+ * @param _size The entry size.
  */
 #define MR_KHOOK_INIT(_entry, _size)                                           \
     {.entry = (_entry), .size = (_size), .next = 0}
@@ -42,9 +42,9 @@ typedef struct mr_khook {
  *
  * @param khook The khook.
  * @param entry The entry pointers.
- * @param size The size of the entry pointers.
+ * @param size The entry size.
  *
- * @note The size is the number of the entry pointers.
+ * @note The size is the entry number.
  */
 void mr_khook_init(mr_khook_t *khook, mr_ptr_t *entry, mr_size_t size);
 
@@ -62,11 +62,12 @@ mr_err_t mr_khook_add(mr_khook_t *khook, mr_ptr_t entry);
  *
  * @param _i The index.
  * @param _entry The entry.
- * @param _hook The hook.
+ * @param _type The entry type.
+ * @param _hook The entry hook.
  */
-#define MR_KHOOK_EACH(_i, _entry, _hook)                                       \
-    for ((_i) = 0, (_entry) = (_hook)->entry[(_i)]; (_i) < (_hook)->next;      \
-         (_i)++, (_entry) = (_hook)->entry[(_i)])
+#define MR_KHOOK_EACH(_i, _entry, _type, _hook)                                \
+    for ((_i) = 0, (_entry) = (_type)(_hook)->entry[(_i)];                     \
+         (_i) < (_hook)->next; (_i)++, (_entry) = (_type)(_hook)->entry[(_i)])
 
 /** @} */
 

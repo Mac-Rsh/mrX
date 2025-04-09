@@ -113,7 +113,7 @@ mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick);
  * @brief This macro function gets the tick of a ktimer.
  *
  * @param ktimer The ktimer.
- * @return The tick of the ktimer.
+ * @return The ktimer tick.
  */
 #define MR_KTIMER_TICK(_ktimer)         (((mr_ktimer_t *)(_ktimer))->init_tick)
 

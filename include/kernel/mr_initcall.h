@@ -32,8 +32,8 @@ typedef struct mr_initcall {
 /**
  * @brief This macro function defines an initcall.
  *
- * @param _entry The function of the initcall.
- * @param _level The level of the initcall.
+ * @param _entry The initcall function.
+ * @param _level The initcall level.
  */
 #define MR_INIT_EXPORT(_entry, _level)                                         \
     MR_USED const mr_initcall_t __mr_initcall_##_entry MR_SECTION(             \

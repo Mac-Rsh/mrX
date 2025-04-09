@@ -279,7 +279,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
         }
 
         /* Get effector */
-        effector = -1;
+        effector = '\0';
         if ((*fmt == 'l') || (*fmt == 'L') || (*fmt == 'z') || (*fmt == 'h')) {
             effector = *(fmt++);
             if ((*fmt == 'l') && (effector == 'l')) {

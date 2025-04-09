@@ -228,6 +228,7 @@ MR_INLINE mr_err_t kobject_name_alloc(mr_kobject_t *kobj, const char *name) {
 }
 
 MR_INLINE void path_free(const char *path, char *ipath) {
+    /* Check inline path */
     if (path == ipath) {
         /* Inline path not need to free */
         return;

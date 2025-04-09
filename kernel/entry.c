@@ -11,26 +11,30 @@
 #include <kernel/mr_initcall.h>
 
 MR_INLINE void entry(void) {
-    extern int main(void);
-
     /* Kernel init */
     mr_kernel_init();
-
-    /* Run main */
-    main();
 }
 
 /* MR-X entry point */
-#if defined(__GNUC__) || defined(__clang__)
-int mr_entry(void) {
-    entry();
-    return 0;
-}
-#elif defined(__CC_ARM)
+#if defined(__ARMCC_VERSION)
 extern int $Super$$main(void);
 int $Sub$$main(void) {
+    /* mr-X entry */
     entry();
+
+    /* Real entry */
+    $Super$$main();
     return 0;
 }
-#endif /* defined(__GNUC__) || defined(__clang__) */
+#else
+extern int main(void);
+int mr_entry(void) {
+    /* mr-X entry */
+    entry();
+
+    /* Real entry */
+    main();
+    return 0;
+}
+#endif /* defined(__ARMCC_VERSION) */
 #endif /* defined(MR_USE_ENTRY) */

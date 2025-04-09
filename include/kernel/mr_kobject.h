@@ -197,13 +197,12 @@ void mr_kobject_put(mr_kobject_t *kobj);
  * @brief This function gets the value of an attribute.
  *
  * @param kobj The kobject.
- * @param name The name of the attribute.
- * @param buf The buffer to store the value.
- * @param size The size of the buffer.
- * @return The length of the value on success, a negative error code on
- * failure.
+ * @param name The attribute name.
+ * @param buf The output buffer.
+ * @param size The buffer size.
+ * @return The value length on success, a negative error code on failure.
  *
- * @note Set buf to MR_NULL to get the length of the value.
+ * @note Set buf to MR_NULL to get the value length.
  */
 mr_ssize_t mr_kobject_attr_show(mr_kobject_t *kobj, const char *name, char *buf,
                                 mr_size_t size);
@@ -212,13 +211,12 @@ mr_ssize_t mr_kobject_attr_show(mr_kobject_t *kobj, const char *name, char *buf,
  * @brief This function sets the value of an attribute.
  *
  * @param kobj The kobject.
- * @param name The name of the attribute.
- * @param buf The buffer to store the value.
- * @param size The size of the buffer.
- * @return The length of the value on success, a negative error code on
- * failure.
+ * @param name The attribute name.
+ * @param buf The input buffer.
+ * @param size The buffer size.
+ * @return The value length on success, a negative error code on failure.
  *
- * @note Set buf to MR_NULL to get the length of the value.
+ * @note Set buf to MR_NULL to get the value length.
  */
 mr_ssize_t mr_kobject_attr_store(mr_kobject_t *kobj, const char *name,
                                  const char *buf, mr_size_t size);
@@ -227,7 +225,7 @@ mr_ssize_t mr_kobject_attr_store(mr_kobject_t *kobj, const char *name,
  * @brief This macro function gets the name of a kobject.
  *
  * @param _kobj The kobject.
- * @return The name of the kobject.
+ * @return The kobject name on success, MR_NULL on failure.
  */
 #define MR_KOBJECT_NAME(_kobj)          (((mr_kobject_t *)(_kobj))->name.str)
 
@@ -235,7 +233,7 @@ mr_ssize_t mr_kobject_attr_store(mr_kobject_t *kobj, const char *name,
  * @brief This macro function gets the length of a kobject name.
  *
  * @param _kobj The kobject.
- * @return The length of the kobject name.
+ * @return The name length on success, 0 on failure.
  *
  * @note The name length includes the null terminator('\0').
  */

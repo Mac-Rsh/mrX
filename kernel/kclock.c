@@ -28,7 +28,7 @@ MR_INLINE void kclock_hook(void) {
     mr_size_t i;
 
     /* Each hooks */
-    MR_KHOOK_EACH(i, entry, &khook) {
+    MR_KHOOK_EACH(i, entry, mr_kclock_hook_t *, &khook) {
         if (!entry) {
             continue;
         }

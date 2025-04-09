@@ -41,11 +41,6 @@ void mr_kernel_init(void) {
     extern void mr_kworkqueue_kernel_init(void);
     mr_kworkqueue_kernel_init();
 #endif /* defined(MR_USE_KWORKQUEUE) */
-#if defined(MR_USE_IRQ)
-    /* Init irq */
-    extern void mr_irq_kernel_init(void);
-    mr_irq_kernel_init();
-#endif /* defined(MR_USE_IRQ) */
 }
 
 void mr_user_init(void) {

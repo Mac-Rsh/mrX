@@ -52,6 +52,7 @@ MR_INLINE void kqueue_timer_entry(mr_ktimer_t *ktimer, void *args) {
     kqueue = mr_kworkqueue_get(MR_CONTAINER_OF(ktimer, mr_kworkqueue_t, timer));
     if (!kqueue) {
         /* Kworkqueue is not exist */
+        mr_ktimer_del(ktimer);
         return;
     }
 
@@ -166,8 +167,9 @@ MR_INLINE mr_err_t kqueue_init_add(mr_kworkqueue_t *kqueue, mr_ktype_t *ktype,
     ret = mr_kobject_add((mr_kobject_t *)kqueue, (mr_kobject_t *)&kroot, name);
     if (ret != 0) {
         kqueue_del(kqueue);
+        return ret;
     }
-    return ret;
+    return 0;
 }
 
 mr_err_t mr_kworkqueue_init(mr_kworkqueue_t *kqueue, const char *name) {

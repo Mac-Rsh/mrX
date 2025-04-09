@@ -21,10 +21,10 @@ extern "C" {
 /**
  * @brief This macro function gets the container of a member.
  *
- * @param _ptr The pointer to the member.
- * @param _type The type of the container.
- * @param _member The member of the container.
- * @return The container of the member.
+ * @param _ptr The member pointer.
+ * @param _type The container type.
+ * @param _member The member.
+ * @return The member container.
  */
 #define MR_CONTAINER_OF(_ptr, _type, _member)                                  \
     ((void *)((char *)(_ptr) - (char *)((void *)&(((_type *)0)->_member))))
@@ -33,58 +33,15 @@ extern "C" {
  * @brief This macro function gets the size of an array.
  *
  * @param _array The array.
- * @return The size of the array.
+ * @return The array size.
  */
 #define MR_ARRAY_SIZE(_array)           (sizeof(_array) / sizeof((_array)[0]))
 
 /**
- * @brief This macro function aligns a value upward.
- *
- * @param _val The value.
- * @param _ali The alignment.
- * @return The aligned value.
- */
-#define MR_ALIGN_UP(_val, _ali)         (((_val) + (_ali) - 1) & ~((_ali) - 1))
-
-/**
- * @brief This macro function aligns a value downward.
- *
- * @param _val The value.
- * @param _ali The alignment.
- * @return The aligned value.
- */
-#define MR_ALIGN_DOWN(_val, _ali)       ((_val) & ~((_ali) - 1))
-
-/**
- * @brief This macro function checks if a bit is set.
- *
- * @param _val The value.
- * @param _mask The mask.
- * @return MR_TRUE if the bit is set, MR_FALSE otherwise.
- */
-#define MR_BIT_IS_SET(_val, _mask)      (((_val) & (_mask)) == (_mask))
-
-/**
- * @brief This macro function sets a bit.
- *
- * @param _val The value.
- * @param _mask The mask.
- */
-#define MR_BIT_SET(_val, _mask)         ((_val) |= (_mask))
-
-/**
- * @brief This macro function clear a bit.
- *
- * @param _val The value.
- * @param _mask The mask.
- */
-#define MR_BIT_CLR(_val, _mask)         ((_val) &= ~(_mask))
-
-/**
  * @brief This macro function makes a local variable.
  *
- * @param _type The type of the local variable.
- * @param ... The arguments of the local variable.
+ * @param _type The local variable type.
+ * @param ... The local variable value.
  */
 #define MR_MAKE_LOCAL(_type, ...)       (&((_type){__VA_ARGS__}))
 

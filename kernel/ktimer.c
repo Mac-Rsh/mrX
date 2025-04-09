@@ -263,7 +263,7 @@ MR_INLINE void ktimer_timeout_check(void) {
         mr_klist_move(&ktimer->list, &list);
 
         /* Save ktimer entry and args */
-        entry = ktimer->entry;
+        entry = (mr_ktimer_entry *)ktimer->entry;
         args = ktimer->args;
 
         /* Unlock */

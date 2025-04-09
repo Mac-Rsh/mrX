@@ -144,10 +144,10 @@ MR_INLINE mr_bool_t mr_klist_is_empty(mr_klist_t *head) {
 /**
  * @brief This macro function gets the container of an element.
  *
- * @param _ptr The pointer to the element.
- * @param _type The type of the element.
- * @param _member The member of the element.
- * @return The container of the element.
+ * @param _ptr The element pointer.
+ * @param _type The element type.
+ * @param _member The element member.
+ * @return The element container.
  */
 #define MR_KLIST_ENTRY(_ptr, _type, _member)                                   \
     MR_CONTAINER_OF(_ptr, _type, _member)
