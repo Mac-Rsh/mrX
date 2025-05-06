@@ -62,4 +62,17 @@ menu "Kernel options"
         default n
         help
             This option controls whether to use kworkqueue hook.
+    # IRQ
+    config MR_USE_IRQ
+        bool "Use irq"
+        default y
+        help
+            This option controls whether to use irq.
+    config MR_CFG_IRQ_TABLE_SIZE
+        depends on MR_USE_IRQ
+        int "Irq table size"
+        default 32
+        range 4 512
+        help
+            This option controls the size of the irq table.
 endmenu

@@ -5,7 +5,7 @@ AlignConsecutiveAssignments: false
 AlignConsecutiveBitFields: false
 AlignConsecutiveDeclarations: false
 AlignConsecutiveMacros: Consecutive
-AlignEscapedNewlines: Right 
+AlignEscapedNewlines: Right
 AlignOperands: AlignAfterOperator
 AlignTrailingComments: true
 AllowAllArgumentsOnNextLine: true
@@ -44,18 +44,10 @@ BreakBeforeBraces: Custom
 BreakBeforeTernaryOperators: true
 BreakStringLiterals: true
 ColumnLimit: 80
-IncludeBlocks: Regroup
-IncludeCategories:
-  - Regex: '.*'
-    Priority: 1
-  - Regex: '^<.*>'
-    Priority: 2
-  - Regex: '^<std.*>'
-    Priority: 3
 IndentCaseBlocks: false
 IndentCaseLabels: true
 IndentExternBlock: NoIndent
-IndentGotoLabels: false 
+IndentGotoLabels: false
 IndentPPDirectives: None
 IndentWidth: 4
 IndentWrappedFunctionNames: true
@@ -65,7 +57,7 @@ Language: Cpp
 ConstructorInitializerAllOnOneLineOrOnePerLine: false
 ConstructorInitializerIndentWidth: 4
 ContinuationIndentWidth: 4
-DerivePointerAlignment:	false
+DerivePointerAlignment: false
 DisableFormat: false
 MaxEmptyLinesToKeep: 1
 PenaltyReturnTypeOnItsOwnLine: 80
@@ -73,7 +65,7 @@ PPIndentWidth: -1
 PointerAlignment: Right
 ReferenceAlignment: Right
 ReflowComments: true
-SortIncludes:	CaseSensitive
+SortIncludes: Never
 SpaceAfterCStyleCast: false
 SpaceAfterLogicalNot: false
 SpaceAroundPointerQualifiers: Default

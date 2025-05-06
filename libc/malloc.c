@@ -8,8 +8,8 @@
 
 #include <libc/mr_malloc.h>
 #if (!defined(MR_USE_LIBC_MALLOC)) && (!defined(MR_USE_3PARTY_MALLOC))
-#include <libc/mr_string.h>
 #include <port/mr_port_irq.h>
+#include <libc/mr_string.h>
 
 #if !defined(MR_CFG_HEAP_SIZE)
 #define MR_CFG_HEAP_SIZE                (4 * 1024)
@@ -30,7 +30,7 @@ static mr_memblk_t blk_head = {.size = 1};
 static void heap_insert_block(mr_memblk_t *blk) {
     mr_memblk_t *prev;
 
-    /* Search for the previous blk */
+    /* Search for the previous block */
     for (prev = &blk_head; prev->next; prev = prev->next) {
         if (prev->next < blk) {
             continue;
@@ -38,16 +38,16 @@ static void heap_insert_block(mr_memblk_t *blk) {
         break;
     }
 
-    /* Insert the blk */
+    /* Insert the block */
     if (prev->next) {
-        /* Merge with the previous blk */
+        /* Merge with the previous block */
         if ((void *)(((mr_uint8_t *)prev) + sizeof(mr_memblk_t) + prev->size)
             == (void *)blk) {
             prev->size += blk->size + sizeof(mr_memblk_t);
             blk = prev;
         }
 
-        /* Merge with the next blk */
+        /* Merge with the next block */
         if ((void *)(((mr_uint8_t *)blk) + sizeof(mr_memblk_t) + blk->size)
             == (void *)prev->next) {
             blk->size += prev->next->size + sizeof(mr_memblk_t);
@@ -59,7 +59,7 @@ static void heap_insert_block(mr_memblk_t *blk) {
         }
     }
 
-    /* Insert the blk */
+    /* Insert the block */
     if (blk != prev) {
         blk->next = prev->next;
         prev->next = blk;
@@ -111,16 +111,16 @@ void *mr_malloc(mr_size_t size) {
     blk->next = MR_NULL;
     blk->size = size;
 
-    /* Check if we need to allocate a new blk */
+    /* Check if we need to allocate a new block */
     if (res > (sizeof(mr_memblk_t) << 1)) {
         new = (mr_memblk_t *)((mr_uint8_t *)mem + size);
 
-        /* Set the new blk information */
+        /* Set the new block information */
         new->size = res - sizeof(mr_memblk_t);
         new->magic = ~HEAP_MAGIC;
         new->next = MR_NULL;
 
-        /* Insert the new blk */
+        /* Insert the new block */
         heap_insert_block(new);
     }
 
@@ -142,13 +142,13 @@ void mr_free(void *mem) {
     /* Disable interrupt */
     mask = mr_port_irq_save();
 
-    /* Check the blk */
+    /* Check the block */
     blk = (mr_memblk_t *)((mr_uint8_t *)mem - sizeof(mr_memblk_t));
     if ((blk->magic == HEAP_MAGIC) && (blk->size != 0)) {
-        /* Clear the blk magic */
+        /* Clear the block magic */
         blk->magic = ~HEAP_MAGIC;
 
-        /* Insert the free blk */
+        /* Insert the free block */
         heap_insert_block(blk);
     }
 
@@ -164,10 +164,10 @@ mr_size_t mr_malloc_usable_size(void *mem) {
         return 0;
     }
 
-    /* Get the blk information */
+    /* Get the block information */
     blk = (mr_memblk_t *)((mr_uint8_t *)mem - sizeof(mr_memblk_t));
     if (blk->magic != HEAP_MAGIC) {
-        /* Not a heap blk */
+        /* Not a heap block */
         return 0;
     }
     return blk->size;

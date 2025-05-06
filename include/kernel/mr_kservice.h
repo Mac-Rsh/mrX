@@ -14,7 +14,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup Service
+ * @addtogroup Kservice
  * @{
  */
 

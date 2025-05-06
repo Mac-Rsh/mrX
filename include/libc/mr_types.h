@@ -11,8 +11,8 @@
 
 #include <mr_config.h>
 #if defined(MR_USE_LIBC_TYPES)
-#include <stdarg.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 #endif /* defined(MR_USE_LIBC_TYPES) */
@@ -32,15 +32,23 @@ typedef int8_t                          mr_int8_t;
 typedef int16_t                         mr_int16_t;
 typedef int32_t                         mr_int32_t;
 typedef int64_t                         mr_int64_t;
+#define MR_INT8_MIN                     INT8_MIN
+#define MR_INT16_MIN                    INT16_MIN
+#define MR_INT32_MIN                    INT32_MIN
+#define MR_INT64_MIN                    INT64_MIN
 #define MR_INT8_MAX                     INT8_MAX
 #define MR_INT16_MAX                    INT16_MAX
 #define MR_INT32_MAX                    INT32_MAX
 #define MR_INT64_MAX                    INT64_MAX
 #else
 typedef signed char                     mr_int8_t;
-typedef signed short                    mr_int16_t;
-typedef signed int                      mr_int32_t;
-typedef signed long long                mr_int64_t;
+typedef short                           mr_int16_t;
+typedef int                             mr_int32_t;
+typedef long long                       mr_int64_t;
+#define MR_INT8_MIN                     (-128)
+#define MR_INT16_MIN                    (-32768)
+#define MR_INT32_MIN                    (-2147483648)
+#define MR_INT64_MIN                    (-9223372036854775808LL)
 #define MR_INT8_MAX                     (127)
 #define MR_INT16_MAX                    (32767)
 #define MR_INT32_MAX                    (2147483647)
@@ -62,8 +70,8 @@ typedef unsigned char                   mr_uint8_t;
 typedef unsigned short                  mr_uint16_t;
 typedef unsigned int                    mr_uint32_t;
 typedef unsigned long long              mr_uint64_t;
-#define MR_UINT8_MAX                    (255)
-#define MR_UINT16_MAX                   (65535)
+#define MR_UINT8_MAX                    (255U)
+#define MR_UINT16_MAX                   (65535U)
 #define MR_UINT32_MAX                   (4294967295U)
 #define MR_UINT64_MAX                   (18446744073709551615ULL)
 #endif /* defined(MR_USE_LIBC_TYPES) */
@@ -71,16 +79,25 @@ typedef unsigned long long              mr_uint64_t;
 /* Size type */
 #if defined(MR_USE_LIBC_TYPES)
 typedef size_t                          mr_size_t;
-typedef ssize_t                         mr_ssize_t;
+#define MR_SIZE_MAX                     SIZE_MAX
 #else
 #if defined(MR_USE_64BIT)
-typedef unsigned long long              mr_size_t;
-typedef long long                       mr_ssize_t;
+typedef mr_uint64_t                     mr_size_t;
+#define MR_SIZE_MAX                     MR_UINT64_MAX
 #else
-typedef unsigned int                    mr_size_t;
-typedef int                             mr_ssize_t;
+typedef mr_uint32_t                     mr_size_t;
+#define MR_SIZE_MAX                     MR_UINT32_MAX
 #endif /* defined(MR_USE_64BIT) */
 #endif /* defined(MR_USE_LIBC_TYPES) */
+#if defined(MR_USE_64BIT)
+typedef mr_int64_t                      mr_ssize_t;
+#define MR_SSIZE_MIN                    MR_INT64_MIN
+#define MR_SSIZE_MAX                    MR_INT64_MAX
+#else
+typedef mr_int32_t                      mr_ssize_t;
+#define MR_SSIZE_MIN                    MR_INT32_MIN
+#define MR_SSIZE_MAX                    MR_INT32_MAX
+#endif /* defined(MR_USE_64BIT) */
 
 /* Boolean type */
 #if defined(MR_USE_LIBC_TYPES)
@@ -89,8 +106,8 @@ typedef bool                            mr_bool_t;
 #define MR_TRUE                         true
 #else
 typedef int                             mr_bool_t;
-#define MR_FALSE                        (0)
-#define MR_TRUE                         (1)
+#define MR_FALSE                        ((mr_bool_t)0)
+#define MR_TRUE                         ((mr_bool_t)1)
 #endif /* defined(MR_USE_LIBC_TYPES) */
 
 /* Pointer type */

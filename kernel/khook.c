@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <kernel/mr_khook.h>
 #include <kernel/mr_kspinlock.h>
+#include <kernel/mr_khook.h>
 
 /* Khook lock */
 static mr_kspinlock_t klock = MR_KSPINLOCK_INIT();

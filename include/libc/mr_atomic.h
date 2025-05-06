@@ -50,6 +50,7 @@ typedef int                             mr_atomic_t;
  * @param val The value to initialize.
  */
 MR_INLINE void mr_atomic_init(volatile mr_atomic_t *atomic, mr_atomic_t val) {
+    /* Init atomic */
     *atomic = val;
 }
 
@@ -67,8 +68,13 @@ MR_INLINE mr_atomic_t mr_atomic_load(volatile mr_atomic_t *atomic) {
     MR_UNUSED(mask);
     tmp = __atomic_load_n(atomic, __ATOMIC_SEQ_CST);
 #else
+    /* Disable interrupt */
     mask = mr_port_irq_save();
+
+    /* Load atomic */
     tmp = *atomic;
+
+    /* Enable interrupt */
     mr_port_irq_restore(mask);
 #endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
@@ -87,8 +93,13 @@ MR_INLINE void mr_atomic_store(volatile mr_atomic_t *atomic, mr_atomic_t val) {
     MR_UNUSED(mask);
     __atomic_store_n(atomic, val, __ATOMIC_SEQ_CST);
 #else
+    /* Disable interrupt */
     mask = mr_port_irq_save();
+
+    /* Store atomic */
     *atomic = val;
+
+    /* Enable interrupt */
     mr_port_irq_restore(mask);
 #endif /* defined(__ATOMIC_SEQ_CST) */
 }
@@ -109,9 +120,14 @@ MR_INLINE mr_atomic_t mr_atomic_exchange(volatile mr_atomic_t *atomic,
     MR_UNUSED(mask);
     tmp = __atomic_exchange_n(atomic, val, __ATOMIC_SEQ_CST);
 #else
+    /* Disable interrupt */
     mask = mr_port_irq_save();
+
+    /* Exchange atomic */
     tmp = *atomic;
     *atomic = val;
+
+    /* Enable interrupt */
     mr_port_irq_restore(mask);
 #endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
@@ -121,29 +137,37 @@ MR_INLINE mr_atomic_t mr_atomic_exchange(volatile mr_atomic_t *atomic,
  * @brief This function compares and exchanges an atomic.
  *
  * @param atomic The atomic to compare and exchange.
- * @param old_val The old value to compare.
- * @param new_val The new value to exchange.
+ * @param val The value to compare.
+ * @param desired The desired value.
  * @return MR_TRUE on success, MR_FALSE on failure.
  */
 MR_INLINE mr_bool_t mr_atomic_compare_exchange(volatile mr_atomic_t *atomic,
-                                               mr_atomic_t *old_val,
-                                               mr_atomic_t new_val) {
+                                               mr_atomic_t *val,
+                                               mr_atomic_t desired) {
+    mr_bool_t tmp;
     int mask;
 
 #if defined(__ATOMIC_SEQ_CST)
     MR_UNUSED(mask);
-    return __atomic_compare_exchange_n(atomic, old_val, new_val, MR_FALSE,
-                                       __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    tmp = __atomic_compare_exchange_n(atomic, val, desired, MR_FALSE,
+                                      __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 #else
+    /* Disable interrupt */
     mask = mr_port_irq_save();
-    if (*atomic != *old_val) {
-        mr_port_irq_restore(mask);
-        return MR_FALSE;
+
+    /* Compare and exchange atomic */
+    if (*atomic != *val) {
+        *val = *atomic;
+        tmp = MR_FALSE;
+    } else {
+        *atomic = desired;
+        tmp = MR_TRUE;
     }
-    *atomic = new_val;
+
+    /* Enable interrupt */
     mr_port_irq_restore(mask);
-    return MR_TRUE;
 #endif /* defined(__ATOMIC_SEQ_CST) */
+    return tmp;
 }
 
 /**
@@ -162,9 +186,14 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_add(volatile mr_atomic_t *atomic,
     MR_UNUSED(mask);
     tmp = __atomic_fetch_add(atomic, val, __ATOMIC_SEQ_CST);
 #else
+    /* Disable interrupt */
     mask = mr_port_irq_save();
+
+    /* Fetch and add atomic */
     tmp = *atomic;
     *atomic += val;
+
+    /* Enable interrupt */
     mr_port_irq_restore(mask);
 #endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
@@ -186,9 +215,14 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_sub(volatile mr_atomic_t *atomic,
     MR_UNUSED(mask);
     tmp = __atomic_fetch_sub(atomic, val, __ATOMIC_SEQ_CST);
 #else
+    /* Disable interrupt */
     mask = mr_port_irq_save();
+
+    /* Fetch and subtract atomic */
     tmp = *atomic;
     *atomic -= val;
+
+    /* Enable interrupt */
     mr_port_irq_restore(mask);
 #endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
@@ -210,9 +244,14 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_and(volatile mr_atomic_t *atomic,
     MR_UNUSED(mask);
     tmp = __atomic_fetch_and(atomic, val, __ATOMIC_SEQ_CST);
 #else
+    /* Disable interrupt */
     mask = mr_port_irq_save();
+
+    /* Fetch and and atomic */
     tmp = *atomic;
     *atomic &= val;
+
+    /* Enable interrupt */
     mr_port_irq_restore(mask);
 #endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
@@ -234,9 +273,14 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_or(volatile mr_atomic_t *atomic,
     MR_UNUSED(mask);
     tmp = __atomic_fetch_or(atomic, val, __ATOMIC_SEQ_CST);
 #else
+    /* Disable interrupt */
     mask = mr_port_irq_save();
+
+    /* Fetch and or atomic */
     tmp = *atomic;
     *atomic |= val;
+
+    /* Enable interrupt */
     mr_port_irq_restore(mask);
 #endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;

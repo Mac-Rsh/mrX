@@ -11,7 +11,7 @@
 #include <libc/mr_atomic.h>
 
 /* Kclock tick */
-static mr_atomic_t kclock;
+static mr_atomic_t ktick;
 /* Kclock hook entry */
 #if !defined(MR_CFG_KCLOCK_HOOK_SIZE)
 #define MR_CFG_KCLOCK_HOOK_SIZE         (4)
@@ -27,31 +27,31 @@ MR_INLINE void kclock_hook(void) {
     mr_kclock_hook_t *entry;
     mr_size_t i;
 
-    /* Each hooks */
+    /* Each kclock hooks */
     MR_KHOOK_EACH(i, entry, mr_kclock_hook_t *, &khook) {
         if (!entry) {
             continue;
         }
 
-        /* Call entry */
+        /* Call kclock hook entry */
         entry();
     }
 }
 
 void mr_kclock_increase(mr_tick_t tick) {
-    /* Kclock increase */
-    mr_atomic_fetch_add(&kclock, (mr_atomic_t)tick);
+    /* Kclock tick increase */
+    mr_atomic_fetch_add(&ktick, (mr_atomic_t)tick);
 
-    /* Call hooks */
+    /* Call kclock hooks */
     kclock_hook();
 }
 
 mr_tick_t mr_kclock_tick(void) {
-    /* Get kclock */
-    return (mr_tick_t)mr_atomic_load(&kclock);
+    /* Get kclock tick */
+    return (mr_tick_t)mr_atomic_load(&ktick);
 }
 
 mr_err_t mr_kclock_hook_add(mr_kclock_hook_t *entry) {
-    /* Add entry to khook */
+    /* Add hook to kclock */
     return mr_khook_add(&khook, (mr_ptr_t)entry);
 }

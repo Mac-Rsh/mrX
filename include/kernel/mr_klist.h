@@ -42,6 +42,7 @@ typedef struct mr_klist {
  * @param entry The element to initialize.
  */
 MR_INLINE void mr_klist_init(mr_klist_t *entry) {
+    /* Init klist */
     entry->next = entry->prev = entry;
 }
 
@@ -54,6 +55,7 @@ MR_INLINE void mr_klist_init(mr_klist_t *entry) {
  * @note Adds to the end of the list.
  */
 MR_INLINE void mr_klist_add(mr_klist_t *head, mr_klist_t *entry) {
+    /* Insert to the end of the list */
     head->prev->next = entry;
     entry->prev = head->prev;
     head->prev = entry;
@@ -69,6 +71,7 @@ MR_INLINE void mr_klist_add(mr_klist_t *head, mr_klist_t *entry) {
  * @note Inserts to the beginning of the list.
  */
 MR_INLINE void mr_klist_insert(mr_klist_t *head, mr_klist_t *entry) {
+    /* Insert to the beginning of the list */
     head->next->prev = entry;
     entry->next = head->next;
     head->next = entry;
@@ -81,6 +84,7 @@ MR_INLINE void mr_klist_insert(mr_klist_t *head, mr_klist_t *entry) {
  * @param entry The element to remove.
  */
 MR_INLINE void mr_klist_del(mr_klist_t *entry) {
+    /* Remove from the list */
     entry->prev->next = entry->next;
     entry->next->prev = entry->prev;
     entry->next = entry->prev = entry;
@@ -93,6 +97,7 @@ MR_INLINE void mr_klist_del(mr_klist_t *entry) {
  * @param old The old element.
  */
 MR_INLINE void mr_klist_replace(mr_klist_t *new, mr_klist_t *old) {
+    /* Replace in the list */
     new->next = old->next;
     new->next->prev = new;
     new->prev = old->prev;
@@ -109,12 +114,17 @@ MR_INLINE void mr_klist_replace(mr_klist_t *new, mr_klist_t *old) {
 MR_INLINE void mr_klist_swap(mr_klist_t *entry1, mr_klist_t *entry2) {
     mr_klist_t *tmp;
 
+    /* Remove from the list */
     tmp = entry2->prev;
     mr_klist_del(entry2);
+
+    /* Replace in the list */
     mr_klist_replace(entry1, entry2);
     if (tmp == entry1) {
         tmp = entry2;
     }
+
+    /* Add to the list */
     mr_klist_add(tmp, entry1);
 }
 
@@ -127,7 +137,10 @@ MR_INLINE void mr_klist_swap(mr_klist_t *entry1, mr_klist_t *entry2) {
  * @note Move to the end of the list.
  */
 MR_INLINE void mr_klist_move(mr_klist_t *entry, mr_klist_t *head) {
+    /* Remove from the list */
     mr_klist_del(entry);
+
+    /* Insert to the end of the list */
     mr_klist_add(head, entry);
 }
 
@@ -138,6 +151,7 @@ MR_INLINE void mr_klist_move(mr_klist_t *entry, mr_klist_t *head) {
  * @return MR_TRUE on empty, MR_FALSE otherwise.
  */
 MR_INLINE mr_bool_t mr_klist_is_empty(mr_klist_t *head) {
+    /* Check if list is empty */
     return (head->next == head) ? MR_TRUE : MR_FALSE;
 }
 

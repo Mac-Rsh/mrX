@@ -26,7 +26,7 @@ typedef mr_uint32_t                     mr_tick_t;
 #define MR_TICK_MAX                     MR_UINT32_MAX
 
 /* Clock hook type */
-typedef void (mr_kclock_hook_t)(void);
+typedef void(mr_kclock_hook_t)(void);
 
 /**
  * @brief This function increases the clock tick.

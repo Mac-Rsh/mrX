@@ -15,6 +15,7 @@
 #else
 #include <libc/mr_types.h>
 #endif /* defined(MR_USE_LIBC_STRING) */
+#include <libc/mr_compiler.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -164,6 +165,52 @@ char *mr_strncpy(char *dst, const char *src, mr_size_t size);
  */
 char *mr_strchr(const char *s, int c);
 #endif /* defined(MR_USE_LIBC_STRING) */
+
+/**
+ * @brief This function returns the index of the first set bit.
+ *
+ * @param x The value.
+ * @return The index of the first set bit.
+ */
+MR_INLINE int mr_ffs32(mr_uint32_t x) {
+    extern const int __mr_ffs_debruijn32[32];
+
+    /* DeBruijn ffs32 */
+    return __mr_ffs_debruijn32[((x & (-x)) * 0x077cb531U) >> 27];
+}
+
+/**
+ * @brief This function returns the index of the first set bit.
+ *
+ * @param x The value.
+ * @return The index of the first set bit.
+ */
+MR_INLINE int mr_ffs64(mr_uint64_t x) {
+    extern const int __mr_ffs_debruijn64[64];
+
+    /* DeBruijn ffs64 */
+    return __mr_ffs_debruijn64[((x & (-x)) * 0x03f79d71b4cb0a89ULL) >> 58];
+}
+
+/**
+ * @brief This function returns the index of the last set bit.
+ *
+ * @param x The value.
+ * @return The index of the last set bit.
+ */
+MR_INLINE int mr_fls32(mr_uint32_t x) {
+    return mr_ffs32(x & (-x));
+}
+
+/**
+ * @brief This function returns the index of the last set bit.
+ *
+ * @param x The value.
+ * @return The index of the last set bit.
+ */
+MR_INLINE int mr_fls64(mr_uint64_t x) {
+    return mr_ffs64(x & (-x));
+}
 
 /** @} */
 

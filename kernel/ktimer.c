@@ -8,8 +8,8 @@
 
 #include <kernel/mr_ktimer.h>
 #if defined(MR_USE_KTIMER)
-#include <kernel/mr_initcall.h>
 #include <kernel/mr_kspinlock.h>
+#include <kernel/mr_initcall.h>
 #include <libc/mr_malloc.h>
 #if defined(MR_USE_KTIMER_ATTR)
 #include <libc/mr_printf.h>
@@ -50,10 +50,10 @@ MR_INLINE mr_err_t ktimer_init_add(mr_ktimer_t *ktimer, mr_ktype_t *ktype,
 }
 
 mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
-                        mr_ktimer_entry *entry, void *args, mr_tick_t tick) {
+                        mr_ktimer_entry_t *entry, void *args, mr_tick_t tick) {
     /* Check arguments */
     if ((!ktimer) || MR_KTIMER_IS_INITED(ktimer) || (!name) || (!entry)
-        || (tick == 0)) {
+        || (tick == 0) || (tick >= (MR_TICK_MAX / 2))) {
         return -MR_EINVAL;
     }
 
@@ -61,13 +61,13 @@ mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
     return ktimer_init_add(ktimer, &ktype1, name, entry, args, tick);
 }
 
-mr_ktimer_t *mr_ktimer_create(const char *name, mr_ktimer_entry *entry,
+mr_ktimer_t *mr_ktimer_create(const char *name, mr_ktimer_entry_t *entry,
                               void *args, mr_tick_t tick) {
     mr_ktimer_t *ktimer;
     mr_err_t ret;
 
     /* Check arguments */
-    if ((!name) || (!entry) || (tick == 0)) {
+    if ((!name) || (!entry) || (tick == 0) || (tick >= (MR_TICK_MAX / 2))) {
         return MR_NULL;
     }
 
@@ -92,7 +92,7 @@ MR_INLINE void ktimer_del(mr_ktimer_t *ktimer) {
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
 
-    /* Check ktimer is deleted */
+    /* Check if ktimer is deleted */
     if (!mr_klist_is_empty(&ktimer->list)) {
         /* Remove ktimer from timer list */
         mr_klist_del(&ktimer->list);
@@ -141,8 +141,13 @@ MR_INLINE void ktimer_insert(mr_ktimer_t *ktimer) {
     mr_klist_move(&ktimer->list, &klist);
 }
 
-MR_INLINE void ktimer_start(mr_ktimer_t *ktimer) {
+mr_err_t mr_ktimer_start(mr_ktimer_t *ktimer) {
     int mask;
+
+    /* Check arguments */
+    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer))) {
+        return -MR_EINVAL;
+    }
 
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
@@ -152,16 +157,6 @@ MR_INLINE void ktimer_start(mr_ktimer_t *ktimer) {
 
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
-}
-
-mr_err_t mr_ktimer_start(mr_ktimer_t *ktimer) {
-    /* Check arguments */
-    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer))) {
-        return -MR_EINVAL;
-    }
-
-    /* Start ktimer */
-    ktimer_start(ktimer);
     return 0;
 }
 
@@ -176,8 +171,13 @@ mr_err_t mr_ktimer_stop(mr_ktimer_t *ktimer) {
     return 0;
 }
 
-MR_INLINE void ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
+mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
     int mask;
+
+    /* Check arguments */
+    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer)) || (tick == 0)) {
+        return -MR_EINVAL;
+    }
 
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
@@ -192,16 +192,6 @@ MR_INLINE void ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
 
     /* Unlock */
     mr_kspinlock_unlock_irqrestore(&klock, mask);
-}
-
-mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
-    /* Check arguments */
-    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer)) || (tick == 0)) {
-        return -MR_EINVAL;
-    }
-
-    /* Set ktimer tick */
-    ktimer_tick_set(ktimer, tick);
     return 0;
 }
 
@@ -237,7 +227,7 @@ MR_INLINE void ktimer_kobj_release2(mr_kobject_t *kobj) {
 }
 
 MR_INLINE void ktimer_timeout_check(void) {
-    mr_ktimer_entry *entry;
+    mr_ktimer_entry_t *entry;
     mr_ktimer_t *ktimer;
     mr_klist_t list;
     void *args;
@@ -263,7 +253,7 @@ MR_INLINE void ktimer_timeout_check(void) {
         mr_klist_move(&ktimer->list, &list);
 
         /* Save ktimer entry and args */
-        entry = (mr_ktimer_entry *)ktimer->entry;
+        entry = ktimer->entry;
         args = ktimer->args;
 
         /* Unlock */
@@ -395,7 +385,7 @@ void mr_ktimer_kernel_init(void) {
         return;
     }
 
-    /* Add kclock entry */
+    /* Add kclock hook */
     mr_kclock_hook_add(ktimer_timeout_check);
 }
 #endif /* defined(MR_USE_KTIMER) */

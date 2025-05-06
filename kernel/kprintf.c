@@ -8,8 +8,8 @@
 
 #include <kernel/mr_kprintf.h>
 #if defined(MR_USE_KPRINTF)
-#include <libc/mr_printf.h>
 #include <port/mr_port_output.h>
+#include <libc/mr_printf.h>
 #if defined(MR_USE_KPRINTF_SAFE)
 #include <libc/mr_malloc.h>
 #endif /* defined(MR_USE_KPRINTF_SAFE) */

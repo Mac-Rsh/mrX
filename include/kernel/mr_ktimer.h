@@ -11,8 +11,8 @@
 
 #include <mr_config.h>
 #if defined(MR_USE_KTIMER)
-#include <kernel/mr_kclock.h>
 #include <kernel/mr_kobject.h>
+#include <kernel/mr_kclock.h>
 #endif /* defined(MR_USE_KTIMER) */
 
 #ifdef __cplusplus
@@ -39,7 +39,7 @@ typedef struct mr_ktimer {
 } mr_ktimer_t;
 
 /* Ktimer entry type */
-typedef void (mr_ktimer_entry)(mr_ktimer_t *ktimer, void *args);
+typedef void(mr_ktimer_entry_t)(mr_ktimer_t *ktimer, void *args);
 
 /**
  * @brief This macro function checks if a ktimer is initialized.
@@ -60,7 +60,7 @@ typedef void (mr_ktimer_entry)(mr_ktimer_t *ktimer, void *args);
  * @returns 0 on success, a negative error code on failure.
  */
 mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
-                        mr_ktimer_entry *entry, void *args, mr_tick_t tick);
+                        mr_ktimer_entry_t *entry, void *args, mr_tick_t tick);
 
 /**
  * @brief This function create a ktimer.
@@ -71,7 +71,7 @@ mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
  * @param tick The ktimer tick.
  * @return The ktimer on success, MR_NULL on failure.
  */
-mr_ktimer_t *mr_ktimer_create(const char *name, mr_ktimer_entry *entry,
+mr_ktimer_t *mr_ktimer_create(const char *name, mr_ktimer_entry_t *entry,
                               void *args, mr_tick_t tick);
 
 /**
@@ -110,12 +110,20 @@ mr_err_t mr_ktimer_stop(mr_ktimer_t *ktimer);
 mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick);
 
 /**
- * @brief This macro function gets the tick of a ktimer.
+ * @brief This function gets a ktimer tick.
  *
  * @param ktimer The ktimer.
  * @return The ktimer tick.
  */
-#define MR_KTIMER_TICK(_ktimer)         (((mr_ktimer_t *)(_ktimer))->init_tick)
+MR_INLINE mr_tick_t mr_ktimer_tick(mr_ktimer_t *ktimer) {
+    /* Check arguments */
+    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer))) {
+        return 0;
+    }
+
+    /* Return ktimer tick */
+    return ktimer->init_tick;
+}
 
 /**
  * @brief This function find a ktimer.

@@ -14,10 +14,12 @@ static mr_atomic_t kstatus = MR_ATOMIC_INIT(MR_FALSE);
 static mr_atomic_t ustatus = MR_ATOMIC_INIT(MR_FALSE);
 
 MR_INLINE void start(void) {
+    /* User init start */
 }
 MR_INIT_EXPORT(start, "0.end");
 
 MR_INLINE void end(void) {
+    /* User init end */
 }
 MR_INIT_EXPORT(end, "9.end");
 
@@ -41,6 +43,11 @@ void mr_kernel_init(void) {
     extern void mr_kworkqueue_kernel_init(void);
     mr_kworkqueue_kernel_init();
 #endif /* defined(MR_USE_KWORKQUEUE) */
+#if defined(MR_USE_IRQ)
+    /* Init irq */
+    extern void mr_irq_kernel_init(void);
+    mr_irq_kernel_init();
+#endif /* defined(MR_USE_IRQ) */
 }
 
 void mr_user_init(void) {

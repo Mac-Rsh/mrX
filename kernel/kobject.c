@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <kernel/mr_kobject.h>
 #include <kernel/mr_kspinlock.h>
+#include <kernel/mr_kobject.h>
 #include <libc/mr_malloc.h>
 #include <libc/mr_printf.h>
 #include <libc/mr_string.h>
@@ -254,8 +254,8 @@ MR_INLINE mr_err_t kobject_add(mr_kobject_t *kobj, mr_kobject_t *parent,
     }
 
     /* Add kobject to parent */
-    kobj->parent = parent;
     mr_klist_add(&parent->list, &kobj->entry);
+    kobj->parent = parent;
     return 0;
 }
 
@@ -326,7 +326,7 @@ MR_INLINE void kobject_del(mr_kobject_t *kobj) {
     /* Lock */
     mask = mr_kspinlock_lock_irqsave(&klock);
 
-    /* Check kobject is deleted */
+    /* Check if kobject is deleted */
     if (!mr_klist_is_empty(&kobj->entry)) {
         /* Remove kobject from parent */
         mr_klist_del(&kobj->entry);

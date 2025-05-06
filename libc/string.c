@@ -10,6 +10,20 @@
 #if (!defined(MR_USE_LIBC_STRING)) && (!defined(MR_USE_3PARTY_STRING))
 #include <libc/mr_errno.h>
 
+/* DeBruijn ffs32 */
+const int __mr_ffs_debruijn32[32] = {
+    1,  2,  29, 3,  30, 15, 25, 4, 31, 23, 21, 16, 26, 18, 5,  9,
+    32, 28, 14, 24, 22, 20, 17, 8, 27, 13, 19, 7,  12, 6,  11, 10,
+};
+
+/* DeBruijn ffs64 */
+const int __mr_ffs_debruijn64[64] = {
+    1,  2,  57, 3,  58, 50, 29, 4,  62, 59, 43, 51, 39, 30, 18, 5,
+    63, 48, 60, 37, 46, 44, 52, 23, 54, 40, 34, 31, 25, 19, 13, 6,
+    64, 56, 49, 28, 61, 42, 38, 17, 47, 36, 45, 22, 53, 33, 24, 12,
+    55, 27, 41, 16, 35, 21, 32, 11, 26, 15, 20, 10, 14, 9,  8,  7,
+};
+
 void *mr_memccpy(void *dst, const void *src, int c, mr_size_t size) {
     const char *s;
     char *d;
@@ -166,12 +180,13 @@ int mr_strcmp(const char *s1, const char *s2) {
     /* Compare bytes */
     while (*s1 == *s2) {
         if (*s1 != '\0') {
-            s1++, s2++;
+            s1++;
+            s2++;
             continue;
         }
         return 0;
     }
-    return *s1 - *s2;
+    return *s1 - (*s2);
 }
 
 char *mr_strcpy(char *dst, const char *src) {
@@ -185,9 +200,10 @@ char *mr_strcpy(char *dst, const char *src) {
 #endif /* defined(MR_USE_STRING_SAFE) */
 
     /* Copy bytes */
-    for (d = dst; ((*d++) = (*src++)) != '\0';) {
+    for (d = dst; *src != '\0'; src++, dst++) {
+        *dst = *src;
     }
-    return dst;
+    return d;
 }
 
 char *mr_strerror(int errnum) {
@@ -280,7 +296,7 @@ mr_size_t mr_strnlen(const char *s, mr_size_t size) {
 }
 
 int mr_strncmp(const char *s1, const char *s2, mr_size_t size) {
-    /* Check arguments */
+    /* Compare bytes */
     return mr_memcmp(s1, s2, size);
 }
 

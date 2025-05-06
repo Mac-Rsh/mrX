@@ -30,6 +30,7 @@ extern "C" {
 /* Assert definition */
 #if defined(MR_USE_LIBC_ASSERT)
 #define MR_ASSERT(_expr)                assert(_expr)
+#define MR_PANIC()                      assert(0)
 #elif defined(MR_USE_3PARTY_ASSERT)
 /* In '3party/libc/mr_assert.h' */
 #elif defined(MR_USE_ASSERT)
@@ -41,8 +42,19 @@ extern "C" {
             }                                                                  \
         }                                                                      \
     } while (0)
+#define MR_PANIC()                                                             \
+    do {                                                                       \
+        mr_port_assert(__FILE__, __LINE__, "panic");                           \
+        while (1) {                                                            \
+        }                                                                      \
+    } while (0)
 #else
 #define MR_ASSERT(_expr)                ((void)0)
+#define MR_PANIC()                                                             \
+    do {                                                                       \
+        while (1) {                                                            \
+        }                                                                      \
+    } while (0)
 #endif /* defined(MR_USE_LIBC_ASSERT) */
 
 /**

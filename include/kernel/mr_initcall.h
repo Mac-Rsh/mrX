@@ -23,10 +23,13 @@ extern "C" {
 /* Initcall level definition */
 #define MR_INIT_LEVEL_USER(_level)      "1."_level
 
+/* Initcall entry type */
+typedef void(mr_initcall_entry_t)(void);
+
 /* Initcall type */
 typedef struct mr_initcall {
     const char *name;
-    void (*entry)(void);
+    mr_initcall_entry_t *entry;
 } mr_initcall_t;
 
 /**

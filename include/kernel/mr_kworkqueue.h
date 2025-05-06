@@ -18,6 +18,11 @@
 extern "C" {
 #endif /* __cplusplus */
 
+/**
+ * @addtogroup Kworkqueue
+ * @{
+ */
+
 #if defined(MR_USE_KWORKQUEUE)
 struct mr_kwork;
 
@@ -36,8 +41,13 @@ typedef struct mr_kworkqueue {
 #endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
 } mr_kworkqueue_t;
 
+#if defined(MR_USE_KWORKQUEUE_HOOK)
+/* Kworkqueue hook type */
+typedef void(mr_kworkqueue_hook_t)(mr_kworkqueue_t *kqueue, void *args);
+#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
+
 /* Kwork entry type */
-typedef void (mr_kwork_entry_t)(struct mr_kwork *kwork, void *args);
+typedef void(mr_kwork_entry_t)(struct mr_kwork *kwork, void *args);
 
 /* Kwork type */
 typedef struct mr_kwork {
@@ -47,11 +57,6 @@ typedef struct mr_kwork {
     mr_kwork_entry_t *entry;
     mr_ptr_t args;
 } mr_kwork_t;
-
-#if defined(MR_USE_KWORKQUEUE_HOOK)
-/* Kworkqueue hook type */
-typedef void (mr_kworkqueue_hook_t)(mr_kworkqueue_t *kqueue, void *args);
-#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
 
 /**
  * @brief This macro function checks if a kworkqueue is initialized.
@@ -94,6 +99,61 @@ mr_err_t mr_kworkqueue_del(mr_kworkqueue_t *kqueue);
  * return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_kworkqueue_execute(mr_kworkqueue_t *kqueue);
+
+/**
+ * @brief This function add a kwork to a kworkqueue.
+ *
+ * @param kqueue The kworkqueue.
+ * @param kwork The kwork.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_kworkqueue_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork);
+
+/**
+ * @brief This function add a delayed-kwork to a kworkqueue.
+ *
+ * @param kqueue The kworkqueue.
+ * @param kwork The delayed-kwork.
+ * @param tick The delayed-kwork tick.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_kworkqueue_delayed_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork,
+                                    mr_tick_t tick);
+
+#if defined(MR_USE_KWORKQUEUE_HOOK)
+/**
+ * @brief This function set a kworkqueue wakeup hook.
+ *
+ * @param kqueue The kworkqueue.
+ * @param hook The kworkqueue wakeup hook.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note Use a semaphore with an initial value of 0 as the hook.
+ */
+mr_err_t mr_kworkqueue_hook_wakeup_set(mr_kworkqueue_t *kqueue,
+                                       mr_kworkqueue_hook_t *hook);
+
+/**
+ * @brief This function set a kworkqueue suspend hook.
+ *
+ * @param kqueue The kworkqueue.
+ * @param hook The kworkqueue suspend hook.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note Use a semaphore with an initial value of 0 as the hook.
+ */
+mr_err_t mr_kworkqueue_hook_suspend_set(mr_kworkqueue_t *kqueue,
+                                        mr_kworkqueue_hook_t *hook);
+
+/**
+ * @brief This function set a kworkqueue hook args.
+ *
+ * @param kqueue The kworkqueue.
+ * @param args The hook args.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_kworkqueue_hook_args_set(mr_kworkqueue_t *kqueue, void *args);
+#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
 
 /**
  * @brief This macro function checks if a kwork is initialized.
@@ -144,26 +204,6 @@ mr_err_t mr_kwork_del(mr_kwork_t *kwork);
 #define MR_KWORK_IS_WORKING(_kwork)     (!mr_klist_is_empty(&(_kwork)->list))
 
 /**
- * @brief This function add a kwork to a kworkqueue.
- *
- * @param kqueue The kworkqueue.
- * @param kwork The kwork.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_kworkqueue_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork);
-
-/**
- * @brief This function add a delayed-kwork to a kworkqueue.
- *
- * @param kqueue The kworkqueue.
- * @param kwork The delayed-kwork.
- * @param tick The delayed-kwork tick.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_kworkqueue_delayed_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork,
-                                    mr_tick_t tick);
-
-/**
  * @brief This function schedule a kwork.
  *
  * @param kwork The kwork.
@@ -185,41 +225,6 @@ mr_err_t mr_kwork_schedule(mr_kwork_t *kwork);
  * deleted.
  */
 mr_err_t mr_kwork_delayed_schedule(mr_kwork_t *kwork, mr_tick_t tick);
-
-#if defined(MR_USE_KWORKQUEUE_HOOK)
-/**
- * @brief This function set a kworkqueue wakeup hook.
- *
- * @param kqueue The kworkqueue.
- * @param hook The kworkqueue wakeup hook.
- * @return 0 on success, a negative error code on failure.
- *
- * @note Use a semaphore with an initial value of 0 as the hook.
- */
-mr_err_t mr_kworkqueue_hook_wakeup_set(mr_kworkqueue_t *kqueue,
-                                       mr_kworkqueue_hook_t *hook);
-
-/**
- * @brief This function set a kworkqueue suspend hook.
- *
- * @param kqueue The kworkqueue.
- * @param hook The kworkqueue suspend hook.
- * @return 0 on success, a negative error code on failure.
- *
- * @note Use a semaphore with an initial value of 0 as the hook.
- */
-mr_err_t mr_kworkqueue_hook_suspend_set(mr_kworkqueue_t *kqueue,
-                                        mr_kworkqueue_hook_t *hook);
-
-/**
- * @brief This function set a kworkqueue hook args.
- *
- * @param kqueue The kworkqueue.
- * @param args The hook args.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_kworkqueue_hook_args_set(mr_kworkqueue_t *kqueue, void *args);
-#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
 
 /**
  * @brief This function find a kworkqueue.
@@ -248,6 +253,8 @@ MR_INLINE void mr_kworkqueue_put(mr_kworkqueue_t *kqueue) {
     mr_kobject_put((mr_kobject_t *)kqueue);
 }
 #endif /* defined(MR_USE_KWORKQUEUE) */
+
+/** @} */
 
 #ifdef __cplusplus
 }
