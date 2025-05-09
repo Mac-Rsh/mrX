@@ -96,7 +96,7 @@ mr_err_t mr_kworkqueue_del(mr_kworkqueue_t *kqueue);
  * @brief This function execute a kworkqueue.
  *
  * @param kqueue The kworkqueue.
- * return 0 on success, a negative error code on failure.
+ * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_kworkqueue_execute(mr_kworkqueue_t *kqueue);
 
@@ -146,10 +146,10 @@ mr_err_t mr_kworkqueue_hook_suspend_set(mr_kworkqueue_t *kqueue,
                                         mr_kworkqueue_hook_t *hook);
 
 /**
- * @brief This function set a kworkqueue hook args.
+ * @brief This function set a kworkqueue hook arguments.
  *
  * @param kqueue The kworkqueue.
- * @param args The hook args.
+ * @param args The hook arguments.
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_kworkqueue_hook_args_set(mr_kworkqueue_t *kqueue, void *args);
@@ -168,7 +168,7 @@ mr_err_t mr_kworkqueue_hook_args_set(mr_kworkqueue_t *kqueue, void *args);
  *
  * @param _kwork The kwork.
  * @param _entry The kwork entry.
- * @param _args The kwork args.
+ * @param _args The kwork arguments.
  */
 #define MR_KWORK_INIT(_kwork, _entry, _args)                                   \
     {.list = MR_KLIST_INIT(&(_kwork)->list),                                   \
@@ -182,7 +182,7 @@ mr_err_t mr_kworkqueue_hook_args_set(mr_kworkqueue_t *kqueue, void *args);
  *
  * @param kwork The kwork.
  * @param entry The kwork entry.
- * @param args The kwork args.
+ * @param args The kwork arguments.
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_kwork_init(mr_kwork_t *kwork, mr_kwork_entry_t *entry, void *args);

@@ -348,7 +348,8 @@ mr_err_t mr_kworkqueue_delayed_work(mr_kworkqueue_t *kqueue, mr_kwork_t *kwork,
 
     /* Check arguments */
     if ((!kqueue) || (!MR_KWORKQUEUE_IS_INITED(kqueue)) || (!kwork)
-        || (!MR_KWORK_IS_INITED(kwork)) || (tick == 0)) {
+        || (!MR_KWORK_IS_INITED(kwork)) || (tick == 0)
+        || (tick >= (MR_TICK_MAX / 2))) {
         return -MR_EINVAL;
     }
 
@@ -514,7 +515,7 @@ mr_err_t mr_kwork_delayed_schedule(mr_kwork_t *kwork, mr_tick_t tick) {
 
     /* Check arguments */
     if ((!kwork) || (!MR_KWORK_IS_INITED(kwork)) || (!kwork->kqueue)
-        || (tick == 0)) {
+        || (tick == 0) || (tick >= (MR_TICK_MAX / 2))) {
         return -MR_EINVAL;
     }
 

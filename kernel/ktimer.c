@@ -175,7 +175,8 @@ mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
     int mask;
 
     /* Check arguments */
-    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer)) || (tick == 0)) {
+    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer)) || (tick == 0)
+        || (tick >= (MR_TICK_MAX / 2))) {
         return -MR_EINVAL;
     }
 
@@ -252,7 +253,7 @@ MR_INLINE void ktimer_timeout_check(void) {
         /* Move ktimer into operation list */
         mr_klist_move(&ktimer->list, &list);
 
-        /* Save ktimer entry and args */
+        /* Save ktimer arguments */
         entry = ktimer->entry;
         args = ktimer->args;
 

@@ -55,7 +55,7 @@ typedef void(mr_ktimer_entry_t)(mr_ktimer_t *ktimer, void *args);
  * @param ktimer The ktimer.
  * @param name The ktimer name.
  * @param entry The ktimer entry.
- * @param args The ktimer args.
+ * @param args The ktimer arguments.
  * @param tick The ktimer tick(period: 'tick | MR_KTIMER_PERIODIC').
  * @returns 0 on success, a negative error code on failure.
  */
@@ -67,7 +67,7 @@ mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
  *
  * @param name The ktimer name.
  * @param entry The ktimer entry.
- * @param args The ktimer args.
+ * @param args The ktimer arguments.
  * @param tick The ktimer tick.
  * @return The ktimer on success, MR_NULL on failure.
  */
