@@ -277,8 +277,8 @@ mr_err_t mr_kworkqueue_execute(mr_kworkqueue_t *kqueue) {
         }
 
         /* Save kwork entry and args */
-        entry = kwork->entry;
-        args = kwork->args;
+        entry = (mr_kwork_entry_t *)kwork->entry;
+        args = (void *)kwork->args;
 
         /* Unlock */
         mr_kspinlock_unlock_irqrestore(&klock, mask);

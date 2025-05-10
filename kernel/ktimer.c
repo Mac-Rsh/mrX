@@ -254,8 +254,8 @@ MR_INLINE void ktimer_timeout_check(void) {
         mr_klist_move(&ktimer->list, &list);
 
         /* Save ktimer arguments */
-        entry = ktimer->entry;
-        args = ktimer->args;
+        entry = (mr_ktimer_entry_t *)ktimer->entry;
+        args = (void *)ktimer->args;
 
         /* Unlock */
         mr_kspinlock_unlock_irqrestore(&klock, mask);

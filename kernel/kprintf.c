@@ -28,7 +28,7 @@ int mr_kprintf(const char *fmt, ...) {
     int ret;
 
     /* Check arguments */
-    if (!fmt) {
+    if ((!fmt) || (fmt[0] == '\0')) {
         return -MR_EINVAL;
     }
 

@@ -15,6 +15,7 @@
  */
 
 #include <kernel/mr_initcall.h>
+#include <kernel/mr_irq.h>
 #include <kernel/mr_kclock.h>
 #include <kernel/mr_khook.h>
 #include <kernel/mr_klist.h>

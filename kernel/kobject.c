@@ -309,7 +309,8 @@ mr_err_t mr_kobject_add(mr_kobject_t *kobj, mr_kobject_t *parent,
     mr_err_t ret;
 
     /* Check arguments(parent checked in 'kobject_varg_add') */
-    if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj)) || (!fmt)) {
+    if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj)) || (!fmt)
+        || (fmt[0] == '\0')) {
         return -MR_EINVAL;
     }
 
@@ -398,7 +399,7 @@ mr_kobject_t *mr_kobject_lookup(mr_kobject_t *parent, const char *fmt, ...) {
     mr_va_list args;
 
     /* Check arguments(parent checked in 'kobject_varg_lookup') */
-    if (!fmt) {
+    if ((!fmt) || (fmt[0] == '\0')) {
         return MR_NULL;
     }
 
@@ -504,7 +505,7 @@ mr_ssize_t mr_kobject_attr_show(mr_kobject_t *kobj, const char *name, char *buf,
     mr_kattr_t *attr;
 
     /* Check arguments */
-    if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj)) || (!name)
+    if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj)) || (!name) || (name[0] == '\0')
         || ((!buf) && (size > 0))) {
         return -MR_EINVAL;
     }
@@ -524,7 +525,7 @@ mr_ssize_t mr_kobject_attr_store(mr_kobject_t *kobj, const char *name,
     mr_kattr_t *attr;
 
     /* Check arguments */
-    if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj)) || (!name)
+    if ((!kobj) || (!MR_KOBJECT_IS_INITED(kobj)) || (!name) || (name[0] == '\0')
         || ((!buf) && (size > 0))) {
         return -MR_EINVAL;
     }

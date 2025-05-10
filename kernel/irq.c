@@ -226,8 +226,8 @@ MR_INLINE void irq_action_defer_entry(mr_kwork_t *kwork, void *args) {
     mask = mr_kspinlock_lock_irqsave(&klock);
 
     /* Save irq action arguments */
-    entry = action->defer_entry;
-    owner = action->owner;
+    entry = (mr_irq_entry_t *)action->defer_entry;
+    owner = (void *)action->owner;
     irq = action->irq;
 
     /* Unlock */
@@ -647,8 +647,8 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
 
         /* Mark irq action pending */
         action->irq |= IRQ_ACTION_PENDING;
-        entry = action->entry;
-        owner = action->owner;
+        entry = (mr_irq_entry_t *)action->entry;
+        owner = (void *)action->owner;
 
         /* Unlock */
         mr_kspinlock_unlock_irqrestore(&klock, mask);

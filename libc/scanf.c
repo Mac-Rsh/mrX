@@ -15,6 +15,11 @@ int mr_sscanf(const char *buf, const char *fmt, ...) {
     va_list args;
     int ret;
 
+    /* Check arguments */
+    if ((!buf) || (!fmt) || (fmt[0] == '\0')) {
+        return -1;
+    }
+
     /* Scan string */
     va_start(args, fmt);
     ret = vsscanf(buf, fmt, args);

@@ -212,7 +212,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
     char effector;
 
     /* Check arguments */
-    if (!fmt) {
+    if ((!fmt) || (fmt[0] == '\0')) {
         return 0;
     }
     if (!buf) {
