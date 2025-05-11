@@ -199,7 +199,16 @@ MR_INLINE int mr_ffs64(mr_uint64_t x) {
  * @return The index of the last set bit.
  */
 MR_INLINE int mr_fls32(mr_uint32_t x) {
-    return mr_ffs32(x & (-x));
+    /* Higher order bits */
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
+    x |= x >> 16;
+    x -= x >> 1;
+
+    /* Find last set bit */
+    return mr_ffs32(x);
 }
 
 /**
@@ -209,7 +218,16 @@ MR_INLINE int mr_fls32(mr_uint32_t x) {
  * @return The index of the last set bit.
  */
 MR_INLINE int mr_fls64(mr_uint64_t x) {
-    return mr_ffs64(x & (-x));
+    /* Higher order bits */
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
+    x |= x >> 16;
+    x |= x >> 32;
+    x -= x >> 1;
+
+    return mr_ffs64(x);
 }
 
 /** @} */

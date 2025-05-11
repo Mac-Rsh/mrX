@@ -631,12 +631,8 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
     /* Get irq run-time */
     mr_irq_get(desc->irq);
 
-    /* Shield irq mask */
+    /* Mask irq */
     desc->irq->ops->mask(irq, desc->irq->args);
-    if (desc->flags & MR_IRQ_EDGE_BOTH) {
-        /* First ack if irq mode is edge */
-        desc->irq->ops->ack(irq, desc->irq->args);
-    }
 
     /* Handle irq action */
     for (action = desc->action; action; action = action->next) {
@@ -700,12 +696,8 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
         }
     }
 
-    /* Unmask irq mask */
+    /* Unmask irq if irq action is enabled */
     if (mr_atomic_load(&desc->depth) == 0) {
-        if (desc->flags & (MR_IRQ_LEVEL_HIGH | MR_IRQ_LEVEL_LOW)) {
-            /* Then ack if irq mode is level */
-            desc->irq->ops->ack(irq, desc->irq->args);
-        }
         desc->irq->ops->unmask(irq, desc->irq->args);
     }
 

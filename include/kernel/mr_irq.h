@@ -47,7 +47,6 @@ typedef struct mr_irq_ops {
     void (*unmask)(mr_uint32_t irq, void *args);
     void (*disable)(mr_uint32_t irq, void *args);
     void (*mask)(mr_uint32_t irq, void *args);
-    void (*ack)(mr_uint32_t irq, void *args);
 } mr_irq_ops_t;
 
 /* Irq type */
