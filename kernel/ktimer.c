@@ -53,7 +53,7 @@ mr_err_t mr_ktimer_init(mr_ktimer_t *ktimer, const char *name,
                         mr_ktimer_entry_t *entry, void *args, mr_tick_t tick) {
     /* Check arguments */
     if ((!ktimer) || MR_KTIMER_IS_INITED(ktimer) || (!name) || (!entry)
-        || (tick == 0) || (tick >= (MR_TICK_MAX / 2))) {
+        || (tick == 0)) {
         return -MR_EINVAL;
     }
 
@@ -67,7 +67,7 @@ mr_ktimer_t *mr_ktimer_create(const char *name, mr_ktimer_entry_t *entry,
     mr_err_t ret;
 
     /* Check arguments */
-    if ((!name) || (!entry) || (tick == 0) || (tick >= (MR_TICK_MAX / 2))) {
+    if ((!name) || (!entry) || (tick == 0)) {
         return MR_NULL;
     }
 
@@ -175,8 +175,7 @@ mr_err_t mr_ktimer_tick_set(mr_ktimer_t *ktimer, mr_tick_t tick) {
     int mask;
 
     /* Check arguments */
-    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer)) || (tick == 0)
-        || (tick >= (MR_TICK_MAX / 2))) {
+    if ((!ktimer) || (!MR_KTIMER_IS_INITED(ktimer)) || (tick == 0)) {
         return -MR_EINVAL;
     }
 
