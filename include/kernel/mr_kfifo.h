@@ -94,6 +94,17 @@ mr_uint32_t mr_kfifo_pop(mr_kfifo_t *kfifo, void *data);
 mr_uint32_t mr_kfifo_in(mr_kfifo_t *kfifo, const void *buf, mr_uint32_t num);
 
 /**
+ * @brief This function puts data to a kfifo with overwrite.
+ *
+ * @param kfifo The kfifo.
+ * @param buf The buffer.
+ * @param num The buffer number.
+ * @return The actual pushed element number.
+ */
+mr_uint32_t mr_kfifo_in_overwrite(mr_kfifo_t *kfifo, const void *buf,
+                                  mr_uint32_t num);
+
+/**
  * @brief This function peeks data from a kfifo.
  *
  * @param kfifo The kfifo.
