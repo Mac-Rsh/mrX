@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_MALLOC_H__
-#define __MR_MALLOC_H__
+#ifndef __MR_LIBC_MALLOC_H__
+#define __MR_LIBC_MALLOC_H__
 
 #include <mr_config.h>
 #if defined(MR_USE_LIBC_MALLOC)
@@ -33,53 +33,53 @@ extern "C" {
 #define mr_calloc(_n, _sz)              calloc(_n, _sz)
 #define mr_realloc(_m, _sz)             realloc(_m, _sz)
 #else
-#if !defined(MR_USE_3PARTY_MALLOC)
+#if defined(MR_USE_MALLOC)
 /* Memory block type */
 typedef struct mr_memblk {
     struct mr_memblk *next;
     mr_uint32_t magic;
     mr_size_t size;
 } mr_memblk_t;
-#endif /* !defined(MR_USE_3PARTY_MALLOC) */
+#endif /* defined(MR_USE_MALLOC) */
 
 /**
  * @brief This function allocates memory.
  *
- * @param size The size of memory to allocate.
+ * @param size The allocated size.
  * @return The allocated memory.
  */
 void *mr_malloc(mr_size_t size);
 
 /**
- * @brief This function free mem.
+ * @brief This function free memory.
  *
- * @param mem The mem to free.
+ * @param mem The free memory.
  */
 void mr_free(void *mem);
 
 /**
  * @brief This function returns the usable size of mem.
  *
- * @param mem The mem.
- * @return The usable size of mem.
+ * @param mem The memory.
+ * @return The usable size.
  */
 mr_size_t mr_malloc_usable_size(void *mem);
 
 /**
  * @brief This function allocates memory.
  *
- * @param num The number of blocks to allocate.
- * @param size The size of each block.
+ * @param num The allocated block number.
+ * @param size The allocated block size.
  * @return The allocated memory.
  */
 void *mr_calloc(mr_size_t num, mr_size_t size);
 
 /**
- * @brief This function reallocates mem.
+ * @brief This function reallocates memory.
  *
- * @param mem The mem to reallocate.
- * @param size The new size of mem.
- * @return The reallocated mem.
+ * @param mem The memory.
+ * @param size The reallocated size.
+ * @return The reallocated memory.
  */
 void *mr_realloc(void *mem, mr_size_t size);
 #endif /* defined(MR_USE_LIBC_MALLOC) */
@@ -90,4 +90,4 @@ void *mr_realloc(void *mem, mr_size_t size);
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_MALLOC_H__ */
+#endif /* __MR_LIBC_MALLOC_H__ */

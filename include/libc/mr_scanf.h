@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_SCANF_H__
-#define __MR_SCANF_H__
+#ifndef __MR_LIBC_SCANF_H__
+#define __MR_LIBC_SCANF_H__
 
 #include <mr_config.h>
 #if defined(MR_USE_LIBC_SCANF)
@@ -33,7 +33,7 @@ extern "C" {
  * @param buf The string to scan.
  * @param fmt The format string.
  * @param ... The arguments.
- * @return The number of characters scanned.
+ * @return The characters scanned number on success, -1 on error.
  */
 int mr_sscanf(const char *buf, const char *fmt, ...);
 #endif /* defined(MR_USE_LIBC_SCANF) */
@@ -44,4 +44,4 @@ int mr_sscanf(const char *buf, const char *fmt, ...);
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_SCANF_H__ */
+#endif /* __MR_LIBC_SCANF_H__ */

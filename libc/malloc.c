@@ -7,7 +7,7 @@
  */
 
 #include <libc/mr_malloc.h>
-#if (!defined(MR_USE_LIBC_MALLOC)) && (!defined(MR_USE_3PARTY_MALLOC))
+#if defined(MR_USE_MALLOC)
 #include <port/mr_port_irq.h>
 #include <libc/mr_string.h>
 
@@ -18,9 +18,9 @@
 #error "Heap size is too small(must >= 24)"
 #endif /* MR_CFG_HEAP_SIZE */
 /* Heap memory */
-static mr_uint8_t heap[MR_CFG_HEAP_SIZE];
+static mr_uint8_t __heap[MR_CFG_HEAP_SIZE];
 /* Heap block head */
-static mr_memblk_t blk_head = {.size = 1};
+static mr_memblk_t __blk_head = {.next = MR_NULL};
 
 /* Heap magic number */
 #define HEAP_MAGIC                      (0x6d722d58U)
@@ -28,10 +28,11 @@ static mr_memblk_t blk_head = {.size = 1};
 #define HEAP_ALIGN(_val, _ali)          (((_val) + (_ali)-1) & ~((_ali)-1))
 
 static void heap_insert_block(mr_memblk_t *blk) {
-    mr_memblk_t *prev;
+    mr_memblk_t *prev, *merge;
+    mr_size_t size;
 
     /* Search for the previous block */
-    for (prev = &blk_head; prev->next; prev = prev->next) {
+    for (prev = &__blk_head; prev->next; prev = prev->next) {
         if (prev->next < blk) {
             continue;
         }
@@ -41,15 +42,17 @@ static void heap_insert_block(mr_memblk_t *blk) {
     /* Insert the block */
     if (prev->next) {
         /* Merge with the previous block */
-        if ((void *)(((mr_uint8_t *)prev) + sizeof(mr_memblk_t) + prev->size)
-            == (void *)blk) {
+        size = sizeof(mr_memblk_t) + prev->size;
+        merge = (mr_memblk_t *)((mr_uint8_t *)prev + size);
+        if (merge == blk) {
             prev->size += blk->size + sizeof(mr_memblk_t);
             blk = prev;
         }
 
         /* Merge with the next block */
-        if ((void *)(((mr_uint8_t *)blk) + sizeof(mr_memblk_t) + blk->size)
-            == (void *)prev->next) {
+        size = sizeof(mr_memblk_t) + blk->size;
+        merge = (mr_memblk_t *)((mr_uint8_t *)blk + size);
+        if (merge == prev->next) {
             blk->size += prev->next->size + sizeof(mr_memblk_t);
             blk->next = prev->next->next;
             if (blk != prev) {
@@ -72,39 +75,35 @@ void *mr_malloc(mr_size_t size) {
     void *mem;
     int mask;
 
+    /* Check parameter */
+    if (size == 0) {
+        return MR_NULL;
+    }
+
     /* Disable interrupt */
     mask = mr_port_irq_save();
 
-    /* Initialize the heap block */
-    if (blk_head.size != 0) {
-        blk = (mr_memblk_t *)heap;
-        blk->size = sizeof(heap) - sizeof(mr_memblk_t);
-        blk->magic = ~HEAP_MAGIC;
-        blk->next = MR_NULL;
-        blk_head.next = blk;
-        blk_head.size = 0;
-    }
-
-    /* Check memory and size */
-    if ((!blk_head.next) || (size == 0)) {
+    /* Check if the heap is empty */
+    prev = &__blk_head;
+    if (!prev->next) {
         mem = MR_NULL;
         goto _exit;
     }
 
-    /* Align the size to the next multiple of sizeof(void *) */
-    size = HEAP_ALIGN(size, sizeof(void *));
+    /* Align the size to the next multiple of width */
+    size = HEAP_ALIGN(size, sizeof(mr_uintptr_t));
 
     /* Search for and take blocks that match the criteria */
-    for (prev = &blk_head, blk = prev->next; blk->size < size;
-         prev = blk, blk = blk->next) {
+    for (blk = prev->next; blk->size < size; blk = blk->next) {
         if (!blk->next) {
             mem = MR_NULL;
             goto _exit;
         }
+        prev = blk;
     }
 
     /* Allocate memory */
-    mem = ((mr_uint8_t *)blk + sizeof(mr_memblk_t));
+    mem = (mr_uint8_t *)blk + sizeof(mr_memblk_t);
     res = blk->size - size;
     prev->next = blk->next;
     blk->magic = HEAP_MAGIC;
@@ -123,7 +122,6 @@ void *mr_malloc(mr_size_t size) {
         /* Insert the new block */
         heap_insert_block(new);
     }
-
 _exit:
     /* Enable interrupt */
     mr_port_irq_restore(mask);
@@ -134,7 +132,7 @@ void mr_free(void *mem) {
     mr_memblk_t *blk;
     int mask;
 
-    /* Check arguments */
+    /* Check parameter */
     if (!mem) {
         return;
     }
@@ -159,7 +157,7 @@ void mr_free(void *mem) {
 mr_size_t mr_malloc_usable_size(void *mem) {
     mr_memblk_t *blk;
 
-    /* Check arguments */
+    /* Check parameter */
     if (!mem) {
         return 0;
     }
@@ -216,4 +214,16 @@ void *mr_realloc(void *mem, mr_size_t size) {
     mr_free(mem);
     return new;
 }
-#endif /* !defined(MR_USE_LIBC_MALLOC) && !defined(MR_USE_3PARTY_MALLOC) */
+
+void mr_libc_malloc_init(void) {
+    mr_memblk_t *blk;
+
+    /* Initialize the heap block */
+    blk = (mr_memblk_t *)__heap;
+    blk->size = sizeof(__heap) - sizeof(mr_memblk_t);
+    blk->magic = ~HEAP_MAGIC;
+    blk->next = MR_NULL;
+    __blk_head.next = blk;
+    __blk_head.size = 0;
+}
+#endif /* defined(MR_USE_MALLOC) */

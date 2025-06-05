@@ -15,18 +15,18 @@
  */
 
 #include <kernel/mr_initcall.h>
+#include <kernel/mr_clock.h>
+#include <kernel/mr_fifo.h>
+#include <kernel/mr_hook.h>
 #include <kernel/mr_irq.h>
-#include <kernel/mr_kclock.h>
-#include <kernel/mr_khook.h>
-#include <kernel/mr_klist.h>
-#include <kernel/mr_kobject.h>
-#include <kernel/mr_kprintf.h>
-#include <kernel/mr_kref.h>
-#include <kernel/mr_kservice.h>
-#include <kernel/mr_kspinlock.h>
-#include <kernel/mr_ktimer.h>
-#include <kernel/mr_kworkqueue.h>
+#include <kernel/mr_list.h>
+#include <kernel/mr_printf.h>
+#include <kernel/mr_ref.h>
+#include <kernel/mr_service.h>
+#include <kernel/mr_spinlock.h>
+#include <kernel/mr_timer.h>
 #include <kernel/mr_version.h>
+#include <kernel/mr_workqueue.h>
 
 /** @} */
 
@@ -40,7 +40,7 @@
 #include <libc/mr_compiler.h>
 #include <libc/mr_errno.h>
 #include <libc/mr_malloc.h>
-#include <libc/mr_printf.h>
+#include <libc/mr_sprintf.h>
 #include <libc/mr_scanf.h>
 #include <libc/mr_string.h>
 #include <libc/mr_types.h>

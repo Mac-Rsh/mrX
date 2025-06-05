@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_ASSERT_H__
-#define __MR_ASSERT_H__
+#ifndef __MR_LIBC_ASSERT_H__
+#define __MR_LIBC_ASSERT_H__
 
 #include <mr_config.h>
 #if defined(MR_USE_LIBC_ASSERT)
@@ -71,4 +71,4 @@ extern "C" {
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_ASSERT_H__ */
+#endif /* __MR_LIBC_ASSERT_H__ */

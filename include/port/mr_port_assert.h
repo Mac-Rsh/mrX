@@ -24,6 +24,8 @@
  * @param file The file name.
  * @param line The line number.
  * @param expr The condition.
+ *
+ * @note User implementation.
  */
 extern void mr_port_assert(const char *file, int line, const char *expr);
 

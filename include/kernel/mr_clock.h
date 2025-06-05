@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KCLOCK_H__
-#define __MR_KCLOCK_H__
+#ifndef __MR_KNL_CLOCK_H__
+#define __MR_KNL_CLOCK_H__
 
 #include <libc/mr_errno.h>
 #include <libc/mr_types.h>
@@ -17,7 +17,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup Kclock
+ * @addtogroup Clock
  * @{
  */
 
@@ -26,21 +26,28 @@ typedef mr_uint32_t                     mr_tick_t;
 #define MR_TICK_MAX                     MR_UINT32_MAX
 
 /* Clock hook type */
-typedef void(mr_kclock_hook_t)(void);
+typedef mr_tick_t(mr_clock_hook_t)(void);
 
 /**
  * @brief This function increases the clock tick.
  *
- * @param tick The tick to increase.
+ * @param tick The increased tick.
  */
-void mr_kclock_increase(mr_tick_t tick);
+void mr_clock_increase(mr_tick_t tick);
 
 /**
  * @brief This function gets the clock tick.
  *
- * @return The tick.
+ * @return The current tick.
  */
-mr_tick_t mr_kclock_tick(void);
+mr_tick_t mr_clock_tick(void);
+
+/**
+ * @brief This function gets the clock tick less.
+ *
+ * @return The current tick less.
+ */
+mr_tick_t mr_clock_tickless(void);
 
 /**
  * @brief This function adds a hook to the clock.
@@ -48,7 +55,7 @@ mr_tick_t mr_kclock_tick(void);
  * @param entry The hook entry.
  * @return 0 on success, a negative error code on failure.
  */
-mr_err_t mr_kclock_hook_add(mr_kclock_hook_t *entry);
+mr_err_t mr_clock_hook_add(mr_clock_hook_t *entry);
 
 /** @} */
 
@@ -56,4 +63,4 @@ mr_err_t mr_kclock_hook_add(mr_kclock_hook_t *entry);
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KCLOCK_H__ */
+#endif /* __MR_KNL_CLOCK_H__ */

@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <libc/mr_printf.h>
-#if (!defined(MR_USE_LIBC_PRINTF)) && (!defined(MR_USE_3PARTY_PRINTF))
+#include <libc/mr_sprintf.h>
+#if defined(MR_USE_SPRINTF)
 
 /* Modifier definition */
 #define MOD_ZEROPAD                     (1U << 0)
@@ -211,7 +211,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
     mr_uint64_t num;
     char effector;
 
-    /* Check arguments */
+    /* Check parameter */
     if ((!fmt) || (fmt[0] == '\0')) {
         return 0;
     }
@@ -505,4 +505,4 @@ int mr_sprintf(char *buf, const char *fmt, ...) {
     mr_va_end(args);
     return ret;
 }
-#endif /* !defined(MR_USE_LIBC_PRINTF) && !defined(MR_USE_3PARTY_PRINTF) */
+#endif /* defined(MR_USE_SPRINTF) */

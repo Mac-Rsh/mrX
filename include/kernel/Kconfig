@@ -1,78 +1,81 @@
 menu "Kernel options"
-    # ENTRY
-    config MR_USE_ENTRY
-        bool "Use entry"
-        default n
-        help
-            This option controls whether to use entry.
-    # KCLOCK
-    config MR_CFG_KCLOCK_HOOK_SIZE
-        int "Kclock hook size"
-        default 4
-        range 2 32
-        help
-            This option controls the size of the clock hook.
-    # KOBJECT
-    config MR_CFG_KOBJECT_INAME_SIZE
-        int "Kobject inline name size"
-        default 8
-        range 4 256
-        help
-            This option controls the size of the inline name of the kobject.
-    # KPRINTF
-    config MR_USE_KPRINTF
-        bool "Use kprintf"
-        default y
-        help
-            This option controls whether to use kprintf.
-    config MR_CFG_KPRINTF_BUF_SIZE
-        depends on MR_USE_KPRINTF
-        int "Kprintf buffer size"
-        default 64
-        range 8 65535
-        help
-            This option controls the buffer size of the kprintf.
-    config MR_USE_KPRINTF_SAFE
-        depends on MR_USE_KPRINTF
-        bool "Use kprintf safe"
-        default n
-        help
-            This option controls whether to use kprintf safe.
-    # KTIMER
-    config MR_USE_KTIMER
-        bool "Use ktimer"
-        default y
-        help
-            This option controls whether to use ktimer.
-    config MR_USE_KTIMER_ATTR
-        bool "Use ktimer attribute"
-        default n
-        help
-            This option controls whether to use ktimer attribute.
-    # KWORKQUEUE
-    config MR_USE_KWORKQUEUE
-        depends on MR_USE_KTIMER
-        bool "Use kworkqueue"
-        default y
-        help
-            This option controls whether to use kworkqueue.
-    config MR_USE_KWORKQUEUE_HOOK
-        depends on MR_USE_KWORKQUEUE
-        bool "Use kworkqueue hook"
-        default n
-        help
-            This option controls whether to use kworkqueue hook.
-    # IRQ
-    config MR_USE_IRQ
-        bool "Use irq"
-        default y
-        help
-            This option controls whether to use irq.
-    config MR_CFG_IRQ_TABLE_SIZE
-        depends on MR_USE_IRQ
-        int "Irq table size"
-        default 32
-        range 4 512
-        help
-            This option controls the size of the irq table.
+
+# ==================================
+# ENTRY
+# ==================================
+config MR_USE_ENTRY
+    bool "Use entry"
+    default n
+
+# ==================================
+# CLOCK
+# ==================================
+config MR_CFG_CLOCK_HOOK_SIZE
+    int "Clock hook size"
+    default 2
+    range 2 32
+
+# ==================================
+# PRINTF
+# ==================================
+config MR_USE_PRINTF
+    bool "Use printf"
+    default y
+
+config MR_CFG_PRINTF_BUF_SIZE
+    depends on MR_USE_PRINTF
+    int "Printf buffer size"
+    default 64
+    range 8 65535
+
+config MR_USE_PRINTF_SAFE
+    depends on MR_USE_PRINTF
+    bool "Use printf safe"
+    default n
+
+# ==================================
+# TIMER
+# ==================================
+config MR_USE_TIMER
+    bool "Use timer"
+    default y
+
+# ==================================
+# WORKQUEUE
+# ==================================
+config MR_USE_WORKQUEUE
+    select MR_USE_TIMER
+    bool "Use workqueue"
+    default y
+
+config MR_USE_WORKQUEUE_HOOK
+    depends on MR_USE_WORKQUEUE
+    bool "Use workqueue hook"
+    default n
+
+# ==================================
+# IRQ
+# ==================================
+config MR_USE_IRQ
+    bool "Use irq"
+    default y
+
+config MR_CFG_IRQ_TABLE_SIZE
+    depends on MR_USE_IRQ
+    int "Irq table size"
+    default 32
+    range 4 512
+
+config MR_USE_IRQ_DEFER
+    depends on MR_USE_IRQ
+    select MR_USE_WORKQUEUE
+    bool "Use irq defer"
+    default y
+
+config MR_USE_IRQ_DEFER_HOOK
+    depends on MR_USE_IRQ_DEFER
+    select MR_USE_WORKQUEUE_HOOK
+    bool "Use irq hook"
+    default n
+
 endmenu

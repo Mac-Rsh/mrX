@@ -11,7 +11,11 @@
 
 #include <mr_config.h>
 #if defined(MR_USE_IRQ)
-#include <kernel/mr_kworkqueue.h>
+#if defined(MR_USE_IRQ_DEFER)
+#include <kernel/mr_workqueue.h>
+#else
+#include <kernel/mr_object.h>
+#endif /* defined(MR_USE_IRQ_DEFER) */
 #endif /* defined(MR_USE_IRQ) */
 
 #ifdef __cplusplus
@@ -41,22 +45,31 @@ typedef enum mr_irq_return {
 
 /* Irq operations type */
 typedef struct mr_irq_ops {
-    void (*priority_set)(mr_uint32_t irq, mr_uint8_t priority, void *args);
-    void (*type_set)(mr_uint32_t irq, mr_uint8_t type, void *args);
-    void (*enable)(mr_uint32_t irq, void *args);
-    void (*unmask)(mr_uint32_t irq, void *args);
-    void (*disable)(mr_uint32_t irq, void *args);
-    void (*mask)(mr_uint32_t irq, void *args);
+    void (*priority_set)(mr_uint32_t irq, mr_uint8_t priority, void *param);
+    void (*type_set)(mr_uint32_t irq, mr_uint8_t type, void *param);
+    void (*enable)(mr_uint32_t irq, void *param);
+    void (*unmask)(mr_uint32_t irq, void *param);
+    void (*disable)(mr_uint32_t irq, void *param);
+    void (*mask)(mr_uint32_t irq, void *param);
 } mr_irq_ops_t;
+
+#if defined(MR_USE_IRQ_DEFER_HOOK)
+/* Irq hook type */
+typedef struct mr_irq_defer_hook {
+    void (*suspend)(void *param);
+    void (*wakeup)(void *param);
+    void *param;
+} mr_irq_defer_hook_t;
+#endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 
 /* Irq type */
 typedef struct mr_irq {
-    mr_kobject_t parent;
-    mr_uint32_t irq_start;
-    mr_uint32_t irq_end;
+    mr_object_t parent;
     mr_atomic_t dying;
+    mr_uint32_t i_start;
+    mr_uint32_t i_end;
     mr_irq_ops_t *ops;
-    mr_ptr_t args;
+    mr_ptr_t param;
 } mr_irq_t;
 
 /* Irq action type */
@@ -65,8 +78,10 @@ typedef struct mr_irq_action {
     mr_uint32_t irq;
     mr_ptr_t entry;
     mr_ptr_t owner;
-    mr_kwork_t defer;
+#if defined(MR_USE_IRQ_DEFER)
+    mr_work_t defer;
     mr_ptr_t defer_entry;
+#endif /* defined(MR_USE_IRQ_DEFER) */
 } mr_irq_action_t;
 
 /* Irq descriptor type */
@@ -81,45 +96,30 @@ typedef struct mr_irq_desc {
 /* Irq entry type */
 typedef mr_irq_return_t(mr_irq_entry_t)(mr_uint32_t irq, void *owner);
 
-#if defined(MR_USE_KWORKQUEUE_HOOK)
-/* Irq hook type */
-typedef void(mr_irq_hook_t)(void *args);
-#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
-
-/**
- * @brief This macro function checks if an irq is initialized.
- *
- * @param _irq The irq.
- * @return MR_TRUE if the irq is initialized, MR_FALSE otherwise.
- */
-#define MR_IRQ_IS_INITED(_irq)          MR_KOBJECT_IS_INITED(_irq)
-
 /**
  * @brief This function initializes an irq.
  *
  * @param irq The irq.
- * @param name The irq name.
  * @param irq_start The start irq number.
  * @param irq_end The end irq number.
  * @param ops The irq operations.
- * @param args The irq arguments.
+ * @param param The irq parameter.
  * @return 0 on success, a negative error code on failure.
  */
-mr_err_t mr_irq_init(mr_irq_t *irq, const char *name, mr_uint32_t irq_start,
-                     mr_uint32_t irq_end, mr_irq_ops_t *ops, void *args);
+mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
+                     mr_irq_ops_t *ops, void *param);
 
 /**
  * @brief This function creates an irq.
  *
- * @param name The irq name.
  * @param irq_start The start irq number.
  * @param irq_end The end irq number.
  * @param ops The irq operations.
- * @param args The irq arguments.
+ * @param param The irq parameter.
  * @return The irq on success, MR_NULL on failure.
  */
-mr_irq_t *mr_irq_create(const char *name, mr_uint32_t irq_start,
-                        mr_uint32_t irq_end, mr_irq_ops_t *ops, void *args);
+mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
+                        mr_irq_ops_t *ops, void *param);
 
 /**
  * @brief This function deletes an irq.
@@ -141,6 +141,7 @@ mr_err_t mr_irq_del(mr_irq_t *irq);
 mr_err_t mr_irq_request(mr_uint32_t irq, mr_irq_entry_t *entry, void *owner,
                         mr_uint32_t flags);
 
+#if defined(MR_USE_IRQ_DEFER)
 /**
  * @brief This function requests an irq.
  *
@@ -154,6 +155,7 @@ mr_err_t mr_irq_request(mr_uint32_t irq, mr_irq_entry_t *entry, void *owner,
 mr_err_t mr_irq_defer_request(mr_uint32_t irq, mr_irq_entry_t *entry,
                               void *owner, mr_uint32_t flags,
                               mr_irq_entry_t *defer_entry);
+#endif /* defined(MR_USE_IRQ_DEFER) */
 
 /**
  * @brief This function frees an irq.
@@ -213,50 +215,14 @@ int mr_irq_priority(mr_uint32_t irq);
  */
 mr_irq_return_t mr_irq_handle(mr_uint32_t irq);
 
+#if defined(MR_USE_IRQ_DEFER)
 /**
  * @brief This function execute deferred irq.
  *
  * @note User does not need to call this function.
  */
 void mr_irq_defer_execute(void);
-
-#if defined(MR_USE_KWORKQUEUE_HOOK)
-/**
- * @brief This function set an irq defer wakeup hook.
- *
- * @param hook The irq defer wakeup hook.
- * @return 0 on success, a negative error code on failure.
- *
- * @note Use a semaphore with an initial value of 0 as the hook.
- */
-mr_err_t mr_irq_defer_hook_wakeup_set(mr_irq_hook_t *hook);
-
-/**
- * @brief This function set an irq defer suspend hook.
- *
- * @param hook The irq defer suspend hook.
- * @return 0 on success, a negative error code on failure.
- *
- * @note Use a semaphore with an initial value of 0 as the hook.
- */
-mr_err_t mr_irq_defer_hook_suspend_set(mr_irq_hook_t *hook);
-
-/**
- * @brief This function set an irq defer hook arguments.
- *
- * @param args The irq defer hook arguments.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_irq_defer_hook_args_set(void *args);
-#endif /* defined(MR_USE_KWORKQUEUE_HOOK) */
-
-/**
- * @brief This function find an irq.
- *
- * @param name The irq name.
- * @return The irq on success, MR_NULL on failure.
- */
-mr_irq_t *mr_irq_find(const char *name);
+#endif /* defined(MR_USE_IRQ_DEFER) */
 
 /**
  * @brief This function get an irq.
@@ -265,17 +231,30 @@ mr_irq_t *mr_irq_find(const char *name);
  * @return The irq on success, MR_NULL on failure.
  */
 MR_INLINE mr_irq_t *mr_irq_get(mr_irq_t *irq) {
-    return (mr_irq_t *)mr_kobject_get((mr_kobject_t *)irq);
+    return (mr_irq_t *)mr_object_get((mr_object_t *)irq);
 }
 
 /**
  * @brief This function put an irq.
  *
  * @param irq The irq.
+ * @return MR_TRUE on end of life cycle, MR_FALSE otherwise.
  */
-MR_INLINE void mr_irq_put(mr_irq_t *irq) {
-    mr_kobject_put((mr_kobject_t *)irq);
+MR_INLINE mr_bool_t mr_irq_put(mr_irq_t *irq) {
+    return mr_object_put((mr_object_t *)irq);
 }
+
+#if defined(MR_USE_IRQ_DEFER_HOOK)
+/**
+ * @brief This function set an irq defer hook.
+ *
+ * @param hook The irq defer hook.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note Recommend to use a semaphore with an initial value of 0 as the hook.
+ */
+mr_err_t mr_irq_defer_hook_set(mr_irq_defer_hook_t *hook);
+#endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 #endif /* defined(MR_USE_IRQ) */
 
 /** @} */

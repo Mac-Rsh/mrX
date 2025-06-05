@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_ATOMIC_H__
-#define __MR_ATOMIC_H__
+#ifndef __MR_LIBC_ATOMIC_H__
+#define __MR_LIBC_ATOMIC_H__
 
 #include <mr_config.h>
 #if defined(MR_USE_3PARTY_ATOMIC)
@@ -39,15 +39,15 @@ typedef int                             mr_atomic_t;
 /**
  * @brief This macro function initializes an atomic.
  *
- * @param _val The atomic initial value.
+ * @param _val The initial value.
  */
 #define MR_ATOMIC_INIT(_val)            (_val)
 
 /**
  * @brief This function initializes an atomic.
  *
- * @param atomic The atomic to initialize.
- * @param val The value to initialize.
+ * @param atomic The atomic.
+ * @param val The initial value.
  */
 MR_INLINE void mr_atomic_init(volatile mr_atomic_t *atomic, mr_atomic_t val) {
     /* Init atomic */
@@ -57,8 +57,8 @@ MR_INLINE void mr_atomic_init(volatile mr_atomic_t *atomic, mr_atomic_t val) {
 /**
  * @brief This function loads an atomic.
  *
- * @param atomic The atomic to load.
- * @return The loaded atomic.
+ * @param atomic The atomic.
+ * @return The loaded value.
  */
 MR_INLINE mr_atomic_t mr_atomic_load(volatile mr_atomic_t *atomic) {
     mr_atomic_t tmp;
@@ -83,8 +83,8 @@ MR_INLINE mr_atomic_t mr_atomic_load(volatile mr_atomic_t *atomic) {
 /**
  * @brief This function stores an atomic.
  *
- * @param atomic The atomic to store.
- * @param val The value to store.
+ * @param atomic The atomic..
+ * @param val The stored value.
  */
 MR_INLINE void mr_atomic_store(volatile mr_atomic_t *atomic, mr_atomic_t val) {
     int mask;
@@ -107,9 +107,9 @@ MR_INLINE void mr_atomic_store(volatile mr_atomic_t *atomic, mr_atomic_t val) {
 /**
  * @brief This function exchanges an atomic.
  *
- * @param atomic The atomic to exchange.
- * @param val The value to exchange.
- * @return The exchanged atomic.
+ * @param atomic The atomic.
+ * @param val The exchange value.
+ * @return The exchanged value.
  */
 MR_INLINE mr_atomic_t mr_atomic_exchange(volatile mr_atomic_t *atomic,
                                          mr_atomic_t val) {
@@ -136,8 +136,8 @@ MR_INLINE mr_atomic_t mr_atomic_exchange(volatile mr_atomic_t *atomic,
 /**
  * @brief This function compares and exchanges an atomic.
  *
- * @param atomic The atomic to compare and exchange.
- * @param val The value to compare.
+ * @param atomic The atomic..
+ * @param val The compared value.
  * @param desired The desired value.
  * @return MR_TRUE on success, MR_FALSE on failure.
  */
@@ -173,8 +173,8 @@ MR_INLINE mr_bool_t mr_atomic_compare_exchange(volatile mr_atomic_t *atomic,
 /**
  * @brief This function fetches and adds an atomic.
  *
- * @param atomic The atomic to add.
- * @param val The value to add.
+ * @param atomic The atomic.
+ * @param val The added value.
  * @return The fetched atomic.
  */
 MR_INLINE mr_atomic_t mr_atomic_fetch_add(volatile mr_atomic_t *atomic,
@@ -202,8 +202,8 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_add(volatile mr_atomic_t *atomic,
 /**
  * @brief This function fetches and subtracts an atomic.
  *
- * @param atomic The atomic to subtract.
- * @param val The value to subtract.
+ * @param atomic The atomic.
+ * @param val The subtracted value.
  * @return The fetched atomic.
  */
 MR_INLINE mr_atomic_t mr_atomic_fetch_sub(volatile mr_atomic_t *atomic,
@@ -231,8 +231,8 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_sub(volatile mr_atomic_t *atomic,
 /**
  * @brief This function fetches and ands an atomic.
  *
- * @param atomic The atomic to and.
- * @param val The value to and.
+ * @param atomic The atomic.
+ * @param val The and value.
  * @return The fetched atomic.
  */
 MR_INLINE mr_atomic_t mr_atomic_fetch_and(volatile mr_atomic_t *atomic,
@@ -260,8 +260,8 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_and(volatile mr_atomic_t *atomic,
 /**
  * @brief This function fetches and ors an atomic.
  *
- * @param atomic The atomic to or.
- * @param val The value to or.
+ * @param atomic The atomic.
+ * @param val The or value.
  * @return The fetched atomic.
  */
 MR_INLINE mr_atomic_t mr_atomic_fetch_or(volatile mr_atomic_t *atomic,
@@ -293,4 +293,4 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_or(volatile mr_atomic_t *atomic,
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_ATOMIC_H__ */
+#endif /* __MR_LIBC_ATOMIC_H__ */

@@ -7,7 +7,7 @@
  */
 
 #include <libc/mr_string.h>
-#if (!defined(MR_USE_LIBC_STRING)) && (!defined(MR_USE_3PARTY_STRING))
+#if defined(MR_USE_STRING)
 #include <libc/mr_errno.h>
 
 /* DeBruijn ffs32 */
@@ -29,7 +29,7 @@ void *mr_memccpy(void *dst, const void *src, int c, mr_size_t size) {
     char *d;
 
 #if defined(MR_USE_STRING_SAFE)
-    /* Check arguments */
+    /* Check parameter */
     if ((!dst) || (!src)) {
         return MR_NULL;
     }
@@ -52,7 +52,7 @@ int mr_memcmp(const void *m1, const void *m2, mr_size_t size) {
     const char *s1, *s2;
 
 #if defined(MR_USE_STRING_SAFE)
-    /* Check arguments */
+    /* Check parameter */
     if ((!m1) || (!m2)) {
         return 0;
     }
@@ -76,7 +76,7 @@ void *mr_memcpy(void *dst, const void *src, mr_size_t size) {
     char *d;
 
 #if defined(MR_USE_STRING_SAFE)
-    /* Check arguments */
+    /* Check parameter */
     if ((!dst) || (!src)) {
         return MR_NULL;
     }
@@ -111,7 +111,7 @@ void *mr_memset(void *dst, int c, mr_size_t size) {
     char *d;
 
 #if defined(MR_USE_STRING_SAFE)
-    /* Check arguments */
+    /* Check parameter */
     if (!dst) {
         return MR_NULL;
     }
@@ -122,12 +122,12 @@ void *mr_memset(void *dst, int c, mr_size_t size) {
     pattern |= pattern << 8;
     pattern |= pattern << 16;
     pattern |= pattern << 24;
-#if defined(MR_USE_64BIT)
+#if defined(MR_USE_64BIT_ARCH)
     pattern |= pattern << 32;
     pattern |= pattern << 40;
     pattern |= pattern << 48;
     pattern |= pattern << 56;
-#endif /* defined(MR_USE_64BIT) */
+#endif /* defined(MR_USE_64BIT_ARCH) */
 
     /* Copy unaligned bytes */
     for (d = dst; (size > 0) && ((mr_uintptr_t)d & align); size--) {
@@ -152,7 +152,7 @@ void *mr_memchr(const void *s, int c, mr_size_t size) {
     const char *p;
 
 #if defined(MR_USE_STRING_SAFE)
-    /* Check arguments */
+    /* Check parameter */
     if (!s) {
         return MR_NULL;
     }
@@ -171,7 +171,7 @@ void *mr_memchr(const void *s, int c, mr_size_t size) {
 
 int mr_strcmp(const char *s1, const char *s2) {
 #if defined(MR_USE_STRING_SAFE)
-    /* Check arguments */
+    /* Check parameter */
     if ((!s1) || (!s2)) {
         return 0;
     }
@@ -193,7 +193,7 @@ char *mr_strcpy(char *dst, const char *src) {
     char *d;
 
 #if defined(MR_USE_STRING_SAFE)
-    /* Check arguments */
+    /* Check parameter */
     if ((!dst) || (!src)) {
         return MR_NULL;
     }
@@ -265,7 +265,7 @@ mr_size_t mr_strlen(const char *s) {
     mr_size_t len;
 
 #if defined(MR_USE_STRING_SAFE)
-    /* Check arguments */
+    /* Check parameter */
     if (!s) {
         return 0;
     }
@@ -282,7 +282,7 @@ mr_size_t mr_strnlen(const char *s, mr_size_t size) {
     mr_size_t len;
 
 #if defined(MR_USE_STRING_SAFE)
-    /* Check arguments */
+    /* Check parameter */
     if (!s) {
         return 0;
     }
@@ -316,4 +316,4 @@ char *mr_strchr(const char *s, int c) {
     /* Search bytes */
     return mr_memchr(s, c, mr_strlen(s) + 1);
 }
-#endif /* !defined(MR_USE_LIBC_STRING)) && (!defined(MR_USE_3PARTY_STRING) */
+#endif /* defined(MR_USE_STRING) */

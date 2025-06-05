@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_TYPES_H__
-#define __MR_TYPES_H__
+#ifndef __MR_LIBC_TYPES_H__
+#define __MR_LIBC_TYPES_H__
 
 #include <mr_config.h>
 #if defined(MR_USE_LIBC_TYPES)
@@ -81,15 +81,15 @@ typedef unsigned long long              mr_uint64_t;
 typedef size_t                          mr_size_t;
 #define MR_SIZE_MAX                     SIZE_MAX
 #else
-#if defined(MR_USE_64BIT)
+#if defined(MR_USE_64BIT_ARCH)
 typedef mr_uint64_t                     mr_size_t;
 #define MR_SIZE_MAX                     MR_UINT64_MAX
 #else
 typedef mr_uint32_t                     mr_size_t;
 #define MR_SIZE_MAX                     MR_UINT32_MAX
-#endif /* defined(MR_USE_64BIT) */
+#endif /* defined(MR_USE_64BIT_ARCH) */
 #endif /* defined(MR_USE_LIBC_TYPES) */
-#if defined(MR_USE_64BIT)
+#if defined(MR_USE_64BIT_ARCH)
 typedef mr_int64_t                      mr_ssize_t;
 #define MR_SSIZE_MIN                    MR_INT64_MIN
 #define MR_SSIZE_MAX                    MR_INT64_MAX
@@ -97,7 +97,7 @@ typedef mr_int64_t                      mr_ssize_t;
 typedef mr_int32_t                      mr_ssize_t;
 #define MR_SSIZE_MIN                    MR_INT32_MIN
 #define MR_SSIZE_MAX                    MR_INT32_MAX
-#endif /* defined(MR_USE_64BIT) */
+#endif /* defined(MR_USE_64BIT_ARCH) */
 
 /* Boolean type */
 #if defined(MR_USE_LIBC_TYPES)
@@ -150,4 +150,4 @@ typedef char *                          mr_va_list;
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_TYPES_H__ */
+#endif /* __MR_LIBC_TYPES_H__ */

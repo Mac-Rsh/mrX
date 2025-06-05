@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KSERVICE_H__
-#define __MR_KSERVICE_H__
+#ifndef __MR_KNL_KSERVICE_H__
+#define __MR_KNL_KSERVICE_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,4 +69,4 @@ extern "C" {
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KSERVICE_H__ */
+#endif /* __MR_KNL_KSERVICE_H__ */

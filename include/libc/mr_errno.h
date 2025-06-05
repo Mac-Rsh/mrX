@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_ERRNO_H__
-#define __MR_ERRNO_H__
+#ifndef __MR_LIBC_ERRNO_H__
+#define __MR_LIBC_ERRNO_H__
 
 #include <mr_config.h>
 #if defined(MR_USE_LIBC_ERRNO)
@@ -61,4 +61,4 @@ typedef int                             mr_err_t;
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_ERRNO_H__ */
+#endif /* __MR_LIBC_ERRNO_H__ */

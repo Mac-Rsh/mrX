@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_VERSION_H__
-#define __MR_VERSION_H__
+#ifndef __MR_KNL_VERSION_H__
+#define __MR_KNL_VERSION_H__
 
 /**
  * @addtogroup Version
@@ -49,4 +49,4 @@
 
 /** @} */
 
-#endif /* __MR_VERSION_H__ */
+#endif /* __MR_KNL_VERSION_H__ */

@@ -7,7 +7,7 @@
  */
 
 #include <libc/mr_scanf.h>
-#if (!defined(MR_USE_LIBC_SCANF)) && (!defined(MR_USE_3PARTY_SCANF))
+#if defined(MR_USE_SCANF)
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -15,7 +15,7 @@ int mr_sscanf(const char *buf, const char *fmt, ...) {
     va_list args;
     int ret;
 
-    /* Check arguments */
+    /* Check parameter */
     if ((!buf) || (!fmt) || (fmt[0] == '\0')) {
         return -1;
     }
@@ -26,4 +26,4 @@ int mr_sscanf(const char *buf, const char *fmt, ...) {
     va_end(args);
     return ret;
 }
-#endif /* !defined(MR_USE_LIBC_SCANF) && !defined(MR_USE_3PARTY_SCANF) */
+#endif /* defined(MR_USE_SCANF) */

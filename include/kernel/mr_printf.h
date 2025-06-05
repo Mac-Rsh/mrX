@@ -6,24 +6,24 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KPRINTF_H__
-#define __MR_KPRINTF_H__
+#ifndef __MR_KNL_PRINTF_H__
+#define __MR_KNL_PRINTF_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_KPRINTF)
+#if defined(MR_USE_PRINTF)
 #include <libc/mr_errno.h>
-#endif /* defined(MR_USE_KPRINTF) */
+#endif /* defined(MR_USE_PRINTF) */
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup Kprintf
+ * @addtogroup Printf
  * @{
  */
 
-#if defined(MR_USE_KPRINTF)
+#if defined(MR_USE_PRINTF)
 /**
  * @brief This function prints a formatted string.
  *
@@ -31,8 +31,8 @@ extern "C" {
  * @param ... The arguments.
  * @return The number of characters printed.
  */
-int mr_kprintf(const char *fmt, ...);
-#endif /* defined(MR_USE_KPRINTF) */
+int mr_printf(const char *fmt, ...);
+#endif /* defined(MR_USE_PRINTF) */
 
 /** @} */
 
@@ -40,4 +40,4 @@ int mr_kprintf(const char *fmt, ...);
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KPRINTF_H__ */
+#endif /* __MR_KNL_PRINTF_H__ */

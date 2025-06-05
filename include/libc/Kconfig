@@ -1,156 +1,144 @@
 menu "Libc options"
-    # ASSERT
-    choice
-        prompt "Assertion"
-        default MR_USE_ASSERT
 
-        config MR_USE_LIBC_ASSERT
-            bool "Standard libc assert"
-            help
-              Use the standard libc assert for assertion checks.
+# ==================================
+# ARCH
+# ==================================
+choice
+    prompt "Arch"
+    default MR_USE_32BIT_ARCH
 
-        config MR_USE_3PARTY_ASSERT
-            bool "3rd party assert"
-            help
-              Use a third-party assertion library for assertion checks.
+    config MR_USE_32BIT_ARCH
+        bool "32B"
 
-        config MR_USE_ASSERT
-            bool "Custom assert"
-            help
-              Use a custom assertion implementation for assertion checks.
-    endchoice
-    # ERRNO
-    choice
-        prompt "Errno"
-        default MR_USE_ERRNO
+    config MR_USE_64BIT_ARCH
+        bool "64B"
+endchoice
 
-        config MR_USE_LIBC_ERRNO
-            bool "Standard libc errno"
-            help
-              Use the standard libc errno for error handling.
+# ==================================
+# MALLOC
+# ==================================
+choice
+    prompt "Malloc"
+    default MR_USE_MALLOC
 
-        config MR_USE_3PARTY_ERRNO
-            bool "3rd party errno"
-            help
-              Use a third-party errno library for error handling.
+    config MR_USE_LIBC_MALLOC
+        bool "STD"
 
-        config MR_USE_ERRNO
-            bool "Custom errno"
-            help
-              Use a custom errno implementation for error handling.
-    endchoice
-    # MALLOC
-    choice
-        prompt "Malloc"
-        default MR_USE_MALLOC
+    config MR_USE_3PARTY_MALLOC
+        bool "3RD"
 
-        config MR_USE_LIBC_MALLOC
-            bool "Standard libc malloc"
-            help
-              Use the standard libc malloc for memory allocation.
+    config MR_USE_MALLOC
+        bool "INT"
+endchoice
 
-        config MR_USE_3PARTY_MALLOC
-            bool "3rd party malloc"
-            help
-              Use a third-party malloc library for memory allocation.
+config MR_CFG_HEAP_SIZE
+    depends on !MR_USE_LIBC_MALLOC
+        int "Heap memory size(Bytes)"
+        default 4096
+        range 24 2147483647
 
-        config MR_USE_MALLOC
-            bool "Custom malloc"
-            help
-              Use a custom malloc implementation for memory allocation.
-    endchoice
-    config MR_CFG_HEAP_SIZE
-        depends on !MR_USE_LIBC_MALLOC
-            int "Heap size"
-            default 4096
-            range 24 2147483647
-            help
-              The size of the heap in bytes.
-    # PRINTF
-    choice
-        prompt "Printf"
-        default MR_USE_PRINTF
+# ==================================
+# SPRINTF
+# ==================================
+choice
+    prompt "Sprintf"
+    default MR_USE_SPRINTF
 
-        config MR_USE_LIBC_PRINTF
-            bool "Standard libc printf"
-            help
-              Use the standard libc printf for printing.
+    config MR_USE_LIBC_SPRINTF
+        bool "STD"
 
-        config MR_USE_3PARTY_PRINTF
-            bool "3rd party printf"
-            help
-              Use a third-party printf library for printing.
+    config MR_USE_3PARTY_SPRINTF
+        bool "3RD"
 
-        config MR_USE_PRINTF
-            bool "Custom printf"
-            help
-              Use a custom printf implementation for printing.
-    endchoice
-    # SCANF
-    choice
-        prompt "Scanf"
-        default MR_USE_SCANF
+    config MR_USE_SPRINTF
+        bool "INT"
+endchoice
 
-        config MR_USE_LIBC_SCANF
-            bool "Standard libc scanf"
-            help
-              Use the standard libc scanf for scanf.
+# ==================================
+# ASSERT
+# ==================================
+choice
+    prompt "Assertion"
+    default MR_USE_ASSERT
 
-        config MR_USE_3PARTY_SCANF
-            bool "3rd party scanf"
-            help
-              Use a third-party scanf library for scanf.
+    config MR_USE_LIBC_ASSERT
+        bool "STD"
 
-        config MR_USE_SCANF
-            bool "Custom scanf"
-            help
-              Use a custom scanf implementation for scanf.
-    endchoice
-    # STRING
-    choice
-        prompt "String"
-        default MR_USE_STRING
+    config MR_USE_3PARTY_ASSERT
+        bool "3RD"
 
-        config MR_USE_LIBC_STRING
-            bool "Standard libc string"
-            help
-              Use the standard libc string for string operations.
+    config MR_USE_ASSERT
+        bool "INT"
+endchoice
 
-        config MR_USE_3PARTY_STRING
-            bool "3rd party string"
-            help
-              Use a third-party string library for string operations.
+# ==================================
+# STRING
+# ==================================
+choice
+    prompt "String"
+    default MR_USE_STRING
 
-        config MR_USE_STRING
-            bool "Custom string"
-            help
-              Use a custom string implementation for string operations.
-    endchoice
-    config MR_USE_STRING_SAFE
-        depends on MR_USE_STRING
-            bool "Use string safe"
-            default y
-            help
-              This option controls whether to use string safe(NULL check).
-    # TYPES
-    choice
-        prompt "Types"
-        default MR_USE_TYPES
+    config MR_USE_LIBC_STRING
+        bool "STD"
 
-        config MR_USE_LIBC_TYPES
-            bool "Standard libc types"
-            help
-              Use the standard libc types for custom types.
+    config MR_USE_3PARTY_STRING
+        bool "3RD"
 
-        config MR_USE_TYPES
-            bool "Custom types"
-            help
-              Use a custom type implementation for custom types.
-    endchoice
-    # 64BIT
-    config MR_USE_64BIT
-        bool "Use 64-bit"
-        default n
-        help
-            This option controls whether to use 64-bit.
+    config MR_USE_STRING
+        bool "INT"
+endchoice
+
+config MR_USE_STRING_SAFE
+    depends on MR_USE_STRING
+        bool "Use string null-ptr safety"
+        default y
+
+# ==================================
+# SCANF
+# ==================================
+choice
+    prompt "Scanf"
+    default MR_USE_SCANF
+
+    config MR_USE_LIBC_SCANF
+        bool "STD"
+
+    config MR_USE_3PARTY_SCANF
+        bool "3RD"
+
+    config MR_USE_SCANF
+        bool "INT"
+endchoice
+
+# ==================================
+# TYPES
+# ==================================
+choice
+    prompt "Types"
+    default MR_USE_TYPES
+
+    config MR_USE_LIBC_TYPES
+        bool "STD"
+
+    config MR_USE_TYPES
+        bool "INT"
+endchoice
+
+# ==================================
+# ERRNO
+# ==================================
+choice
+    prompt "Errno"
+    default MR_USE_ERRNO
+
+    config MR_USE_LIBC_ERRNO
+        bool "STD"
+
+    config MR_USE_3PARTY_ERRNO
+        bool "3RD"
+
+    config MR_USE_ERRNO
+        bool "INT"
+endchoice
+
 endmenu

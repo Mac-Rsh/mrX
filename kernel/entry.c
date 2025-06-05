@@ -10,7 +10,7 @@
 #if defined(MR_USE_ENTRY)
 #include <kernel/mr_initcall.h>
 
-MR_INLINE void entry(void) {
+static void entry(void) {
     /* Kernel init */
     mr_kernel_init();
 }
