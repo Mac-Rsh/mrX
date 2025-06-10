@@ -56,6 +56,9 @@ mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t size,
 }
 
 void mr_fifo_free(mr_fifo_t *fifo) {
+    /* Check parameter */
+    MR_ASSERT(fifo != MR_NULL);
+
     /* Check need to free */
     if (!fifo->buf) {
         return;
@@ -68,6 +71,10 @@ void mr_fifo_free(mr_fifo_t *fifo) {
 
 mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data) {
     mr_uint32_t in;
+
+    /* Check parameter */
+    MR_ASSERT(fifo != MR_NULL);
+    MR_ASSERT(data != MR_NULL);
 
     /* Check if fifo is full */
     if (mr_fifo_is_full(fifo)) {
@@ -89,6 +96,10 @@ mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data) {
 mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data) {
     mr_uint32_t out;
 
+    /* Check parameter */
+    MR_ASSERT(fifo != MR_NULL);
+    MR_ASSERT(data != MR_NULL);
+
     /* Check if fifo is empty */
     if (mr_fifo_is_empty(fifo)) {
         return 0;
@@ -108,6 +119,10 @@ mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data) {
 
 mr_uint32_t mr_fifo_in(mr_fifo_t *fifo, const void *buf, mr_uint32_t num) {
     mr_uint32_t avail, num2, in, size, n;
+
+    /* Check parameter */
+    MR_ASSERT(fifo != MR_NULL);
+    MR_ASSERT((buf != MR_NULL) || (num == 0));
 
     /* Limit number */
     avail = mr_fifo_avail(fifo);
@@ -140,6 +155,10 @@ mr_uint32_t mr_fifo_in_overwrite(mr_fifo_t *fifo, const void *buf,
                                  mr_uint32_t num) {
     mr_uint32_t capacity, avail;
 
+    /* Check parameter */
+    MR_ASSERT(fifo != MR_NULL);
+    MR_ASSERT((buf != MR_NULL) || (num == 0));
+
     /* Limit number */
     capacity = fifo->mask + 1;
     if (num > capacity) {
@@ -159,6 +178,10 @@ mr_uint32_t mr_fifo_in_overwrite(mr_fifo_t *fifo, const void *buf,
 
 mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
     mr_uint32_t avail, num2, out, size, n;
+
+    /* Check parameter */
+    MR_ASSERT(fifo != MR_NULL);
+    MR_ASSERT((buf != MR_NULL) || (num == 0));
 
     /* Limit number */
     avail = mr_fifo_len(fifo);

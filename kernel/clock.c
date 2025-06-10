@@ -8,6 +8,7 @@
 
 #include <kernel/mr_clock.h>
 #include <kernel/mr_hook.h>
+#include <libc/mr_assert.h>
 #include <libc/mr_atomic.h>
 
 /* Clock tick */
@@ -67,6 +68,9 @@ mr_tick_t mr_clock_tickless(void) {
 }
 
 mr_err_t mr_clock_hook_add(mr_clock_hook_t *entry) {
+    /* Check parameter */
+    MR_ASSERT(entry != MR_NULL);
+
     /* Add hook to clock */
     return mr_hook_add(&__hook, (mr_ptr_t)entry);
 }

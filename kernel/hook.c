@@ -14,6 +14,10 @@
 static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
 
 void mr_hook_init(mr_hook_t *hook, mr_ptr_t *entry, mr_size_t size) {
+    /* Check parameter */
+    MR_ASSERT(hook != MR_NULL);
+    MR_ASSERT((entry != MR_NULL) || (size == 0));
+
     /* Initialize hook */
     hook->size = entry ? size : 0;
     hook->entry = entry;

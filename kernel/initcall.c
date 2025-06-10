@@ -66,9 +66,9 @@ void mr_user_init(void) {
         return;
     }
 
-    /* Search initcalls */
+    /* Each init calls */
     for (call = start; call <= end; call++) {
-        /* Call initcall entry */
+        /* Call init call entry */
         call->entry();
     }
 }
