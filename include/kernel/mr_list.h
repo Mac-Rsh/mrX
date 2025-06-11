@@ -152,7 +152,7 @@ MR_INLINE void mr_list_move(mr_list_t *entry, mr_list_t *head) {
  */
 MR_INLINE mr_bool_t mr_list_is_empty(mr_list_t *head) {
     /* Check if list is empty */
-    return (head->next == head) ? MR_TRUE : MR_FALSE;
+    return head->next == head;
 }
 
 /**

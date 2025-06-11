@@ -90,7 +90,7 @@ void *mr_memcpy(void *dst, const void *src, mr_size_t size) {
         }
     } else {
         /* Copy aligned bytes */
-        for (d = dst, s = src; (size >= sizeof(mr_uintptr_t));
+        for (d = dst, s = src; size >= sizeof(mr_uintptr_t);
              size -= sizeof(mr_uintptr_t)) {
             *(mr_uintptr_t *)d = *(mr_uintptr_t *)s;
             d += sizeof(mr_uintptr_t);

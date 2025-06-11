@@ -49,13 +49,13 @@ mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
  * @brief This function allocates a fifo.
  *
  * @param fifo The fifo.
- * @param size The buffer size(bytes).
+ * @param num The buffer number.
  * @param elem_size The element size(bytes).
  * @return The element capacity(number).
  *
  * @note The buffer will be aligned up to a power of 2.
  */
-mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t size,
+mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t num,
                           mr_uint32_t elem_size);
 
 /**

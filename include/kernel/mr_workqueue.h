@@ -44,7 +44,7 @@ typedef struct mr_workqueue {
     mr_atomic_t running;
     mr_atomic_t dying;
     mr_list_t t_list;
-    mr_list_t list;
+    mr_list_t r_list;
 #if defined(MR_USE_WORKQUEUE_HOOK)
     mr_workqueue_hook_t hook;
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */

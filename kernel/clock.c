@@ -72,5 +72,5 @@ mr_err_t mr_clock_hook_add(mr_clock_hook_t *entry) {
     MR_ASSERT(entry != MR_NULL);
 
     /* Add hook to clock */
-    return mr_hook_add(&__hook, (mr_ptr_t)entry);
+    return mr_hook_add(&__hook, entry);
 }

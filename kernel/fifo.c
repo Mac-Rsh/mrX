@@ -33,16 +33,17 @@ mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
     return size;
 }
 
-mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t size,
+mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t num,
                           mr_uint32_t elem_size) {
+    mr_uint32_t size;
     void *buf;
 
     /* Check parameter */
     MR_ASSERT(fifo != MR_NULL);
-    MR_ASSERT((size >= 2) && (elem_size > 0) && (elem_size <= size));
+    MR_ASSERT((num > 0) && (elem_size > 0));
 
     /* Align size(up to power of 2) */
-    size = FIFO_ALIGN_POW2_UP(size);
+    size = FIFO_ALIGN_POW2_UP(num * elem_size);
 
     /* Allocate buffer */
     buf = mr_realloc(fifo->buf, size);
@@ -146,7 +147,7 @@ mr_uint32_t mr_fifo_in(mr_fifo_t *fifo, const void *buf, mr_uint32_t num) {
 
     /* Push buffer */
     mr_memcpy((mr_uint8_t *)fifo->buf + in, buf, n);
-    mr_memcpy(fifo->buf, ((mr_uint8_t *)buf) + n, num - n);
+    mr_memcpy(fifo->buf, (mr_uint8_t *)buf + n, num - n);
     fifo->in += num2;
     return num2;
 }
@@ -162,7 +163,7 @@ mr_uint32_t mr_fifo_in_overwrite(mr_fifo_t *fifo, const void *buf,
     /* Limit number */
     capacity = fifo->mask + 1;
     if (num > capacity) {
-        buf = ((mr_uint8_t *)buf) + ((num - capacity) * fifo->elem_size);
+        buf = (mr_uint8_t *)buf + ((num - capacity) * fifo->elem_size);
         num = capacity;
     }
 

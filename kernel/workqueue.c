@@ -73,7 +73,7 @@ static void queue_timer_entry(mr_timer_t *timer, void *param) {
         }
 
         /* Move work to workqueue work list */
-        mr_list_move(&work->list, &queue->list);
+        mr_list_move(&work->list, &queue->r_list);
     }
 
     /* Check if workqueue need set timer tick */
@@ -114,7 +114,7 @@ static mr_err_t workqueue_init(mr_workqueue_t *queue, const mr_class_t *class) {
     mr_atomic_init(&queue->running, MR_FALSE);
     mr_atomic_init(&queue->dying, MR_FALSE);
     mr_list_init(&queue->t_list);
-    mr_list_init(&queue->list);
+    mr_list_init(&queue->r_list);
 #if defined(MR_USE_WORKQUEUE_HOOK)
     queue->hook.suspend = MR_NULL;
     queue->hook.wakeup = MR_NULL;
@@ -201,7 +201,7 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
     MR_ASSERT(MR_OBJECT_CLASS_IS_OR(queue, &__class1, &__class2));
 
     /* Reduce unnecessary lock operations */
-    if (mr_list_is_empty(&queue->list)
+    if (mr_list_is_empty(&queue->r_list)
 #if defined(MR_USE_WORKQUEUE_HOOK)
         && (!queue->hook.suspend)
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
@@ -213,8 +213,8 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
     mask = mr_spinlock_lock_irqsave(&__lock);
 
     /* Check workqueue work list */
-    while (!mr_list_is_empty(&queue->list)) {
-        work = MR_LIST_ENTRY(queue->list.next, mr_work_t, list);
+    while (!mr_list_is_empty(&queue->r_list)) {
+        work = MR_LIST_ENTRY(queue->r_list.next, mr_work_t, list);
 
         /* Remove work from running list */
         mr_list_del(&work->list);
@@ -265,7 +265,7 @@ mr_err_t mr_workqueue_work(mr_workqueue_t *queue, mr_work_t *work) {
     }
 
     /* Add work to running list */
-    mr_list_add(&queue->list, &work->list);
+    mr_list_add(&queue->r_list, &work->list);
     work->queue = queue;
 
     /* Unlock */
@@ -463,8 +463,8 @@ static void queue_del(mr_workqueue_t *queue) {
     }
 
     /* Remove work from workqueue running list */
-    while (!mr_list_is_empty(&queue->list)) {
-        work = MR_LIST_ENTRY(&queue->list.next, mr_work_t, list);
+    while (!mr_list_is_empty(&queue->r_list)) {
+        work = MR_LIST_ENTRY(&queue->r_list.next, mr_work_t, list);
         mr_list_del(&work->list);
     }
 

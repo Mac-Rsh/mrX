@@ -58,7 +58,7 @@ void *mr_malloc(mr_size_t size);
 void mr_free(void *mem);
 
 /**
- * @brief This function returns the usable size of mem.
+ * @brief This function returns the usable size of memory.
  *
  * @param mem The memory.
  * @return The usable size.
