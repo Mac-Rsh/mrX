@@ -9,24 +9,27 @@
 #ifndef __MR_X_H__
 #define __MR_X_H__
 
+#include <mr_config.h>
+
 /**
  * @addtogroup Kernel
  * @{
  */
 
-#include <kernel/mr_initcall.h>
-#include <kernel/mr_clock.h>
-#include <kernel/mr_fifo.h>
-#include <kernel/mr_hook.h>
-#include <kernel/mr_irq.h>
-#include <kernel/mr_list.h>
-#include <kernel/mr_printf.h>
-#include <kernel/mr_ref.h>
-#include <kernel/mr_service.h>
-#include <kernel/mr_spinlock.h>
-#include <kernel/mr_timer.h>
-#include <kernel/mr_version.h>
-#include <kernel/mr_workqueue.h>
+#include <mr-X/mr_clock.h>
+#include <mr-X/mr_fifo.h>
+#include <mr-X/mr_hook.h>
+#include <mr-X/mr_initcall.h>
+#include <mr-X/mr_irq.h>
+#include <mr-X/mr_list.h>
+#include <mr-X/mr_object.h>
+#include <mr-X/mr_printf.h>
+#include <mr-X/mr_ref.h>
+#include <mr-X/mr_service.h>
+#include <mr-X/mr_spinlock.h>
+#include <mr-X/mr_timer.h>
+#include <mr-X/mr_version.h>
+#include <mr-X/mr_workqueue.h>
 
 /** @} */
 
@@ -41,7 +44,7 @@
 #include <libc/mr_errno.h>
 #include <libc/mr_malloc.h>
 #include <libc/mr_sprintf.h>
-#include <libc/mr_scanf.h>
+#include <libc/mr_sscanf.h>
 #include <libc/mr_string.h>
 #include <libc/mr_types.h>
 

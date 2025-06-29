@@ -6,7 +6,7 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <kernel/mr_printf.h>
+#include <mr-X/mr_printf.h>
 #if defined(MR_USE_PRINTF)
 #include <port/mr_port_output.h>
 #include <libc/mr_sprintf.h>
@@ -23,8 +23,8 @@ int mr_printf(const char *fmt, ...) {
 #else
     char *buf;
 #endif /* !defined(MR_USE_PRINTF_SAFE) */
-    mr_size_t output_size;
     mr_va_list args;
+    mr_size_t outsz;
     int ret;
 
     /* Check parameter */
@@ -48,11 +48,11 @@ int mr_printf(const char *fmt, ...) {
         ret = -MR_EINVAL;
         goto _exit;
     } else {
-        output_size = (mr_size_t)ret;
+        outsz = (mr_size_t)ret;
     }
 
     /* Output string */
-    ret = mr_port_output(buf, output_size);
+    ret = mr_port_output(buf, outsz);
 _exit:
 #if defined(MR_USE_PRINTF_SAFE)
     mr_free(buf);

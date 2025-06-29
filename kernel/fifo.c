@@ -6,7 +6,7 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <kernel/mr_fifo.h>
+#include <mr-X/mr_fifo.h>
 #include <libc/mr_assert.h>
 #include <libc/mr_string.h>
 #include <libc/mr_malloc.h>
@@ -17,33 +17,34 @@
 #define FIFO_ALIGN_POW2_DOWN(_size)     (1U << (mr_fls32(_size) - 1))
 
 mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
-                         mr_uint32_t elem_size) {
+                         mr_uint32_t elemsz) {
     /* Check parameter */
     MR_ASSERT((fifo != MR_NULL) && (buf != MR_NULL));
-    MR_ASSERT((size >= 2) && (elem_size > 0) && (elem_size <= size));
+    MR_ASSERT((size >= 2) && (elemsz > 0) && (elemsz <= size));
 
     /* Align size(down to power of 2) */
-    size = FIFO_ALIGN_POW2_DOWN(size / elem_size);
+    size = FIFO_ALIGN_POW2_DOWN(size / elemsz);
 
     /* Init fifo */
     fifo->buf = buf;
     fifo->mask = size - 1;
-    fifo->in = fifo->out = 0;
-    fifo->elem_size = elem_size;
+    mr_atomic_init(&fifo->ridx, 0);
+    mr_atomic_init(&fifo->widx, 0);
+    fifo->elemsz = elemsz;
     return size;
 }
 
 mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t num,
-                          mr_uint32_t elem_size) {
+                          mr_uint32_t elemsz) {
     mr_uint32_t size;
     void *buf;
 
     /* Check parameter */
     MR_ASSERT(fifo != MR_NULL);
-    MR_ASSERT((num > 0) && (elem_size > 0));
+    MR_ASSERT((num > 0) && (elemsz > 0));
 
     /* Align size(up to power of 2) */
-    size = FIFO_ALIGN_POW2_UP(num * elem_size);
+    size = FIFO_ALIGN_POW2_UP(num * elemsz);
 
     /* Allocate buffer */
     buf = mr_realloc(fifo->buf, size);
@@ -53,7 +54,7 @@ mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t num,
     }
 
     /* Init fifo */
-    return mr_fifo_init(fifo, buf, size, elem_size);
+    return mr_fifo_init(fifo, buf, size, elemsz);
 }
 
 void mr_fifo_free(mr_fifo_t *fifo) {
@@ -71,7 +72,7 @@ void mr_fifo_free(mr_fifo_t *fifo) {
 }
 
 mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data) {
-    mr_uint32_t in;
+    mr_uint32_t index;
 
     /* Check parameter */
     MR_ASSERT(fifo != MR_NULL);
@@ -82,20 +83,20 @@ mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data) {
         return 0;
     }
 
-    /* Get in index */
-    in = fifo->in & fifo->mask;
-    if (fifo->elem_size != 1) {
-        in *= fifo->elem_size;
+    /* Get write index */
+    index = (mr_uint32_t)mr_atomic_load(&fifo->widx) & fifo->mask;
+    if (fifo->elemsz != 1) {
+        index *= fifo->elemsz;
     }
 
     /* Push data */
-    mr_memcpy((mr_uint8_t *)fifo->buf + in, data, fifo->elem_size);
-    fifo->in += 1;
+    mr_memcpy((mr_uint8_t *)fifo->buf + index, data, fifo->elemsz);
+    mr_atomic_fetch_add(&fifo->widx, 1);
     return 1;
 }
 
 mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data) {
-    mr_uint32_t out;
+    mr_uint32_t index;
 
     /* Check parameter */
     MR_ASSERT(fifo != MR_NULL);
@@ -106,20 +107,20 @@ mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data) {
         return 0;
     }
 
-    /* Get out index */
-    out = fifo->out & fifo->mask;
-    if (fifo->elem_size != 1) {
-        out *= fifo->elem_size;
+    /* Get read index */
+    index = (mr_uint32_t)mr_atomic_load(&fifo->ridx) & fifo->mask;
+    if (fifo->elemsz != 1) {
+        index *= fifo->elemsz;
     }
 
     /* Pop data */
-    mr_memcpy(data, (mr_uint8_t *)fifo->buf + out, fifo->elem_size);
-    fifo->out += 1;
+    mr_memcpy(data, (mr_uint8_t *)fifo->buf + index, fifo->elemsz);
+    mr_atomic_fetch_add(&fifo->ridx, 1);
     return 1;
 }
 
-mr_uint32_t mr_fifo_in(mr_fifo_t *fifo, const void *buf, mr_uint32_t num) {
-    mr_uint32_t avail, num2, in, size, n;
+mr_uint32_t mr_fifo_write(mr_fifo_t *fifo, const void *buf, mr_uint32_t num) {
+    mr_uint32_t avail, num2, index, size, n;
 
     /* Check parameter */
     MR_ASSERT(fifo != MR_NULL);
@@ -135,36 +136,36 @@ mr_uint32_t mr_fifo_in(mr_fifo_t *fifo, const void *buf, mr_uint32_t num) {
     }
     num2 = num;
 
-    /* Get in index */
-    in = fifo->in & fifo->mask;
+    /* Get write index */
+    index = (mr_uint32_t)mr_atomic_load(&fifo->widx) & fifo->mask;
     size = fifo->mask + 1;
-    if (fifo->elem_size != 1) {
-        in *= fifo->elem_size;
-        size *= fifo->elem_size;
-        num *= fifo->elem_size;
+    if (fifo->elemsz != 1) {
+        index *= fifo->elemsz;
+        size *= fifo->elemsz;
+        num *= fifo->elemsz;
     }
-    n = MR_MIN(num, size - in);
 
     /* Push buffer */
-    mr_memcpy((mr_uint8_t *)fifo->buf + in, buf, n);
+    n = MR_MIN(num, size - index);
+    mr_memcpy((mr_uint8_t *)fifo->buf + index, buf, n);
     mr_memcpy(fifo->buf, (mr_uint8_t *)buf + n, num - n);
-    fifo->in += num2;
+    mr_atomic_fetch_add(&fifo->widx, (mr_atomic_t)num2);
     return num2;
 }
 
-mr_uint32_t mr_fifo_in_overwrite(mr_fifo_t *fifo, const void *buf,
-                                 mr_uint32_t num) {
-    mr_uint32_t capacity, avail;
+mr_uint32_t mr_fifo_overwrite(mr_fifo_t *fifo, const void *buf,
+                              mr_uint32_t num) {
+    mr_uint32_t cap, avail;
 
     /* Check parameter */
     MR_ASSERT(fifo != MR_NULL);
     MR_ASSERT((buf != MR_NULL) || (num == 0));
 
     /* Limit number */
-    capacity = fifo->mask + 1;
-    if (num > capacity) {
-        buf = (mr_uint8_t *)buf + ((num - capacity) * fifo->elem_size);
-        num = capacity;
+    cap = fifo->mask + 1;
+    if (num > cap) {
+        buf = (mr_uint8_t *)buf + ((num - cap) * fifo->elemsz);
+        num = cap;
     }
 
     /* Limit size */
@@ -174,11 +175,11 @@ mr_uint32_t mr_fifo_in_overwrite(mr_fifo_t *fifo, const void *buf,
     }
 
     /* Push buffer */
-    return mr_fifo_in(fifo, buf, num);
+    return mr_fifo_write(fifo, buf, num);
 }
 
 mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
-    mr_uint32_t avail, num2, out, size, n;
+    mr_uint32_t avail, num2, index, size, n;
 
     /* Check parameter */
     MR_ASSERT(fifo != MR_NULL);
@@ -194,18 +195,18 @@ mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
     }
     num2 = num;
 
-    /* Get out index */
-    out = fifo->out & fifo->mask;
+    /* Get read index */
+    index = (mr_uint32_t)mr_atomic_load(&fifo->ridx) & fifo->mask;
     size = fifo->mask + 1;
-    if (fifo->elem_size != 1) {
-        out *= fifo->elem_size;
-        size *= fifo->elem_size;
-        num *= fifo->elem_size;
+    if (fifo->elemsz != 1) {
+        index *= fifo->elemsz;
+        size *= fifo->elemsz;
+        num *= fifo->elemsz;
     }
 
     /* Peek buffer */
-    n = MR_MIN(num, size - out);
-    mr_memcpy(buf, (mr_uint8_t *)fifo->buf + out, n);
+    n = MR_MIN(num, size - index);
+    mr_memcpy(buf, (mr_uint8_t *)fifo->buf + index, n);
     mr_memcpy((mr_uint8_t *)buf + n, fifo->buf, num - n);
     return num2;
 }

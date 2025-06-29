@@ -6,12 +6,12 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KNL_WORKQUEUE_H__
-#define __MR_KNL_WORKQUEUE_H__
+#ifndef __MR_WORKQUEUE_H__
+#define __MR_WORKQUEUE_H__
 
 #include <mr_config.h>
 #if defined(MR_USE_WORKQUEUE)
-#include <kernel/mr_timer.h>
+#include <mr-X/mr_timer.h>
 #endif /* defined(MR_USE_WORKQUEUE) */
 
 #ifdef __cplusplus
@@ -40,11 +40,11 @@ typedef struct mr_workqueue_hook {
 /* Workqueue type */
 typedef struct mr_workqueue {
     mr_object_t parent;
-    mr_timer_t timer;
     mr_atomic_t running;
     mr_atomic_t dying;
-    mr_list_t t_list;
-    mr_list_t r_list;
+    mr_timer_t timer;
+    mr_list_t tlist;
+    mr_list_t list;
 #if defined(MR_USE_WORKQUEUE_HOOK)
     mr_workqueue_hook_t hook;
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
@@ -57,7 +57,7 @@ typedef void(mr_work_entry_t)(struct mr_work *work, void *param);
 typedef struct mr_work {
     mr_list_t list;
     mr_ptr_t queue;
-    mr_tick_t t_tick;
+    mr_tick_t ttick;
     mr_work_entry_t *entry;
     void *param;
 } mr_work_t;
@@ -199,9 +199,6 @@ mr_err_t mr_work_del(mr_work_t *work);
  *
  * @param work The work.
  * @return 0 on success, a negative error code on failure.
- *
- * @note The work must have been worked in a workqueue and has not been manually
- * deleted.
  */
 mr_err_t mr_work_schedule(mr_work_t *work);
 
@@ -211,11 +208,16 @@ mr_err_t mr_work_schedule(mr_work_t *work);
  * @param work The work.
  * @param tick The delay tick.
  * @return 0 on success, a negative error code on failure.
- *
- * @note The work must have been worked in a workqueue and has not been manually
- * deleted.
  */
 mr_err_t mr_work_delayed_schedule(mr_work_t *work, mr_tick_t tick);
+
+/**
+ * @brief This function cancels a work.
+ *
+ * @param work The work.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_work_cancel(mr_work_t *work);
 #endif /* defined(MR_USE_WORKQUEUE) */
 
 /** @} */
@@ -224,4 +226,4 @@ mr_err_t mr_work_delayed_schedule(mr_work_t *work, mr_tick_t tick);
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KNL_WORKQUEUE_H__ */
+#endif /* __MR_WORKQUEUE_H__ */

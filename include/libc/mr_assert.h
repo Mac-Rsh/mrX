@@ -10,13 +10,13 @@
 #define __MR_LIBC_ASSERT_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_LIBC_ASSERT)
+#if defined(MR_USE_ASSERT_LIBC)
 #include <assert.h>
-#elif defined(MR_USE_3PARTY_ASSERT)
+#elif defined(MR_USE_ASSERT_3PARTY)
 #include <3party/libc/mr_assert.h>
 #elif defined(MR_USE_ASSERT)
 #include <port/mr_port_assert.h>
-#endif /* defined(MR_USE_LIBC_ASSERT) */
+#endif /* defined(MR_USE_ASSERT_LIBC) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,10 +28,10 @@ extern "C" {
  */
 
 /* Assert definition */
-#if defined(MR_USE_LIBC_ASSERT)
+#if defined(MR_USE_ASSERT_LIBC)
 #define MR_ASSERT(_expr)                assert(_expr)
 #define MR_PANIC()                      assert(0)
-#elif defined(MR_USE_3PARTY_ASSERT)
+#elif defined(MR_USE_ASSERT_3PARTY)
 /* In '3party/libc/mr_assert.h' */
 #elif defined(MR_USE_ASSERT)
 #define MR_ASSERT(_expr)                                                       \
@@ -55,7 +55,7 @@ extern "C" {
         while (1) {                                                            \
         }                                                                      \
     } while (0)
-#endif /* defined(MR_USE_LIBC_ASSERT) */
+#endif /* defined(MR_USE_ASSERT_LIBC) */
 
 /**
  * @brief This macro function defines a static assert.

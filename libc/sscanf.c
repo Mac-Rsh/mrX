@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <libc/mr_scanf.h>
-#if defined(MR_USE_SCANF)
+#include <libc/mr_sscanf.h>
+#if defined(MR_USE_SSCANF)
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -26,4 +26,4 @@ int mr_sscanf(const char *buf, const char *fmt, ...) {
     va_end(args);
     return ret;
 }
-#endif /* defined(MR_USE_SCANF) */
+#endif /* defined(MR_USE_SSCANF) */

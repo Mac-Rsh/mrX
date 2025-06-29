@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KNL_PRINTF_H__
-#define __MR_KNL_PRINTF_H__
+#ifndef __MR_PRINTF_H__
+#define __MR_PRINTF_H__
 
 #include <mr_config.h>
 #if defined(MR_USE_PRINTF)
@@ -40,4 +40,4 @@ int mr_printf(const char *fmt, ...);
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KNL_PRINTF_H__ */
+#endif /* __MR_PRINTF_H__ */

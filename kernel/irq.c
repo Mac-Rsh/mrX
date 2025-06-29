@@ -6,9 +6,9 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <kernel/mr_irq.h>
+#include <mr-X/mr_irq.h>
 #if defined(MR_USE_IRQ)
-#include <kernel/mr_spinlock.h>
+#include <mr-X/mr_spinlock.h>
 #include <libc/mr_malloc.h>
 
 /* Irq class(static & dynamic) */
@@ -92,7 +92,7 @@ static void irq_table_remove(mr_irq_t *irq) {
     mr_uint32_t i;
 
     /* Remove irq from table */
-    for (i = irq->i_start; i <= irq->i_end; i++) {
+    for (i = irq->istart; i <= irq->iend; i++) {
         /* Free irq actions */
         while (__table[i].action) {
             /* Remove irq action from irq descriptor */
@@ -124,8 +124,8 @@ static mr_err_t irq_init(mr_irq_t *irq, const mr_class_t *class,
 
     /* Init irq */
     mr_atomic_init(&irq->dying, MR_FALSE);
-    irq->i_start = irq_start;
-    irq->i_end = irq_end;
+    irq->istart = irq_start;
+    irq->iend = irq_end;
     irq->ops = ops;
     irq->param = param;
 
@@ -617,7 +617,8 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
     desc->irq->ops->mask(irq, desc->irq->param);
 
     /* Handle irq action */
-    for (action = desc->action; action; action = action->next) {
+    for (ret = MR_IRQ_NONE, action = desc->action; action;
+         action = action->next) {
         /* Check if irq action is being freed */
         if (!action->owner) {
             continue;

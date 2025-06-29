@@ -10,11 +10,11 @@
 #define __MR_LIBC_STRING_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_LIBC_STRING)
+#if defined(MR_USE_STRING_LIBC)
 #include <string.h>
 #else
 #include <libc/mr_types.h>
-#endif /* defined(MR_USE_LIBC_STRING) */
+#endif /* defined(MR_USE_STRING_LIBC) */
 #include <libc/mr_compiler.h>
 
 #ifdef __cplusplus
@@ -27,7 +27,7 @@ extern "C" {
  */
 
 /* String definition */
-#if defined(MR_USE_LIBC_STRING)
+#if defined(MR_USE_STRING_LIBC)
 #define mr_memccpy(_d, _s, _c, _sz)     memccpy(_d, _s, _c, _sz)
 #define mr_memcmp(_m1, _m2, _sz)        memcmp(_m1, _m2, _sz)
 #define mr_memcpy(_d, _s, _sz)          memcpy(_d, _s, _sz)
@@ -164,7 +164,7 @@ char *mr_strncpy(char *dst, const char *src, mr_size_t size);
  * @return The pointer to the first occurrence of c in s, MR_NULL if not found.
  */
 char *mr_strchr(const char *s, int c);
-#endif /* defined(MR_USE_LIBC_STRING) */
+#endif /* defined(MR_USE_STRING_LIBC) */
 
 /**
  * @brief This function returns the index of the first set bit.

@@ -10,12 +10,12 @@
 #define __MR_LIBC_TYPES_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_LIBC_TYPES)
+#if defined(MR_USE_TYPES_LIBC)
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
-#endif /* defined(MR_USE_LIBC_TYPES) */
+#endif /* defined(MR_USE_TYPES_LIBC) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,7 +27,7 @@ extern "C" {
  */
 
 /* Signed integer type */
-#if defined(MR_USE_LIBC_TYPES)
+#if defined(MR_USE_TYPES_LIBC)
 typedef int8_t                          mr_int8_t;
 typedef int16_t                         mr_int16_t;
 typedef int32_t                         mr_int32_t;
@@ -53,10 +53,10 @@ typedef long long                       mr_int64_t;
 #define MR_INT16_MAX                    (32767)
 #define MR_INT32_MAX                    (2147483647)
 #define MR_INT64_MAX                    (9223372036854775807LL)
-#endif /* defined(MR_USE_LIBC_TYPES) */
+#endif /* defined(MR_USE_TYPES_LIBC) */
 
 /* Unsigned integer type */
-#if defined(MR_USE_LIBC_TYPES)
+#if defined(MR_USE_TYPES_LIBC)
 typedef uint8_t                         mr_uint8_t;
 typedef uint16_t                        mr_uint16_t;
 typedef uint32_t                        mr_uint32_t;
@@ -74,22 +74,22 @@ typedef unsigned long long              mr_uint64_t;
 #define MR_UINT16_MAX                   (65535U)
 #define MR_UINT32_MAX                   (4294967295U)
 #define MR_UINT64_MAX                   (18446744073709551615ULL)
-#endif /* defined(MR_USE_LIBC_TYPES) */
+#endif /* defined(MR_USE_TYPES_LIBC) */
 
 /* Size type */
-#if defined(MR_USE_LIBC_TYPES)
+#if defined(MR_USE_TYPES_LIBC)
 typedef size_t                          mr_size_t;
 #define MR_SIZE_MAX                     SIZE_MAX
 #else
-#if defined(MR_USE_64BIT_ARCH)
+#if defined(MR_USE_ARCH_64BIT)
 typedef mr_uint64_t                     mr_size_t;
 #define MR_SIZE_MAX                     MR_UINT64_MAX
 #else
 typedef mr_uint32_t                     mr_size_t;
 #define MR_SIZE_MAX                     MR_UINT32_MAX
-#endif /* defined(MR_USE_64BIT_ARCH) */
-#endif /* defined(MR_USE_LIBC_TYPES) */
-#if defined(MR_USE_64BIT_ARCH)
+#endif /* defined(MR_USE_ARCH_64BIT) */
+#endif /* defined(MR_USE_TYPES_LIBC) */
+#if defined(MR_USE_ARCH_64BIT)
 typedef mr_int64_t                      mr_ssize_t;
 #define MR_SSIZE_MIN                    MR_INT64_MIN
 #define MR_SSIZE_MAX                    MR_INT64_MAX
@@ -97,10 +97,10 @@ typedef mr_int64_t                      mr_ssize_t;
 typedef mr_int32_t                      mr_ssize_t;
 #define MR_SSIZE_MIN                    MR_INT32_MIN
 #define MR_SSIZE_MAX                    MR_INT32_MAX
-#endif /* defined(MR_USE_64BIT_ARCH) */
+#endif /* defined(MR_USE_ARCH_64BIT) */
 
 /* Boolean type */
-#if defined(MR_USE_LIBC_TYPES)
+#if defined(MR_USE_TYPES_LIBC)
 typedef bool                            mr_bool_t;
 #define MR_FALSE                        false
 #define MR_TRUE                         true
@@ -108,10 +108,10 @@ typedef bool                            mr_bool_t;
 typedef int                             mr_bool_t;
 #define MR_FALSE                        ((mr_bool_t)0)
 #define MR_TRUE                         ((mr_bool_t)1)
-#endif /* defined(MR_USE_LIBC_TYPES) */
+#endif /* defined(MR_USE_TYPES_LIBC) */
 
 /* Pointer type */
-#if defined(MR_USE_LIBC_TYPES)
+#if defined(MR_USE_TYPES_LIBC)
 typedef void *                          mr_ptr_t;
 typedef intptr_t                        mr_intptr_t;
 typedef uintptr_t                       mr_uintptr_t;
@@ -121,14 +121,14 @@ typedef void *                          mr_ptr_t;
 typedef mr_ssize_t                      mr_intptr_t;
 typedef mr_size_t                       mr_uintptr_t;
 #define MR_NULL                         ((void *)0)
-#endif /* defined(MR_USE_LIBC_TYPES) */
+#endif /* defined(MR_USE_TYPES_LIBC) */
 
 /* Floating point type */
 typedef float                           mr_f32_t;
 typedef double                          mr_f64_t;
 
 /* Variable argument list type */
-#if defined(MR_USE_LIBC_TYPES)
+#if defined(MR_USE_TYPES_LIBC)
 typedef va_list                         mr_va_list;
 #define mr_va_start(_a, _l)             va_start(_a, _l)
 #define mr_va_arg(_a, _t)               va_arg(_a, _t)
@@ -142,7 +142,7 @@ typedef char *                          mr_va_list;
 #define mr_va_arg(_a, _t)                                                      \
     ((_a) += __mr_va_align(_t), *(_t *)((_a)-__mr_va_align(_t)))
 #define mr_va_end(_a)                   ((_a) = (mr_va_list)0)
-#endif /* defined(MR_USE_LIBC_TYPES) */
+#endif /* defined(MR_USE_TYPES_LIBC) */
 
 /** @} */
 

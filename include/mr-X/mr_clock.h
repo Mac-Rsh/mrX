@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KNL_CLOCK_H__
-#define __MR_KNL_CLOCK_H__
+#ifndef __MR_CLOCK_H__
+#define __MR_CLOCK_H__
 
 #include <libc/mr_errno.h>
 #include <libc/mr_types.h>
@@ -63,4 +63,4 @@ mr_err_t mr_clock_hook_add(mr_clock_hook_t *entry);
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KNL_CLOCK_H__ */
+#endif /* __MR_CLOCK_H__ */

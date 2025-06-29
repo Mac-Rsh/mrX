@@ -6,11 +6,11 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KNL_OBJECT_H__
-#define __MR_KNL_OBJECT_H__
+#ifndef __MR_OBJECT_H__
+#define __MR_OBJECT_H__
 
-#include <kernel/mr_list.h>
-#include <kernel/mr_ref.h>
+#include <mr-X/mr_list.h>
+#include <mr-X/mr_ref.h>
 #include <libc/mr_assert.h>
 #include <libc/mr_errno.h>
 
@@ -36,7 +36,7 @@ typedef struct mr_attr {
     const char *name;
     mr_ssize_t (*show)(struct mr_object *obj, const struct mr_attr *attr,
                        char *buf, mr_size_t size);
-    mr_ssize_t (*store)(struct mr_object *kobj, const struct mr_attr *attr,
+    mr_ssize_t (*store)(struct mr_object *obj, const struct mr_attr *attr,
                         const char *buf, mr_size_t size);
 } mr_attr_t;
 
@@ -189,4 +189,4 @@ mr_ssize_t mr_object_attr_store(mr_object_t *obj, const char *name,
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KNL_OBJECT_H__ */
+#endif /* __MR_OBJECT_H__ */

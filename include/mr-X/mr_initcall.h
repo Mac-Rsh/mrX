@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KNL_INITCALL_H__
-#define __MR_KNL_INITCALL_H__
+#ifndef __MR_INITCALL_H__
+#define __MR_INITCALL_H__
 
 #include <libc/mr_compiler.h>
 
@@ -63,4 +63,4 @@ void mr_user_init(void);
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KNL_INITCALL_H__ */
+#endif /* __MR_INITCALL_H__ */

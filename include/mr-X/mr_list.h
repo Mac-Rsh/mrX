@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KNL_LIST_H__
-#define __MR_KNL_LIST_H__
+#ifndef __MR_LIST_H__
+#define __MR_LIST_H__
 
-#include <kernel/mr_service.h>
+#include <mr-X/mr_service.h>
 #include <libc/mr_compiler.h>
 #include <libc/mr_types.h>
 
@@ -192,4 +192,4 @@ MR_INLINE mr_bool_t mr_list_is_empty(mr_list_t *head) {
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KNL_LIST_H__ */
+#endif /* __MR_LIST_H__ */

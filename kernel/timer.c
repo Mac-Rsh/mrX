@@ -6,9 +6,9 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <kernel/mr_timer.h>
+#include <mr-X/mr_timer.h>
 #if defined(MR_USE_TIMER)
-#include <kernel/mr_spinlock.h>
+#include <mr-X/mr_spinlock.h>
 #include <libc/mr_malloc.h>
 
 /* Timer class(static & dynamic) */
@@ -20,15 +20,15 @@ static const mr_class_t __class2
     = MR_CLASS_INIT("timer", MR_NULL, timer_obj_release2);
 
 /* Timer timing list */
-static mr_list_t __list = MR_LIST_INIT(&__list);
+static mr_list_t __tlist = MR_LIST_INIT(&__tlist);
 /* Timer lock */
 static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
 
 static mr_err_t timer_init(mr_timer_t *timer, const mr_class_t *class,
                            mr_ptr_t entry, mr_ptr_t param, mr_tick_t tick) {
     /* Init timer */
-    mr_list_init(&timer->t_list);
-    timer->i_tick = tick;
+    mr_list_init(&timer->list);
+    timer->itick = tick;
     timer->entry = entry;
     timer->param = param;
 
@@ -76,9 +76,9 @@ static void timer_remove(mr_timer_t *timer) {
     mask = mr_spinlock_lock_irqsave(&__lock);
 
     /* Check if timer is removed */
-    if (!mr_list_is_empty(&timer->t_list)) {
+    if (!mr_list_is_empty(&timer->list)) {
         /* Remove timer from timing list */
-        mr_list_del(&timer->t_list);
+        mr_list_del(&timer->list);
     }
 
     /* Unlock */
@@ -104,25 +104,25 @@ static void timer_insert(mr_timer_t *timer) {
     mr_list_t *l;
 
     /* Set timeout tick */
-    tick = timer->i_tick & ~MR_TIMER_PERIODIC;
-    timer->t_tick = mr_clock_tick() + tick;
+    tick = timer->itick & ~MR_TIMER_PERIODIC;
+    timer->ttick = mr_clock_tick() + tick;
 
     /* Insert timer into timing list */
-    MR_LIST_FOR_EACH(l, &__list) {
-        t = MR_LIST_ENTRY(l, mr_timer_t, t_list);
+    MR_LIST_FOR_EACH(l, &__tlist) {
+        t = MR_LIST_ENTRY(l, mr_timer_t, list);
 
         /* Compare timeout tick */
-        if ((timer->t_tick - t->t_tick) < (MR_TICK_MAX / 2)) {
+        if ((timer->ttick - t->ttick) < (MR_TICK_MAX / 2)) {
             continue;
         }
 
         /* Move timer into position */
-        mr_list_move(&timer->t_list, &t->t_list);
+        mr_list_move(&timer->list, &t->list);
         return;
     }
 
     /* It is the last timer */
-    mr_list_move(&timer->t_list, &__list);
+    mr_list_move(&timer->list, &__tlist);
 }
 
 mr_err_t mr_timer_start(mr_timer_t *timer) {
@@ -159,7 +159,7 @@ mr_tick_t mr_timer_tick(mr_timer_t *timer) {
     MR_ASSERT(MR_OBJECT_CLASS_IS_OR(timer, &__class1, &__class2));
 
     /* Return timer tick */
-    return timer->i_tick;
+    return timer->itick;
 }
 
 mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
@@ -174,12 +174,12 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
     mask = mr_spinlock_lock_irqsave(&__lock);
 
     /* Remove timer from timing list */
-    if (!mr_list_is_empty(&timer->t_list)) {
-        mr_list_del(&timer->t_list);
+    if (!mr_list_is_empty(&timer->list)) {
+        mr_list_del(&timer->list);
     }
 
     /* Set init tick */
-    timer->i_tick = tick;
+    timer->itick = tick;
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__lock, mask);
@@ -216,29 +216,29 @@ static mr_tick_t timer_timeout_check(void) {
     mr_tick_t tickless, tick;
     mr_timer_entry_t *entry;
     mr_timer_t *timer;
-    mr_list_t list;
+    mr_list_t oplist;
     void *param;
     int mask;
 
     /* Init operation list and tick */
-    mr_list_init(&list);
+    mr_list_init(&oplist);
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
 
     /* Check timeout timer */
-    for (tickless = 0, tick = mr_clock_tick(); !mr_list_is_empty(&__list);) {
-        timer = MR_LIST_ENTRY(__list.next, mr_timer_t, t_list);
+    for (tickless = 0, tick = mr_clock_tick(); !mr_list_is_empty(&__tlist);) {
+        timer = MR_LIST_ENTRY(__tlist.next, mr_timer_t, list);
 
         /* Check timeout tick */
-        if ((tick - timer->t_tick) >= (MR_TICK_MAX / 2)) {
+        if ((tick - timer->ttick) >= (MR_TICK_MAX / 2)) {
             /* There will be no timeout timer after that */
-            tickless = timer->t_tick - tick;
+            tickless = timer->ttick - tick;
             break;
         }
 
         /* Move timer into operation list */
-        mr_list_move(&timer->t_list, &list);
+        mr_list_move(&timer->list, &oplist);
 
         /* Save timer entry and param */
         entry = (mr_timer_entry_t *)timer->entry;
@@ -254,13 +254,13 @@ static mr_tick_t timer_timeout_check(void) {
         mask = mr_spinlock_lock_irqsave(&__lock);
 
         /* Check that the timer has not been moved */
-        if (mr_list_is_empty(&list)) {
+        if (mr_list_is_empty(&oplist)) {
             /* Timer is no longer yours to operate */
             continue;
         }
 
         /* Tick is periodic */
-        if (timer->i_tick & MR_TIMER_PERIODIC) {
+        if (timer->itick & MR_TIMER_PERIODIC) {
             /* Restart timer */
             timer_insert(timer);
         }

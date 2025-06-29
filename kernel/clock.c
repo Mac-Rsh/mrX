@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <kernel/mr_clock.h>
-#include <kernel/mr_hook.h>
+#include <mr-X/mr_clock.h>
+#include <mr-X/mr_hook.h>
 #include <libc/mr_assert.h>
 #include <libc/mr_atomic.h>
 

@@ -6,13 +6,13 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KNL_TIMER_H__
-#define __MR_KNL_TIMER_H__
+#ifndef __MR_TIMER_H__
+#define __MR_TIMER_H__
 
 #include <mr_config.h>
 #if defined(MR_USE_TIMER)
-#include <kernel/mr_object.h>
-#include <kernel/mr_clock.h>
+#include <mr-X/mr_object.h>
+#include <mr-X/mr_clock.h>
 #endif /* defined(MR_USE_TIMER) */
 
 #ifdef __cplusplus
@@ -31,9 +31,9 @@ extern "C" {
 /* Timer type */
 typedef struct mr_timer {
     mr_object_t parent;
-    mr_list_t t_list;
-    mr_tick_t i_tick;
-    mr_tick_t t_tick;
+    mr_tick_t itick;
+    mr_tick_t ttick;
+    mr_list_t list;
     mr_ptr_t entry;
     mr_ptr_t param;
 } mr_timer_t;
@@ -134,4 +134,4 @@ MR_INLINE mr_bool_t mr_timer_put(mr_timer_t *timer) {
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KNL_TIMER_H__ */
+#endif /* __MR_TIMER_H__ */

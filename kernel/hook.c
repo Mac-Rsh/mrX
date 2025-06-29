@@ -6,29 +6,20 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <kernel/mr_spinlock.h>
-#include <kernel/mr_hook.h>
+#include <mr-X/mr_spinlock.h>
+#include <mr-X/mr_hook.h>
 #include <libc/mr_assert.h>
 
 /* Hook lock */
 static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
-
-void mr_hook_init(mr_hook_t *hook, mr_ptr_t *entry, mr_size_t size) {
-    /* Check parameter */
-    MR_ASSERT(hook != MR_NULL);
-    MR_ASSERT((entry != MR_NULL) || (size == 0));
-
-    /* Initialize hook */
-    hook->entry = entry;
-    hook->size = size;
-    hook->next = 0;
-}
 
 mr_err_t mr_hook_add(mr_hook_t *hook, mr_ptr_t entry) {
     mr_err_t ret;
     int mask;
 
     /* Check parameter */
+    MR_ASSERT(hook != MR_NULL);
+    MR_ASSERT((hook->entry != MR_NULL) || (hook->size == 0));
     MR_ASSERT(entry != MR_NULL);
 
     /* Lock hook */

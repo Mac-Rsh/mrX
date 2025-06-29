@@ -10,23 +10,23 @@
 #define __MR_LIBC_SPRINTF_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_LIBC_SPRINTF)
+#if defined(MR_USE_SPRINTF_LIBC)
 #include <stdio.h>
 #else
 #include <libc/mr_types.h>
-#endif /* defined(MR_USE_LIBC_SPRINTF) */
+#endif /* defined(MR_USE_SPRINTF_LIBC) */
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup Printf
+ * @addtogroup Sprintf
  * @{
  */
 
 /* Printf definition */
-#if defined(MR_USE_LIBC_SPRINTF)
+#if defined(MR_USE_SPRINTF_LIBC)
 #define mr_vsnprintf(_b, _s, _f, _a)    vsnprintf(_b, _s, _f, _a)
 #define mr_vsprintf(_b, _f, _a)         vsprintf(_b, _f, _a)
 #define mr_snprintf(_b, _s, _f, ...)    snprintf(_b, _s, _f, __VA_ARGS__)
@@ -73,7 +73,7 @@ int mr_snprintf(char *buf, mr_size_t size, const char *fmt, ...);
  * @return The characters printed number on success, -1 on error.
  */
 int mr_sprintf(char *buf, const char *fmt, ...);
-#endif /* defined(MR_USE_LIBC_SPRINTF) */
+#endif /* defined(MR_USE_SPRINTF_LIBC) */
 
 /** @} */
 

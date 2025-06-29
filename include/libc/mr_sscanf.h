@@ -6,25 +6,25 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_LIBC_SCANF_H__
-#define __MR_LIBC_SCANF_H__
+#ifndef __MR_LIBC_SSCANF_H__
+#define __MR_LIBC_SSCANF_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_LIBC_SCANF)
+#if defined(MR_USE_SSCANF_LIBC)
 #include <stdio.h>
-#endif /* defined(MR_USE_LIBC_SCANF) */
+#endif /* defined(MR_USE_SSCANF_LIBC) */
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup Scanf
+ * @addtogroup Sscanf
  * @{
  */
 
 /* Scanf definition */
-#if defined(MR_USE_LIBC_SCANF)
+#if defined(MR_USE_SSCANF_LIBC)
 #define mr_sscanf(_b, _fmt, ...)        sscanf(_b, _fmt, __VA_ARGS__)
 #else
 /**
@@ -36,7 +36,7 @@ extern "C" {
  * @return The characters scanned number on success, -1 on error.
  */
 int mr_sscanf(const char *buf, const char *fmt, ...);
-#endif /* defined(MR_USE_LIBC_SCANF) */
+#endif /* defined(MR_USE_SSCANF_LIBC) */
 
 /** @} */
 
@@ -44,4 +44,4 @@ int mr_sscanf(const char *buf, const char *fmt, ...);
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_LIBC_SCANF_H__ */
+#endif /* __MR_LIBC_SSCANF_H__ */

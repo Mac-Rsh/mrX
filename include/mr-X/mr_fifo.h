@@ -6,12 +6,11 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KNL_FIFO_H__
-#define __MR_KNL_FIFO_H__
+#ifndef __MR_FIFO_H__
+#define __MR_FIFO_H__
 
-#include <kernel/mr_service.h>
-#include <libc/mr_compiler.h>
-#include <libc/mr_types.h>
+#include <mr-X/mr_service.h>
+#include <libc/mr_atomic.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,9 +25,8 @@ extern "C" {
 typedef struct mr_fifo {
     mr_uint8_t *buf;
     mr_uint32_t mask;
-    mr_uint32_t elem_size;
-    volatile mr_uint32_t in;
-    volatile mr_uint32_t out;
+    mr_uint32_t elemsz;
+    mr_atomic_t ridx, widx;
 } mr_fifo_t;
 
 /**
@@ -37,26 +35,25 @@ typedef struct mr_fifo {
  * @param fifo The fifo.
  * @param buf The buffer.
  * @param size The buffer size(bytes).
- * @param elem_size The element size(bytes).
+ * @param elemsz The element size(bytes).
  * @return The element capacity(number).
  *
  * @note The buffer will be aligned down to a power of 2.
  */
 mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
-                         mr_uint32_t elem_size);
+                         mr_uint32_t elemsz);
 
 /**
  * @brief This function allocates a fifo.
  *
  * @param fifo The fifo.
  * @param num The buffer number.
- * @param elem_size The element size(bytes).
+ * @param elemsz The element size(bytes).
  * @return The element capacity(number).
  *
  * @note The buffer will be aligned up to a power of 2.
  */
-mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t num,
-                          mr_uint32_t elem_size);
+mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t num, mr_uint32_t elemsz);
 
 /**
  * @brief This function frees a fifo.
@@ -91,7 +88,7 @@ mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data);
  * @param num The buffer number.
  * @return The actual pushed element number.
  */
-mr_uint32_t mr_fifo_in(mr_fifo_t *fifo, const void *buf, mr_uint32_t num);
+mr_uint32_t mr_fifo_write(mr_fifo_t *fifo, const void *buf, mr_uint32_t num);
 
 /**
  * @brief This function puts data to a fifo with overwrite.
@@ -101,8 +98,8 @@ mr_uint32_t mr_fifo_in(mr_fifo_t *fifo, const void *buf, mr_uint32_t num);
  * @param num The buffer number.
  * @return The actual pushed element number.
  */
-mr_uint32_t mr_fifo_in_overwrite(mr_fifo_t *fifo, const void *buf,
-                                 mr_uint32_t num);
+mr_uint32_t mr_fifo_overwrite(mr_fifo_t *fifo, const void *buf,
+                              mr_uint32_t num);
 
 /**
  * @brief This function peeks data from a fifo.
@@ -122,10 +119,11 @@ mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num);
  * @param num The buffer number.
  * @return The actual popped element number.
  */
-MR_INLINE mr_uint32_t mr_fifo_out(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
+MR_INLINE mr_uint32_t mr_fifo_read(mr_fifo_t *fifo, void *buf,
+                                   mr_uint32_t num) {
     /* Pop buffer */
     num = mr_fifo_peek(fifo, buf, num);
-    fifo->out += num;
+    mr_atomic_fetch_add(&fifo->ridx, (mr_atomic_t)num);
     return num;
 }
 
@@ -136,8 +134,12 @@ MR_INLINE mr_uint32_t mr_fifo_out(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
  * @return The element number.
  */
 MR_INLINE mr_uint32_t mr_fifo_len(mr_fifo_t *fifo) {
+    mr_uint32_t ridx, widx;
+
     /* Get fifo element number */
-    return fifo->in - fifo->out;
+    ridx = (mr_uint32_t)mr_atomic_load(&fifo->ridx);
+    widx = (mr_uint32_t)mr_atomic_load(&fifo->widx);
+    return widx - ridx;
 }
 
 /**
@@ -149,7 +151,8 @@ MR_INLINE mr_uint32_t mr_fifo_len(mr_fifo_t *fifo) {
  */
 MR_INLINE mr_uint32_t mr_fifo_skip(mr_fifo_t *fifo, mr_uint32_t num) {
     /* Skip buffer */
-    fifo->out += MR_MIN(num, mr_fifo_len(fifo));
+    num = MR_MIN(num, mr_fifo_len(fifo));
+    mr_atomic_fetch_add(&fifo->ridx, (mr_atomic_t)num);
     return num;
 }
 
@@ -171,7 +174,8 @@ MR_INLINE mr_uint32_t mr_fifo_avail(mr_fifo_t *fifo) {
  */
 MR_INLINE void mr_fifo_reset(mr_fifo_t *fifo) {
     /* Reset fifo */
-    fifo->in = fifo->out = 0;
+    mr_atomic_store(&fifo->ridx, 0);
+    mr_atomic_store(&fifo->widx, 0);
 }
 
 /**
@@ -181,8 +185,12 @@ MR_INLINE void mr_fifo_reset(mr_fifo_t *fifo) {
  * @return MR_TRUE on empty, MR_FALSE otherwise.
  */
 MR_INLINE mr_bool_t mr_fifo_is_empty(mr_fifo_t *fifo) {
+    mr_uint32_t ridx, widx;
+
     /* Check if fifo is empty */
-    return fifo->in == fifo->out;
+    ridx = (mr_uint32_t)mr_atomic_load(&fifo->ridx);
+    widx = (mr_uint32_t)mr_atomic_load(&fifo->widx);
+    return ridx == widx;
 }
 
 /**
@@ -202,4 +210,4 @@ MR_INLINE mr_bool_t mr_fifo_is_full(mr_fifo_t *fifo) {
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KNL_FIFO_H__ */
+#endif /* __MR_FIFO_H__ */

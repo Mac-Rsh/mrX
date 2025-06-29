@@ -5,12 +5,12 @@ menu "Libc options"
 # ==================================
 choice
     prompt "Arch"
-    default MR_USE_32BIT_ARCH
+    default MR_USE_ARCH_32BIT
 
-    config MR_USE_32BIT_ARCH
+    config MR_USE_ARCH_32BIT
         bool "32B"
 
-    config MR_USE_64BIT_ARCH
+    config MR_USE_ARCH_64BIT
         bool "64B"
 endchoice
 
@@ -21,10 +21,10 @@ choice
     prompt "Malloc"
     default MR_USE_MALLOC
 
-    config MR_USE_LIBC_MALLOC
+    config MR_USE_MALLOC_LIBC
         bool "STD"
 
-    config MR_USE_3PARTY_MALLOC
+    config MR_USE_MALLOC_3PARTY
         bool "3RD"
 
     config MR_USE_MALLOC
@@ -32,7 +32,7 @@ choice
 endchoice
 
 config MR_CFG_HEAP_SIZE
-    depends on !MR_USE_LIBC_MALLOC
+    depends on !MR_USE_MALLOC_LIBC
         int "Heap memory size(Bytes)"
         default 4096
         range 24 2147483647
@@ -44,10 +44,10 @@ choice
     prompt "Sprintf"
     default MR_USE_SPRINTF
 
-    config MR_USE_LIBC_SPRINTF
+    config MR_USE_SPRINTF_LIBC
         bool "STD"
 
-    config MR_USE_3PARTY_SPRINTF
+    config MR_USE_SPRINTF_3PARTY
         bool "3RD"
 
     config MR_USE_SPRINTF
@@ -61,10 +61,10 @@ choice
     prompt "Assertion"
     default MR_USE_ASSERT
 
-    config MR_USE_LIBC_ASSERT
+    config MR_USE_ASSERT_LIBC
         bool "STD"
 
-    config MR_USE_3PARTY_ASSERT
+    config MR_USE_ASSERT_3PARTY
         bool "3RD"
 
     config MR_USE_ASSERT
@@ -78,10 +78,10 @@ choice
     prompt "String"
     default MR_USE_STRING
 
-    config MR_USE_LIBC_STRING
+    config MR_USE_STRING_LIBC
         bool "STD"
 
-    config MR_USE_3PARTY_STRING
+    config MR_USE_STRING_3PARTY
         bool "3RD"
 
     config MR_USE_STRING
@@ -94,19 +94,19 @@ config MR_USE_STRING_SAFE
         default y
 
 # ==================================
-# SCANF
+# SSCANF
 # ==================================
 choice
-    prompt "Scanf"
-    default MR_USE_SCANF
+    prompt "Sscanf"
+    default MR_USE_SSCANF
 
-    config MR_USE_LIBC_SCANF
+    config MR_USE_SSCANF_LIBC
         bool "STD"
 
-    config MR_USE_3PARTY_SCANF
+    config MR_USE_SSCANF_3PARTY
         bool "3RD"
 
-    config MR_USE_SCANF
+    config MR_USE_SSCANF
         bool "INT"
 endchoice
 
@@ -117,7 +117,7 @@ choice
     prompt "Types"
     default MR_USE_TYPES
 
-    config MR_USE_LIBC_TYPES
+    config MR_USE_TYPES_LIBC
         bool "STD"
 
     config MR_USE_TYPES
@@ -131,10 +131,10 @@ choice
     prompt "Errno"
     default MR_USE_ERRNO
 
-    config MR_USE_LIBC_ERRNO
+    config MR_USE_ERRNO_LIBC
         bool "STD"
 
-    config MR_USE_3PARTY_ERRNO
+    config MR_USE_ERRNO_3PARTY
         bool "3RD"
 
     config MR_USE_ERRNO

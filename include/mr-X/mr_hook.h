@@ -6,9 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KNL_HOOK_H__
-#define __MR_KNL_HOOK_H__
+#ifndef __MR_HOOK_H__
+#define __MR_HOOK_H__
 
+#include <libc/mr_compiler.h>
 #include <libc/mr_errno.h>
 #include <libc/mr_types.h>
 
@@ -46,7 +47,12 @@ typedef struct mr_hook {
  *
  * @note The size is the entry number.
  */
-void mr_hook_init(mr_hook_t *hook, mr_ptr_t *entry, mr_size_t size);
+MR_INLINE void mr_hook_init(mr_hook_t *hook, mr_ptr_t *entry, mr_size_t size) {
+    /* Initialize hook */
+    hook->entry = entry;
+    hook->size = size;
+    hook->next = 0;
+}
 
 /**
  * @brief This function add an entry to the hook.
@@ -76,4 +82,4 @@ mr_err_t mr_hook_add(mr_hook_t *hook, mr_ptr_t entry);
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KNL_HOOK_H__ */
+#endif /* __MR_HOOK_H__ */

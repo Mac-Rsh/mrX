@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_KNL_REF_H__
-#define __MR_KNL_REF_H__
+#ifndef __MR_REF_H__
+#define __MR_REF_H__
 
 #include <libc/mr_atomic.h>
 
@@ -89,4 +89,4 @@ MR_INLINE mr_bool_t mr_ref_put(mr_ref_t *ref, mr_ref_release_t *release) {
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_KNL_REF_H__ */
+#endif /* __MR_REF_H__ */

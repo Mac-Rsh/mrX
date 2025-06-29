@@ -8,7 +8,7 @@
 
 #include <mr_config.h>
 #if defined(MR_USE_ENTRY)
-#include <kernel/mr_initcall.h>
+#include <mr-X/mr_initcall.h>
 
 static void entry(void) {
     /* Kernel init */

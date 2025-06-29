@@ -107,7 +107,7 @@ void *mr_memcpy(void *dst, const void *src, mr_size_t size) {
 
 void *mr_memset(void *dst, int c, mr_size_t size) {
     const mr_uint8_t align = sizeof(mr_uintptr_t) - 1;
-    mr_uintptr_t pattern;
+    mr_uintptr_t pat;
     char *d;
 
 #if defined(MR_USE_STRING_SAFE)
@@ -118,16 +118,16 @@ void *mr_memset(void *dst, int c, mr_size_t size) {
 #endif /* defined(MR_USE_STRING_SAFE) */
 
     /* Make pattern(aligned) */
-    pattern = (mr_uint8_t)c;
-    pattern |= pattern << 8;
-    pattern |= pattern << 16;
-    pattern |= pattern << 24;
-#if defined(MR_USE_64BIT_ARCH)
-    pattern |= pattern << 32;
-    pattern |= pattern << 40;
-    pattern |= pattern << 48;
-    pattern |= pattern << 56;
-#endif /* defined(MR_USE_64BIT_ARCH) */
+    pat = (mr_uint8_t)c;
+    pat |= pat << 8;
+    pat |= pat << 16;
+    pat |= pat << 24;
+#if defined(MR_USE_ARCH_64BIT)
+    pat |= pat << 32;
+    pat |= pat << 40;
+    pat |= pat << 48;
+    pat |= pat << 56;
+#endif /* defined(MR_USE_ARCH_64BIT) */
 
     /* Copy unaligned bytes */
     for (d = dst; (size > 0) && ((mr_uintptr_t)d & align); size--) {
@@ -136,7 +136,7 @@ void *mr_memset(void *dst, int c, mr_size_t size) {
 
     /* Copy aligned bytes */
     while (size >= sizeof(mr_uintptr_t)) {
-        *(mr_uintptr_t *)d = pattern;
+        *(mr_uintptr_t *)d = pat;
         d += sizeof(mr_uintptr_t);
         size -= sizeof(mr_uintptr_t);
     }

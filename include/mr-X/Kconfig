@@ -75,7 +75,7 @@ config MR_USE_IRQ_DEFER
 config MR_USE_IRQ_DEFER_HOOK
     depends on MR_USE_IRQ_DEFER
     select MR_USE_WORKQUEUE_HOOK
-    bool "Use irq hook"
+    bool "Use irq defer hook"
     default n
 
 endmenu

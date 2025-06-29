@@ -12,9 +12,9 @@
 #include <mr_config.h>
 #if defined(MR_USE_IRQ)
 #if defined(MR_USE_IRQ_DEFER)
-#include <kernel/mr_workqueue.h>
+#include <mr-X/mr_workqueue.h>
 #else
-#include <kernel/mr_object.h>
+#include <mr-X/mr_object.h>
 #endif /* defined(MR_USE_IRQ_DEFER) */
 #endif /* defined(MR_USE_IRQ) */
 
@@ -66,8 +66,8 @@ typedef struct mr_irq_defer_hook {
 typedef struct mr_irq {
     mr_object_t parent;
     mr_atomic_t dying;
-    mr_uint32_t i_start;
-    mr_uint32_t i_end;
+    mr_uint32_t istart;
+    mr_uint32_t iend;
     mr_irq_ops_t *ops;
     mr_ptr_t param;
 } mr_irq_t;
