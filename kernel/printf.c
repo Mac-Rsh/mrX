@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024, MacRsh
+ * @copyright (c) 2024-2025, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *

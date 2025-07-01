@@ -13,7 +13,7 @@ config MR_USE_ENTRY
 config MR_CFG_CLOCK_HOOK_SIZE
     int "Clock hook size"
     default 2
-    range 2 32
+    range 2 128
 
 # ==================================
 # PRINTF
@@ -64,7 +64,7 @@ config MR_CFG_IRQ_TABLE_SIZE
     depends on MR_USE_IRQ
     int "Irq table size"
     default 32
-    range 4 512
+    range 4 1024
 
 config MR_USE_IRQ_DEFER
     depends on MR_USE_IRQ

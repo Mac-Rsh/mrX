@@ -33,7 +33,7 @@ endchoice
 
 config MR_CFG_HEAP_SIZE
     depends on !MR_USE_MALLOC_LIBC
-        int "Heap memory size(Bytes)"
+        int "Heap memory size"
         default 4096
         range 24 2147483647
 
