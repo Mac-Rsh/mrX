@@ -38,6 +38,23 @@ config MR_CFG_HEAP_SIZE
         range 24 2147483647
 
 # ==================================
+# ASSERT
+# ==================================
+choice
+    prompt "Assertion"
+    default MR_USE_ASSERT
+
+    config MR_USE_ASSERT_LIBC
+        bool "STD"
+
+    config MR_USE_ASSERT_3PARTY
+        bool "3RD"
+
+    config MR_USE_ASSERT
+        bool "INT"
+endchoice
+
+# ==================================
 # SPRINTF
 # ==================================
 choice
@@ -55,19 +72,19 @@ choice
 endchoice
 
 # ==================================
-# ASSERT
+# SSCANF
 # ==================================
 choice
-    prompt "Assertion"
-    default MR_USE_ASSERT
+    prompt "Sscanf"
+    default MR_USE_SSCANF
 
-    config MR_USE_ASSERT_LIBC
+    config MR_USE_SSCANF_LIBC
         bool "STD"
 
-    config MR_USE_ASSERT_3PARTY
+    config MR_USE_SSCANF_3PARTY
         bool "3RD"
 
-    config MR_USE_ASSERT
+    config MR_USE_SSCANF
         bool "INT"
 endchoice
 
@@ -92,23 +109,6 @@ config MR_USE_STRING_SAFE
     depends on MR_USE_STRING
         bool "Use string null-ptr safety"
         default y
-
-# ==================================
-# SSCANF
-# ==================================
-choice
-    prompt "Sscanf"
-    default MR_USE_SSCANF
-
-    config MR_USE_SSCANF_LIBC
-        bool "STD"
-
-    config MR_USE_SSCANF_3PARTY
-        bool "3RD"
-
-    config MR_USE_SSCANF
-        bool "INT"
-endchoice
 
 # ==================================
 # TYPES

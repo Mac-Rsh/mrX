@@ -114,6 +114,7 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick);
  * @return The timer on success, MR_NULL on failure.
  */
 MR_INLINE mr_timer_t *mr_timer_get(mr_timer_t *timer) {
+    /* Get timer reference */
     return (mr_timer_t *)mr_object_get((mr_object_t *)timer);
 }
 
@@ -124,6 +125,7 @@ MR_INLINE mr_timer_t *mr_timer_get(mr_timer_t *timer) {
  * @return MR_TRUE on end of life cycle, MR_FALSE otherwise.
  */
 MR_INLINE mr_bool_t mr_timer_put(mr_timer_t *timer) {
+    /* Put timer reference */
     return mr_object_put((mr_object_t *)timer);
 }
 #endif /* defined(MR_USE_TIMER) */

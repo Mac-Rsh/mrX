@@ -231,6 +231,7 @@ void mr_irq_defer_execute(void);
  * @return The irq on success, MR_NULL on failure.
  */
 MR_INLINE mr_irq_t *mr_irq_get(mr_irq_t *irq) {
+    /* Get irq reference */
     return (mr_irq_t *)mr_object_get((mr_object_t *)irq);
 }
 
@@ -241,6 +242,7 @@ MR_INLINE mr_irq_t *mr_irq_get(mr_irq_t *irq) {
  * @return MR_TRUE on end of life cycle, MR_FALSE otherwise.
  */
 MR_INLINE mr_bool_t mr_irq_put(mr_irq_t *irq) {
+    /* Put irq reference */
     return mr_object_put((mr_object_t *)irq);
 }
 

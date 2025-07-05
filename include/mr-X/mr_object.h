@@ -28,9 +28,6 @@ struct mr_object;
 /* Object magic number */
 #define MR_OBJECT_MAGIC                 (0x6d722d58U)
 
-/* Object release type */
-typedef void(mr_object_release_t)(struct mr_object *obj);
-
 /* Attribute type */
 typedef struct mr_attr {
     const char *name;
@@ -39,6 +36,9 @@ typedef struct mr_attr {
     mr_ssize_t (*store)(struct mr_object *obj, const struct mr_attr *attr,
                         const char *buf, mr_size_t size);
 } mr_attr_t;
+
+/* Object release type */
+typedef void(mr_object_release_t)(struct mr_object *obj);
 
 /* Class type */
 typedef struct mr_class {

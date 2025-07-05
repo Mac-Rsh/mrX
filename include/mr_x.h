@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024, MacRsh
+ * @copyright (c) 2024-2025, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -16,6 +16,7 @@
  * @{
  */
 
+#include <mr-X/async/mr_async.h>
 #include <mr-X/mr_clock.h>
 #include <mr-X/mr_fifo.h>
 #include <mr-X/mr_hook.h>

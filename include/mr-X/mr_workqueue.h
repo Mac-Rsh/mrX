@@ -50,17 +50,18 @@ typedef struct mr_workqueue {
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 } mr_workqueue_t;
 
-/* Work entry type */
-typedef void(mr_work_entry_t)(struct mr_work *work, void *param);
-
 /* Work type */
 typedef struct mr_work {
+    mr_object_t parent;
     mr_list_t list;
     mr_ptr_t queue;
-    mr_tick_t ttick;
-    mr_work_entry_t *entry;
-    void *param;
+    mr_tick_t tick;
+    mr_ptr_t entry;
+    mr_ptr_t param;
 } mr_work_t;
+
+/* Work entry type */
+typedef void(mr_work_entry_t)(struct mr_work *work, void *param);
 
 /**
  * @brief This function initializes a workqueue.
@@ -120,6 +121,7 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
  * @return The workqueue on success, MR_NULL on failure.
  */
 MR_INLINE mr_workqueue_t *mr_workqueue_get(mr_workqueue_t *queue) {
+    /* Get workqueue reference */
     return (mr_workqueue_t *)mr_object_get((mr_object_t *)queue);
 }
 
@@ -130,6 +132,7 @@ MR_INLINE mr_workqueue_t *mr_workqueue_get(mr_workqueue_t *queue) {
  * @return MR_TRUE on end of life cycle, MR_FALSE otherwise.
  */
 MR_INLINE mr_bool_t mr_workqueue_put(mr_workqueue_t *queue) {
+    /* Put workqueue reference */
     return mr_object_put((mr_object_t *)queue);
 }
 
@@ -148,19 +151,6 @@ mr_err_t mr_workqueue_hook_set(mr_workqueue_t *queue,
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
 /**
- * @brief This macro function initializes a work.
- *
- * @param _work The work.
- * @param _entry The work entry.
- * @param _param The entry parameter.
- */
-#define MR_WORK_INIT(_work, _entry, _param)                                    \
-    {                                                                          \
-        .list = MR_LIST_ENTRY_INIT(&(_work)->list), .queue = MR_NULL,          \
-        .entry = (_entry), .param = (_param)                                   \
-    }
-
-/**
  * @brief This function initializes a work.
  *
  * @param work The work.
@@ -171,12 +161,13 @@ mr_err_t mr_workqueue_hook_set(mr_workqueue_t *queue,
 mr_err_t mr_work_init(mr_work_t *work, mr_work_entry_t *entry, void *param);
 
 /**
- * @brief This macro function checks if a work is initialized.
+ * @brief This function creates a work.
  *
- * @param _work The work.
- * @return MR_TRUE if the work is initialized, MR_FALSE otherwise.
+ * @param entry The work entry.
+ * @param param The entry parameter.
+ * @return The work on success, MR_NULL on failure.
  */
-#define MR_WORK_IS_INITED(_work)        ((_work)->entry != MR_NULL)
+mr_work_t *mr_work_create(mr_work_entry_t *entry, void *param);
 
 /**
  * @brief This function deletes a work.
@@ -218,6 +209,37 @@ mr_err_t mr_work_delayed_schedule(mr_work_t *work, mr_tick_t tick);
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_work_cancel(mr_work_t *work);
+
+/**
+ * @brief This function binds a work to a workqueue.
+ *
+ * @param work The work.
+ * @param queue The workqueue.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_work_bind(mr_work_t *work, mr_workqueue_t *queue);
+
+/**
+ * @brief This function gets a work.
+ *
+ * @param work The work.
+ * @return The work on success, MR_NULL on failure.
+ */
+MR_INLINE mr_work_t *mr_work_get(mr_work_t *work) {
+    /* Get work reference */
+    return (mr_work_t *)mr_object_get((mr_object_t *)work);
+}
+
+/**
+ * @brief This function puts a work.
+ *
+ * @param work The work.
+ * @return MR_TRUE on end of life cycle, MR_FALSE otherwise.
+ */
+MR_INLINE mr_bool_t mr_work_put(mr_work_t *work) {
+    /* Put work reference */
+    return mr_object_put((mr_object_t *)work);
+}
 #endif /* defined(MR_USE_WORKQUEUE) */
 
 /** @} */

@@ -78,4 +78,16 @@ config MR_USE_IRQ_DEFER_HOOK
     bool "Use irq defer hook"
     default n
 
+# ==================================
+# ASYNC
+# ==================================
+config MR_USE_ASYNC
+    select MR_USE_WORKQUEUE
+    bool "Use async"
+    default y
+
+if MR_USE_ASYNC
+rsource "async/Kconfig"
+endif
+
 endmenu
