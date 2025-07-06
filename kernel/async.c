@@ -6,7 +6,7 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/async/mr_async.h>
+#include <mr-X/mr_async.h>
 #if defined(MR_USE_ASYNC)
 #include <mr-X/mr_spinlock.h>
 #include <libc/mr_malloc.h>
@@ -153,7 +153,7 @@ mr_err_t mr_await_complete(mr_await_t *await) {
         /* Remove async from waiting list */
         mr_list_del(&async->list);
 
-        /* Force resume async */
+        /* Force resume async(it might be running a timer) */
         mr_work_cancel(&async->work);
         mr_work_schedule(&async->work);
     }
@@ -254,11 +254,8 @@ static void async_remove(mr_async_t *async) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
 
-    /* Check if async is removed */
-    if (!mr_list_is_empty(&async->list)) {
-        /* Remove async from waiting list */
-        mr_list_del(&async->list);
-    }
+    /* Remove async from waiting list */
+    mr_list_del(&async->list);
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__lock, mask);

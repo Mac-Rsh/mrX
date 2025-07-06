@@ -543,11 +543,8 @@ static void work_remove(mr_work_t *work) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
 
-    /* Check if work is running */
-    if (MR_WORK_IS_RUNNING(work)) {
-        /* Remove work from running list */
-        mr_list_del(&work->list);
-    }
+    /* Remove work from running list */
+    mr_list_del(&work->list);
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__lock, mask);

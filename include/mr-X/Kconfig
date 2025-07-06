@@ -86,8 +86,9 @@ config MR_USE_ASYNC
     bool "Use async"
     default y
 
-if MR_USE_ASYNC
-rsource "async/Kconfig"
-endif
+config MR_USE_ASYNC_SYNC
+    depends on MR_USE_ASYNC
+    bool "Use async sync"
+    default n
 
 endmenu

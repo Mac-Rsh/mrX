@@ -139,6 +139,22 @@ mr_async_t *mr_async_create(mr_async_entry_t *entry, void *param);
 mr_err_t mr_async_del(mr_async_t *async);
 
 /**
+ * @brief This macro function runs an async.
+ *
+ * @param _async The async.
+ * @param _queue The workqueue.
+ */
+#define mr_async_run(_async, _queue)                                           \
+    mr_workqueue_work(_queue, &(_async)->work)
+
+/**
+ * @brief This macro function checks if an async is waiting.
+ *
+ * @param _async The async.
+ */
+#define MR_ASYNC_IS_WAITING(_async)     (!mr_list_is_empty(&(_async)->list))
+
+/**
  * @brief This function cancels an async.
  *
  * @param async The async.
@@ -149,15 +165,6 @@ mr_err_t mr_async_del(mr_async_t *async);
 mr_err_t mr_async_cancel(mr_async_t *async);
 
 /**
- * @brief This macro function runs an async.
- *
- * @param _async The async.
- * @param _queue The workqueue.
- */
-#define mr_async_run(_async, _queue)                                           \
-    mr_workqueue_work(_queue, &(_async)->work)
-
-/**
  * @brief This macro function waits for an async.
  *
  * @param _async The async.
@@ -166,6 +173,7 @@ mr_err_t mr_async_cancel(mr_async_t *async);
 #define mr_async_wait_async(_async, _wait_async)                               \
     mr_await_wait(&(_wait_async)->await, _async)
 
+#if defined(MR_USE_ASYNC_SYNC)
 /**
  * @brief This macro function begins an async.
  *
@@ -188,29 +196,6 @@ mr_err_t mr_async_cancel(mr_async_t *async);
     while (0)
 
 /**
- * @brief This macro function checks if an async is waiting.
- *
- * @param _async The async.
- */
-#define MR_ASYNC_IS_WAITING(_async)     (!mr_list_is_empty(&(_async)->list))
-
-/**
- * @brief This macro function suspends an async.
- *
- * @param _async The async.
- *
- * @note It can only be used between 'mr_async_begin' and 'mr_async_end'.
- */
-#define mr_async_suspend(_async)        mr_work_cancel(&(_async)->work)
-
-/**
- * @brief This macro function resumes an async.
- *
- * @param _async The async.
- */
-#define mr_async_resume(_async)         mr_work_schedule(&(_async)->work)
-
-/**
  * @brief This macro function yields an async.
  *
  * @param _async The async.
@@ -219,7 +204,7 @@ mr_err_t mr_async_cancel(mr_async_t *async);
  */
 #define mr_async_yield(_async)                                                 \
     do {                                                                       \
-        mr_async_resume(_async);                                               \
+        mr_work_schedule(&(_async)->work);                                     \
         (_async)->label = __LINE__;                                            \
         return;                                                                \
         case __LINE__:;                                                        \
@@ -282,6 +267,7 @@ mr_err_t mr_async_cancel(mr_async_t *async);
                 mr_async_cancel(_async);                                       \
             }                                                                  \
     } while (0)
+#endif /* defined(MR_USE_ASYNC_SYNC) */
 
 /**
  * @brief This function gets an async.

@@ -16,7 +16,7 @@
  * @{
  */
 
-#include <mr-X/async/mr_async.h>
+#include <mr-X/mr_async.h>
 #include <mr-X/mr_clock.h>
 #include <mr-X/mr_fifo.h>
 #include <mr-X/mr_hook.h>

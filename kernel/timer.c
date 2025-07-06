@@ -75,11 +75,8 @@ static void timer_remove(mr_timer_t *timer) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
 
-    /* Check if timer is removed */
-    if (!mr_list_is_empty(&timer->list)) {
-        /* Remove timer from timing list */
-        mr_list_del(&timer->list);
-    }
+    /* Remove timer from timing list */
+    mr_list_del(&timer->list);
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__lock, mask);
@@ -174,9 +171,7 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
     mask = mr_spinlock_lock_irqsave(&__lock);
 
     /* Remove timer from timing list */
-    if (!mr_list_is_empty(&timer->list)) {
-        mr_list_del(&timer->list);
-    }
+    mr_list_del(&timer->list);
 
     /* Set init tick */
     timer->itick = tick;
