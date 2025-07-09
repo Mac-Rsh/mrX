@@ -15,6 +15,26 @@ choice
 endchoice
 
 # ==================================
+# ASSERT
+# ==================================
+choice
+    prompt "Assertion"
+    default MR_USE_ASSERT
+
+    config MR_USE_ASSERT_LIBC
+        bool "STD"
+
+    config MR_USE_ASSERT_3PARTY
+        bool "3RD"
+
+    config MR_USE_ASSERT
+        bool "INT"
+
+    config MR_USE_ASSERT_NONE
+        bool "NONE"
+endchoice
+
+# ==================================
 # MALLOC
 # ==================================
 choice
@@ -36,23 +56,6 @@ config MR_CFG_HEAP_SIZE
         int "Heap memory size"
         default 4096
         range 24 2147483647
-
-# ==================================
-# ASSERT
-# ==================================
-choice
-    prompt "Assertion"
-    default MR_USE_ASSERT
-
-    config MR_USE_ASSERT_LIBC
-        bool "STD"
-
-    config MR_USE_ASSERT_3PARTY
-        bool "3RD"
-
-    config MR_USE_ASSERT
-        bool "INT"
-endchoice
 
 # ==================================
 # SPRINTF
@@ -108,7 +111,24 @@ endchoice
 config MR_USE_STRING_SAFE
     depends on MR_USE_STRING
         bool "Use string null-ptr safety"
-        default y
+        default n
+
+# ==================================
+# ATOMIC
+# ==================================
+choice
+    prompt "Atomic"
+    default MR_USE_ATOMIC
+
+    config MR_USE_ATOMIC_LIBC
+        bool "STD"
+
+    config MR_USE_ATOMIC_3PARTY
+        bool "3RD"
+
+    config MR_USE_ATOMIC
+        bool "INT"
+endchoice
 
 # ==================================
 # TYPES

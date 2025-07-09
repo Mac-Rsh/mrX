@@ -280,7 +280,8 @@ mr_err_t mr_async_cancel(mr_async_t *async) {
     MR_ASSERT((async != MR_NULL) && MR_OBJECT_IS_INITED(async));
     MR_ASSERT(MR_OBJECT_CLASS_IS_OR(async, &__async_class1, &__async_class2));
 
-    /* Remove async */
+    /* Cancel async */
+    mr_work_cancel(&async->work);
     async_remove(async);
     return 0;
 }

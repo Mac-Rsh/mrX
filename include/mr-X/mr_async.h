@@ -139,13 +139,13 @@ mr_async_t *mr_async_create(mr_async_entry_t *entry, void *param);
 mr_err_t mr_async_del(mr_async_t *async);
 
 /**
- * @brief This macro function runs an async.
+ * @brief This macro function binds an async to a workqueue.
  *
  * @param _async The async.
  * @param _queue The workqueue.
  */
-#define mr_async_run(_async, _queue)                                           \
-    mr_workqueue_work(_queue, &(_async)->work)
+#define mr_async_bind(_async, _queue)                                          \
+    mr_workqueue_bind(_queue, &(_async)->work)
 
 /**
  * @brief This macro function checks if an async is waiting.
@@ -169,11 +169,22 @@ mr_err_t mr_async_cancel(mr_async_t *async);
  *
  * @param _async The async.
  * @param _wait_async The async to wait.
+ *
+ * @note It can generate asynchronous behaviors.
  */
 #define mr_async_wait_async(_async, _wait_async)                               \
     mr_await_wait(&(_wait_async)->await, _async)
 
 #if defined(MR_USE_ASYNC_SYNC)
+/**
+ * @brief This macro function runs an async.
+ *
+ * @param _async The async.
+ * @param _queue The workqueue.
+ */
+#define mr_async_run(_async, _queue)                                           \
+    mr_workqueue_work(_queue, &(_async)->work)
+
 /**
  * @brief This macro function begins an async.
  *

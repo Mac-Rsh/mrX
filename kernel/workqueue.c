@@ -372,7 +372,7 @@ mr_err_t mr_workqueue_hook_set(mr_workqueue_t *queue,
                                mr_workqueue_hook_t *hook) {
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLASS_IS_OR(queue, &__class1, &__class2));
+    MR_ASSERT(MR_OBJECT_CLASS_IS_OR(queue, &__queue_class1, &__queue_class2));
     MR_ASSERT(hook != MR_NULL);
 
     /* Set workqueue hook */

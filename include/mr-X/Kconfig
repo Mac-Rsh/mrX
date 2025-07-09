@@ -15,12 +15,17 @@ config MR_CFG_CLOCK_HOOK_SIZE
     default 2
     range 2 128
 
+config MR_CFG_TICK_PER_SECOND
+    int "Tick per-second"
+    default 1000
+    range 1 2147483647
+
 # ==================================
 # PRINTF
 # ==================================
 config MR_USE_PRINTF
     bool "Use printf"
-    default y
+    default n
 
 config MR_CFG_PRINTF_BUF_SIZE
     depends on MR_USE_PRINTF

@@ -21,6 +21,11 @@ extern "C" {
  * @{
  */
 
+/* Clock tick per-second definition */
+#if !defined(MR_CFG_TICK_PER_SECOND)
+#define MR_CFG_TICK_PER_SECOND          (1000)
+#endif /* !defined(MR_CFG_TICK_PER_SECOND) */
+
 /* Clock type */
 typedef mr_uint32_t                     mr_tick_t;
 #define MR_TICK_MAX                     MR_UINT32_MAX

@@ -10,15 +10,15 @@
 #define __MR_LIBC_ATOMIC_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_3PARTY_ATOMIC)
+#if defined(MR_USE_ATOMIC_LIBC)
+#include <stdatomic.h>
+#elif defined(MR_USE_3PARTY_ATOMIC)
 #include <3party/libc/mr_atomic.h>
 #else
+#include <port/mr_port_irq.h>
+#endif /* defined(MR_USE_3PARTY_ATOMIC) */
 #include <libc/mr_compiler.h>
 #include <libc/mr_types.h>
-#if !defined(__ATOMIC_SEQ_CST)
-#include <port/mr_port_irq.h>
-#endif /* !defined(__ATOMIC_SEQ_CST) */
-#endif /* defined(MR_USE_3PARTY_ATOMIC) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,7 +30,28 @@ extern "C" {
  */
 
 /* Atomic definition */
-#if defined(MR_USE_3PARTY_ATOMIC)
+#if defined(MR_USE_ATOMIC_LIBC)
+typedef atomic_int                      mr_atomic_t;
+#define MR_ATOMIC_INIT(_val)            ATOMIC_VAR_INIT(_val)
+#define mr_atomic_init(_a, _val)        atomic_init(_a, _val)
+#define mr_atomic_load(_a)                                                     \
+    atomic_load_explicit(_a, memory_order_seq_cst)
+#define mr_atomic_store(_a, _val)                                              \
+    atomic_store_explicit(_a, _val, memory_order_seq_cst)
+#define mr_atomic_exchange(_a, _val)                                           \
+    atomic_exchange_explicit(_a, _val, memory_order_seq_cst)
+#define mr_atomic_compare_exchange(_a, _val, _desired)                         \
+    atomic_compare_exchange_strong_explicit(                                   \
+        _a, _val, _desired, memory_order_seq_cst, memory_order_seq_cst)
+#define mr_atomic_fetch_add(_a, _val)                                          \
+    atomic_fetch_add_explicit(_a, _val, memory_order_seq_cst)
+#define mr_atomic_fetch_sub(_a, _val)                                          \
+    atomic_fetch_sub_explicit(_a, _val, memory_order_seq_cst)
+#define mr_atomic_fetch_and(_a, _val)                                          \
+    atomic_fetch_and_explicit(_a, _val, memory_order_seq_cst)
+#define mr_atomic_fetch_or(_a, _val)                                           \
+    atomic_fetch_or_explicit(_a, _val, memory_order_seq_cst)
+#elif defined(MR_USE_3PARTY_ATOMIC)
 /* In '3party/libc/mr_atomic.h' */
 #else
 /* Atomic type */
@@ -64,10 +85,6 @@ MR_INLINE mr_atomic_t mr_atomic_load(volatile mr_atomic_t *atomic) {
     mr_atomic_t tmp;
     int mask;
 
-#if defined(__ATOMIC_SEQ_CST)
-    MR_UNUSED(mask);
-    tmp = __atomic_load_n(atomic, __ATOMIC_SEQ_CST);
-#else
     /* Disable interrupt */
     mask = mr_port_irq_save();
 
@@ -76,7 +93,6 @@ MR_INLINE mr_atomic_t mr_atomic_load(volatile mr_atomic_t *atomic) {
 
     /* Enable interrupt */
     mr_port_irq_restore(mask);
-#endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
 }
 
@@ -89,10 +105,6 @@ MR_INLINE mr_atomic_t mr_atomic_load(volatile mr_atomic_t *atomic) {
 MR_INLINE void mr_atomic_store(volatile mr_atomic_t *atomic, mr_atomic_t val) {
     int mask;
 
-#if defined(__ATOMIC_SEQ_CST)
-    MR_UNUSED(mask);
-    __atomic_store_n(atomic, val, __ATOMIC_SEQ_CST);
-#else
     /* Disable interrupt */
     mask = mr_port_irq_save();
 
@@ -101,7 +113,6 @@ MR_INLINE void mr_atomic_store(volatile mr_atomic_t *atomic, mr_atomic_t val) {
 
     /* Enable interrupt */
     mr_port_irq_restore(mask);
-#endif /* defined(__ATOMIC_SEQ_CST) */
 }
 
 /**
@@ -116,10 +127,6 @@ MR_INLINE mr_atomic_t mr_atomic_exchange(volatile mr_atomic_t *atomic,
     mr_atomic_t tmp;
     int mask;
 
-#if defined(__ATOMIC_SEQ_CST)
-    MR_UNUSED(mask);
-    tmp = __atomic_exchange_n(atomic, val, __ATOMIC_SEQ_CST);
-#else
     /* Disable interrupt */
     mask = mr_port_irq_save();
 
@@ -129,7 +136,6 @@ MR_INLINE mr_atomic_t mr_atomic_exchange(volatile mr_atomic_t *atomic,
 
     /* Enable interrupt */
     mr_port_irq_restore(mask);
-#endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
 }
 
@@ -147,11 +153,6 @@ MR_INLINE mr_bool_t mr_atomic_compare_exchange(volatile mr_atomic_t *atomic,
     mr_bool_t tmp;
     int mask;
 
-#if defined(__ATOMIC_SEQ_CST)
-    MR_UNUSED(mask);
-    tmp = __atomic_compare_exchange_n(atomic, val, desired, MR_FALSE,
-                                      __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
-#else
     /* Disable interrupt */
     mask = mr_port_irq_save();
 
@@ -166,7 +167,6 @@ MR_INLINE mr_bool_t mr_atomic_compare_exchange(volatile mr_atomic_t *atomic,
 
     /* Enable interrupt */
     mr_port_irq_restore(mask);
-#endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
 }
 
@@ -182,10 +182,6 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_add(volatile mr_atomic_t *atomic,
     mr_atomic_t tmp;
     int mask;
 
-#if defined(__ATOMIC_SEQ_CST)
-    MR_UNUSED(mask);
-    tmp = __atomic_fetch_add(atomic, val, __ATOMIC_SEQ_CST);
-#else
     /* Disable interrupt */
     mask = mr_port_irq_save();
 
@@ -195,7 +191,6 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_add(volatile mr_atomic_t *atomic,
 
     /* Enable interrupt */
     mr_port_irq_restore(mask);
-#endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
 }
 
@@ -211,10 +206,6 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_sub(volatile mr_atomic_t *atomic,
     mr_atomic_t tmp;
     int mask;
 
-#if defined(__ATOMIC_SEQ_CST)
-    MR_UNUSED(mask);
-    tmp = __atomic_fetch_sub(atomic, val, __ATOMIC_SEQ_CST);
-#else
     /* Disable interrupt */
     mask = mr_port_irq_save();
 
@@ -224,7 +215,6 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_sub(volatile mr_atomic_t *atomic,
 
     /* Enable interrupt */
     mr_port_irq_restore(mask);
-#endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
 }
 
@@ -240,10 +230,6 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_and(volatile mr_atomic_t *atomic,
     mr_atomic_t tmp;
     int mask;
 
-#if defined(__ATOMIC_SEQ_CST)
-    MR_UNUSED(mask);
-    tmp = __atomic_fetch_and(atomic, val, __ATOMIC_SEQ_CST);
-#else
     /* Disable interrupt */
     mask = mr_port_irq_save();
 
@@ -253,7 +239,6 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_and(volatile mr_atomic_t *atomic,
 
     /* Enable interrupt */
     mr_port_irq_restore(mask);
-#endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
 }
 
@@ -269,10 +254,6 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_or(volatile mr_atomic_t *atomic,
     mr_atomic_t tmp;
     int mask;
 
-#if defined(__ATOMIC_SEQ_CST)
-    MR_UNUSED(mask);
-    tmp = __atomic_fetch_or(atomic, val, __ATOMIC_SEQ_CST);
-#else
     /* Disable interrupt */
     mask = mr_port_irq_save();
 
@@ -282,7 +263,6 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_or(volatile mr_atomic_t *atomic,
 
     /* Enable interrupt */
     mr_port_irq_restore(mask);
-#endif /* defined(__ATOMIC_SEQ_CST) */
     return tmp;
 }
 #endif /* defined(MR_USE_3PARTY_ATOMIC) */

@@ -1,0 +1,68 @@
+menu "Board options"
+
+# ==================================
+# BOARD
+# ==================================
+config MR_USE_BOARD
+    def_bool y
+
+# ==================================
+# SERIES
+# ==================================
+choice
+    prompt "Series"
+    default MR_USE_SERIES_V30X
+
+    config MR_USE_SERIES_V00X
+        bool "V00X"
+
+    config MR_USE_SERIES_V10X
+        bool "V10X"
+
+    config MR_USE_SERIES_V20X
+        bool "V20X"
+
+    config MR_USE_SERIES_V30X
+        bool "V30X"
+endchoice
+
+# ==================================
+# SYSTICK
+# ==================================
+config MR_CFG_WCH_SYSTICK_IRQ_PRIORITY
+    int "Systick irq priority"
+    default 1
+    range 0 15
+
+# ==================================
+# NVIC
+# ==================================
+config MR_CFG_WCH_IRQ_DEFER_PRIORITY
+    int "Defer irq priority"
+    default 2
+    range MR_CFG_WCH_SYSTICK_IRQ_PRIORITY 15
+
+config MR_CFG_WCH_IRQ_BEGIN
+    int "IRQ begin"
+    default 16
+    range 2 MR_CFG_IRQ_TABLE_SIZE
+
+config MR_CFG_WCH_IRQ_END
+    int "IRQ end"
+    default 38  if MR_USE_SERIES_V00X
+    default 59  if MR_USE_SERIES_V10X
+    default 69  if MR_USE_SERIES_V20X
+    default 103 if MR_USE_SERIES_V30X
+    range MR_CFG_WCH_IRQ_BEGIN MR_CFG_IRQ_TABLE_SIZE
+
+if MR_CFG_WCH_IRQ_END=MR_CFG_IRQ_TABLE_SIZE
+    comment "IRQ size exceed IRQ table, adjust 'Irq table size'"
+endif
+
+if MR_CFG_WCH_IRQ_END<MR_CFG_IRQ_TABLE_SIZE
+config MR_USE_WCH_IRQ_DEFER_HOOK
+    select MR_USE_IRQ_DEFER_HOOK
+    def_bool y
+endif
+
+endmenu
