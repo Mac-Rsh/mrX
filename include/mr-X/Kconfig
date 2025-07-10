@@ -68,8 +68,8 @@ config MR_USE_IRQ
 config MR_CFG_IRQ_TABLE_SIZE
     depends on MR_USE_IRQ
     int "Irq table size"
-    default 32
-    range 4 1024
+    default 16
+    range 2 1024
 
 config MR_USE_IRQ_DEFER
     depends on MR_USE_IRQ
@@ -91,9 +91,9 @@ config MR_USE_ASYNC
     bool "Use async"
     default y
 
-config MR_USE_ASYNC_SYNC
+config MR_USE_ASYNC_THREAD
     depends on MR_USE_ASYNC
-    bool "Use async sync"
+    bool "Use async thread"
     default n
 
 endmenu

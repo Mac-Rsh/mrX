@@ -215,7 +215,7 @@ static mr_tick_t timer_timeout_check(void) {
     void *param;
     int mask;
 
-    /* Init operation list and tick */
+    /* Init operation list */
     mr_list_init(&oplist);
 
     /* Lock */

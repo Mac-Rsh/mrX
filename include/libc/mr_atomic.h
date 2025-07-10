@@ -34,23 +34,15 @@ extern "C" {
 typedef atomic_int                      mr_atomic_t;
 #define MR_ATOMIC_INIT(_val)            ATOMIC_VAR_INIT(_val)
 #define mr_atomic_init(_a, _val)        atomic_init(_a, _val)
-#define mr_atomic_load(_a)                                                     \
-    atomic_load_explicit(_a, memory_order_seq_cst)
-#define mr_atomic_store(_a, _val)                                              \
-    atomic_store_explicit(_a, _val, memory_order_seq_cst)
-#define mr_atomic_exchange(_a, _val)                                           \
-    atomic_exchange_explicit(_a, _val, memory_order_seq_cst)
+#define mr_atomic_load(_a)              atomic_load(_a)
+#define mr_atomic_store(_a, _val)       atomic_store(_a, _val)
+#define mr_atomic_exchange(_a, _val)    atomic_exchange(_a, _val)
 #define mr_atomic_compare_exchange(_a, _val, _desired)                         \
-    atomic_compare_exchange_strong_explicit(                                   \
-        _a, _val, _desired, memory_order_seq_cst, memory_order_seq_cst)
-#define mr_atomic_fetch_add(_a, _val)                                          \
-    atomic_fetch_add_explicit(_a, _val, memory_order_seq_cst)
-#define mr_atomic_fetch_sub(_a, _val)                                          \
-    atomic_fetch_sub_explicit(_a, _val, memory_order_seq_cst)
-#define mr_atomic_fetch_and(_a, _val)                                          \
-    atomic_fetch_and_explicit(_a, _val, memory_order_seq_cst)
-#define mr_atomic_fetch_or(_a, _val)                                           \
-    atomic_fetch_or_explicit(_a, _val, memory_order_seq_cst)
+    atomic_compare_exchange_strong(_a, _val, _desired)
+#define mr_atomic_fetch_add(_a, _val)   atomic_fetch_add(_a, _val)
+#define mr_atomic_fetch_sub(_a, _val)   atomic_fetch_sub(_a, _val)
+#define mr_atomic_fetch_and(_a, _val)   atomic_fetch_and(_a, _val)
+#define mr_atomic_fetch_or(_a, _val)    atomic_fetch_or(_a, _val)
 #elif defined(MR_USE_3PARTY_ATOMIC)
 /* In '3party/libc/mr_atomic.h' */
 #else

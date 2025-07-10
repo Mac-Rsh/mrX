@@ -29,14 +29,16 @@ static void irq_defer_hook_wakeup(void *param);
 static mr_irq_defer_hook_t __hook
     = {.suspend = irq_defer_hook_suspend, .wakeup = irq_defer_hook_wakeup};
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
+static mr_uint8_t __irqn[] = {
+    WWDG_IRQn,
+};
 
-#if defined(MR_USE_IRQ)
 static void irq_priority_set(mr_uint32_t irq, mr_uint8_t priority,
                              void *param) {
     MR_UNUSED(param);
 
     /* Set irq priority */
-    NVIC_SetPriority((IRQn_Type)irq, priority);
+    NVIC_SetPriority((IRQn_Type)__irqn[irq], priority);
 }
 
 static void irq_type_set(mr_uint32_t irq, mr_uint8_t type, void *param) {
@@ -49,7 +51,7 @@ static void irq_enable(mr_uint32_t irq, void *param) {
     MR_UNUSED(param);
 
     /* Enable irq */
-    NVIC_EnableIRQ((IRQn_Type)irq);
+    NVIC_EnableIRQ((IRQn_Type)__irqn[irq]);
 }
 
 static void irq_unmask(mr_uint32_t irq, void *param) {
@@ -61,14 +63,13 @@ static void irq_disable(mr_uint32_t irq, void *param) {
     MR_UNUSED(param);
 
     /* Disable irq */
-    NVIC_DisableIRQ((IRQn_Type)irq);
+    NVIC_DisableIRQ((IRQn_Type)__irqn[irq]);
 }
 
 static void irq_mask(mr_uint32_t irq, void *param) {
     MR_UNUSED(irq);
     MR_UNUSED(param);
 }
-#endif /* defined(MR_USE_IRQ) */
 
 #if defined(MR_USE_IRQ_DEFER_HOOK)
 static void irq_defer_hook_suspend(void *param) {
@@ -94,12 +95,10 @@ void SW_Handler(void) {
 void mr_board_irq_init(void) {
     mr_err_t ret;
 
-#if (MR_CFG_WCH_IRQ_END == MR_CFG_IRQ_TABLE_SIZE)
-#error "IRQ size exceed IRQ table, adjust 'MR_CFG_WCH_IRQ_END'"
-#endif /* (MR_CFG_WCH_IRQ_END == MR_CFG_IRQ_TABLE_SIZE) */
     /* Init irq */
-    ret = mr_irq_init(&__irq, MR_CFG_WCH_IRQ_BEGIN, MR_CFG_WCH_IRQ_END, &__ops,
-                      MR_NULL);
+    ret = mr_irq_init(&__irq, 0,
+                      MR_MIN(MR_ARRAY_SIZE(__irqn), MR_CFG_IRQ_TABLE_SIZE - 1),
+                      &__ops, MR_NULL);
     if (ret != 0) {
         MR_ASSERT(ret == 0);
         return;

@@ -13,9 +13,9 @@
 #if defined(MR_USE_STRING_LIBC)
 #include <string.h>
 #else
-#include <libc/mr_types.h>
 #endif /* defined(MR_USE_STRING_LIBC) */
 #include <libc/mr_compiler.h>
+#include <libc/mr_types.h>
 
 #ifdef __cplusplus
 extern "C" {

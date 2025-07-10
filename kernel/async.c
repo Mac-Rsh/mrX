@@ -78,11 +78,11 @@ static void await_remove(mr_await_t *await) {
     while (!mr_list_is_empty(&await->list)) {
         async = MR_CONTAINER_OF(await->list.next, mr_async_t, list);
 
-        /* Resume async */
-        mr_work_schedule(&async->work);
-
         /* Remove async from waiting list */
         mr_list_del(&async->list);
+
+        /* Resume async */
+        mr_work_schedule(&async->work);
     }
 
     /* Unlock */
@@ -131,7 +131,10 @@ mr_err_t mr_await_wait(mr_await_t *await, mr_async_t *async) {
 }
 
 mr_err_t mr_await_complete(mr_await_t *await) {
+    mr_async_entry_t *entry;
     mr_async_t *async;
+    mr_list_t rtmlist;
+    void *param;
     int mask;
 
     /* Check parameter */
@@ -143,6 +146,9 @@ mr_err_t mr_await_complete(mr_await_t *await) {
         return 0;
     }
 
+    /* Init real-time list */
+    mr_list_init(&rtmlist);
+
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
 
@@ -153,9 +159,31 @@ mr_err_t mr_await_complete(mr_await_t *await) {
         /* Remove async from waiting list */
         mr_list_del(&async->list);
 
-        /* Force resume async(it might be running a timer) */
-        mr_work_cancel(&async->work);
-        mr_work_schedule(&async->work);
+        /* Check if async is in thread or queue mode */
+        if (async->work.queue) {
+            /* Force resume async(it might be running a timer) */
+            mr_work_cancel(&async->work);
+            mr_work_schedule(&async->work);
+            continue;
+        }
+
+        /* Move async to real-time list */
+        mr_list_move(&async->list, &rtmlist);
+    }
+
+    /* Check real-time list */
+    while (!mr_list_is_empty(&rtmlist)) {
+        async = MR_LIST_ENTRY(rtmlist.next, mr_async_t, list);
+
+        /* Remove async from real-time list */
+        mr_list_del(&async->list);
+
+        /* Save async entry and param */
+        entry = (mr_async_entry_t *)async->entry;
+        param = (void *)async->work.param;
+
+        /* Call async entry */
+        entry(async, param);
     }
 
     /* Unlock */
@@ -207,7 +235,9 @@ static mr_err_t async_init(mr_async_t *async, const mr_class_t *class,
                            mr_ptr_t entry, mr_ptr_t param) {
     /* Init async */
     mr_work_init(&async->work, async_work_entry, param);
+#if defined(MR_USE_ASYNC_THREAD)
     mr_await_init(&async->await, 1);
+#endif /* defined(MR_USE_ASYNC_THREAD) */
     mr_list_init(&async->list);
     async->entry = entry;
     async->label = 0;
@@ -275,6 +305,55 @@ mr_err_t mr_async_del(mr_async_t *async) {
     return 0;
 }
 
+mr_err_t mr_async_run(mr_async_t *async, mr_async_mode_t mode,
+                      mr_workqueue_t *queue) {
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT((async != MR_NULL) && MR_OBJECT_IS_INITED(async));
+    MR_ASSERT((mode < MR_ASYNC_RTM) && (queue != MR_NULL));
+    MR_ASSERT(mode <= MR_ASYNC_RTM);
+
+    /* Check if mode is workqueue mode */
+    if (mode == MR_ASYNC_QUEUE
+#if defined(MR_USE_ASYNC_THREAD)
+        || mode == MR_ASYNC_THREAD
+#endif /* defined(MR_USE_ASYNC_THREAD) */
+    ) {
+        /* Get workqueue */
+        queue = mr_workqueue_get(queue);
+        if (!queue) {
+            return -MR_ENOMEM;
+        }
+    }
+
+    switch (mode) {
+#if defined(MR_USE_ASYNC_THREAD)
+        case MR_ASYNC_THREAD: {
+            ret = mr_workqueue_work(queue, &async->work);
+            break;
+        }
+#endif /* defined(MR_USE_ASYNC_THREAD) */
+        case MR_ASYNC_QUEUE: {
+            ret = mr_work_bind(&async->work, queue);
+            break;
+        }
+        case MR_ASYNC_RTM: {
+            /* Real-time mode */
+            mr_work_cancel(&async->work);
+            async->work.queue = MR_NULL;
+            return 0;
+        }
+        default: {
+            return -MR_EINVAL;
+        }
+    }
+
+    /* Put workqueue */
+    mr_workqueue_put(queue);
+    return ret;
+}
+
 mr_err_t mr_async_cancel(mr_async_t *async) {
     /* Check parameter */
     MR_ASSERT((async != MR_NULL) && MR_OBJECT_IS_INITED(async));
@@ -292,8 +371,10 @@ static mr_async_t *async_obj_release(mr_object_t *obj) {
     /* Get async */
     async = MR_CONTAINER_OF(obj, mr_async_t, parent);
 
+#if defined(MR_USE_ASYNC_THREAD)
     /* Complete await */
     mr_await_complete(&async->await);
+#endif /* defined(MR_USE_ASYNC_THREAD) */
 
     /* Delete async */
     mr_work_del(&async->work);

@@ -34,10 +34,21 @@ typedef struct mr_await {
     mr_list_t list;
 } mr_await_t;
 
+/* Async mode type */
+typedef enum mr_async_mode {
+#if defined(MR_USE_ASYNC_THREAD)
+    MR_ASYNC_THREAD,
+#endif /* defined(MR_USE_ASYNC_THREAD) */
+    MR_ASYNC_QUEUE,
+    MR_ASYNC_RTM,
+} mr_async_mode_t;
+
 /* Async type */
 typedef struct mr_async {
     mr_object_t parent;
+#if defined(MR_USE_ASYNC_THREAD)
     mr_await_t await;
+#endif /* defined(MR_USE_ASYNC_THREAD) */
     mr_int32_t label;
     mr_list_t list;
     mr_work_t work;
@@ -139,13 +150,16 @@ mr_async_t *mr_async_create(mr_async_entry_t *entry, void *param);
 mr_err_t mr_async_del(mr_async_t *async);
 
 /**
- * @brief This macro function binds an async to a workqueue.
+ * @brief This function runs an async.
  *
- * @param _async The async.
- * @param _queue The workqueue.
+ * @param async The async.
+ * @param mode The async mode.
+ * @param queue The async workqueue(use on 'MR_ASYNC_QUEUE' or
+ * 'MR_ASYNC_THREAD').
+ * @return 0 on success, a negative error code on failure.
  */
-#define mr_async_bind(_async, _queue)                                          \
-    mr_workqueue_bind(_queue, &(_async)->work)
+mr_err_t mr_async_run(mr_async_t *async, mr_async_mode_t mode,
+                      mr_workqueue_t *queue);
 
 /**
  * @brief This macro function checks if an async is waiting.
@@ -160,10 +174,12 @@ mr_err_t mr_async_del(mr_async_t *async);
  * @param async The async.
  * @return 0 on success, a negative error code on failure.
  *
- * @note All async-io may generate asynchronous behaviors, which can be cancelled by this function.
+ * @note All async-io may generate asynchronous behaviors, which can be
+ * cancelled by this function.
  */
 mr_err_t mr_async_cancel(mr_async_t *async);
 
+#if defined(MR_USE_ASYNC_THREAD)
 /**
  * @brief This macro function waits for an async.
  *
@@ -174,21 +190,15 @@ mr_err_t mr_async_cancel(mr_async_t *async);
  */
 #define mr_async_wait_async(_async, _wait_async)                               \
     mr_await_wait(&(_wait_async)->await, _async)
+#endif /* defined(MR_USE_ASYNC_THREAD) */
 
-#if defined(MR_USE_ASYNC_SYNC)
-/**
- * @brief This macro function runs an async.
- *
- * @param _async The async.
- * @param _queue The workqueue.
- */
-#define mr_async_run(_async, _queue)                                           \
-    mr_workqueue_work(_queue, &(_async)->work)
-
+#if defined(MR_USE_ASYNC_THREAD)
 /**
  * @brief This macro function begins an async.
  *
  * @param _async The async.
+ *
+ * @note It can only be used async thread mode.
  */
 #define mr_async_begin(_async)                                                 \
     switch ((_async)->label) {                                                 \
@@ -199,6 +209,8 @@ mr_err_t mr_async_cancel(mr_async_t *async);
  * @brief This macro function ends an async.
  *
  * @param _async The async.
+ *
+ * @note It can only be used async thread mode.
  */
 #define mr_async_end(_async)                                                   \
     (_async)->label = -1;                                                      \
@@ -278,7 +290,7 @@ mr_err_t mr_async_cancel(mr_async_t *async);
                 mr_async_cancel(_async);                                       \
             }                                                                  \
     } while (0)
-#endif /* defined(MR_USE_ASYNC_SYNC) */
+#endif /* defined(MR_USE_ASYNC_THREAD) */
 
 /**
  * @brief This function gets an async.

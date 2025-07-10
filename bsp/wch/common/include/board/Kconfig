@@ -42,27 +42,8 @@ config MR_CFG_WCH_IRQ_DEFER_PRIORITY
     default 2
     range MR_CFG_WCH_SYSTICK_IRQ_PRIORITY 15
 
-config MR_CFG_WCH_IRQ_BEGIN
-    int "IRQ begin"
-    default 16
-    range 2 MR_CFG_IRQ_TABLE_SIZE
-
-config MR_CFG_WCH_IRQ_END
-    int "IRQ end"
-    default 38  if MR_USE_SERIES_V00X
-    default 59  if MR_USE_SERIES_V10X
-    default 69  if MR_USE_SERIES_V20X
-    default 103 if MR_USE_SERIES_V30X
-    range MR_CFG_WCH_IRQ_BEGIN MR_CFG_IRQ_TABLE_SIZE
-
-if MR_CFG_WCH_IRQ_END=MR_CFG_IRQ_TABLE_SIZE
-    comment "IRQ size exceed IRQ table, adjust 'Irq table size'"
-endif
-
-if MR_CFG_WCH_IRQ_END<MR_CFG_IRQ_TABLE_SIZE
 config MR_USE_WCH_IRQ_DEFER_HOOK
     select MR_USE_IRQ_DEFER_HOOK
     def_bool y
-endif
 
 endmenu
