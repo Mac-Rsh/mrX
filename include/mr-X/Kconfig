@@ -91,9 +91,9 @@ config MR_USE_ASYNC
     bool "Use async"
     default y
 
-config MR_USE_ASYNC_THREAD
+config MR_USE_ASYNC_COROUTINE
     depends on MR_USE_ASYNC
-    bool "Use async thread"
+    bool "Use async coroutine"
     default n
 
 endmenu

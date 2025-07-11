@@ -36,19 +36,19 @@ typedef struct mr_await {
 
 /* Async mode type */
 typedef enum mr_async_mode {
-#if defined(MR_USE_ASYNC_THREAD)
-    MR_ASYNC_THREAD,
-#endif /* defined(MR_USE_ASYNC_THREAD) */
+#if defined(MR_USE_ASYNC_COROUTINE)
+    MR_ASYNC_COROUTINE,
+#endif /* defined(MR_USE_ASYNC_COROUTINE) */
     MR_ASYNC_QUEUE,
-    MR_ASYNC_RTM,
+    MR_ASYNC_RT,
 } mr_async_mode_t;
 
 /* Async type */
 typedef struct mr_async {
     mr_object_t parent;
-#if defined(MR_USE_ASYNC_THREAD)
+#if defined(MR_USE_ASYNC_COROUTINE)
     mr_await_t await;
-#endif /* defined(MR_USE_ASYNC_THREAD) */
+#endif /* defined(MR_USE_ASYNC_COROUTINE) */
     mr_int32_t label;
     mr_list_t list;
     mr_work_t work;
@@ -155,7 +155,7 @@ mr_err_t mr_async_del(mr_async_t *async);
  * @param async The async.
  * @param mode The async mode.
  * @param queue The async workqueue(use on 'MR_ASYNC_QUEUE' or
- * 'MR_ASYNC_THREAD').
+ * 'MR_ASYNC_COROUTINE').
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_async_run(mr_async_t *async, mr_async_mode_t mode,
@@ -179,7 +179,7 @@ mr_err_t mr_async_run(mr_async_t *async, mr_async_mode_t mode,
  */
 mr_err_t mr_async_cancel(mr_async_t *async);
 
-#if defined(MR_USE_ASYNC_THREAD)
+#if defined(MR_USE_ASYNC_COROUTINE)
 /**
  * @brief This macro function waits for an async.
  *
@@ -190,9 +190,9 @@ mr_err_t mr_async_cancel(mr_async_t *async);
  */
 #define mr_async_wait_async(_async, _wait_async)                               \
     mr_await_wait(&(_wait_async)->await, _async)
-#endif /* defined(MR_USE_ASYNC_THREAD) */
+#endif /* defined(MR_USE_ASYNC_COROUTINE) */
 
-#if defined(MR_USE_ASYNC_THREAD)
+#if defined(MR_USE_ASYNC_COROUTINE)
 /**
  * @brief This macro function begins an async.
  *
@@ -290,7 +290,7 @@ mr_err_t mr_async_cancel(mr_async_t *async);
                 mr_async_cancel(_async);                                       \
             }                                                                  \
     } while (0)
-#endif /* defined(MR_USE_ASYNC_THREAD) */
+#endif /* defined(MR_USE_ASYNC_COROUTINE) */
 
 /**
  * @brief This function gets an async.

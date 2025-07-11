@@ -159,7 +159,7 @@ mr_err_t mr_await_complete(mr_await_t *await) {
         /* Remove async from waiting list */
         mr_list_del(&async->list);
 
-        /* Check if async is in thread or queue mode */
+        /* Check if async is in coroutine or queue mode */
         if (async->work.queue) {
             /* Force resume async(it might be running a timer) */
             mr_work_cancel(&async->work);
@@ -235,9 +235,9 @@ static mr_err_t async_init(mr_async_t *async, const mr_class_t *class,
                            mr_ptr_t entry, mr_ptr_t param) {
     /* Init async */
     mr_work_init(&async->work, async_work_entry, param);
-#if defined(MR_USE_ASYNC_THREAD)
+#if defined(MR_USE_ASYNC_COROUTINE)
     mr_await_init(&async->await, 1);
-#endif /* defined(MR_USE_ASYNC_THREAD) */
+#endif /* defined(MR_USE_ASYNC_COROUTINE) */
     mr_list_init(&async->list);
     async->entry = entry;
     async->label = 0;
@@ -311,14 +311,14 @@ mr_err_t mr_async_run(mr_async_t *async, mr_async_mode_t mode,
 
     /* Check parameter */
     MR_ASSERT((async != MR_NULL) && MR_OBJECT_IS_INITED(async));
-    MR_ASSERT((mode < MR_ASYNC_RTM) && (queue != MR_NULL));
-    MR_ASSERT(mode <= MR_ASYNC_RTM);
+    MR_ASSERT((mode < MR_ASYNC_RT) && (queue != MR_NULL));
+    MR_ASSERT(mode <= MR_ASYNC_RT);
 
     /* Check if mode is workqueue mode */
     if (mode == MR_ASYNC_QUEUE
-#if defined(MR_USE_ASYNC_THREAD)
-        || mode == MR_ASYNC_THREAD
-#endif /* defined(MR_USE_ASYNC_THREAD) */
+#if defined(MR_USE_ASYNC_COROUTINE)
+        || mode == MR_ASYNC_COROUTINE
+#endif /* defined(MR_USE_ASYNC_COROUTINE) */
     ) {
         /* Get workqueue */
         queue = mr_workqueue_get(queue);
@@ -328,17 +328,17 @@ mr_err_t mr_async_run(mr_async_t *async, mr_async_mode_t mode,
     }
 
     switch (mode) {
-#if defined(MR_USE_ASYNC_THREAD)
-        case MR_ASYNC_THREAD: {
+#if defined(MR_USE_ASYNC_COROUTINE)
+        case MR_ASYNC_COROUTINE: {
             ret = mr_workqueue_work(queue, &async->work);
             break;
         }
-#endif /* defined(MR_USE_ASYNC_THREAD) */
+#endif /* defined(MR_USE_ASYNC_COROUTINE) */
         case MR_ASYNC_QUEUE: {
             ret = mr_work_bind(&async->work, queue);
             break;
         }
-        case MR_ASYNC_RTM: {
+        case MR_ASYNC_RT: {
             /* Real-time mode */
             mr_work_cancel(&async->work);
             async->work.queue = MR_NULL;
@@ -371,10 +371,10 @@ static mr_async_t *async_obj_release(mr_object_t *obj) {
     /* Get async */
     async = MR_CONTAINER_OF(obj, mr_async_t, parent);
 
-#if defined(MR_USE_ASYNC_THREAD)
+#if defined(MR_USE_ASYNC_COROUTINE)
     /* Complete await */
     mr_await_complete(&async->await);
-#endif /* defined(MR_USE_ASYNC_THREAD) */
+#endif /* defined(MR_USE_ASYNC_COROUTINE) */
 
     /* Delete async */
     mr_work_del(&async->work);
