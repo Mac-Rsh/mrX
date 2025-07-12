@@ -237,10 +237,10 @@ static mr_err_t async_init(mr_async_t *async, const mr_class_t *class,
     mr_work_init(&async->work, async_work_entry, param);
 #if defined(MR_USE_ASYNC_COROUTINE)
     mr_await_init(&async->await, 1);
+    async->label = 0;
 #endif /* defined(MR_USE_ASYNC_COROUTINE) */
     mr_list_init(&async->list);
     async->entry = entry;
-    async->label = 0;
 
     /* Init object */
     return mr_object_init((mr_object_t *)async, class);

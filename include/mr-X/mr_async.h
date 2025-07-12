@@ -48,8 +48,8 @@ typedef struct mr_async {
     mr_object_t parent;
 #if defined(MR_USE_ASYNC_COROUTINE)
     mr_await_t await;
-#endif /* defined(MR_USE_ASYNC_COROUTINE) */
     mr_int32_t label;
+#endif /* defined(MR_USE_ASYNC_COROUTINE) */
     mr_list_t list;
     mr_work_t work;
     mr_ptr_t entry;
