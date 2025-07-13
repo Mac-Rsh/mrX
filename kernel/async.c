@@ -182,8 +182,14 @@ mr_err_t mr_await_complete(mr_await_t *await) {
         entry = (mr_async_entry_t *)async->entry;
         param = (void *)async->work.param;
 
+        /* Unlock */
+        mr_spinlock_unlock_irqrestore(&__lock, mask);
+
         /* Call async entry */
         entry(async, param);
+
+        /* Lock */
+        mask = mr_spinlock_lock_irqsave(&__lock);
     }
 
     /* Unlock */

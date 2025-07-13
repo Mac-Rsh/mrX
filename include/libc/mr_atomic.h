@@ -10,9 +10,7 @@
 #define __MR_LIBC_ATOMIC_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_ATOMIC_LIBC)
-#include <stdatomic.h>
-#elif defined(MR_USE_3PARTY_ATOMIC)
+#if defined(MR_USE_3PARTY_ATOMIC)
 #include <3party/libc/mr_atomic.h>
 #else
 #include <port/mr_port_irq.h>
@@ -30,24 +28,11 @@ extern "C" {
  */
 
 /* Atomic definition */
-#if defined(MR_USE_ATOMIC_LIBC)
-typedef atomic_int                      mr_atomic_t;
-#define MR_ATOMIC_INIT(_val)            ATOMIC_VAR_INIT(_val)
-#define mr_atomic_init(_a, _val)        atomic_init(_a, _val)
-#define mr_atomic_load(_a)              atomic_load(_a)
-#define mr_atomic_store(_a, _val)       atomic_store(_a, _val)
-#define mr_atomic_exchange(_a, _val)    atomic_exchange(_a, _val)
-#define mr_atomic_compare_exchange(_a, _val, _desired)                         \
-    atomic_compare_exchange_strong(_a, _val, _desired)
-#define mr_atomic_fetch_add(_a, _val)   atomic_fetch_add(_a, _val)
-#define mr_atomic_fetch_sub(_a, _val)   atomic_fetch_sub(_a, _val)
-#define mr_atomic_fetch_and(_a, _val)   atomic_fetch_and(_a, _val)
-#define mr_atomic_fetch_or(_a, _val)    atomic_fetch_or(_a, _val)
-#elif defined(MR_USE_3PARTY_ATOMIC)
+#if defined(MR_USE_3PARTY_ATOMIC)
 /* In '3party/libc/mr_atomic.h' */
 #else
 /* Atomic type */
-typedef int                             mr_atomic_t;
+typedef mr_intptr_t                     mr_atomic_t;
 
 /**
  * @brief This macro function initializes an atomic.
@@ -136,12 +121,12 @@ MR_INLINE mr_atomic_t mr_atomic_exchange(volatile mr_atomic_t *atomic,
  *
  * @param atomic The atomic..
  * @param val The compared value.
- * @param desired The desired value.
+ * @param des The desired value.
  * @return MR_TRUE on success, MR_FALSE on failure.
  */
 MR_INLINE mr_bool_t mr_atomic_compare_exchange(volatile mr_atomic_t *atomic,
                                                mr_atomic_t *val,
-                                               mr_atomic_t desired) {
+                                               mr_atomic_t des) {
     mr_bool_t tmp;
     int mask;
 
@@ -153,7 +138,7 @@ MR_INLINE mr_bool_t mr_atomic_compare_exchange(volatile mr_atomic_t *atomic,
         *val = *atomic;
         tmp = MR_FALSE;
     } else {
-        *atomic = desired;
+        *atomic = des;
         tmp = MR_TRUE;
     }
 
@@ -211,7 +196,7 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_sub(volatile mr_atomic_t *atomic,
 }
 
 /**
- * @brief This function fetches and ands an atomic.
+ * @brief This function fetches and ands('&') an atomic.
  *
  * @param atomic The atomic.
  * @param val The and value.
@@ -235,7 +220,7 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_and(volatile mr_atomic_t *atomic,
 }
 
 /**
- * @brief This function fetches and ors an atomic.
+ * @brief This function fetches and ors('|') an atomic.
  *
  * @param atomic The atomic.
  * @param val The or value.
@@ -252,6 +237,30 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_or(volatile mr_atomic_t *atomic,
     /* Fetch and or atomic */
     tmp = *atomic;
     *atomic |= val;
+
+    /* Enable interrupt */
+    mr_port_irq_restore(mask);
+    return tmp;
+}
+
+/**
+ * @brief This function fetches and xors('^') an atomic.
+ *
+ * @param atomic The atomic.
+ * @param val The xor value.
+ * @return The fetched atomic.
+ */
+MR_INLINE mr_atomic_t mr_atomic_fetch_xor(volatile mr_atomic_t *atomic,
+                                          mr_atomic_t val) {
+    mr_atomic_t tmp;
+    int mask;
+
+    /* Disable interrupt */
+    mask = mr_port_irq_save();
+
+    /* Fetch and xor atomic */
+    tmp = *atomic;
+    *atomic ^= val;
 
     /* Enable interrupt */
     mr_port_irq_restore(mask);

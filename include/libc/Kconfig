@@ -120,9 +120,6 @@ choice
     prompt "Atomic"
     default MR_USE_ATOMIC
 
-    config MR_USE_ATOMIC_LIBC
-        bool "STD"
-
     config MR_USE_ATOMIC_3PARTY
         bool "3RD"
 
