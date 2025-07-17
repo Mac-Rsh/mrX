@@ -34,10 +34,6 @@ static mr_tick_t clock_hook(void) {
 
     /* Each clock hooks */
     MR_HOOK_EACH(i, entry, mr_clock_hook_t, &__hook) {
-        if (!entry) {
-            continue;
-        }
-
         /* Call clock hook entry */
         less = entry();
 

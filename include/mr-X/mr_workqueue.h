@@ -24,8 +24,6 @@ extern "C" {
  */
 
 #if defined(MR_USE_WORKQUEUE)
-struct mr_work;
-
 #if defined(MR_USE_WORKQUEUE_HOOK)
 struct mr_workqueue;
 
@@ -114,6 +112,20 @@ mr_err_t mr_workqueue_work(mr_workqueue_t *queue, mr_work_t *work);
 mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
                                    mr_tick_t tick);
 
+#if defined(MR_USE_WORKQUEUE_HOOK)
+/**
+ * @brief This function sets a workqueue hook.
+ *
+ * @param queue The workqueue.
+ * @param hook The workqueue hook.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note Recommend to use a semaphore with an initial value of 0 as the hook.
+ */
+mr_err_t mr_workqueue_hook_set(mr_workqueue_t *queue,
+                               mr_workqueue_hook_t *hook);
+#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
+
 /**
  * @brief This function gets a workqueue.
  *
@@ -135,20 +147,6 @@ MR_INLINE mr_bool_t mr_workqueue_put(mr_workqueue_t *queue) {
     /* Put workqueue reference */
     return mr_object_put((mr_object_t *)queue);
 }
-
-#if defined(MR_USE_WORKQUEUE_HOOK)
-/**
- * @brief This function sets a workqueue hook.
- *
- * @param queue The workqueue.
- * @param hook The workqueue hook.
- * @return 0 on success, a negative error code on failure.
- *
- * @note Recommend to use a semaphore with an initial value of 0 as the hook.
- */
-mr_err_t mr_workqueue_hook_set(mr_workqueue_t *queue,
-                               mr_workqueue_hook_t *hook);
-#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
 /**
  * @brief This function initializes a work.

@@ -81,7 +81,7 @@ void *mr_malloc(mr_size_t size) {
     }
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Check if the heap is empty */
     prev = &__blk_head;
@@ -124,7 +124,7 @@ void *mr_malloc(mr_size_t size) {
     }
 _exit:
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
     return mem;
 }
 
@@ -138,7 +138,7 @@ void mr_free(void *mem) {
     }
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Check the block */
     blk = (mr_memblk_t *)((mr_uint8_t *)mem - sizeof(mr_memblk_t));
@@ -151,7 +151,7 @@ void mr_free(void *mem) {
     }
 
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
 }
 
 mr_size_t mr_malloc_usable_size(void *mem) {

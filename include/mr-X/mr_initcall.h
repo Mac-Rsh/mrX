@@ -10,6 +10,7 @@
 #define __MR_INITCALL_H__
 
 #include <libc/mr_compiler.h>
+#include <libc/mr_assert.h>
 
 #ifdef __cplusplus
 extern "C" {

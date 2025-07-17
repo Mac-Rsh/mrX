@@ -60,10 +60,11 @@ extern "C" {
 /**
  * @brief This macro function defines a static assert.
  *
+ * @param _name The name.
  * @param _expr The expression.
  */
-#define MR_STATIC_ASSERT(_expr)                                                \
-    typedef char __mr_static_assert[(_expr) ? 1 : -1];
+#define MR_STATIC_ASSERT(_name, _expr)                                         \
+    typedef char __mr_static_##_name[(_expr) ? 1 : -1]
 
 /** @} */
 

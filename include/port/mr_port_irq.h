@@ -19,23 +19,24 @@
  */
 
 /**
- * @brief This function saves the current interrupt mask.
+ * @brief This function disables the interrupt.
  *
- * @return The current interrupt mask.
+ * @return The current interrupt mask or nesting level.
  *
  * @note User implementation.
- * @note Need to clear the hardware interrupt mask.
+ * @note Need support nesting.
  */
-extern int mr_port_irq_save(void);
+extern int mr_port_irq_disable(void);
 
 /**
- * @brief This function restores the interrupt mask.
+ * @brief This function enables the interrupt.
  *
- * @param mask The interrupt mask to restore.
+ * @param mask The interrupt mask or nesting level.
  *
  * @note User implementation.
+ * @note Need support nesting.
  */
-extern void mr_port_irq_restore(int mask);
+extern void mr_port_irq_enable(int mask);
 
 /** @} */
 

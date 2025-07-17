@@ -20,8 +20,11 @@ extern "C" {
  * @{
  */
 
+/* Ref magic definition */
+#define MR_REF_MAGIC                    (0x6d720000)
+
 /* Ref type */
-typedef mr_atomic_t                     mr_ref_t;
+typedef volatile mr_atomic_t            mr_ref_t;
 
 /* Ref release type */
 typedef void(mr_ref_release_t)(mr_ref_t *ref);
@@ -29,7 +32,24 @@ typedef void(mr_ref_release_t)(mr_ref_t *ref);
 /**
  * @brief This macro function initializes a ref.
  */
-#define MR_REF_INIT()                  MR_ATOMIC_INIT(1)
+#define MR_REF_INIT()                  MR_ATOMIC_INIT(MR_REF_MAGIC | 0x0001)
+
+/**
+ * @brief This macro function checks if a ref is initialized.
+ *
+ * @param _ref The ref.
+ * @return MR_TRUE on initialized, MR_FALSE otherwise.
+ */
+#define MR_REF_IS_INITED(_ref)                                                 \
+    (((_ref) & MR_REF_MAGIC) == MR_REF_MAGIC)
+
+/**
+ * @brief This macro function gets the ref count.
+ *
+ * @param _ref The ref.
+ * @return The ref count.
+ */
+#define MR_REF_COUNT(_ref)               ((_ref) & (~MR_REF_MAGIC))
 
 /**
  * @brief This function initializes a ref.
@@ -38,7 +58,7 @@ typedef void(mr_ref_release_t)(mr_ref_t *ref);
  */
 MR_INLINE void mr_ref_init(mr_ref_t *ref) {
     /* Init ref(endow with an effective life cycle) */
-    mr_atomic_init(ref, 1);
+    mr_atomic_init(ref, MR_REF_MAGIC | 0x0001);
 }
 
 /**
@@ -53,7 +73,9 @@ MR_INLINE mr_bool_t mr_ref_get(mr_ref_t *ref) {
     do {
         /* Get current ref */
         last = mr_atomic_load(ref);
-        if (last == 0) {
+
+        /* Check if ref is inited or ref count is zero */
+        if ((!MR_REF_IS_INITED(last)) || (MR_REF_COUNT(last) == 0)) {
             /* End of life cycle */
             return MR_FALSE;
         }
@@ -71,11 +93,15 @@ MR_INLINE mr_bool_t mr_ref_get(mr_ref_t *ref) {
  * @return MR_TRUE on end of lifecycle, MR_FALSE otherwise.
  */
 MR_INLINE mr_bool_t mr_ref_put(mr_ref_t *ref, mr_ref_release_t *release) {
-    mr_atomic_t ret;
+    mr_atomic_t last;
 
     /* Decrement ref */
-    ret = mr_atomic_fetch_sub(ref, 1);
-    if ((ret == 1) && (release != MR_NULL)) {
+    last = mr_atomic_fetch_sub(ref, 1);
+    if (MR_REF_IS_INITED(last) && (MR_REF_COUNT(last) == 1)
+        && (release != MR_NULL)) {
+        /* Mark as released */
+        mr_atomic_fetch_and(ref, ~MR_REF_MAGIC);
+
         /* End of life cycle */
         release(ref);
         return MR_TRUE;

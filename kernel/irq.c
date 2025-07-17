@@ -11,13 +11,13 @@
 #include <mr-X/mr_spinlock.h>
 #include <libc/mr_malloc.h>
 
-/* Irq class(static & dynamic) */
+/* Irq clazz(static & dynamic) */
 static void irq_obj_release1(mr_object_t *obj);
 static void irq_obj_release2(mr_object_t *obj);
-static const mr_class_t __class1
-    = MR_CLASS_INIT("irq", MR_NULL, irq_obj_release1);
-static const mr_class_t __class2
-    = MR_CLASS_INIT("irq", MR_NULL, irq_obj_release2);
+static const mr_clazz_t __clazz1
+    = MR_CLAZZ_INIT("irq", irq_obj_release1);
+static const mr_clazz_t __clazz2
+    = MR_CLAZZ_INIT("irq", irq_obj_release2);
 
 #if defined(MR_USE_IRQ_DEFER)
 /* Irq defer workqueue */
@@ -64,6 +64,11 @@ static mr_err_t irq_table_insert(mr_irq_t *irq, mr_uint32_t irq_start,
 }
 
 static void irq_action_free(mr_irq_action_t *action) {
+#if defined(MR_USE_IRQ_DEFER)
+    /* Delete irq action defer work */
+    mr_work_del(&action->defer);
+#endif /* defined(MR_USE_IRQ_DEFER) */
+
     /* Free irq action */
     mr_free(action);
 }
@@ -107,7 +112,7 @@ static void irq_table_remove(mr_irq_t *irq) {
     }
 }
 
-static mr_err_t irq_init(mr_irq_t *irq, const mr_class_t *class,
+static mr_err_t irq_init(mr_irq_t *irq, const mr_clazz_t *clazz,
                          mr_uint32_t irq_start, mr_uint32_t irq_end,
                          mr_ptr_t ops, mr_ptr_t param) {
     mr_err_t ret;
@@ -130,7 +135,7 @@ static mr_err_t irq_init(mr_irq_t *irq, const mr_class_t *class,
     irq->param = param;
 
     /* Init object */
-    ret = mr_object_init((mr_object_t *)irq, class);
+    ret = mr_object_init((mr_object_t *)irq, clazz);
     if (ret != 0) {
         irq_table_remove(irq);
         goto _exit;
@@ -151,7 +156,7 @@ mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
     MR_ASSERT(ops != MR_NULL);
 
     /* Init workqueue */
-    return irq_init(irq, &__class1, irq_start, irq_end, ops, param);
+    return irq_init(irq, &__clazz1, irq_start, irq_end, ops, param);
 }
 
 mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
@@ -172,7 +177,7 @@ mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
     }
 
     /* Init irq */
-    ret = irq_init(irq, &__class2, irq_start, irq_end, ops, param);
+    ret = irq_init(irq, &__clazz2, irq_start, irq_end, ops, param);
     if (ret != 0) {
         mr_free(irq);
         return MR_NULL;
@@ -183,7 +188,7 @@ mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
 mr_err_t mr_irq_del(mr_irq_t *irq) {
     /* Check parameter */
     MR_ASSERT((irq != MR_NULL) && MR_OBJECT_IS_INITED(irq));
-    MR_ASSERT(MR_OBJECT_CLASS_IS_OR(irq, &__class1, &__class2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(irq, &__clazz1, &__clazz2));
 
     /* Mark as dying */
     mr_atomic_store(&irq->dying, MR_TRUE);
@@ -205,14 +210,11 @@ static void irq_action_defer_entry(mr_work_t *work, void *param) {
 
     /* Get irq action */
     action = (mr_irq_action_t *)param;
-    if (!action) {
-        return;
-    }
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
 
-    /* Save irq action parameter */
+    /* Save irq action entry, owner and irq */
     entry = (mr_irq_entry_t *)action->defer_entry;
     owner = (void *)action->owner;
     irq = action->irq;
@@ -234,6 +236,7 @@ static mr_irq_action_t *irq_action_alloc(mr_uint32_t irq, mr_irq_entry_t *entry,
                                          mr_ptr_t owner,
                                          mr_irq_entry_t *defer_entry) {
     mr_irq_action_t *action;
+    mr_err_t ret;
 
     /* Create irq action */
     action = mr_malloc(sizeof(mr_irq_action_t));
@@ -241,17 +244,23 @@ static mr_irq_action_t *irq_action_alloc(mr_uint32_t irq, mr_irq_entry_t *entry,
         return MR_NULL;
     }
 
+#if defined(MR_USE_IRQ_DEFER)
+    /* Init irq action defer work */
+    ret = mr_work_init(&action->defer, irq_action_defer_entry, action);
+    if (ret != 0) {
+        mr_free(action);
+        return MR_NULL;
+    }
+    action->defer_entry = defer_entry;
+#else
+    MR_UNUSED(defer_entry);
+#endif /* MR_USE_IRQ_DEFER */
+
     /* Init irq action */
     action->next = MR_NULL;
     action->irq = irq;
     action->entry = entry;
     action->owner = owner;
-#if defined(MR_USE_IRQ_DEFER)
-    mr_work_init(&action->defer, irq_action_defer_entry, action);
-    action->defer_entry = defer_entry;
-#else
-    MR_UNUSED(defer_entry);
-#endif /* MR_USE_IRQ_DEFER */
     return action;
 }
 
@@ -626,6 +635,8 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
 
         /* Mark irq action pending */
         action->irq |= IRQ_ACTION_PENDING;
+
+        /* Save irq action entry and owner */
         entry = (mr_irq_entry_t *)action->entry;
         owner = (void *)action->owner;
 
@@ -654,6 +665,7 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
                  * structure unchanged) */
                 action2.next = *a = action->next;
 #if defined(MR_USE_IRQ_DEFER)
+                /* To prevent entering the defer branch after a break */
                 action2.defer_entry = MR_NULL;
 #endif /* defined(MR_USE_IRQ_DEFER) */
                 irq_action_free(action);

@@ -63,13 +63,13 @@ MR_INLINE mr_atomic_t mr_atomic_load(volatile mr_atomic_t *atomic) {
     int mask;
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Load atomic */
     tmp = *atomic;
 
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
     return tmp;
 }
 
@@ -83,13 +83,13 @@ MR_INLINE void mr_atomic_store(volatile mr_atomic_t *atomic, mr_atomic_t val) {
     int mask;
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Store atomic */
     *atomic = val;
 
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
 }
 
 /**
@@ -105,14 +105,14 @@ MR_INLINE mr_atomic_t mr_atomic_exchange(volatile mr_atomic_t *atomic,
     int mask;
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Exchange atomic */
     tmp = *atomic;
     *atomic = val;
 
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
     return tmp;
 }
 
@@ -131,7 +131,7 @@ MR_INLINE mr_bool_t mr_atomic_compare_exchange(volatile mr_atomic_t *atomic,
     int mask;
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Compare and exchange atomic */
     if (*atomic != *val) {
@@ -143,7 +143,7 @@ MR_INLINE mr_bool_t mr_atomic_compare_exchange(volatile mr_atomic_t *atomic,
     }
 
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
     return tmp;
 }
 
@@ -160,14 +160,14 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_add(volatile mr_atomic_t *atomic,
     int mask;
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Fetch and add atomic */
     tmp = *atomic;
     *atomic += val;
 
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
     return tmp;
 }
 
@@ -184,14 +184,14 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_sub(volatile mr_atomic_t *atomic,
     int mask;
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Fetch and subtract atomic */
     tmp = *atomic;
     *atomic -= val;
 
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
     return tmp;
 }
 
@@ -208,14 +208,14 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_and(volatile mr_atomic_t *atomic,
     int mask;
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Fetch and and atomic */
     tmp = *atomic;
     *atomic &= val;
 
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
     return tmp;
 }
 
@@ -232,14 +232,14 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_or(volatile mr_atomic_t *atomic,
     int mask;
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Fetch and or atomic */
     tmp = *atomic;
     *atomic |= val;
 
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
     return tmp;
 }
 
@@ -256,14 +256,14 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_xor(volatile mr_atomic_t *atomic,
     int mask;
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Fetch and xor atomic */
     tmp = *atomic;
     *atomic ^= val;
 
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
     return tmp;
 }
 #endif /* defined(MR_USE_3PARTY_ATOMIC) */

@@ -10,7 +10,8 @@
 #include <libc/mr_types.h>
 
 /* Kernel and user init status */
-static mr_bool_t __kstatus, __ustatus;
+static volatile mr_bool_t __kstatus = MR_FALSE;
+static volatile mr_bool_t __ustatus = MR_FALSE;
 
 static void start(void) {
     /* User init start */
@@ -73,6 +74,10 @@ void mr_user_init(void) {
 
     /* Each init calls */
     for (call = start; call <= end; call++) {
+        if (!call->entry) {
+            continue;
+        }
+
         /* Call init call entry */
         call->entry();
     }

@@ -13,6 +13,7 @@
 #if defined(MR_USE_TIMER)
 #include <mr-X/mr_object.h>
 #include <mr-X/mr_clock.h>
+#include <mr-X/mr_list.h>
 #endif /* defined(MR_USE_TIMER) */
 
 #ifdef __cplusplus

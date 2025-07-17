@@ -76,7 +76,7 @@ MR_INLINE int mr_spinlock_lock_irqsave(mr_spinlock_t *lock) {
     int mask;
 
     /* Disable interrupt */
-    mask = mr_port_irq_save();
+    mask = mr_port_irq_disable();
 
     /* Lock spinlock */
     mr_spinlock_lock(lock);
@@ -94,7 +94,7 @@ MR_INLINE void mr_spinlock_unlock_irqrestore(mr_spinlock_t *lock, int mask) {
     mr_spinlock_unlock(lock);
 
     /* Enable interrupt */
-    mr_port_irq_restore(mask);
+    mr_port_irq_enable(mask);
 }
 
 /**

@@ -83,17 +83,4 @@ config MR_USE_IRQ_DEFER_HOOK
     bool "Use irq defer hook"
     default n
 
-# ==================================
-# ASYNC
-# ==================================
-config MR_USE_ASYNC
-    select MR_USE_WORKQUEUE
-    bool "Use async"
-    default y
-
-config MR_USE_ASYNC_COROUTINE
-    depends on MR_USE_ASYNC
-    bool "Use async coroutine"
-    default n
-
 endmenu

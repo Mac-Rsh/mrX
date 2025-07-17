@@ -23,7 +23,7 @@ int mr_port_output(const char *buf, mr_size_t size) {
     return 0;
 }
 
-int mr_port_irq_save(void) {
+int mr_port_irq_disable(void) {
     /* Disable interrupt */
     __disable_irq();
 
@@ -31,7 +31,7 @@ int mr_port_irq_save(void) {
     return (++__irq_nest);
 }
 
-void mr_port_irq_restore(int mask) {
+void mr_port_irq_enable(int mask) {
     MR_UNUSED(mask);
 
     /* Decrement irq nest */
