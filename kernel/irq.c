@@ -37,7 +37,7 @@ static mr_irq_defer_hook_t __hook = {.wakeup = MR_NULL, .suspend = MR_NULL};
 /* Irq priority default definition */
 #define IRQ_PRIORITY_DEFAULT            (0)
 /* Irq flags definition */
-#define IRQ_FLAG_TYPE_MASK              (0x0f)
+#define IRQ_FLAG_TYPE_MASK              (0x0fU)
 /* Irq action pending definition */
 #define IRQ_ACTION_PENDING              (1U << 31)
 
@@ -296,7 +296,7 @@ static void irq_depth_enable(mr_uint32_t irq, mr_irq_desc_t *desc) {
     desc->irq->ops->enable(irq, desc->irq->param);
 }
 
-static mr_err_t irq_request(mr_uint32_t irq, mr_uint32_t flags,
+static mr_err_t irq_request(mr_uint32_t irq, mr_uint16_t flags,
                             mr_irq_action_t *action) {
     mr_irq_action_t **a;
     mr_irq_desc_t *desc;
@@ -361,7 +361,7 @@ _exit:
 }
 
 static mr_err_t irq_defer_request(mr_uint32_t irq, mr_irq_entry_t *entry,
-                                  mr_ptr_t owner, mr_uint32_t flags,
+                                  mr_ptr_t owner, mr_uint16_t flags,
                                   mr_irq_entry_t *defer_entry) {
     mr_irq_action_t *action;
     mr_err_t ret;
@@ -382,7 +382,7 @@ static mr_err_t irq_defer_request(mr_uint32_t irq, mr_irq_entry_t *entry,
 }
 
 mr_err_t mr_irq_request(mr_uint32_t irq, mr_irq_entry_t *entry, void *owner,
-                        mr_uint32_t flags) {
+                        mr_uint16_t flags) {
     /* Check parameter */
     MR_ASSERT(irq < MR_CFG_IRQ_TABLE_SIZE);
     MR_ASSERT((entry != MR_NULL) && (owner != MR_NULL));
@@ -393,7 +393,7 @@ mr_err_t mr_irq_request(mr_uint32_t irq, mr_irq_entry_t *entry, void *owner,
 }
 
 mr_err_t mr_irq_defer_request(mr_uint32_t irq, mr_irq_entry_t *entry,
-                              void *owner, mr_uint32_t flags,
+                              void *owner, mr_uint16_t flags,
                               mr_irq_entry_t *defer_entry) {
     /* Check parameter */
     MR_ASSERT(irq < MR_CFG_IRQ_TABLE_SIZE);

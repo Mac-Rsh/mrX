@@ -87,8 +87,8 @@ typedef struct mr_irq_action {
 /* Irq descriptor type */
 typedef struct mr_irq_desc {
     mr_irq_action_t *action;
-    mr_uint32_t priority;
-    mr_uint32_t flags;
+    mr_uint16_t priority;
+    mr_uint16_t flags;
     mr_atomic_t depth;
     mr_irq_t *irq;
 } mr_irq_desc_t;
@@ -139,7 +139,7 @@ mr_err_t mr_irq_del(mr_irq_t *irq);
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_irq_request(mr_uint32_t irq, mr_irq_entry_t *entry, void *owner,
-                        mr_uint32_t flags);
+                        mr_uint16_t flags);
 
 #if defined(MR_USE_IRQ_DEFER)
 /**
@@ -153,7 +153,7 @@ mr_err_t mr_irq_request(mr_uint32_t irq, mr_irq_entry_t *entry, void *owner,
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_irq_defer_request(mr_uint32_t irq, mr_irq_entry_t *entry,
-                              void *owner, mr_uint32_t flags,
+                              void *owner, mr_uint16_t flags,
                               mr_irq_entry_t *defer_entry);
 #endif /* defined(MR_USE_IRQ_DEFER) */
 

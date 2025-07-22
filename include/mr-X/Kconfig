@@ -83,4 +83,11 @@ config MR_USE_IRQ_DEFER_HOOK
     bool "Use irq defer hook"
     default n
 
+# ==================================
+# WAIT
+# ==================================
+config MR_USE_WAIT
+    bool "Use irq"
+    default y
+
 endmenu

@@ -29,6 +29,7 @@
 #include <mr-X/mr_spinlock.h>
 #include <mr-X/mr_timer.h>
 #include <mr-X/mr_version.h>
+#include <mr-X/mr_wait.h>
 #include <mr-X/mr_workqueue.h>
 
 /** @} */
