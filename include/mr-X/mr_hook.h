@@ -25,8 +25,8 @@ extern "C" {
 /* Hook type */
 typedef struct mr_hook {
     mr_ptr_t *entry;
-    mr_size_t size;
-    mr_size_t next;
+    mr_uint16_t size;
+    mr_uint16_t next;
 } mr_hook_t;
 
 /**
@@ -47,7 +47,8 @@ typedef struct mr_hook {
  *
  * @note The size is the entry number.
  */
-MR_INLINE void mr_hook_init(mr_hook_t *hook, mr_ptr_t *entry, mr_size_t size) {
+MR_INLINE void mr_hook_init(mr_hook_t *hook, mr_ptr_t *entry,
+                            mr_uint16_t size) {
     /* Initialize hook */
     hook->entry = entry;
     hook->size = size;

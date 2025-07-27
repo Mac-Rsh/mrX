@@ -20,6 +20,7 @@ extern "C" {
 
 /* Compiler specific attributes */
 #if defined(__GNUC__) || defined(__clang__) || defined(__ARMCC_VERSION)
+#define MR_ALIGN(_x)                    __attribute__((aligned(_x)))
 #define MR_SECTION(_x)                  __attribute__((section(_x)))
 #define MR_USED                         __attribute__((used))
 #define MR_WEAK                         __attribute__((weak))
@@ -27,6 +28,7 @@ extern "C" {
 #else
 #error "Compiler not supported"
 #endif /* defined(__GNUC__) || defined(__clang__) || defined(__ARMCC_VERSION) */
+#define MR_ALIGN_SIZE                   (sizeof(void *) * 2)
 #define MR_UNUSED(_x)                   (void)(_x)
 
 /** @} */

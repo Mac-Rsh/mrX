@@ -37,6 +37,7 @@ static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
 static mr_err_t waitable_init(mr_waitable_t *waitable, const mr_clazz_t *class,
                               mr_ptr_t check, mr_ptr_t param) {
     /* Init waitable */
+    mr_atomic_init(&waitable->gen, 0);
     mr_list_init(&waitable->list);
     waitable->check = check;
     waitable->param = param;
@@ -113,7 +114,11 @@ mr_err_t mr_waitable_del(mr_waitable_t *waitable) {
 static mr_uint32_t waitable_check(mr_waitable_t *waitable) {
     mr_waitable_check_t *check;
     mr_uint32_t event;
+    mr_atomic_t gen;
     void *param;
+
+    /* Save waitable generation */
+    gen = mr_atomic_fetch_add(&waitable->gen, 1);
 
     /* Save waitable check and param */
     check = (mr_waitable_check_t *)waitable->check;
@@ -121,8 +126,16 @@ static mr_uint32_t waitable_check(mr_waitable_t *waitable) {
 
     /* Call waitable check */
     event = check(waitable, param);
-    event &= WAIT_MASK;
-    return event;
+
+    /* Check if waitable generation is changed */
+    if (mr_atomic_load(&waitable->gen) != (gen + 1)) {
+        /* If another check occurs during the check process, the last one shall
+         * prevail */
+        return 0;
+    }
+
+    /* Return waitable event */
+    return event & WAIT_MASK;
 }
 
 mr_err_t mr_waitable_complete(mr_waitable_t *waitable) {
@@ -159,6 +172,9 @@ mr_err_t mr_waitable_complete(mr_waitable_t *waitable) {
     event_edge = event & ~waitable->last;
     event_level = event;
 
+    /* Update waitable last event */
+    waitable->last = event;
+
     /* Replace the waiting list with the operation list (to prevent node removal
      * in the middle) */
     mr_list_replace(&oplist, &waitable->list);
@@ -190,9 +206,6 @@ mr_err_t mr_waitable_complete(mr_waitable_t *waitable) {
         /* Lock */
         mask = mr_spinlock_lock_irqsave(&__lock);
     }
-
-    /* Update waitable last event */
-    waitable->last = event;
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__lock, mask);
@@ -328,27 +341,25 @@ mr_err_t mr_waiter_wait(mr_waiter_t *waiter, mr_waitable_t *waitable) {
         goto _exit;
     }
 
+    /* Unlock */
+    mr_spinlock_unlock_irqrestore(&__lock, mask);
+
     /* Get waitable event */
     event = waitable_check(waitable);
     if ((event & WAIT_TYPE_MASK) == 0) {
         /* No waitable event(untyped events will be discarded) */
-        ret = 0;
-        goto _exit;
+        return 0;
     }
 
     /* Check if waiter is triggered */
     if (!(waiter->event & event)) {
         /* Not triggered */
-        ret = 0;
-        goto _exit;
+        return 0;
     }
 
     /* Save waiter entry and param */
     entry = (mr_waiter_entry_t *)waiter->entry;
     param = (void *)waiter->param;
-
-    /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
 
     /* Call waiter entry */
     entry(waiter, param, event);

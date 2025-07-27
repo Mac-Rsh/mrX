@@ -10,12 +10,12 @@
 #include <mr_x.h>
 
 #if defined(MR_USE_IRQ)
-static void irq_priority_set(mr_uint32_t irq, mr_uint8_t priority, void *param);
-static void irq_type_set(mr_uint32_t irq, mr_uint8_t type, void *param);
-static void irq_enable(mr_uint32_t irq, void *param);
-static void irq_unmask(mr_uint32_t irq, void *param);
-static void irq_disable(mr_uint32_t irq, void *param);
-static void irq_mask(mr_uint32_t irq, void *param);
+static void irq_priority_set(mr_uint32_t irq, mr_uint8_t priority, void *priv);
+static void irq_type_set(mr_uint32_t irq, mr_uint8_t type, void *priv);
+static void irq_enable(mr_uint32_t irq, void *priv);
+static void irq_unmask(mr_uint32_t irq, void *priv);
+static void irq_disable(mr_uint32_t irq, void *priv);
+static void irq_mask(mr_uint32_t irq, void *priv);
 static mr_irq_ops_t __ops = {.priority_set = irq_priority_set,
                              .type_set = irq_type_set,
                              .enable = irq_enable,
@@ -34,53 +34,53 @@ static mr_uint8_t __irqn[] = {
 };
 
 static void irq_priority_set(mr_uint32_t irq, mr_uint8_t priority,
-                             void *param) {
-    MR_UNUSED(param);
+                             void *priv) {
+    MR_UNUSED(priv);
 
     /* Set irq priority */
     NVIC_SetPriority((IRQn_Type)__irqn[irq], priority);
 }
 
-static void irq_type_set(mr_uint32_t irq, mr_uint8_t type, void *param) {
+static void irq_type_set(mr_uint32_t irq, mr_uint8_t type, void *priv) {
     MR_UNUSED(irq);
     MR_UNUSED(type);
-    MR_UNUSED(param);
+    MR_UNUSED(priv);
 }
 
-static void irq_enable(mr_uint32_t irq, void *param) {
-    MR_UNUSED(param);
+static void irq_enable(mr_uint32_t irq, void *priv) {
+    MR_UNUSED(priv);
 
     /* Enable irq */
     NVIC_EnableIRQ((IRQn_Type)__irqn[irq]);
 }
 
-static void irq_unmask(mr_uint32_t irq, void *param) {
+static void irq_unmask(mr_uint32_t irq, void *priv) {
     MR_UNUSED(irq);
-    MR_UNUSED(param);
+    MR_UNUSED(priv);
 }
 
-static void irq_disable(mr_uint32_t irq, void *param) {
-    MR_UNUSED(param);
+static void irq_disable(mr_uint32_t irq, void *priv) {
+    MR_UNUSED(priv);
 
     /* Disable irq */
     NVIC_DisableIRQ((IRQn_Type)__irqn[irq]);
 }
 
-static void irq_mask(mr_uint32_t irq, void *param) {
+static void irq_mask(mr_uint32_t irq, void *priv) {
     MR_UNUSED(irq);
-    MR_UNUSED(param);
+    MR_UNUSED(priv);
 }
 
 #if defined(MR_USE_IRQ_DEFER_HOOK)
-static void irq_defer_hook_suspend(void *param) {
-    MR_UNUSED(param);
+static void irq_defer_hook_suspend(void *priv) {
+    MR_UNUSED(priv);
 
     /* Clear soft irq */
     SysTick->CTLR &= ~(1 << 31);
 }
 
-static void irq_defer_hook_wakeup(void *param) {
-    MR_UNUSED(param);
+static void irq_defer_hook_wakeup(void *priv) {
+    MR_UNUSED(priv);
 
     /* Trigger soft irq */
     SysTick->CTLR |= (1 << 31);

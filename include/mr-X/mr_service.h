@@ -63,6 +63,24 @@ extern "C" {
  */
 #define MR_MAX(_a, _b)                  (((_a) > (_b)) ? (_a) : (_b))
 
+/**
+ * @brief This macro function aligns the value up.
+ *
+ * @param _x The value.
+ * @param _ali The alignment.
+ * @return The aligned value.
+ */
+#define MR_ALIGN_UP(_x, _ali)           (((_x) + (_ali)-1) & ~((_ali)-1))
+
+/**
+ * @brief This macro function aligns the value down.
+ *
+ * @param _x The value.
+ * @param _ali The alignment.
+ * @return The aligned value.
+ */
+#define MR_ALIGN_DOWN(_x, _ali)         ((_x) & ~((_ali)-1))
+
 /** @} */
 
 #ifdef __cplusplus

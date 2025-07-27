@@ -11,19 +11,17 @@
 #include <port/mr_port_irq.h>
 #include <libc/mr_string.h>
 
+/* Heap memory */
 #if !defined(MR_CFG_HEAP_SIZE)
 #define MR_CFG_HEAP_SIZE                (4 * 1024)
 #endif /* !defined(MR_CFG_HEAP_SIZE) */
-#if (MR_CFG_HEAP_SIZE < 24)
-#error "Heap size is too small(must >= 24)"
+#if (MR_CFG_HEAP_SIZE < 32)
+#error "Heap size is too small(must >= 32)"
 #endif /* MR_CFG_HEAP_SIZE */
-/* Heap memory */
-static mr_uint8_t __heap[MR_CFG_HEAP_SIZE];
+static mr_uint8_t MR_ALIGN(MR_ALIGN_SIZE) __heap[MR_CFG_HEAP_SIZE];
 /* Heap block head */
 static mr_memblk_t __blk_head = {.next = MR_NULL};
 
-/* Heap magic number */
-#define HEAP_MAGIC                      (0x6d722d58U)
 /* Heap align macro function */
 #define HEAP_ALIGN(_val, _ali)          (((_val) + (_ali)-1) & ~((_ali)-1))
 
@@ -90,8 +88,8 @@ void *mr_malloc(mr_size_t size) {
         goto _exit;
     }
 
-    /* Align the size to the next multiple of width */
-    size = HEAP_ALIGN(size, sizeof(mr_uintptr_t));
+    /* Align the size */
+    size = HEAP_ALIGN(size, MR_ALIGN_SIZE);
 
     /* Search for and take blocks that match the criteria */
     for (blk = prev->next; blk->size < size; blk = blk->next) {
@@ -106,17 +104,15 @@ void *mr_malloc(mr_size_t size) {
     mem = (mr_uint8_t *)blk + sizeof(mr_memblk_t);
     res = blk->size - size;
     prev->next = blk->next;
-    blk->magic = HEAP_MAGIC;
     blk->next = MR_NULL;
     blk->size = size;
 
     /* Check if we need to allocate a new block */
-    if (res > (sizeof(mr_memblk_t) << 1)) {
+    if (res > (sizeof(mr_memblk_t) << 2)) {
         new = (mr_memblk_t *)((mr_uint8_t *)mem + size);
 
         /* Set the new block information */
         new->size = res - sizeof(mr_memblk_t);
-        new->magic = ~HEAP_MAGIC;
         new->next = MR_NULL;
 
         /* Insert the new block */
@@ -142,10 +138,7 @@ void mr_free(void *mem) {
 
     /* Check the block */
     blk = (mr_memblk_t *)((mr_uint8_t *)mem - sizeof(mr_memblk_t));
-    if ((blk->magic == HEAP_MAGIC) && (blk->size != 0)) {
-        /* Clear the block magic */
-        blk->magic = ~HEAP_MAGIC;
-
+    if (blk->size != 0) {
         /* Insert the free block */
         heap_insert_block(blk);
     }
@@ -164,10 +157,6 @@ mr_size_t mr_malloc_usable_size(void *mem) {
 
     /* Get the block information */
     blk = (mr_memblk_t *)((mr_uint8_t *)mem - sizeof(mr_memblk_t));
-    if (blk->magic != HEAP_MAGIC) {
-        /* Not a heap block */
-        return 0;
-    }
     return blk->size;
 }
 
@@ -216,12 +205,14 @@ void *mr_realloc(void *mem, mr_size_t size) {
 }
 
 void mr_libc_malloc_init(void) {
+    mr_uintptr_t offset, size;
     mr_memblk_t *blk;
 
     /* Initialize the heap block */
-    blk = (mr_memblk_t *)__heap;
-    blk->size = sizeof(__heap) - sizeof(mr_memblk_t);
-    blk->magic = ~HEAP_MAGIC;
+    blk = (mr_memblk_t *)HEAP_ALIGN((mr_uintptr_t)__heap, MR_ALIGN_SIZE);
+    offset = (mr_uintptr_t)blk - (mr_uintptr_t)__heap;
+    size = sizeof(__heap) - sizeof(mr_memblk_t);
+    blk->size = size - offset;
     blk->next = MR_NULL;
     __blk_head.next = blk;
     __blk_head.size = 0;

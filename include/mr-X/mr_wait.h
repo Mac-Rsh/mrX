@@ -35,6 +35,7 @@ extern "C" {
 typedef struct mr_waitable {
     mr_object_t parent;
     mr_uint32_t last;
+    mr_atomic_t gen;
     mr_list_t list;
     mr_ptr_t check;
     mr_ptr_t param;
@@ -129,7 +130,7 @@ mr_err_t mr_waiter_del(mr_waiter_t *waiter);
  * @param waiter The waiter.
  * @return MR_TRUE if the waiter is waiting, false otherwise.
  */
-#define MR_WAITER_IS_WAITING(_waiter) (!mr_list_is_empty(&(_waiter)->list))
+#define MR_WAITER_IS_WAITING(_waiter)   (!mr_list_is_empty(&(_waiter)->list))
 
 /**
  * @brief This function waits for a waitable.

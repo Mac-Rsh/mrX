@@ -84,7 +84,7 @@ void *mr_memcpy(void *dst, const void *src, mr_size_t size) {
 
     /* Check dst and src alignment */
     if (((mr_uintptr_t)dst & align) || ((mr_uintptr_t)src & align)) {
-        /* Copy unaligned bytes */
+        /* It is expected to be replaced with 'build in' */
         for (d = dst, s = src; size > 0; size--) {
             (*d++) = (*s++);
         }
@@ -122,12 +122,12 @@ void *mr_memset(void *dst, int c, mr_size_t size) {
     pat |= pat << 8;
     pat |= pat << 16;
     pat |= pat << 24;
-#if defined(MR_USE_ARCH_64BIT)
+#if defined(MR_USE_ARCH_64B)
     pat |= pat << 32;
     pat |= pat << 40;
     pat |= pat << 48;
     pat |= pat << 56;
-#endif /* defined(MR_USE_ARCH_64BIT) */
+#endif /* defined(MR_USE_ARCH_64B) */
 
     /* Copy unaligned bytes */
     for (d = dst; (size > 0) && ((mr_uintptr_t)d & align); size--) {

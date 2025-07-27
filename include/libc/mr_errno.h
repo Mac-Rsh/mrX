@@ -10,11 +10,11 @@
 #define __MR_LIBC_ERRNO_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_ERRNO_LIBC)
+#if defined(MR_USE_ERRNO_STD)
 #include <errno.h>
-#elif defined(MR_USE_ERRNO_3PARTY)
+#elif defined(MR_USE_ERRNO_3RD)
 #include <3party/libc/mr_errno.h>
-#endif /* defined(MR_USE_ERRNO_LIBC) */
+#endif /* defined(MR_USE_ERRNO_STD) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,7 +29,7 @@ extern "C" {
 typedef int                             mr_err_t;
 
 /* Errno definition */
-#if defined(MR_USE_ERRNO_LIBC)
+#if defined(MR_USE_ERRNO_STD)
 #define MR_EPERM                        EPERM
 #define MR_ENOENT                       ENOENT
 #define MR_EIO                          EIO
@@ -40,7 +40,7 @@ typedef int                             mr_err_t;
 #define MR_EINVAL                       EINVAL
 #define MR_ENOSYS                       ENOSYS
 #define MR_ETIMEDOUT                    ETIMEDOUT
-#elif defined(MR_USE_ERRNO_3PARTY)
+#elif defined(MR_USE_ERRNO_3RD)
 /* In '3party/libc/mr_errno.h' */
 #else
 #define MR_EPERM                        (1)
@@ -53,7 +53,7 @@ typedef int                             mr_err_t;
 #define MR_EINVAL                       (22)
 #define MR_ENOSYS                       (40)
 #define MR_ETIMEDOUT                    (116)
-#endif /* defined(MR_USE_ERRNO_LIBC) */
+#endif /* defined(MR_USE_ERRNO_STD) */
 
 /** @} */
 

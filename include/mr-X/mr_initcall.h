@@ -29,9 +29,9 @@ extern "C" {
 typedef void(mr_initcall_entry_t)(void);
 
 /* Initcall type */
-typedef struct mr_initcall {
-    const char *name;
+typedef struct MR_ALIGN(MR_ALIGN_SIZE) mr_initcall {
     mr_initcall_entry_t *entry;
+    const char *name;
 } mr_initcall_t;
 
 /**

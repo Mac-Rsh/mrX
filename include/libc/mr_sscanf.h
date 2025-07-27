@@ -10,9 +10,9 @@
 #define __MR_LIBC_SSCANF_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_SSCANF_LIBC)
+#if defined(MR_USE_SSCANF_STD)
 #include <stdio.h>
-#endif /* defined(MR_USE_SSCANF_LIBC) */
+#endif /* defined(MR_USE_SSCANF_STD) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,7 +24,7 @@ extern "C" {
  */
 
 /* Scanf definition */
-#if defined(MR_USE_SSCANF_LIBC)
+#if defined(MR_USE_SSCANF_STD)
 #define mr_sscanf(_b, _fmt, ...)        sscanf(_b, _fmt, __VA_ARGS__)
 #else
 /**
@@ -36,7 +36,7 @@ extern "C" {
  * @return The characters scanned number on success, -1 on error.
  */
 int mr_sscanf(const char *buf, const char *fmt, ...);
-#endif /* defined(MR_USE_SSCANF_LIBC) */
+#endif /* defined(MR_USE_SSCANF_STD) */
 
 /** @} */
 

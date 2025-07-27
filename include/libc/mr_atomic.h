@@ -10,11 +10,11 @@
 #define __MR_LIBC_ATOMIC_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_3PARTY_ATOMIC)
+#if defined(MR_USE_ATOMIC_3RD)
 #include <3party/libc/mr_atomic.h>
 #else
 #include <port/mr_port_irq.h>
-#endif /* defined(MR_USE_3PARTY_ATOMIC) */
+#endif /* defined(MR_USE_ATOMIC_3RD) */
 #include <libc/mr_compiler.h>
 #include <libc/mr_types.h>
 
@@ -28,7 +28,7 @@ extern "C" {
  */
 
 /* Atomic definition */
-#if defined(MR_USE_3PARTY_ATOMIC)
+#if defined(MR_USE_ATOMIC_3RD)
 /* In '3party/libc/mr_atomic.h' */
 #else
 /* Atomic type */
@@ -266,7 +266,7 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_xor(volatile mr_atomic_t *atomic,
     mr_port_irq_enable(mask);
     return tmp;
 }
-#endif /* defined(MR_USE_3PARTY_ATOMIC) */
+#endif /* defined(MR_USE_ATOMIC_3RD) */
 
 /** @} */
 

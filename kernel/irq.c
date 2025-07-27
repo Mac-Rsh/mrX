@@ -88,8 +88,8 @@ static void irq_depth_disable(mr_uint32_t irq, mr_irq_desc_t *desc) {
     }
 
     /* Disable irq */
-    desc->irq->ops->disable(irq, desc->irq->param);
-    desc->irq->ops->mask(irq, desc->irq->param);
+    desc->irq->ops->disable(irq, desc->irq->priv);
+    desc->irq->ops->mask(irq, desc->irq->priv);
 }
 
 static void irq_table_remove(mr_irq_t *irq) {
@@ -132,7 +132,7 @@ static mr_err_t irq_init(mr_irq_t *irq, const mr_clazz_t *clazz,
     irq->istart = irq_start;
     irq->iend = irq_end;
     irq->ops = ops;
-    irq->param = param;
+    irq->priv = param;
 
     /* Init object */
     ret = mr_object_init((mr_object_t *)irq, clazz);
@@ -147,7 +147,7 @@ _exit:
 }
 
 mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
-                     mr_irq_ops_t *ops, void *param) {
+                     mr_irq_ops_t *ops, void *priv) {
     /* Check parameter */
     MR_ASSERT((irq != MR_NULL) && (!MR_OBJECT_IS_INITED(irq)));
     MR_ASSERT(irq_start < MR_CFG_IRQ_TABLE_SIZE);
@@ -156,11 +156,11 @@ mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
     MR_ASSERT(ops != MR_NULL);
 
     /* Init workqueue */
-    return irq_init(irq, &__clazz1, irq_start, irq_end, ops, param);
+    return irq_init(irq, &__clazz1, irq_start, irq_end, ops, priv);
 }
 
 mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
-                        mr_irq_ops_t *ops, void *param) {
+                        mr_irq_ops_t *ops, void *priv) {
     mr_irq_t *irq;
     mr_err_t ret;
 
@@ -177,7 +177,7 @@ mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
     }
 
     /* Init irq */
-    ret = irq_init(irq, &__clazz2, irq_start, irq_end, ops, param);
+    ret = irq_init(irq, &__clazz2, irq_start, irq_end, ops, priv);
     if (ret != 0) {
         mr_free(irq);
         return MR_NULL;
@@ -267,13 +267,13 @@ static mr_irq_action_t *irq_action_alloc(mr_uint32_t irq, mr_irq_entry_t *entry,
 static void irq_type_set(mr_uint32_t irq, mr_irq_desc_t *desc,
                          mr_uint8_t type) {
     /* Set irq type */
-    desc->irq->ops->type_set(irq, type, desc->irq->param);
+    desc->irq->ops->type_set(irq, type, desc->irq->priv);
 }
 
 static void irq_priority_set(mr_uint32_t irq, mr_irq_desc_t *desc,
                              mr_uint8_t priority) {
     /* Set irq priority */
-    desc->irq->ops->priority_set(irq, priority, desc->irq->param);
+    desc->irq->ops->priority_set(irq, priority, desc->irq->priv);
     desc->priority = priority;
 }
 
@@ -292,8 +292,8 @@ static void irq_depth_enable(mr_uint32_t irq, mr_irq_desc_t *desc) {
     }
 
     /* Enable irq */
-    desc->irq->ops->unmask(irq, desc->irq->param);
-    desc->irq->ops->enable(irq, desc->irq->param);
+    desc->irq->ops->unmask(irq, desc->irq->priv);
+    desc->irq->ops->enable(irq, desc->irq->priv);
 }
 
 static mr_err_t irq_request(mr_uint32_t irq, mr_uint16_t flags,
@@ -623,7 +623,7 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
     mr_irq_get(desc->irq);
 
     /* Mask irq */
-    desc->irq->ops->mask(irq, desc->irq->param);
+    desc->irq->ops->mask(irq, desc->irq->priv);
 
     /* Handle irq action */
     for (ret = MR_IRQ_NONE, action = desc->action; action;
@@ -698,7 +698,7 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
 
     /* Unmask irq if irq action is enabled */
     if (mr_atomic_load(&desc->depth) == 0) {
-        desc->irq->ops->unmask(irq, desc->irq->param);
+        desc->irq->ops->unmask(irq, desc->irq->priv);
     }
 
     /* Put irq run-time */

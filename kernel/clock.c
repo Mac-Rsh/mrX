@@ -27,7 +27,7 @@ static mr_hook_t __hook = MR_HOOK_INIT(__entry, MR_CFG_CLOCK_HOOK_SIZE);
 static mr_tick_t clock_hook(void) {
     mr_tick_t tickless, less;
     mr_clock_hook_t *entry;
-    mr_size_t i;
+    mr_uint16_t i;
 
     /* Init tickless */
     tickless = MR_TICK_MAX;

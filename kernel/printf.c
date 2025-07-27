@@ -24,8 +24,7 @@ int mr_printf(const char *fmt, ...) {
     char *buf;
 #endif /* !defined(MR_USE_PRINTF_SAFE) */
     mr_va_list args;
-    mr_size_t outsz;
-    int ret;
+    int outsz, ret;
 
     /* Check parameter */
     if ((!fmt) || (fmt[0] == '\0')) {
@@ -48,11 +47,11 @@ int mr_printf(const char *fmt, ...) {
         ret = -MR_EINVAL;
         goto _exit;
     } else {
-        outsz = (mr_size_t)ret;
+        outsz = ret;
     }
 
     /* Output string */
-    ret = mr_port_output(buf, outsz);
+    ret = mr_port_output(buf, (mr_size_t)outsz);
 _exit:
 #if defined(MR_USE_PRINTF_SAFE)
     mr_free(buf);

@@ -74,9 +74,7 @@ void mr_user_init(void) {
 
     /* Each init calls */
     for (call = start; call <= end; call++) {
-        if (!call->entry) {
-            continue;
-        }
+        MR_ASSERT(call->entry != MR_NULL);
 
         /* Call init call entry */
         call->entry();

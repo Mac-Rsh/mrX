@@ -45,12 +45,12 @@ typedef enum mr_irq_return {
 
 /* Irq operations type */
 typedef struct mr_irq_ops {
-    void (*priority_set)(mr_uint32_t irq, mr_uint8_t priority, void *param);
-    void (*type_set)(mr_uint32_t irq, mr_uint8_t type, void *param);
-    void (*enable)(mr_uint32_t irq, void *param);
-    void (*unmask)(mr_uint32_t irq, void *param);
-    void (*disable)(mr_uint32_t irq, void *param);
-    void (*mask)(mr_uint32_t irq, void *param);
+    void (*priority_set)(mr_uint32_t irq, mr_uint8_t priority, void *priv);
+    void (*type_set)(mr_uint32_t irq, mr_uint8_t type, void *priv);
+    void (*enable)(mr_uint32_t irq, void *priv);
+    void (*unmask)(mr_uint32_t irq, void *priv);
+    void (*disable)(mr_uint32_t irq, void *priv);
+    void (*mask)(mr_uint32_t irq, void *priv);
 } mr_irq_ops_t;
 
 #if defined(MR_USE_IRQ_DEFER_HOOK)
@@ -69,7 +69,7 @@ typedef struct mr_irq {
     mr_uint32_t istart;
     mr_uint32_t iend;
     mr_irq_ops_t *ops;
-    mr_ptr_t param;
+    mr_ptr_t priv;
 } mr_irq_t;
 
 /* Irq action type */
@@ -103,11 +103,11 @@ typedef mr_irq_return_t(mr_irq_entry_t)(mr_uint32_t irq, void *owner);
  * @param irq_start The start irq number.
  * @param irq_end The end irq number.
  * @param ops The irq operations.
- * @param param The irq parameter.
+ * @param priv The irq private data.
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
-                     mr_irq_ops_t *ops, void *param);
+                     mr_irq_ops_t *ops, void *priv);
 
 /**
  * @brief This function creates an irq.
@@ -115,11 +115,11 @@ mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
  * @param irq_start The start irq number.
  * @param irq_end The end irq number.
  * @param ops The irq operations.
- * @param param The irq parameter.
+ * @param priv The irq private data.
  * @return The irq on success, MR_NULL on failure.
  */
 mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
-                        mr_irq_ops_t *ops, void *param);
+                        mr_irq_ops_t *ops, void *priv);
 
 /**
  * @brief This function deletes an irq.

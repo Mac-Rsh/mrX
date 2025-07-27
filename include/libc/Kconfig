@@ -5,12 +5,12 @@ menu "Libc options"
 # ==================================
 choice
     prompt "Arch"
-    default MR_USE_ARCH_32BIT
+    default MR_USE_ARCH_32B
 
-    config MR_USE_ARCH_32BIT
+    config MR_USE_ARCH_32B
         bool "32B"
 
-    config MR_USE_ARCH_64BIT
+    config MR_USE_ARCH_64B
         bool "64B"
 endchoice
 
@@ -21,10 +21,10 @@ choice
     prompt "Assertion"
     default MR_USE_ASSERT
 
-    config MR_USE_ASSERT_LIBC
+    config MR_USE_ASSERT_STD
         bool "STD"
 
-    config MR_USE_ASSERT_3PARTY
+    config MR_USE_ASSERT_3RD
         bool "3RD"
 
     config MR_USE_ASSERT
@@ -41,10 +41,10 @@ choice
     prompt "Malloc"
     default MR_USE_MALLOC
 
-    config MR_USE_MALLOC_LIBC
+    config MR_USE_MALLOC_STD
         bool "STD"
 
-    config MR_USE_MALLOC_3PARTY
+    config MR_USE_MALLOC_3RD
         bool "3RD"
 
     config MR_USE_MALLOC
@@ -52,10 +52,10 @@ choice
 endchoice
 
 config MR_CFG_HEAP_SIZE
-    depends on !MR_USE_MALLOC_LIBC
+    depends on !MR_USE_MALLOC_STD
         int "Heap memory size"
         default 4096
-        range 24 2147483647
+        range 32 2147483647
 
 # ==================================
 # SPRINTF
@@ -64,10 +64,10 @@ choice
     prompt "Sprintf"
     default MR_USE_SPRINTF
 
-    config MR_USE_SPRINTF_LIBC
+    config MR_USE_SPRINTF_STD
         bool "STD"
 
-    config MR_USE_SPRINTF_3PARTY
+    config MR_USE_SPRINTF_3RD
         bool "3RD"
 
     config MR_USE_SPRINTF
@@ -81,10 +81,10 @@ choice
     prompt "Sscanf"
     default MR_USE_SSCANF
 
-    config MR_USE_SSCANF_LIBC
+    config MR_USE_SSCANF_STD
         bool "STD"
 
-    config MR_USE_SSCANF_3PARTY
+    config MR_USE_SSCANF_3RD
         bool "3RD"
 
     config MR_USE_SSCANF
@@ -98,10 +98,10 @@ choice
     prompt "String"
     default MR_USE_STRING
 
-    config MR_USE_STRING_LIBC
+    config MR_USE_STRING_STD
         bool "STD"
 
-    config MR_USE_STRING_3PARTY
+    config MR_USE_STRING_3RD
         bool "3RD"
 
     config MR_USE_STRING
@@ -120,7 +120,7 @@ choice
     prompt "Atomic"
     default MR_USE_ATOMIC
 
-    config MR_USE_ATOMIC_3PARTY
+    config MR_USE_ATOMIC_3RD
         bool "3RD"
 
     config MR_USE_ATOMIC
@@ -134,7 +134,7 @@ choice
     prompt "Types"
     default MR_USE_TYPES
 
-    config MR_USE_TYPES_LIBC
+    config MR_USE_TYPES_STD
         bool "STD"
 
     config MR_USE_TYPES
@@ -148,10 +148,10 @@ choice
     prompt "Errno"
     default MR_USE_ERRNO
 
-    config MR_USE_ERRNO_LIBC
+    config MR_USE_ERRNO_STD
         bool "STD"
 
-    config MR_USE_ERRNO_3PARTY
+    config MR_USE_ERRNO_3RD
         bool "3RD"
 
     config MR_USE_ERRNO

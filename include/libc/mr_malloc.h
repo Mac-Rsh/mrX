@@ -10,11 +10,12 @@
 #define __MR_LIBC_MALLOC_H__
 
 #include <mr_config.h>
-#if defined(MR_USE_MALLOC_LIBC)
+#if defined(MR_USE_MALLOC_STD)
 #include <stdlib.h>
 #else
+#include <libc/mr_compiler.h>
 #include <libc/mr_types.h>
-#endif /* defined(MR_USE_MALLOC_LIBC) */
+#endif /* defined(MR_USE_MALLOC_STD) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,7 +27,7 @@ extern "C" {
  */
 
 /* Malloc definition */
-#if defined(MR_USE_MALLOC_LIBC)
+#if defined(MR_USE_MALLOC_STD)
 #define mr_malloc(_sz)                  malloc(_sz)
 #define mr_free(_m)                     free(_m)
 #define mr_malloc_usable_size(_m)       malloc_usable_size(_m)
@@ -35,9 +36,8 @@ extern "C" {
 #else
 #if defined(MR_USE_MALLOC)
 /* Memory block type */
-typedef struct mr_memblk {
+typedef struct MR_ALIGN(MR_ALIGN_SIZE) mr_memblk {
     struct mr_memblk *next;
-    mr_uint32_t magic;
     mr_size_t size;
 } mr_memblk_t;
 #endif /* defined(MR_USE_MALLOC) */
@@ -82,7 +82,7 @@ void *mr_calloc(mr_size_t num, mr_size_t size);
  * @return The reallocated memory.
  */
 void *mr_realloc(void *mem, mr_size_t size);
-#endif /* defined(MR_USE_MALLOC_LIBC) */
+#endif /* defined(MR_USE_MALLOC_STD) */
 
 /** @} */
 

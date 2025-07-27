@@ -9,6 +9,7 @@
 #ifndef __MR_REF_H__
 #define __MR_REF_H__
 
+#include <libc/mr_assert.h>
 #include <libc/mr_atomic.h>
 
 #ifdef __cplusplus
@@ -22,6 +23,7 @@ extern "C" {
 
 /* Ref magic definition */
 #define MR_REF_MAGIC                    (0x6d720000)
+#define MR_REF_OVERFLOW                 (0x6d730000)
 
 /* Ref type */
 typedef volatile mr_atomic_t            mr_ref_t;
@@ -41,7 +43,7 @@ typedef void(mr_ref_release_t)(mr_ref_t *ref);
  * @return MR_TRUE on initialized, MR_FALSE otherwise.
  */
 #define MR_REF_IS_INITED(_ref)                                                 \
-    (((_ref) & MR_REF_MAGIC) == MR_REF_MAGIC)
+    (((_ref) & 0xffff0000) == MR_REF_MAGIC)
 
 /**
  * @brief This macro function gets the ref count.
@@ -76,6 +78,7 @@ MR_INLINE mr_bool_t mr_ref_get(mr_ref_t *ref) {
 
         /* Check if ref is inited or ref count is zero */
         if ((!MR_REF_IS_INITED(last)) || (MR_REF_COUNT(last) == 0)) {
+            MR_ASSERT(last != MR_REF_OVERFLOW);
             /* End of life cycle */
             return MR_FALSE;
         }
