@@ -35,8 +35,8 @@ typedef struct mr_clazz {
 
 /* Object type */
 typedef struct mr_object {
+    mr_ref_t magic_ref;
     const mr_clazz_t *clazz;
-    mr_ref_t ref;
 } mr_object_t;
 
 /**
@@ -69,7 +69,7 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _clazz The clazz.
  */
 #define MR_OBJECT_INIT(_obj, _clazz)                                           \
-    { .clazz = (_clazz), .ref = MR_REF_INIT() }
+    { .magic_ref = MR_REF_INIT(), .clazz = (_clazz) }
 
 /**
  * @brief This function initializes an object.
@@ -87,7 +87,7 @@ mr_err_t mr_object_init(mr_object_t *obj, const mr_clazz_t *clazz);
  * @return MR_TRUE on initialized, MR_FALSE otherwise.
  */
 #define MR_OBJECT_IS_INITED(_obj)                                              \
-    (MR_REF_IS_INITED(((mr_object_t *)(_obj))->ref))
+    (MR_REF_IS_INITED(((mr_object_t *)(_obj))->magic_ref))
 
 /**
  * @brief This macro function checks if an object is of a clazz.

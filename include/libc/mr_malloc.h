@@ -35,8 +35,12 @@ extern "C" {
 #define mr_realloc(_m, _sz)             realloc(_m, _sz)
 #else
 #if defined(MR_USE_MALLOC)
+/* Memory block magic definition */
+#define MR_MEMBLK_MAGIC                 (0x6d725800U)
+
 /* Memory block type */
 typedef struct MR_ALIGN(MR_ALIGN_SIZE) mr_memblk {
+    volatile mr_uint32_t magic;
     struct mr_memblk *next;
     mr_size_t size;
 } mr_memblk_t;

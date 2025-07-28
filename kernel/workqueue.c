@@ -40,9 +40,6 @@ static void queue_wakeup(mr_workqueue_t *queue) {
         return;
     }
 
-    /* Get workqueue run-time(running) */
-    mr_workqueue_get(queue);
-
     /* Wakeup workqueue */
 #if defined(MR_USE_WORKQUEUE_HOOK)
     if (queue->hook.wakeup) {
@@ -94,9 +91,6 @@ static void queue_timer_entry(mr_timer_t *timer, void *param) {
     } else if (mr_list_is_empty(&queue->tlist)) {
         /* Don't need timer */
         mr_timer_stop(&queue->timer);
-
-        /* Put workqueue run-time(timing) */
-        mr_workqueue_put(queue);
     }
 
     /* Unlock */
@@ -170,7 +164,7 @@ mr_err_t mr_workqueue_del(mr_workqueue_t *queue) {
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
     MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(queue, &__queue_clazz1, &__queue_clazz2));
 
-    /* Mark as dying */
+    /* Mark workqueue as dying */
     mr_atomic_store(&queue->dying, MR_TRUE);
 
     /* Delete object */
@@ -179,16 +173,10 @@ mr_err_t mr_workqueue_del(mr_workqueue_t *queue) {
 }
 
 static void queue_suspend(mr_workqueue_t *queue) {
-    mr_atomic_t run;
-
     /* Check if workqueue need suspend */
-    mr_atomic_init(&run, MR_TRUE);
-    if (!mr_atomic_compare_exchange(&queue->running, &run, MR_FALSE)) {
+    if (mr_atomic_load(&queue->running)) {
         return;
     }
-
-    /* Put workqueue run-time(running) */
-    mr_workqueue_put(queue);
 
     /* Suspend workqueue */
 #if defined(MR_USE_WORKQUEUE_HOOK)
@@ -240,6 +228,9 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
         /* Lock */
         mask = mr_spinlock_lock_irqsave(&__lock);
     }
+
+    /* Mark workqueue as not running */
+    mr_atomic_store(&queue->running, MR_FALSE);
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__lock, mask);
@@ -323,12 +314,6 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
         goto _exit;
     }
 
-    /* Check if workqueue is started for the first time */
-    if (mr_list_is_empty(&queue->tlist)) {
-        /* Get workqueue run-time(timing) */
-        mr_workqueue_get(queue);
-    }
-
     /* Set timeout tick */
     tick = tick & ~MR_TIMER_PERIODIC;
     work->tick = mr_clock_tick() + tick;
@@ -385,7 +370,7 @@ static void queue_del(mr_workqueue_t *queue) {
     mr_work_t *work;
     int mask;
 
-    /* Mark as dying */
+    /* Mark workqueue as dying */
     mr_atomic_store(&queue->dying, MR_TRUE);
 
     /* Delete workqueue timer */

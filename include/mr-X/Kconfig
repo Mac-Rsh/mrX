@@ -8,6 +8,13 @@ config MR_USE_ENTRY
     default n
 
 # ==================================
+# REF
+# ==================================
+config MR_USE_REF_LONG_COUNT
+    bool "Use ref long count"
+    default n
+
+# ==================================
 # CLOCK
 # ==================================
 config MR_CFG_CLOCK_HOOK_SIZE

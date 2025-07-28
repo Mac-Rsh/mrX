@@ -106,6 +106,7 @@ void *mr_malloc(mr_size_t size) {
     prev->next = blk->next;
     blk->next = MR_NULL;
     blk->size = size;
+    blk->magic = MR_MEMBLK_MAGIC;
 
     /* Check if we need to allocate a new block */
     if (res > (sizeof(mr_memblk_t) << 2)) {
@@ -114,6 +115,7 @@ void *mr_malloc(mr_size_t size) {
         /* Set the new block information */
         new->size = res - sizeof(mr_memblk_t);
         new->next = MR_NULL;
+        new->magic = ~MR_MEMBLK_MAGIC;
 
         /* Insert the new block */
         heap_insert_block(new);
@@ -138,7 +140,7 @@ void mr_free(void *mem) {
 
     /* Check the block */
     blk = (mr_memblk_t *)((mr_uint8_t *)mem - sizeof(mr_memblk_t));
-    if (blk->size != 0) {
+    if (blk->magic == MR_MEMBLK_MAGIC) {
         /* Insert the free block */
         heap_insert_block(blk);
     }
@@ -157,6 +159,9 @@ mr_size_t mr_malloc_usable_size(void *mem) {
 
     /* Get the block information */
     blk = (mr_memblk_t *)((mr_uint8_t *)mem - sizeof(mr_memblk_t));
+    if (blk->magic != MR_MEMBLK_MAGIC) {
+        return 0;
+    }
     return blk->size;
 }
 
@@ -214,6 +219,7 @@ void mr_libc_malloc_init(void) {
     size = sizeof(__heap) - sizeof(mr_memblk_t);
     blk->size = size - offset;
     blk->next = MR_NULL;
+    blk->magic = MR_MEMBLK_MAGIC;
     __blk_head.next = blk;
     __blk_head.size = 0;
 }

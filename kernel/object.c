@@ -16,8 +16,8 @@ mr_err_t mr_object_init(mr_object_t *obj, const mr_clazz_t *clazz) {
     }
 
     /* Init object */
+    mr_ref_init(&obj->magic_ref);
     obj->clazz = clazz;
-    mr_ref_init(&obj->ref);
     return 0;
 }
 
@@ -38,7 +38,7 @@ mr_object_t *mr_object_get(mr_object_t *obj) {
     }
 
     /* Get object reference */
-    return mr_ref_get(&obj->ref) ? obj : MR_NULL;
+    return mr_ref_get(&obj->magic_ref) ? obj : MR_NULL;
 }
 
 static void object_ref_release(mr_ref_t *ref) {
@@ -46,7 +46,7 @@ static void object_ref_release(mr_ref_t *ref) {
     mr_object_t *obj;
 
     /* Get object and clazz */
-    obj = MR_CONTAINER_OF(ref, mr_object_t, ref);
+    obj = MR_CONTAINER_OF(ref, mr_object_t, magic_ref);
     clazz = obj->clazz;
 
     /* Call clazz release */
@@ -62,5 +62,5 @@ mr_bool_t mr_object_put(mr_object_t *obj) {
     }
 
     /* Put object reference */
-    return mr_ref_put(&obj->ref, object_ref_release);
+    return mr_ref_put(&obj->magic_ref, object_ref_release);
 }

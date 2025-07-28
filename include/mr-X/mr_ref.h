@@ -21,9 +21,17 @@ extern "C" {
  * @{
  */
 
-/* Ref magic definition */
-#define MR_REF_MAGIC                    (0x6d720000)
-#define MR_REF_OVERFLOW                 (0x6d730000)
+#if defined(MR_USE_REF_LONG_COUNT)
+/* Ref magic definition(16bits ref-count) */
+#define MR_REF_MAGIC                    (0x6d720000U)
+#define MR_REF_MAGIC_MASK               (0xffff0000U)
+#define MR_REF_OVERFLOW                 (0x6d730000U)
+#else
+/* Ref magic definition(8bits ref-count) */
+#define MR_REF_MAGIC                    (0x6d725800U)
+#define MR_REF_MAGIC_MASK               (0xffffff00U)
+#define MR_REF_OVERFLOW                 (0x6d725900U)
+#endif /* defined(MR_USE_REF_LONG_COUNT) */
 
 /* Ref type */
 typedef volatile mr_atomic_t            mr_ref_t;
@@ -34,7 +42,7 @@ typedef void(mr_ref_release_t)(mr_ref_t *ref);
 /**
  * @brief This macro function initializes a ref.
  */
-#define MR_REF_INIT()                  MR_ATOMIC_INIT(MR_REF_MAGIC | 0x0001)
+#define MR_REF_INIT()                  MR_ATOMIC_INIT(MR_REF_MAGIC | 0x0001U)
 
 /**
  * @brief This macro function checks if a ref is initialized.
@@ -43,7 +51,7 @@ typedef void(mr_ref_release_t)(mr_ref_t *ref);
  * @return MR_TRUE on initialized, MR_FALSE otherwise.
  */
 #define MR_REF_IS_INITED(_ref)                                                 \
-    (((_ref) & 0xffff0000) == MR_REF_MAGIC)
+    (((_ref) & MR_REF_MAGIC_MASK) == MR_REF_MAGIC)
 
 /**
  * @brief This macro function gets the ref count.
@@ -60,7 +68,7 @@ typedef void(mr_ref_release_t)(mr_ref_t *ref);
  */
 MR_INLINE void mr_ref_init(mr_ref_t *ref) {
     /* Init ref(endow with an effective life cycle) */
-    mr_atomic_init(ref, MR_REF_MAGIC | 0x0001);
+    mr_atomic_init(ref, MR_REF_MAGIC | 0x0001U);
 }
 
 /**

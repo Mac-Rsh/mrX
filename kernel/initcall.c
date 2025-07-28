@@ -7,6 +7,7 @@
  */
 
 #include <mr-X/mr_initcall.h>
+#include <libc/mr_assert.h>
 #include <libc/mr_types.h>
 
 /* Kernel and user init status */

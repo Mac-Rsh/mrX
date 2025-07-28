@@ -10,7 +10,6 @@
 #define __MR_INITCALL_H__
 
 #include <libc/mr_compiler.h>
-#include <libc/mr_assert.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,8 +29,8 @@ typedef void(mr_initcall_entry_t)(void);
 
 /* Initcall type */
 typedef struct MR_ALIGN(MR_ALIGN_SIZE) mr_initcall {
-    mr_initcall_entry_t *entry;
     const char *name;
+    mr_initcall_entry_t *entry;
 } mr_initcall_t;
 
 /**

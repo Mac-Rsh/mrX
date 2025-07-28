@@ -29,12 +29,12 @@ extern "C" {
 
 #if defined(MR_USE_IRQ)
 /* Irq flag definition */
-#define MR_IRQ_EDGE_RISING              (0x01)
-#define MR_IRQ_EDGE_FALLING             (0x02)
-#define MR_IRQ_EDGE_BOTH                (0x03)
-#define MR_IRQ_LEVEL_HIGH               (0x04)
-#define MR_IRQ_LEVEL_LOW                (0x08)
-#define MR_IRQ_SHARED                   (0x10)
+#define MR_IRQ_EDGE_RISING              (0x01U)
+#define MR_IRQ_EDGE_FALLING             (0x02U)
+#define MR_IRQ_EDGE_BOTH                (0x03U)
+#define MR_IRQ_LEVEL_HIGH               (0x04U)
+#define MR_IRQ_LEVEL_LOW                (0x08U)
+#define MR_IRQ_SHARED                   (0x10U)
 
 /* Irq return definition */
 typedef enum mr_irq_return {

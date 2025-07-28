@@ -34,12 +34,12 @@ static mr_irq_desc_t __table[MR_CFG_IRQ_TABLE_SIZE];
 static mr_irq_defer_hook_t __hook = {.wakeup = MR_NULL, .suspend = MR_NULL};
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 
-/* Irq priority default definition */
-#define IRQ_PRIORITY_DEFAULT            (0)
-/* Irq flags definition */
-#define IRQ_FLAG_TYPE_MASK              (0x0fU)
 /* Irq action pending definition */
 #define IRQ_ACTION_PENDING              (1U << 31)
+/* Irq flags definition */
+#define IRQ_FLAG_TYPE_MASK              (0x0fU)
+/* Irq priority default definition */
+#define IRQ_PRIORITY_DEFAULT            (0)
 
 static mr_err_t irq_table_insert(mr_irq_t *irq, mr_uint32_t irq_start,
                                  mr_uint32_t irq_end) {
@@ -190,7 +190,7 @@ mr_err_t mr_irq_del(mr_irq_t *irq) {
     MR_ASSERT((irq != MR_NULL) && MR_OBJECT_IS_INITED(irq));
     MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(irq, &__clazz1, &__clazz2));
 
-    /* Mark as dying */
+    /* Mark irq as dying */
     mr_atomic_store(&irq->dying, MR_TRUE);
 
     /* Delete object */
@@ -773,7 +773,7 @@ mr_err_t mr_irq_defer_hook_set(mr_irq_defer_hook_t *hook) {
 static void irq_del(mr_irq_t *irq) {
     int mask;
 
-    /* Mark as dying */
+    /* Mark irq as dying */
     mr_atomic_store(&irq->dying, MR_TRUE);
 
     /* Lock */

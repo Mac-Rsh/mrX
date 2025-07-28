@@ -11,8 +11,6 @@
 #include <libc/mr_assert.h>
 #include <libc/mr_atomic.h>
 
-/* Clock tick */
-static mr_atomic_t __tick;
 /* Clock hook entry */
 #if !defined(MR_CFG_CLOCK_HOOK_SIZE)
 #define MR_CFG_CLOCK_HOOK_SIZE          (2)
@@ -23,6 +21,8 @@ static mr_atomic_t __tick;
 static mr_ptr_t __entry[MR_CFG_CLOCK_HOOK_SIZE];
 /* Clock hook */
 static mr_hook_t __hook = MR_HOOK_INIT(__entry, MR_CFG_CLOCK_HOOK_SIZE);
+/* Clock tick */
+static mr_atomic_t __tick = MR_ATOMIC_INIT(0);
 
 static mr_tick_t clock_hook(void) {
     mr_tick_t tickless, less;
