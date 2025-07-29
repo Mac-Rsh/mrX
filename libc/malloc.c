@@ -141,6 +141,9 @@ void mr_free(void *mem) {
     /* Check the block */
     blk = (mr_memblk_t *)((mr_uint8_t *)mem - sizeof(mr_memblk_t));
     if (blk->magic == MR_MEMBLK_MAGIC) {
+        /* Mark the block as free */
+        blk->magic = ~MR_MEMBLK_MAGIC;
+
         /* Insert the free block */
         heap_insert_block(blk);
     }
@@ -219,7 +222,7 @@ void mr_libc_malloc_init(void) {
     size = sizeof(__heap) - sizeof(mr_memblk_t);
     blk->size = size - offset;
     blk->next = MR_NULL;
-    blk->magic = MR_MEMBLK_MAGIC;
+    blk->magic = ~MR_MEMBLK_MAGIC;
     __blk_head.next = blk;
     __blk_head.size = 0;
 }
