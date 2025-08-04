@@ -203,6 +203,7 @@ char *mr_strcpy(char *dst, const char *src) {
     for (d = dst; *src != '\0'; src++, dst++) {
         *dst = *src;
     }
+    *dst = '\0';
     return d;
 }
 

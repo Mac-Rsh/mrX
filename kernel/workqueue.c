@@ -31,12 +31,12 @@ static const mr_clazz_t __work_clazz2
 static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
 
 static void queue_wakeup(mr_workqueue_t *queue) {
-    mr_atomic_t norun;
+    mr_atomic_t last;
 
-    /* Check if workqueue need wakeup */
-    mr_atomic_init(&norun, MR_FALSE);
-    if (!mr_atomic_compare_exchange(&queue->running, &norun, MR_TRUE)) {
-        /* No need wakeup */
+    /* Increase depth */
+    last = mr_atomic_fetch_add(&queue->depth, 1);
+    if (last != 0) {
+        /* No need to wakeup */
         return;
     }
 
@@ -113,8 +113,8 @@ static mr_err_t workqueue_init(mr_workqueue_t *queue, const mr_clazz_t *clazz) {
     }
 
     /* Init workqueue */
-    mr_atomic_init(&queue->running, MR_FALSE);
     mr_atomic_init(&queue->dying, MR_FALSE);
+    mr_atomic_init(&queue->depth, 0);
     mr_list_init(&queue->tlist);
     mr_list_init(&queue->list);
 #if defined(MR_USE_WORKQUEUE_HOOK)
@@ -173,8 +173,12 @@ mr_err_t mr_workqueue_del(mr_workqueue_t *queue) {
 }
 
 static void queue_suspend(mr_workqueue_t *queue) {
-    /* Check if workqueue need suspend */
-    if (mr_atomic_load(&queue->running)) {
+    mr_atomic_t last;
+
+    /* Decrease depth */
+    last = mr_atomic_fetch_sub(&queue->depth, 1);
+    if (last != 1) {
+        /* No need to suspend */
         return;
     }
 
@@ -188,6 +192,7 @@ static void queue_suspend(mr_workqueue_t *queue) {
 
 mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
     mr_work_entry_t *entry;
+    mr_list_t oplist;
     mr_work_t *work;
     void *param;
     int mask;
@@ -205,12 +210,22 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
         return 0;
     }
 
+    /* Init operation list */
+    mr_list_init(&oplist);
+
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
 
+    /* Replace the running list with the operation list (to prevent node removal
+     * in the middle) */
+    mr_list_replace(&oplist, &queue->list);
+
+    /* Mark workqueue as running(reset depth) */
+    mr_atomic_store(&queue->depth, 1);
+
     /* Check workqueue work list */
-    while (!mr_list_is_empty(&queue->list)) {
-        work = MR_LIST_ENTRY(queue->list.next, mr_work_t, list);
+    while (!mr_list_is_empty(&oplist)) {
+        work = MR_LIST_ENTRY(oplist.next, mr_work_t, list);
 
         /* Remove work from running list */
         mr_list_del(&work->list);
@@ -228,9 +243,6 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
         /* Lock */
         mask = mr_spinlock_lock_irqsave(&__lock);
     }
-
-    /* Mark workqueue as not running */
-    mr_atomic_store(&queue->running, MR_FALSE);
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__lock, mask);

@@ -1,0 +1,10 @@
+menu "Test options"
+
+# ==================================
+# TEST
+# ==================================
+config MR_USE_TEST
+    bool "Use test"
+    default n
+
+endmenu

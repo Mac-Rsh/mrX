@@ -38,7 +38,7 @@ typedef struct mr_workqueue_hook {
 /* Workqueue type */
 typedef struct mr_workqueue {
     mr_object_t parent;
-    mr_atomic_t running;
+    mr_atomic_t depth;
     mr_atomic_t dying;
     mr_timer_t timer;
     mr_list_t tlist;

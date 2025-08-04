@@ -24,6 +24,23 @@ extern "C" {
  */
 
 #if defined(MR_USE_PRINTF)
+#if defined(MR_USE_PRINTF_COLOR)
+/* Printf color definition */
+#define MR_COLOR_RESET                  "\033[0m"
+#define MR_COLOR_RED                    "\033[31m"
+#define MR_COLOR_GREEN                  "\033[32m"
+#define MR_COLOR_YELLOW                 "\033[33m"
+#define MR_COLOR_BLUE                   "\033[34m"
+#define MR_COLOR(_color, _str)          _color _str MR_COLOR_RESET
+#else
+#define MR_COLOR_RESET
+#define MR_COLOR_RED
+#define MR_COLOR_GREEN
+#define MR_COLOR_YELLOW
+#define MR_COLOR_BLUE
+#define MR_COLOR(_color, _str)          _str
+#endif /* defined(MR_USE_PRINTF_COLOR) */
+
 /**
  * @brief This function prints a formatted string.
  *

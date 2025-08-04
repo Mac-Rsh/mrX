@@ -10,7 +10,7 @@
 #define __MR_PORT_IRQ_H__
 
 #ifdef __cplusplus
-"C" {
+extern "C" {
 #endif /* __cplusplus */
 
 /**

@@ -40,6 +40,11 @@ config MR_CFG_PRINTF_BUF_SIZE
     default 64
     range 8 65535
 
+config MR_USE_PRINTF_COLOR
+    depends on MR_USE_PRINTF
+    bool "Use printf color"
+    default n
+
 config MR_USE_PRINTF_SAFE
     depends on MR_USE_PRINTF
     bool "Use printf safe"

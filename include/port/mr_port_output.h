@@ -12,7 +12,7 @@
 #include <libc/mr_types.h>
 
 #ifdef __cplusplus
-"C" {
+extern "C" {
 #endif /* __cplusplus */
 
 /**
