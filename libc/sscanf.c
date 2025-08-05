@@ -16,7 +16,7 @@ int mr_sscanf(const char *buf, const char *fmt, ...) {
     int ret;
 
     /* Check parameter */
-    if ((!buf) || (!fmt) || (fmt[0] == '\0')) {
+    if ((!buf) || (!fmt)) {
         return -1;
     }
 

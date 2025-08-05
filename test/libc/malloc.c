@@ -39,11 +39,21 @@ static void test_malloc_free_basic(void) {
     mr_size_t usable;
     void *p;
 
+    p = mr_malloc(0);
+    MR_TEST_ASSERT_EQ_PTR(p, MR_NULL);
+    mr_free(MR_NULL);
+
     p = mr_malloc(128);
     MR_TEST_ASSERT_NE_PTR(p, MR_NULL);
 
     usable = mr_malloc_usable_size(p);
     MR_TEST_ASSERT_GE_UINT(usable, 128);
+
+    usable = mr_malloc_usable_size(MR_NULL);
+    MR_TEST_ASSERT_EQ_UINT(usable, 0);
+
+    usable = mr_malloc_usable_size(p + 32);
+    MR_TEST_ASSERT_EQ_UINT(usable, 0);
 
     canary_fill(p, usable);
     MR_TEST_ASSERT_EQ_INT(canary_verify(p, usable), 1);
@@ -56,8 +66,14 @@ MR_TEST_EXPORT(malloc, free_basic, test_malloc_free_basic);
 /* calloc test: memory must be zero-filled                                    */
 static void test_calloc_zero(void) {
     const mr_size_t n = 16, sz = 32;
-    mr_size_t usable;
+    mr_size_t usable, i;
     void *p;
+
+    p = mr_calloc(0, 0);
+    MR_TEST_ASSERT_EQ_PTR(p, MR_NULL);
+
+    p = mr_calloc(MR_SIZE_MAX / 2, 1);
+    MR_TEST_ASSERT_EQ_PTR(p, MR_NULL);
 
     p = mr_calloc(n, sz);
     MR_TEST_ASSERT_NE_PTR(p, MR_NULL);
@@ -66,7 +82,7 @@ static void test_calloc_zero(void) {
     MR_TEST_ASSERT_GE_UINT(usable, n * sz);
 
     /* Verify all bytes are zero */
-    for (mr_size_t i = 0; i < usable; ++i) {
+    for (i = 0; i < usable; ++i) {
         MR_TEST_ASSERT_EQ_INT(((mr_uint8_t *)p)[i], 0);
     }
 
@@ -83,12 +99,13 @@ static void test_realloc_resize(void) {
     MR_TEST_ASSERT_NE_PTR(p1, MR_NULL);
     canary_fill(p1, 64);
 
-    /* Expand */
+    p2 = mr_realloc(p1, MR_SIZE_MAX);
+    MR_TEST_ASSERT_EQ_PTR(p2, MR_NULL);
+
     p2 = mr_realloc(p1, 256);
     MR_TEST_ASSERT_NE_PTR(p2, MR_NULL);
     MR_TEST_ASSERT_EQ_INT(canary_verify(p2, 64), 1);
 
-    /* Shrink */
     p3 = mr_realloc(p2, 32);
     MR_TEST_ASSERT_NE_PTR(p3, MR_NULL);
     MR_TEST_ASSERT_EQ_INT(canary_verify(p3, 32), 1);
@@ -146,7 +163,10 @@ MR_TEST_EXPORT(malloc, frag_merge, test_frag_merge);
 static void test_malloc_max(void) {
     const mr_size_t huge = 3 * 1024;
     mr_size_t usable;
-    void *p;
+    void *p, *n;
+
+    p = mr_malloc(MR_SIZE_MAX - 32);
+    MR_TEST_ASSERT_EQ_PTR(p, MR_NULL);
 
     p = mr_malloc(huge);
     if (p) {

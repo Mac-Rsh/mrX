@@ -211,7 +211,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
     char eff;
 
     /* Check parameter */
-    if ((!fmt) || (fmt[0] == '\0')) {
+    if (!fmt) {
         return 0;
     }
     if (!buf) {
@@ -478,7 +478,7 @@ _default:
 
 int mr_vsprintf(char *buf, const char *fmt, mr_va_list args) {
     /* Format string no limit */
-    return mr_vsnprintf(buf, (mr_size_t)-1, fmt, args);
+    return mr_vsnprintf(buf, MR_SIZE_MAX - (mr_size_t)buf, fmt, args);
 }
 
 int mr_snprintf(char *buf, mr_size_t size, const char *fmt, ...) {

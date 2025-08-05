@@ -26,135 +26,141 @@ extern "C" {
 #if defined(MR_USE_TEST)
 /* Test expect and assert equality macros definition */
 #define MR_TEST_EXPECT_EQ_INT(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_EQ(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_INT(_a, EQ, _b))
 #define MR_TEST_EXPECT_EQ_UINT(_a, _b)                                         \
-    __MR_TEST_EXPECT(__MR_TEST_EQ(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_UINT(_a, EQ, _b))
 #define MR_TEST_EXPECT_EQ_PTR(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_EQ(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_PTR(_a, EQ, _b))
 #define MR_TEST_EXPECT_EQ_FLOAT(_a, _b)                                        \
-    __MR_TEST_EXPECT(__MR_TEST_EQ(_a, _b, float, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_NEAR(_a, _b, 1e-6))
 #define MR_TEST_EXPECT_EQ_DOUBLE(_a, _b)                                       \
-    __MR_TEST_EXPECT(__MR_TEST_EQ(_a, _b, double, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_NEAR(_a, _b, 1e-8))
 #define MR_TEST_ASSERT_EQ_INT(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_EQ(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_INT(_a, EQ, _b))
 #define MR_TEST_ASSERT_EQ_UINT(_a, _b)                                         \
-    __MR_TEST_ASSERT(__MR_TEST_EQ(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_UINT(_a, EQ, _b))
 #define MR_TEST_ASSERT_EQ_PTR(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_EQ(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_PTR(_a, EQ, _b))
 #define MR_TEST_ASSERT_EQ_FLOAT(_a, _b)                                        \
-    __MR_TEST_ASSERT(__MR_TEST_EQ(_a, _b, float, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_NEAR(_a, _b, 1e-6))
 #define MR_TEST_ASSERT_EQ_DOUBLE(_a, _b)                                       \
-    __MR_TEST_ASSERT(__MR_TEST_EQ(_a, _b, double, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_NEAR(_a, _b, 1e-8))
 
 /* Test expect and assert inequality macros definition */
 #define MR_TEST_EXPECT_NE_INT(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_NE(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_INT(_a, NE, _b))
 #define MR_TEST_EXPECT_NE_UINT(_a, _b)                                         \
-    __MR_TEST_EXPECT(__MR_TEST_NE(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_UINT(_a, NE, _b))
 #define MR_TEST_EXPECT_NE_PTR(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_NE(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_PTR(_a, NE, _b))
 #define MR_TEST_EXPECT_NE_FLOAT(_a, _b)                                        \
-    __MR_TEST_EXPECT(__MR_TEST_NE(_a, _b, float, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_FLOAT(_a, NE, _b))
 #define MR_TEST_EXPECT_NE_DOUBLE(_a, _b)                                       \
-    __MR_TEST_EXPECT(__MR_TEST_NE(_a, _b, double, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_DOUBLE(_a, NE, _b))
 #define MR_TEST_ASSERT_NE_INT(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_NE(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_INT(_a, NE, _b))
 #define MR_TEST_ASSERT_NE_UINT(_a, _b)                                         \
-    __MR_TEST_ASSERT(__MR_TEST_NE(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_UINT(_a, NE, _b))
 #define MR_TEST_ASSERT_NE_PTR(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_NE(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_PTR(_a, NE, _b))
 #define MR_TEST_ASSERT_NE_FLOAT(_a, _b)                                        \
-    __MR_TEST_ASSERT(__MR_TEST_NE(_a, _b, float, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_FLOAT(_a, NE, _b))
 #define MR_TEST_ASSERT_NE_DOUBLE(_a, _b)                                       \
-    __MR_TEST_ASSERT(__MR_TEST_NE(_a, _b, double, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_DOUBLE(_a, NE, _b))
 
 /* Test expect and assert less than macros definition */
 #define MR_TEST_EXPECT_LT_INT(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_LT(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_INT(_a, LT, _b))
 #define MR_TEST_EXPECT_LT_UINT(_a, _b)                                         \
-    __MR_TEST_EXPECT(__MR_TEST_LT(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_UINT(_a, LT, _b))
 #define MR_TEST_EXPECT_LT_PTR(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_LT(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_PTR(_a, LT, _b))
 #define MR_TEST_EXPECT_LT_FLOAT(_a, _b)                                        \
-    __MR_TEST_EXPECT(__MR_TEST_LT(_a, _b, float, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_FLOAT(_a, LT, _b))
 #define MR_TEST_EXPECT_LT_DOUBLE(_a, _b)                                       \
-    __MR_TEST_EXPECT(__MR_TEST_LT(_a, _b, double, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_DOUBLE(_a, LT, _b))
 #define MR_TEST_ASSERT_LT_INT(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_LT(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_INT(_a, LT, _b))
 #define MR_TEST_ASSERT_LT_UINT(_a, _b)                                         \
-    __MR_TEST_ASSERT(__MR_TEST_LT(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_UINT(_a, LT, _b))
 #define MR_TEST_ASSERT_LT_PTR(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_LT(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_PTR(_a, LT, _b))
 #define MR_TEST_ASSERT_LT_FLOAT(_a, _b)                                        \
-    __MR_TEST_ASSERT(__MR_TEST_LT(_a, _b, float, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_FLOAT(_a, LT, _b))
 #define MR_TEST_ASSERT_LT_DOUBLE(_a, _b)                                       \
-    __MR_TEST_ASSERT(__MR_TEST_LT(_a, _b, double, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_DOUBLE(_a, LT, _b))
 
 /* Test expect and assert less than or equal macros definition */
 #define MR_TEST_EXPECT_LE_INT(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_LE(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_INT(_a, LE, _b))
 #define MR_TEST_EXPECT_LE_UINT(_a, _b)                                         \
-    __MR_TEST_EXPECT(__MR_TEST_LE(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_UINT(_a, LE, _b))
 #define MR_TEST_EXPECT_LE_PTR(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_LE(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_PTR(_a, LE, _b))
 #define MR_TEST_EXPECT_LE_FLOAT(_a, _b)                                        \
-    __MR_TEST_EXPECT(__MR_TEST_LE(_a, _b, float, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_FLOAT(_a, LE, _b))
 #define MR_TEST_EXPECT_LE_DOUBLE(_a, _b)                                       \
-    __MR_TEST_EXPECT(__MR_TEST_LE(_a, _b, double, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_DOUBLE(_a, LE, _b))
 #define MR_TEST_ASSERT_LE_INT(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_LE(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_INT(_a, LE, _b))
 #define MR_TEST_ASSERT_LE_UINT(_a, _b)                                         \
-    __MR_TEST_ASSERT(__MR_TEST_LE(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_UINT(_a, LE, _b))
 #define MR_TEST_ASSERT_LE_PTR(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_LE(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_PTR(_a, LE, _b))
 #define MR_TEST_ASSERT_LE_FLOAT(_a, _b)                                        \
-    __MR_TEST_ASSERT(__MR_TEST_LE(_a, _b, float, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_FLOAT(_a, LE, _b))
 #define MR_TEST_ASSERT_LE_DOUBLE(_a, _b)                                       \
-    __MR_TEST_ASSERT(__MR_TEST_LE(_a, _b, double, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_DOUBLE(_a, LE, _b))
 
 /* Test expect and assert greater than macros definition */
 #define MR_TEST_EXPECT_GT_INT(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_GT(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_INT(_a, GT, _b))
 #define MR_TEST_EXPECT_GT_UINT(_a, _b)                                         \
-    __MR_TEST_EXPECT(__MR_TEST_GT(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_UINT(_a, GT, _b))
 #define MR_TEST_EXPECT_GT_PTR(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_GT(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_PTR(_a, GT, _b))
 #define MR_TEST_EXPECT_GT_FLOAT(_a, _b)                                        \
-    __MR_TEST_EXPECT(__MR_TEST_GT(_a, _b, float, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_FLOAT(_a, GT, _b))
 #define MR_TEST_EXPECT_GT_DOUBLE(_a, _b)                                       \
-    __MR_TEST_EXPECT(__MR_TEST_GT(_a, _b, double, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_DOUBLE(_a, GT, _b))
 #define MR_TEST_ASSERT_GT_INT(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_GT(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_INT(_a, GT, _b))
 #define MR_TEST_ASSERT_GT_UINT(_a, _b)                                         \
-    __MR_TEST_ASSERT(__MR_TEST_GT(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_UINT(_a, GT, _b))
 #define MR_TEST_ASSERT_GT_PTR(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_GT(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_PTR(_a, GT, _b))
 #define MR_TEST_ASSERT_GT_FLOAT(_a, _b)                                        \
-    __MR_TEST_ASSERT(__MR_TEST_GT(_a, _b, float, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_FLOAT(_a, GT, _b))
 #define MR_TEST_ASSERT_GT_DOUBLE(_a, _b)                                       \
-    __MR_TEST_ASSERT(__MR_TEST_GT(_a, _b, double, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_DOUBLE(_a, GT, _b))
 
 /* Test expect and assert greater than or equal macros definition */
 #define MR_TEST_EXPECT_GE_INT(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_GE(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_INT(_a, GE, _b))
 #define MR_TEST_EXPECT_GE_UINT(_a, _b)                                         \
-    __MR_TEST_EXPECT(__MR_TEST_GE(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_UINT(_a, GE, _b))
 #define MR_TEST_EXPECT_GE_PTR(_a, _b)                                          \
-    __MR_TEST_EXPECT(__MR_TEST_GE(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_PTR(_a, GE, _b))
 #define MR_TEST_EXPECT_GE_FLOAT(_a, _b)                                        \
-    __MR_TEST_EXPECT(__MR_TEST_GE(_a, _b, float, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_FLOAT(_a, GE, _b))
 #define MR_TEST_EXPECT_GE_DOUBLE(_a, _b)                                       \
-    __MR_TEST_EXPECT(__MR_TEST_GE(_a, _b, double, "%f"))
+    __MR_TEST_EXPECT(__MR_TEST_COND_DOUBLE(_a, GE, _b))
 #define MR_TEST_ASSERT_GE_INT(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_GE(_a, _b, mr_int64_t, "%lld"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_INT(_a, GE, _b))
 #define MR_TEST_ASSERT_GE_UINT(_a, _b)                                         \
-    __MR_TEST_ASSERT(__MR_TEST_GE(_a, _b, mr_uint64_t, "%llu"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_UINT(_a, GE, _b))
 #define MR_TEST_ASSERT_GE_PTR(_a, _b)                                          \
-    __MR_TEST_ASSERT(__MR_TEST_GE(_a, _b, mr_ptr_t, "%p"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_PTR(_a, GE, _b))
 #define MR_TEST_ASSERT_GE_FLOAT(_a, _b)                                        \
-    __MR_TEST_ASSERT(__MR_TEST_GE(_a, _b, float, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_FLOAT(_a, GE, _b))
 #define MR_TEST_ASSERT_GE_DOUBLE(_a, _b)                                       \
-    __MR_TEST_ASSERT(__MR_TEST_GE(_a, _b, double, "%f"))
+    __MR_TEST_ASSERT(__MR_TEST_COND_DOUBLE(_a, GE, _b))
+
+/* Test expect and assert near macros definition */
+#define MR_TEST_EXPECT_NEAR(_a, _b, _e)                                        \
+    __MR_TEST_EXPECT(__MR_TEST_COND_NEAR(_a, _b, _e))
+#define MR_TEST_ASSERT_NEAR(_a, _b, _e)                                        \
+    __MR_TEST_ASSERT(__MR_TEST_COND_NEAR(_a, _b, _e))
 
 /* Testcase entry type */
 typedef void(mr_testcase_entry)(void);
@@ -183,9 +189,26 @@ typedef struct MR_ALIGN(MR_ALIGN_SIZE) mr_testcase {
     __MR_TEST_EXPORT(_suite, _name, _entry, "1")
 
 /**
- * @brief This function runs all testcases.
+ * @brief This function runs a testcase.
+ *
+ * @param suite The testcase suite name.
+ * @param name The testcase name.
  */
-int mr_test_all_run(void);
+void mr_testcase_run(const char *suite, const char *name);
+
+/**
+ * @brief This function runs a testsuite.
+ *
+ * @param suite The testsuite name.
+ */
+void mr_testsuite_run(const char *suite);
+
+/**
+ * @brief This function runs all testcases.
+ *
+ * @return MR_TRUE on success, MR_FALSE on failure.
+ */
+mr_bool_t mr_test_run(void);
 #endif /* defined(MR_USE_TEST) */
 
 /** @} */

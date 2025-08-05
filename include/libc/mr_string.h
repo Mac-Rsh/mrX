@@ -37,6 +37,7 @@ extern "C" {
 #define mr_strcpy(_d, _s)               strcpy(_d, _s)
 #define mr_strerror(_e)                 strerror(_e)
 #define mr_strlen(_s)                   strlen(_s)
+#define mr_strnlen(_s, _sz)             strnlen(_s, _sz)
 #define mr_strncmp(_s1, _s2, _sz)       strncmp(_s1, _s2, _sz)
 #define mr_strncpy(_d, _s, _sz)         strncpy(_d, _s, _sz)
 #define mr_strchr(_s, _c)               strchr(_s, _c)

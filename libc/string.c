@@ -9,6 +9,7 @@
 #include <libc/mr_string.h>
 #if defined(MR_USE_STRING)
 #include <libc/mr_errno.h>
+#endif /* defined(MR_USE_STRING) */
 
 /* DeBruijn ffs32 */
 const int __mr_ffs_debruijn32[32] = {
@@ -24,6 +25,7 @@ const int __mr_ffs_debruijn64[64] = {
     55, 27, 41, 16, 35, 21, 32, 11, 26, 15, 20, 10, 14, 9,  8,  7,
 };
 
+#if defined(MR_USE_STRING)
 void *mr_memccpy(void *dst, const void *src, int c, mr_size_t size) {
     const char *s;
     char *d;

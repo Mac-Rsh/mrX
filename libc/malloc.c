@@ -90,6 +90,11 @@ void *mr_malloc(mr_size_t size) {
 
     /* Align the size */
     size = HEAP_ALIGN(size, MR_ALIGN_SIZE);
+    if (size == 0) {
+        /* Overflow */
+        mem = MR_NULL;
+        goto _exit;
+    }
 
     /* Search for and take blocks that match the criteria */
     for (blk = prev->next; blk->size < size; blk = blk->next) {

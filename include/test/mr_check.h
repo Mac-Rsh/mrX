@@ -31,28 +31,39 @@ extern mr_uint32_t __mr_test_status;
 /* Test pass magic number definition */
 #define __MR_TEST_MAGIC_PASS            (0x70617373U)
 
-/**
- * @brief This macro function checks if the condition is true.
- *
- * @param _a The first operand.
- * @param _cond The condition.
- * @param _b The second operand.
- * @param _type The operand type.
- * @param _fmt The format string for the operand.
- */
+/* Test printf macro definition */
+#define __MR_TEST_PRINTF(_desc, _a_str, _a, _b_str, _b, _fmt)                  \
+    do {                                                                       \
+        mr_printf("%s:%d\n", __FILE__, __LINE__);                              \
+        mr_printf("Expectation failed: %s\n", _desc);                          \
+        mr_printf("  %s = "_fmt                                                \
+                  "\n",                                                        \
+                  (_a_str), (_a));                                             \
+        mr_printf("  %s = "_fmt                                                \
+                  "\n",                                                        \
+                  (_b_str), (_b));                                             \
+    } while (0)
+
+/* Test check macro definition */
 #define __MR_TEST_CHECK(_a, _cond, _b, _type, _fmt)                            \
     do {                                                                       \
         _type __a = (_type)(_a);                                               \
         _type __b = (_type)(_b);                                               \
         if (!(__a _cond __b)) {                                                \
-            mr_printf("%s:%d: Test Failure\n", __FILE__, __LINE__);            \
-            mr_printf("Expectation failed: %s %s %s\n", #_a, #_cond, #_b);     \
-            mr_printf("  %s = "_fmt                                            \
-                      "\n",                                                    \
-                      #_a, __a);                                               \
-            mr_printf("  %s = "_fmt                                            \
-                      "\n",                                                    \
-                      #_b, __b);                                               \
+            __MR_TEST_PRINTF(#_a " " #_cond " " #_b, #_a, __a, #_b, __b,       \
+                             _fmt);                                            \
+            __mr_test_status = ~__MR_TEST_MAGIC_PASS;                          \
+        }                                                                      \
+    } while (0)
+#define __MR_TEST_CHECK_NEAR(_a, _b, _e, _type, _fmt)                          \
+    do {                                                                       \
+        _type __a = (_type)(_a);                                               \
+        _type __b = (_type)(_b);                                               \
+        _type __e = (_type)(_e);                                               \
+        _type __c = (__a > __b) ? (__a - __b) : (__b - __a);                   \
+        if (!(__c <= __e)) {                                                   \
+            __MR_TEST_PRINTF("| " #_a " - " #_b " | <= " #_e, #_a, __a, #_b,   \
+                             __b, _fmt);                                       \
             __mr_test_status = ~__MR_TEST_MAGIC_PASS;                          \
         }                                                                      \
     } while (0)
@@ -70,15 +81,34 @@ extern mr_uint32_t __mr_test_status;
     __MR_TEST_CHECK(_a, >, _b, _type, _fmt)
 #define __MR_TEST_GE(_a, _b, _type, _fmt)                                      \
     __MR_TEST_CHECK(_a, >=, _b, _type, _fmt)
+#define __MR_TEST_NEAR(_a, _b, _e, _type, _fmt)                                \
+    __MR_TEST_CHECK_NEAR(_a, _b, _e, _type, _fmt)
+
+/* Test condition macros definition */
+#define __MR_TEST_COND_INT(_a, _cond, _b)                                      \
+    __MR_TEST_##_cond(_a, _b, mr_int64_t, "%lld")
+#define __MR_TEST_COND_UINT(_a, _cond, _b)                                     \
+    __MR_TEST_##_cond(_a, _b, mr_uint64_t, "%llu")
+#define __MR_TEST_COND_PTR(_a, _cond, _b)                                      \
+    __MR_TEST_##_cond(_a, _b, mr_ptr_t, "%p")
+#define __MR_TEST_COND_FLOAT(_a, _cond, _b)                                    \
+    __MR_TEST_##_cond(_a, _b, mr_f32_t, "%f")
+#define __MR_TEST_COND_DOUBLE(_a, _cond, _b)                                   \
+    __MR_TEST_##_cond(_a, _b, mr_f64_t, "%lf")
+#define __MR_TEST_COND_NEAR(_a, _b, _e)                                        \
+    __MR_TEST_NEAR(_a, _b, _e, mr_f64_t, "%lf")
 
 /* Test expect and assert macros definition */
 #define __MR_TEST_EXPECT(_check)        _check
 #define __MR_TEST_ASSERT(_check)                                               \
     do {                                                                       \
+        mr_uint32_t __s = __mr_test_status;                                    \
+        __mr_test_status = __MR_TEST_MAGIC_PASS;                               \
         _check;                                                                \
         if (__mr_test_status == (~__MR_TEST_MAGIC_PASS)) {                     \
             return;                                                            \
         }                                                                      \
+        __mr_test_status = __s;                                                \
     } while (0)
 #endif /* defined(MR_USE_TEST) */
 

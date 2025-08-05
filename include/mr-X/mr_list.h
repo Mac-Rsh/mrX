@@ -106,29 +106,6 @@ MR_INLINE void mr_list_replace(mr_list_t *new, mr_list_t *old) {
 }
 
 /**
- * @brief This function swaps two elements in the list.
- *
- * @param entry1 The first element.
- * @param entry2 The second element.
- */
-MR_INLINE void mr_list_swap(mr_list_t *entry1, mr_list_t *entry2) {
-    mr_list_t *tmp;
-
-    /* Remove from the list */
-    tmp = entry2->prev;
-    mr_list_del(entry2);
-
-    /* Replace in the list */
-    mr_list_replace(entry1, entry2);
-    if (tmp == entry1) {
-        tmp = entry2;
-    }
-
-    /* Add to the list */
-    mr_list_add(tmp, entry1);
-}
-
-/**
  * @brief This function moves an element to the head of the list.
  *
  * @param entry The element to move.

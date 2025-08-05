@@ -10,6 +10,7 @@
 #if defined(MR_USE_TEST)
 #include <mr-X/mr_clock.h>
 #include <libc/mr_assert.h>
+#include <libc/mr_string.h>
 
 /* Test status */
 mr_uint32_t __mr_test_status = __MR_TEST_MAGIC_PASS;
@@ -24,45 +25,107 @@ static void end(void) {
 }
 __MR_TEST_EXPORT(sys, end, end, "1.end");
 
-int mr_test_all_run(void) {
+static mr_bool_t testcase_run(const mr_testcase_t *cs) {
+    mr_tick_t tick;
+
+    /* Check parameter */
+    MR_ASSERT(cs->entry != MR_NULL);
+
+    /* Test case begin */
+    mr_printf("[ RUN      ] %s.%s\n", cs->suite, cs->name);
+
+    /* Reset test status */
+    __mr_test_status = __MR_TEST_MAGIC_PASS;
+
+    /* Get begin tick */
+    tick = mr_clock_tick();
+
+    /* Call test entry */
+    cs->entry();
+
+    /* Get difference tick */
+    tick = mr_clock_tick() - tick;
+
+    /* Test case end */
+    if (__mr_test_status == __MR_TEST_MAGIC_PASS) {
+        mr_printf(
+            "[       " MR_COLOR(MR_COLOR_GREEN, "OK") " ] %s.%s (%d tick)\n",
+            cs->suite, cs->name, tick);
+        return MR_TRUE;
+    } else {
+        mr_printf(
+            "[  " MR_COLOR(MR_COLOR_RED, "FAILED") "  ] %s.%s (%d tick)\n",
+            cs->suite, cs->name, tick);
+        return MR_FALSE;
+    }
+}
+
+void mr_testcase_run(const char *suite, const char *name) {
+    const mr_testcase_t *start = &__mr_testcase_sys_start;
+    const mr_testcase_t *end = &__mr_testcase_sys_end;
+    const mr_testcase_t *cs;
+
+    /* Each test cases */
+    for (cs = start + 1; cs < end; cs++) {
+        /* Match testcase */
+        if ((!mr_strcmp(cs->suite, suite)) || (!mr_strcmp(cs->name, name))) {
+            continue;
+        }
+
+        /* Run testcase */
+        testcase_run(cs);
+    }
+}
+
+void mr_testsuite_run(const char *suite) {
     const mr_testcase_t *start = &__mr_testcase_sys_start;
     const mr_testcase_t *end = &__mr_testcase_sys_end;
     const mr_testcase_t *cs;
     int pass, fail;
-    mr_tick_t tick;
+    mr_bool_t ret;
 
     /* Test begin */
-    mr_printf("[==========] Running tests\n");
+    mr_printf("[==========] Running '%s' suite\n", suite);
 
     /* Each test cases */
     for (pass = fail = 0, cs = start + 1; cs < end; cs++) {
-        MR_ASSERT(cs->entry != MR_NULL);
+        /* Match testcase */
+        if (mr_strcmp(cs->suite, suite) != 0) {
+            continue;
+        }
 
-        /* Test case begin */
-        mr_printf("[ RUN      ] %s.%s\n", cs->suite, cs->name);
-
-        /* Reset test status */
-        __mr_test_status = __MR_TEST_MAGIC_PASS;
-
-        /* Get begin tick */
-        tick = mr_clock_tick();
-
-        /* Call test entry */
-        cs->entry();
-
-        /* Get difference tick */
-        tick = mr_clock_tick() - tick;
-
-        /* Test case end */
-        if (__mr_test_status == __MR_TEST_MAGIC_PASS) {
-            mr_printf("[       " MR_COLOR(MR_COLOR_GREEN,
-                                          "OK") " ] %s.%s (%d tick)\n",
-                      cs->suite, cs->name, tick);
+        /* Run testcase */
+        ret = testcase_run(cs);
+        if (ret) {
             pass++;
         } else {
-            mr_printf(
-                "[  " MR_COLOR(MR_COLOR_RED, "FAILED") "  ] %s.%s (%d tick)\n",
-                cs->suite, cs->name, tick);
+            fail++;
+        }
+    }
+
+    /* Test summary */
+    mr_printf("[==========]\n");
+    mr_printf("[  PASSED  ] %d tests\n", pass);
+    mr_printf("[  FAILED  ] %d tests\n", fail);
+}
+
+mr_bool_t mr_test_run(void) {
+    const mr_testcase_t *start = &__mr_testcase_sys_start;
+    const mr_testcase_t *end = &__mr_testcase_sys_end;
+    const mr_testcase_t *cs;
+    int pass, fail;
+    mr_bool_t ret;
+
+    /* Test begin */
+    mr_printf("[==========] Running 'all' tests\n");
+
+    /* Each test cases */
+    for (pass = fail = 0, cs = start + 1; cs < end; cs++) {
+        /* Run testcase */
+        ret = testcase_run(cs);
+        if (ret) {
+            pass++;
+        } else {
             fail++;
         }
     }
@@ -72,7 +135,7 @@ int mr_test_all_run(void) {
     mr_printf("[  PASSED  ] %d tests\n", pass);
     mr_printf("[  FAILED  ] %d tests\n", fail);
 
-    /* Test end */
-    return 0;
+    /* Return result */
+    return (fail == 0) ? MR_TRUE : MR_FALSE;
 }
 #endif /* defined(MR_USE_TEST) */

@@ -29,8 +29,8 @@ extern "C" {
 #if defined(MR_USE_SPRINTF_STD)
 #define mr_vsnprintf(_b, _s, _f, _a)    vsnprintf(_b, _s, _f, _a)
 #define mr_vsprintf(_b, _f, _a)         vsprintf(_b, _f, _a)
-#define mr_snprintf(_b, _s, _f, ...)    snprintf(_b, _s, _f, __VA_ARGS__)
-#define mr_sprintf(_b, _f, ...)         sprintf(_b, _f, __VA_ARGS__)
+#define mr_snprintf(_b, _s, _f, ...)    snprintf(_b, _s, _f, ##__VA_ARGS__)
+#define mr_sprintf(_b, _f, ...)         sprintf(_b, _f, ##__VA_ARGS__)
 #else
 /**
  * @brief This function prints a formatted string to a buffer.
