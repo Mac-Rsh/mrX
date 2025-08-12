@@ -7,6 +7,7 @@
  */
 
 #include <test/mr_test.h>
+#if defined(MR_USE_TEST)
 #if defined(MR_USE_WAIT)
 #include <mr-X/mr_wait.h>
 
@@ -253,3 +254,4 @@ static void test_generation_skip(void) {
 }
 MR_TEST_EXPORT(wait, generation_skip, test_generation_skip);
 #endif /* defined(MR_USE_WAIT) */
+#endif /* defined(MR_USE_TEST) */

@@ -7,6 +7,7 @@
  */
 
 #include <test/mr_test.h>
+#if defined(MR_USE_TEST)
 #if defined(MR_USE_IRQ)
 #include <mr-X/mr_irq.h>
 #include <libc/mr_string.h>
@@ -406,3 +407,4 @@ static void test_irq_defer_request(void) {
 MR_TEST_EXPORT(irq, defer_request, test_irq_defer_request);
 #endif /* defined(MR_USE_IRQ_DEFER) */
 #endif /* defined(MR_USE_IRQ) */
+#endif /* defined(MR_USE_TEST) */
