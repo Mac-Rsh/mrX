@@ -30,7 +30,6 @@ extern "C" {
 #if defined(MR_USE_MALLOC_STD)
 #define mr_malloc(_sz)                  malloc(_sz)
 #define mr_free(_m)                     free(_m)
-#define mr_malloc_usable_size(_m)       malloc_usable_size(_m)
 #define mr_calloc(_n, _sz)              calloc(_n, _sz)
 #define mr_realloc(_m, _sz)             realloc(_m, _sz)
 #else

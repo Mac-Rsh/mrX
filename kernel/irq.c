@@ -760,9 +760,7 @@ static void irq_workqueue_hook_suspend(mr_workqueue_t *queue, void *param) {
 
 mr_err_t mr_irq_defer_hook_set(mr_irq_defer_hook_t *hook) {
     /* Check parameter */
-    if (!hook) {
-        return -MR_EINVAL;
-    }
+    MR_ASSERT(hook != MR_NULL);
 
     /* Set irq defer hook */
     __hook = *hook;

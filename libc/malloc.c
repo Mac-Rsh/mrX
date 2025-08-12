@@ -200,7 +200,11 @@ void *mr_realloc(void *mem, mr_size_t size) {
     void *new;
 
     /* Get the old size */
-    old_size = mr_malloc_usable_size(mem);
+    if (mem) {
+        old_size = mr_malloc_usable_size(mem);
+    } else {
+        old_size = 0;
+    }
 
     /* Reallocate memory */
     new = mr_malloc(size);

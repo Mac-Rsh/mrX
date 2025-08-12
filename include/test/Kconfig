@@ -4,6 +4,7 @@ menu "Test options"
 # TEST
 # ==================================
 config MR_USE_TEST
+    select MR_USE_PRINTF
     bool "Use test"
     default n
 

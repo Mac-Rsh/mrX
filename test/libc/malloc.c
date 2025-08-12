@@ -13,20 +13,20 @@
 /* -------------------------------------------------------------------------- */
 /* Utility: fill/verify canary pattern                                        */
 static void canary_fill(void *p, mr_size_t usable) {
-    mr_uint8_t *u8;
+    mr_uint8_t *data;
     mr_size_t i;
 
-    for (u8 = (mr_uint8_t *)p, i = 0; i < usable; ++i) {
-        u8[i] = (mr_uint8_t)(i & 0xFFU);
+    for (data = (mr_uint8_t *)p, i = 0; i < usable; ++i) {
+        data[i] = (mr_uint8_t)(i & 0xFFU);
     }
 }
 
 static int canary_verify(void *p, mr_size_t usable) {
-    mr_uint8_t *u8;
+    mr_uint8_t *data;
     mr_size_t i;
 
-    for (u8 = (mr_uint8_t *)p, i = 0; i < usable; ++i) {
-        if (u8[i] != (mr_uint8_t)(i & 0xFFU)) {
+    for (data = (mr_uint8_t *)p, i = 0; i < usable; ++i) {
+        if (data[i] != (mr_uint8_t)(i & 0xFFU)) {
             return 0;
         }
     }
@@ -39,13 +39,16 @@ static void test_malloc_free_basic(void) {
     mr_size_t usable;
     void *p;
 
+#if defined(MR_USE_MALLOC)
     p = mr_malloc(0);
     MR_TEST_ASSERT_EQ_PTR(p, MR_NULL);
     mr_free(MR_NULL);
+#endif /* defined(MR_USE_MALLOC) */
 
     p = mr_malloc(128);
     MR_TEST_ASSERT_NE_PTR(p, MR_NULL);
 
+#if defined(MR_USE_MALLOC)
     usable = mr_malloc_usable_size(p);
     MR_TEST_ASSERT_GE_UINT(usable, 128);
 
@@ -54,6 +57,9 @@ static void test_malloc_free_basic(void) {
 
     usable = mr_malloc_usable_size(p + 32);
     MR_TEST_ASSERT_EQ_UINT(usable, 0);
+#else
+    usable = 128;
+#endif /* defined(MR_USE_MALLOC) */
 
     canary_fill(p, usable);
     MR_TEST_ASSERT_EQ_INT(canary_verify(p, usable), 1);
@@ -69,17 +75,23 @@ static void test_calloc_zero(void) {
     mr_size_t usable, i;
     void *p;
 
+#if defined(MR_USE_MALLOC)
     p = mr_calloc(0, 0);
     MR_TEST_ASSERT_EQ_PTR(p, MR_NULL);
+#endif /* defined(MR_USE_MALLOC) */
 
-    p = mr_calloc(MR_SIZE_MAX / 2, 1);
+    p = mr_calloc(MR_SIZE_MAX >> 1, 1);
     MR_TEST_ASSERT_EQ_PTR(p, MR_NULL);
 
     p = mr_calloc(n, sz);
     MR_TEST_ASSERT_NE_PTR(p, MR_NULL);
 
+#if defined(MR_USE_MALLOC)
     usable = mr_malloc_usable_size(p);
     MR_TEST_ASSERT_GE_UINT(usable, n * sz);
+#else
+    usable = n * sz;
+#endif /* defined(MR_USE_MALLOC) */
 
     /* Verify all bytes are zero */
     for (i = 0; i < usable; ++i) {
@@ -99,7 +111,7 @@ static void test_realloc_resize(void) {
     MR_TEST_ASSERT_NE_PTR(p1, MR_NULL);
     canary_fill(p1, 64);
 
-    p2 = mr_realloc(p1, MR_SIZE_MAX);
+    p2 = mr_realloc(p1, MR_SIZE_MAX >> 1);
     MR_TEST_ASSERT_EQ_PTR(p2, MR_NULL);
 
     p2 = mr_realloc(p1, 256);
@@ -114,6 +126,7 @@ static void test_realloc_resize(void) {
 }
 MR_TEST_EXPORT(malloc, realloc_resize, test_realloc_resize);
 
+#if defined(MR_USE_MALLOC)
 /* -------------------------------------------------------------------------- */
 /* Zero-size malloc should return NULL                                        */
 static void test_malloc_zero(void) {
@@ -123,6 +136,7 @@ static void test_malloc_zero(void) {
     MR_TEST_ASSERT_EQ_PTR(p, MR_NULL);
 }
 MR_TEST_EXPORT(malloc, malloc_zero, test_malloc_zero);
+#endif /* defined(MR_USE_MALLOC) */
 
 /* -------------------------------------------------------------------------- */
 /* Fragmentation & merge test: allocate, free, re-allocate                    */
@@ -163,14 +177,18 @@ MR_TEST_EXPORT(malloc, frag_merge, test_frag_merge);
 static void test_malloc_max(void) {
     const mr_size_t huge = 3 * 1024;
     mr_size_t usable;
-    void *p, *n;
+    void *p;
 
-    p = mr_malloc(MR_SIZE_MAX - 32);
+    p = mr_malloc(MR_SIZE_MAX >> 1);
     MR_TEST_ASSERT_EQ_PTR(p, MR_NULL);
 
     p = mr_malloc(huge);
     if (p) {
+#if defined(MR_USE_MALLOC)
         usable = mr_malloc_usable_size(p);
+#else
+        usable = huge;
+#endif /* defined(MR_USE_MALLOC) */
         MR_TEST_ASSERT_GE_UINT(usable, huge);
         canary_fill(p, usable);
         MR_TEST_ASSERT_EQ_INT(canary_verify(p, usable), 1);

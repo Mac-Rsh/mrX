@@ -65,10 +65,9 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
 /**
  * @brief This macro function initializes an object.
  *
- * @param _obj The object.
  * @param _clazz The clazz.
  */
-#define MR_OBJECT_INIT(_obj, _clazz)                                           \
+#define MR_OBJECT_INIT(_clazz)                                                 \
     { .magic_ref = MR_REF_INIT(), .clazz = (_clazz) }
 
 /**

@@ -47,7 +47,7 @@ mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t num,
     size = FIFO_ALIGN_POW2_UP(num * elemsz);
 
     /* Allocate buffer */
-    buf = mr_realloc(fifo->buf, size);
+    buf = mr_malloc(size);
     if (!buf) {
         /* Not enough memory */
         return 0;

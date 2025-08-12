@@ -25,8 +25,7 @@ static const mr_clazz_t test_clazz = MR_CLAZZ_INIT("test", test_obj_release);
 /* -------------------------------------------------------------------------- */
 /* Test: Static initializer                                                   */
 static void test_object_static_init(void) {
-    static test_obj_t o
-        = {.obj = MR_OBJECT_INIT(&o.o, &test_clazz), .data = 42};
+    static test_obj_t o = {.obj = MR_OBJECT_INIT(&test_clazz), .data = 42};
 
     MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(&o.obj), MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(MR_OBJECT_CLAZZ_IS(&o.obj, &test_clazz), MR_TRUE);
@@ -62,6 +61,12 @@ static void test_object_refcount(void) {
     MR_TEST_ASSERT_EQ_INT(mr_object_put(&o.obj), MR_FALSE);
     MR_TEST_ASSERT_EQ_INT(mr_object_put(&o.obj), MR_FALSE);
     MR_TEST_ASSERT_EQ_INT(mr_object_put(&o.obj), MR_TRUE);
+
+    MR_TEST_ASSERT_EQ_PTR(mr_object_get(MR_NULL), MR_NULL);
+    MR_TEST_ASSERT_EQ_PTR(mr_object_get(&o.obj), MR_NULL);
+
+    MR_TEST_ASSERT_EQ_INT(mr_object_put(MR_NULL), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(mr_object_put(&o.obj), MR_TRUE);
 }
 MR_TEST_EXPORT(object, refcount, test_object_refcount);
 
@@ -75,6 +80,11 @@ static void test_object_invalid(void) {
 
     mr_object_init(&o.obj, &test_clazz);
     MR_TEST_ASSERT_EQ_INT(mr_object_init(&o.obj, &test_clazz), -MR_EINVAL);
+
+    mr_object_del(MR_NULL);
+    mr_object_del(&o.obj);
+    mr_object_del(&o.obj);
+    MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(&o.obj), MR_FALSE);
 }
 MR_TEST_EXPORT(object, invalid, test_object_invalid);
 

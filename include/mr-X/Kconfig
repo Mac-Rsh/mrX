@@ -99,7 +99,7 @@ config MR_USE_IRQ_DEFER_HOOK
 # WAIT
 # ==================================
 config MR_USE_WAIT
-    bool "Use irq"
+    bool "Use wait"
     default y
 
 endmenu

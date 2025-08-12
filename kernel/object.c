@@ -16,8 +16,8 @@ mr_err_t mr_object_init(mr_object_t *obj, const mr_clazz_t *clazz) {
     }
 
     /* Init object */
-    mr_ref_init(&obj->magic_ref);
     obj->clazz = clazz;
+    mr_ref_init(&obj->magic_ref);
     return 0;
 }
 

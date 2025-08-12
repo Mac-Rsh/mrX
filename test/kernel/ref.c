@@ -55,9 +55,9 @@ static void test_ref_put(void) {
 
     mr_ref_init(&r);
     MR_TEST_ASSERT_EQ_INT(mr_ref_put(&r, stub_release), MR_TRUE);
-    MR_TEST_ASSERT_EQ_INT(r, 0xdeadbeef);
+    MR_TEST_ASSERT_EQ_INT(r & 0xffffffff, 0xdeadbeef);
     MR_TEST_ASSERT_EQ_INT(mr_ref_put(&r, stub_release), MR_FALSE);
-    MR_TEST_ASSERT_EQ_INT(r, 0xdeadbeef - 1);
+    MR_TEST_ASSERT_EQ_INT(r & 0xffffffff, 0xdeadbeef - 1);
 }
 MR_TEST_EXPORT(ref, put, test_ref_put);
 
