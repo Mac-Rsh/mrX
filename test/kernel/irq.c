@@ -10,7 +10,6 @@
 #if defined(MR_USE_TEST)
 #if defined(MR_USE_IRQ)
 #include <mr-X/mr_irq.h>
-#include <libc/mr_string.h>
 
 static mr_uint8_t last_priority = 0;
 static mr_uint8_t last_type = 0;
