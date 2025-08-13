@@ -55,7 +55,7 @@ static void test_malloc_free_basic(void) {
     usable = mr_malloc_usable_size(MR_NULL);
     MR_TEST_ASSERT_EQ_UINT(usable, 0);
 
-    usable = mr_malloc_usable_size(p + 32);
+    usable = mr_malloc_usable_size((mr_uint8_t *)p + 32);
     MR_TEST_ASSERT_EQ_UINT(usable, 0);
 #else
     usable = 128;

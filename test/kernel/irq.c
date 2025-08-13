@@ -43,7 +43,6 @@ static void irq_unmask(mr_uint32_t irq, void *priv) {
 
 static void irq_disable(mr_uint32_t irq, void *priv) {
     MR_UNUSED(priv);
-
     last_irq = (mr_int32_t)irq;
 }
 
@@ -65,7 +64,6 @@ static mr_irq_ops_t mock_irq_ops = {
 static mr_irq_return_t test_irq_handler(mr_uint32_t irq, void *owner) {
     MR_UNUSED(irq);
     MR_UNUSED(owner);
-
     handle_count++;
     return MR_IRQ_HANDLED;
 }

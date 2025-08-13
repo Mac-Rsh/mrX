@@ -26,11 +26,11 @@ mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
     size = FIFO_ALIGN_POW2_DOWN(size / elemsz);
 
     /* Init fifo */
-    fifo->buf = buf;
-    fifo->mask = size - 1;
     mr_atomic_init(&fifo->ridx, 0);
     mr_atomic_init(&fifo->widx, 0);
     fifo->elemsz = elemsz;
+    fifo->mask = size - 1;
+    fifo->buf = buf;
     return size;
 }
 

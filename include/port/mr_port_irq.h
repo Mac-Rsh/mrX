@@ -14,7 +14,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup Port-IRQ
+ * @addtogroup Port-irq
  * @{
  */
 

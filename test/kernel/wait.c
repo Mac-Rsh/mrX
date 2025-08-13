@@ -19,7 +19,6 @@ static void test_waiter_cb(mr_waiter_t *waiter, void *param,
                            mr_uint32_t event) {
     MR_UNUSED(waiter);
     MR_UNUSED(param);
-
     trig_status++;
     last_event = event;
     last_param = param;
@@ -225,7 +224,6 @@ static mr_uint32_t test_check_race(mr_waitable_t *w, void *p) {
     static mr_uint32_t gen = 0;
 
     MR_UNUSED(p);
-
     if ((gen++) == 0)
     {
         mr_waitable_complete(w);

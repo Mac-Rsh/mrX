@@ -76,14 +76,14 @@ static void irq_defer_hook_suspend(void *priv) {
     MR_UNUSED(priv);
 
     /* Clear soft irq */
-    SysTick->CTLR &= ~(1 << 31);
+    SysTick->CTLR &= ~(1U << 31);
 }
 
 static void irq_defer_hook_wakeup(void *priv) {
     MR_UNUSED(priv);
 
     /* Trigger soft irq */
-    SysTick->CTLR |= (1 << 31);
+    SysTick->CTLR |= (1U << 31);
 }
 
 void SW_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));

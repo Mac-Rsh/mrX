@@ -254,6 +254,7 @@ static mr_irq_action_t *irq_action_alloc(mr_uint32_t irq, mr_irq_entry_t *entry,
     action->defer_entry = defer_entry;
 #else
     MR_UNUSED(defer_entry);
+    MR_UNUSED(ret);
 #endif /* MR_USE_IRQ_DEFER */
 
     /* Init irq action */
