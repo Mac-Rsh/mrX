@@ -80,10 +80,10 @@ MR_INLINE void mr_ref_init(mr_ref_t *ref) {
 MR_INLINE mr_bool_t mr_ref_get(mr_ref_t *ref) {
     mr_atomic_t last;
 
-    do {
-        /* Get current ref */
-        last = mr_atomic_load(ref);
+    /* Get current ref */
+    last = mr_atomic_load(ref);
 
+    do {
         /* Check if ref is inited or ref count is zero */
         if ((!MR_REF_IS_INITED(last)) || (MR_REF_COUNT(last) == 0)) {
             MR_ASSERT(last != MR_REF_OVERFLOW);

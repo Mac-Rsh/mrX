@@ -73,4 +73,21 @@ static void test_service_align(void) {
     MR_TEST_ASSERT_EQ_INT(MR_ALIGN_DOWN(8, 8), 8);
 }
 MR_TEST_EXPORT(service, align, test_service_align);
+
+/* -------------------------------------------------------------------------- */
+/* Test: parity_even / parity_odd                                          */
+static void test_service_parity(void) {
+    mr_uint8_t odd, j;
+    mr_uint16_t i;
+
+    for (i = 0; i < 65535; i++) {
+        for (odd = 0, j = 0; j < 16; j++) {
+            odd ^= ((i >> j) & 0x1U);
+        }
+
+        MR_TEST_ASSERT_EQ_INT(mr_parity_even(&i, sizeof(i)), !odd);
+        MR_TEST_ASSERT_EQ_INT(mr_parity_odd(&i, sizeof(i)), odd);
+    }
+}
+MR_TEST_EXPORT(service, parity, test_service_parity);
 #endif /* defined(MR_USE_TEST) */

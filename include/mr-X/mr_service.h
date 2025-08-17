@@ -9,6 +9,9 @@
 #ifndef __MR_SERVICE_H__
 #define __MR_SERVICE_H__
 
+#include <libc/mr_compiler.h>
+#include <libc/mr_types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
@@ -80,6 +83,39 @@ extern "C" {
  * @return The aligned value.
  */
 #define MR_ALIGN_DOWN(_x, _ali)         ((_x) & ~((_ali)-1))
+
+/**
+ * @brief This function verifies the parity(even).
+ *
+ * @param src The source.
+ * @param size The verify size.
+ * @return MR_TRUE on even, MR_FALSE on odd.
+ */
+MR_INLINE mr_bool_t mr_parity_even(const void *src, mr_size_t size) {
+    const mr_uint8_t bits16[16]
+        = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
+    mr_uint8_t *s, parity;
+    mr_size_t i;
+
+    /* Bitwise parity */
+    for (s = (mr_uint8_t *)src, parity = 0, i = 0; i < size; ++i) {
+        parity += bits16[s[i] & (0x0fU)];
+        parity += bits16[s[i] >> 4];
+    }
+    return (parity & 0x01U) == 0;
+}
+
+/**
+ * @brief This function verifies the parity(odd).
+ *
+ * @param src The source.
+ * @param size The verify size.
+ * @return MR_TRUE on odd, MR_FALSE on even.
+ */
+MR_INLINE mr_bool_t mr_parity_odd(const void *src, mr_size_t size) {
+    /* Even parity negation */
+    return !mr_parity_even(src, size);
+}
 
 /** @} */
 

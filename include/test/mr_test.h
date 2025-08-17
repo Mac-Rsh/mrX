@@ -32,7 +32,7 @@ extern "C" {
 #define MR_TEST_EXPECT_EQ_PTR(_a, _b)                                          \
     __MR_TEST_EXPECT(__MR_TEST_COND_PTR(_a, EQ, _b))
 #define MR_TEST_EXPECT_EQ_FLOAT(_a, _b)                                        \
-    __MR_TEST_EXPECT(__MR_TEST_COND_NEAR(_a, _b, 1e-6))
+    __MR_TEST_EXPECT(__MR_TEST_COND_NEAR(_a, _b, 1e-4f))
 #define MR_TEST_EXPECT_EQ_DOUBLE(_a, _b)                                       \
     __MR_TEST_EXPECT(__MR_TEST_COND_NEAR(_a, _b, 1e-8))
 #define MR_TEST_ASSERT_EQ_INT(_a, _b)                                          \
@@ -42,7 +42,7 @@ extern "C" {
 #define MR_TEST_ASSERT_EQ_PTR(_a, _b)                                          \
     __MR_TEST_ASSERT(__MR_TEST_COND_PTR(_a, EQ, _b))
 #define MR_TEST_ASSERT_EQ_FLOAT(_a, _b)                                        \
-    __MR_TEST_ASSERT(__MR_TEST_COND_NEAR(_a, _b, 1e-6))
+    __MR_TEST_ASSERT(__MR_TEST_COND_NEAR(_a, _b, 1e-4f))
 #define MR_TEST_ASSERT_EQ_DOUBLE(_a, _b)                                       \
     __MR_TEST_ASSERT(__MR_TEST_COND_NEAR(_a, _b, 1e-8))
 

@@ -68,7 +68,8 @@ void mr_testcase_run(const char *suite, const char *name) {
     /* Each test cases */
     for (cs = start + 1; cs < end; cs++) {
         /* Match testcase */
-        if ((!mr_strcmp(cs->suite, suite)) || (!mr_strcmp(cs->name, name))) {
+        if ((mr_strcmp(cs->suite, suite) != 0)
+            || (mr_strcmp(cs->name, name) != 0)) {
             continue;
         }
 

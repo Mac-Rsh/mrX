@@ -174,7 +174,10 @@ char *mr_strchr(const char *s, int c);
  * @return The first set bit index.
  */
 MR_INLINE int mr_ffs32(mr_uint32_t x) {
-    extern const int __mr_ffs_debruijn32[32];
+    const int debruijn32[32] = {
+        1,  2,  29, 3,  30, 15, 25, 4, 31, 23, 21, 16, 26, 18, 5,  9,
+        32, 28, 14, 24, 22, 20, 17, 8, 27, 13, 19, 7,  12, 6,  11, 10,
+    };
 
     /* Check zero */
     if (x == 0) {
@@ -182,7 +185,7 @@ MR_INLINE int mr_ffs32(mr_uint32_t x) {
     }
 
     /* DeBruijn ffs32 */
-    return __mr_ffs_debruijn32[((x & (-x)) * 0x077cb531U) >> 27];
+    return debruijn32[((x & (-x)) * 0x077cb531U) >> 27];
 }
 
 /**
@@ -192,7 +195,12 @@ MR_INLINE int mr_ffs32(mr_uint32_t x) {
  * @return The first set bit index.
  */
 MR_INLINE int mr_ffs64(mr_uint64_t x) {
-    extern const int __mr_ffs_debruijn64[64];
+    const int debruijn64[64] = {
+        1,  2,  57, 3,  58, 50, 29, 4,  62, 59, 43, 51, 39, 30, 18, 5,
+        63, 48, 60, 37, 46, 44, 52, 23, 54, 40, 34, 31, 25, 19, 13, 6,
+        64, 56, 49, 28, 61, 42, 38, 17, 47, 36, 45, 22, 53, 33, 24, 12,
+        55, 27, 41, 16, 35, 21, 32, 11, 26, 15, 20, 10, 14, 9,  8,  7,
+    };
 
     /* Check zero */
     if (x == 0) {
@@ -200,7 +208,7 @@ MR_INLINE int mr_ffs64(mr_uint64_t x) {
     }
 
     /* DeBruijn ffs64 */
-    return __mr_ffs_debruijn64[((x & (-x)) * 0x03f79d71b4cb0a89ULL) >> 58];
+    return debruijn64[((x & (-x)) * 0x03f79d71b4cb0a89ULL) >> 58];
 }
 
 /**

@@ -14,20 +14,20 @@
 /* -------------------------------------------------------------------------- */
 /* Utilities: fill / verify canary pattern                                    */
 static void canary_fill(void *p, mr_size_t n) {
-    mr_uint8_t *u8;
+    mr_uint8_t *d;
     mr_size_t i;
 
-    for (u8 = (mr_uint8_t *)p, i = 0; i < n; ++i) {
-        u8[i] = (mr_uint8_t)(i & 0xFFU);
+    for (d = (mr_uint8_t *)p, i = 0; i < n; ++i) {
+        d[i] = (mr_uint8_t)(i & 0xFFU);
     }
 }
 
 static int canary_verify(void *p, mr_size_t n) {
-    mr_uint8_t *u8;
+    mr_uint8_t *d;
     mr_size_t i;
 
-    for (u8 = (mr_uint8_t *)p, i = 0; i < n; ++i) {
-        if (u8[i] != (mr_uint8_t)(i & 0xFFU)) {
+    for (d = (mr_uint8_t *)p, i = 0; i < n; ++i) {
+        if (d[i] != (mr_uint8_t)(i & 0xFFU)) {
             return 0;
         }
     }
