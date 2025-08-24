@@ -148,6 +148,25 @@ mr_err_t mr_waiter_wait(mr_waiter_t *waiter, mr_waitable_t *waitable);
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_waiter_cancel(mr_waiter_t *waiter);
+
+/**
+ * @brief This function gets waiter waiting event.
+ *
+ * @param waiter The waiter.
+ * @return The waiting event.
+ */
+mr_uint32_t mr_waiter_event(mr_waiter_t *waiter);
+
+/**
+ * @brief This function sets waiter waiting event.
+ *
+ * @param waiter The waiter.
+ * @param event The waiting event.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note If the waiter is waiting, it will be canceled.
+ */
+mr_err_t mr_waiter_event_set(mr_waiter_t *waiter, mr_uint32_t event);
 #endif /* defined(MR_USE_WAIT) */
 
 /** @} */

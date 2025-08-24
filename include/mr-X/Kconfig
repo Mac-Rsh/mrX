@@ -51,6 +51,20 @@ config MR_USE_PRINTF_SAFE
     default n
 
 # ==================================
+# LOG
+# ==================================
+config MR_USE_LOG
+    select MR_USE_PRINTF
+    bool "Use log"
+    default n
+
+config MR_CFG_LOG_LEVEL
+    depends on MR_USE_LOG
+    int "Log level"
+    default 4
+    range 0 4
+
+# ==================================
 # TIMER
 # ==================================
 config MR_USE_TIMER

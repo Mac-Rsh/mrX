@@ -380,6 +380,37 @@ mr_err_t mr_waiter_cancel(mr_waiter_t *waiter) {
     return 0;
 }
 
+mr_uint32_t mr_waiter_event(mr_waiter_t *waiter) {
+    /* Check parameter */
+    MR_ASSERT((waiter != MR_NULL) && MR_OBJECT_IS_INITED(waiter));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(waiter, &__wait_clazz1, &__wait_clazz2));
+
+    /* Return waiter event */
+    return waiter->event;
+}
+
+mr_err_t mr_waiter_event_set(mr_waiter_t *waiter, mr_uint32_t event) {
+    int mask;
+
+    /* Check parameter */
+    MR_ASSERT((waiter != MR_NULL) && MR_OBJECT_IS_INITED(waiter));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(waiter, &__wait_clazz1, &__wait_clazz2));
+    MR_ASSERT((event & WAIT_TYPE_MASK) != 0);
+
+    /* Lock */
+    mask = mr_spinlock_lock_irqsave(&__lock);
+
+    /* Remove waiter from waiting list */
+    mr_list_del(&waiter->list);
+
+    /* Set waiter event */
+    waiter->event = event;
+
+    /* Unlock */
+    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    return 0;
+}
+
 static mr_waiter_t *wait_obj_release(mr_object_t *obj) {
     mr_waiter_t *waiter;
 

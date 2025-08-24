@@ -251,5 +251,29 @@ static void test_generation_skip(void) {
     mr_waitable_del(&waitable);
 }
 MR_TEST_EXPORT(wait, generation_skip, test_generation_skip);
+
+static void test_event_get_set(void) {
+    mr_waitable_t waitable;
+    mr_waiter_t waiter;
+    mr_err_t ret;
+
+    mr_waitable_init(&waitable, test_check_race, MR_NULL);
+    mr_waiter_init(&waiter, test_waiter_cb, MR_NULL, MR_WAIT_IN);
+
+    MR_TEST_ASSERT_EQ_UINT(mr_waiter_event(&waiter), MR_WAIT_IN);
+
+    trig_status = 0;
+    ret = mr_waiter_wait(&waiter, &waitable);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(trig_status, 1);
+
+    mr_waiter_event_set(&waiter, MR_WAIT_OUT);
+    mr_waitable_complete(&waitable);
+    MR_TEST_ASSERT_EQ_INT(trig_status, 1);
+
+    mr_waiter_del(&waiter);
+    mr_waitable_del(&waitable);
+}
+MR_TEST_EXPORT(wait, event_get_set, test_event_get_set);
 #endif /* defined(MR_USE_WAIT) */
 #endif /* defined(MR_USE_TEST) */

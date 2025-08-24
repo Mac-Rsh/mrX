@@ -19,10 +19,9 @@ static const mr_clazz_t __clazz1
 static const mr_clazz_t __clazz2
     = MR_CLAZZ_INIT("irq", irq_obj_release2);
 
-#if defined(MR_USE_IRQ_DEFER)
-/* Irq defer workqueue */
-static mr_workqueue_t __defer_queue;
-#endif /* defined(MR_USE_IRQ_DEFER) */
+#if defined(MR_USE_IRQ_DEFER_HOOK)
+static mr_irq_defer_hook_t __hook = {.wakeup = MR_NULL, .suspend = MR_NULL};
+#endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 /* Irq lock */
 static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
 /* Irq descriptor table */
@@ -30,9 +29,10 @@ static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
 #define MR_CFG_IRQ_TABLE_SIZE           (32)
 #endif /* !defined(MR_CFG_IRQ_TABLE_SIZE) */
 static mr_irq_desc_t __table[MR_CFG_IRQ_TABLE_SIZE];
-#if defined(MR_USE_IRQ_DEFER_HOOK)
-static mr_irq_defer_hook_t __hook = {.wakeup = MR_NULL, .suspend = MR_NULL};
-#endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
+#if defined(MR_USE_IRQ_DEFER)
+/* Irq defer workqueue */
+static mr_workqueue_t __defer_queue;
+#endif /* defined(MR_USE_IRQ_DEFER) */
 
 /* Irq action pending definition */
 #define IRQ_ACTION_PENDING              (1U << 31)
@@ -114,7 +114,7 @@ static void irq_table_remove(mr_irq_t *irq) {
 
 static mr_err_t irq_init(mr_irq_t *irq, const mr_clazz_t *clazz,
                          mr_uint32_t irq_start, mr_uint32_t irq_end,
-                         mr_ptr_t ops, mr_ptr_t param) {
+                         const mr_irq_ops_t *ops, mr_ptr_t priv) {
     mr_err_t ret;
     int mask;
 
@@ -132,7 +132,7 @@ static mr_err_t irq_init(mr_irq_t *irq, const mr_clazz_t *clazz,
     irq->istart = irq_start;
     irq->iend = irq_end;
     irq->ops = ops;
-    irq->priv = param;
+    irq->priv = priv;
 
     /* Init object */
     ret = mr_object_init((mr_object_t *)irq, clazz);
@@ -147,7 +147,7 @@ _exit:
 }
 
 mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
-                     mr_irq_ops_t *ops, void *priv) {
+                     const mr_irq_ops_t *ops, void *priv) {
     /* Check parameter */
     MR_ASSERT((irq != MR_NULL) && (!MR_OBJECT_IS_INITED(irq)));
     MR_ASSERT(irq_start < MR_CFG_IRQ_TABLE_SIZE);
@@ -160,7 +160,7 @@ mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
 }
 
 mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
-                        mr_irq_ops_t *ops, void *priv) {
+                        const mr_irq_ops_t *ops, void *priv) {
     mr_irq_t *irq;
     mr_err_t ret;
 

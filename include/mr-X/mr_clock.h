@@ -56,7 +56,7 @@ mr_tick_t mr_clock_tickless(void);
 
 /**
  * @brief This function adds a hook to the clock.
- * 
+ *
  * @param entry The hook entry.
  * @return 0 on success, a negative error code on failure.
  */

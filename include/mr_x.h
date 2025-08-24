@@ -22,6 +22,7 @@
 #include <mr-X/mr_initcall.h>
 #include <mr-X/mr_irq.h>
 #include <mr-X/mr_list.h>
+#include <mr-X/mr_log.h>
 #include <mr-X/mr_object.h>
 #include <mr-X/mr_printf.h>
 #include <mr-X/mr_ref.h>

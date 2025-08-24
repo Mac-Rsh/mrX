@@ -14,7 +14,7 @@
 #include <libc/mr_malloc.h>
 #endif /* defined(MR_USE_PRINTF_SAFE) */
 
-int mr_printf(const char *fmt, ...) {
+int mr_vprintf(const char *fmt, mr_va_list args) {
 #if !defined(MR_CFG_PRINTF_BUF_SIZE)
 #define MR_CFG_PRINTF_BUF_SIZE          (64)
 #endif /* !defined(MR_CFG_PRINTF_BUF_SIZE) */
@@ -23,7 +23,6 @@ int mr_printf(const char *fmt, ...) {
 #else
     char *buf;
 #endif /* !defined(MR_USE_PRINTF_SAFE) */
-    mr_va_list args;
     int outsz, ret;
 
     /* Check parameter */
@@ -40,9 +39,7 @@ int mr_printf(const char *fmt, ...) {
 #endif /* defined(MR_USE_PRINTF_SAFE) */
 
     /* Format string */
-    mr_va_start(args, fmt);
     ret = mr_vsnprintf(buf, MR_CFG_PRINTF_BUF_SIZE, fmt, args);
-    mr_va_end(args);
     if (ret < 0) {
         ret = -MR_EINVAL;
         goto _exit;
@@ -56,6 +53,22 @@ _exit:
 #if defined(MR_USE_PRINTF_SAFE)
     mr_free(buf);
 #endif /* defined(MR_USE_PRINTF_SAFE) */
+    return ret;
+}
+
+int mr_printf(const char *fmt, ...) {
+    mr_va_list args;
+    int ret;
+
+    /* Check parameter */
+    if ((!fmt) || (fmt[0] == '\0')) {
+        return -MR_EINVAL;
+    }
+
+    /* Print */
+    mr_va_start(args, fmt);
+    ret = mr_vprintf(fmt, args);
+    mr_va_end(args);
     return ret;
 }
 #endif /* defined(MR_USE_PRINTF) */

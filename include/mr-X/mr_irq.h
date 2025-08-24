@@ -68,7 +68,7 @@ typedef struct mr_irq {
     mr_atomic_t dying;
     mr_uint32_t istart;
     mr_uint32_t iend;
-    mr_irq_ops_t *ops;
+    const mr_irq_ops_t *ops;
     mr_ptr_t priv;
 } mr_irq_t;
 
@@ -107,7 +107,7 @@ typedef mr_irq_return_t(mr_irq_entry_t)(mr_uint32_t irq, void *owner);
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
-                     mr_irq_ops_t *ops, void *priv);
+                     const mr_irq_ops_t *ops, void *priv);
 
 /**
  * @brief This function creates an irq.
@@ -119,7 +119,7 @@ mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
  * @return The irq on success, MR_NULL on failure.
  */
 mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
-                        mr_irq_ops_t *ops, void *priv);
+                        const mr_irq_ops_t *ops, void *priv);
 
 /**
  * @brief This function deletes an irq.
