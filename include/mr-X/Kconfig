@@ -60,7 +60,7 @@ config MR_USE_LOG
 
 config MR_CFG_LOG_LEVEL
     depends on MR_USE_LOG
-    int "Log level"
+    int "Log level(0:ERR, 1:WRN, 2:INF, 3:DBG, 4:TRC)"
     default 4
     range 0 4
 

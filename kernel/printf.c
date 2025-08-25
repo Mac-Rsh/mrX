@@ -60,11 +60,6 @@ int mr_printf(const char *fmt, ...) {
     mr_va_list args;
     int ret;
 
-    /* Check parameter */
-    if ((!fmt) || (fmt[0] == '\0')) {
-        return -MR_EINVAL;
-    }
-
     /* Print */
     mr_va_start(args, fmt);
     ret = mr_vprintf(fmt, args);
