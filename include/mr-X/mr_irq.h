@@ -63,6 +63,7 @@ typedef struct mr_irq_defer_hook {
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 
 /* Irq type */
+MR_CLAZZ_EXPORT(irq);
 typedef struct mr_irq {
     mr_object_t parent;
     mr_atomic_t dying;
@@ -255,7 +256,7 @@ MR_INLINE mr_bool_t mr_irq_put(mr_irq_t *irq) {
  *
  * @note Recommend to use a semaphore with an initial value of 0 as the hook.
  */
-mr_err_t mr_irq_defer_hook_set(mr_irq_defer_hook_t *hook);
+mr_err_t mr_irq_defer_hook_set(const mr_irq_defer_hook_t *hook);
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 #endif /* defined(MR_USE_IRQ) */
 

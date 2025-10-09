@@ -36,7 +36,7 @@ typedef struct mr_hook {
  * @param _size The entry size.
  */
 #define MR_HOOK_INIT(_entry, _size)                                            \
-    { .entry = (_entry), .size = (_size), .next = 0 }
+    {.entry = (_entry), .size = (_size), .next = 0}
 
 /**
  * @brief This function initializes a hook.

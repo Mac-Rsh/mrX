@@ -27,7 +27,7 @@ typedef mr_atomic_t                     mr_spinlock_t;
 /**
  * @brief This macro function initializes a spinlock.
  */
-#define MR_SPINLOCK_INIT()             MR_ATOMIC_INIT(0)
+#define MR_SPINLOCK_INIT()              MR_ATOMIC_INIT(0)
 
 /**
  * @brief This function initializes a spinlock.

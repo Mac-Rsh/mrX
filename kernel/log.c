@@ -8,6 +8,7 @@
 
 #include <mr-X/mr_log.h>
 #if defined(MR_USE_LOG)
+#include <mr-X/mr_printf.h>
 
 /* Log level mask */
 static mr_uint32_t __level = 0xffffffffU;

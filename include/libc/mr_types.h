@@ -140,7 +140,7 @@ typedef char *                          mr_va_list;
 #define mr_va_start(_a, _l)                                                    \
     ((_a) = (mr_va_list) & (_l) + __mr_va_align(_l))
 #define mr_va_arg(_a, _t)                                                      \
-    ((_a) += __mr_va_align(_t), *(_t *)((_a)-__mr_va_align(_t)))
+    ((_a) += __mr_va_align(_t), *(_t *)((_a) - __mr_va_align(_t)))
 #define mr_va_end(_a)                   ((_a) = (mr_va_list)0)
 #endif /* defined(MR_USE_TYPES_STD) */
 

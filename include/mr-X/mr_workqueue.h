@@ -36,6 +36,7 @@ typedef struct mr_workqueue_hook {
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
 /* Workqueue type */
+MR_CLAZZ_EXPORT(workqueue);
 typedef struct mr_workqueue {
     mr_object_t parent;
     mr_atomic_t depth;
@@ -44,11 +45,12 @@ typedef struct mr_workqueue {
     mr_list_t tlist;
     mr_list_t list;
 #if defined(MR_USE_WORKQUEUE_HOOK)
-    mr_workqueue_hook_t hook;
+    const mr_workqueue_hook_t *hook;
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 } mr_workqueue_t;
 
 /* Work type */
+MR_CLAZZ_EXPORT(work);
 typedef struct mr_work {
     mr_object_t parent;
     mr_list_t list;
@@ -60,6 +62,18 @@ typedef struct mr_work {
 
 /* Work entry type */
 typedef void(mr_work_entry_t)(struct mr_work *work, void *param);
+
+/**
+ * @brief This macro function initializes a workqueue.
+ *
+ * @param _queue The workqueue.
+ */
+#define MR_WORKQUEUE_INIT(_queue)                                              \
+    {.parent = MR_OBJECT_INIT(MR_CLAZZ_FIND(workqueue)),                       \
+     .depth = MR_ATOMIC_INIT(0),                                               \
+     .dying = MR_ATOMIC_INIT(MR_FALSE),                                        \
+     .tlist = MR_LIST_INIT(&(_queue)->tlist),                                  \
+     .list = MR_LIST_INIT(&(_queue)->list)}
 
 /**
  * @brief This function initializes a workqueue.
@@ -122,8 +136,17 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
  *
  * @note Recommend to use a semaphore with an initial value of 0 as the hook.
  */
-mr_err_t mr_workqueue_hook_set(mr_workqueue_t *queue,
-                               mr_workqueue_hook_t *hook);
+MR_INLINE mr_err_t mr_workqueue_hook_set(mr_workqueue_t *queue,
+                                         const mr_workqueue_hook_t *hook) {
+    /* Check parameter */
+    MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
+    MR_ASSERT(hook != MR_NULL);
+
+    /* Set workqueue hook */
+    queue->hook = hook;
+    return 0;
+}
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
 /**
@@ -147,6 +170,21 @@ MR_INLINE mr_bool_t mr_workqueue_put(mr_workqueue_t *queue) {
     /* Put workqueue reference */
     return mr_object_put((mr_object_t *)queue);
 }
+
+/**
+ * @brief This macro function initializes a work.
+ *
+ * @param _work The work.
+ * @param _entry The work entry.
+ * @param _param The entry parameter.
+ */
+#define MR_WORK_INIT(_work, _entry, _param)                                    \
+    {.parent = MR_OBJECT_INIT(MR_CLAZZ_FIND(work)),                            \
+     .list = MR_LIST_INIT(&(_work)->list),                                     \
+     .queue = MR_NULL,                                                         \
+     .tick = 0,                                                                \
+     .entry = (_entry),                                                        \
+     .param = (_param)}
 
 /**
  * @brief This function initializes a work.
@@ -215,7 +253,17 @@ mr_err_t mr_work_cancel(mr_work_t *work);
  * @param queue The workqueue.
  * @return 0 on success, a negative error code on failure.
  */
-mr_err_t mr_work_bind(mr_work_t *work, mr_workqueue_t *queue);
+MR_INLINE mr_err_t mr_work_bind(mr_work_t *work, mr_workqueue_t *queue) {
+    /* Check parameter */
+    MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
+    MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
+
+    /* Set workqueue */
+    work->queue = queue;
+    return 0;
+}
 
 /**
  * @brief This function gets a work.

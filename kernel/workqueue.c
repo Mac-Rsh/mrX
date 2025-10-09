@@ -11,21 +11,17 @@
 #include <mr-X/mr_spinlock.h>
 #include <libc/mr_malloc.h>
 
-/* Workqueue clazz(static & dynamic) */
-static void queue_obj_release1(mr_object_t *obj);
-static void queue_obj_release2(mr_object_t *obj);
-static const mr_clazz_t __queue_clazz1
-    = MR_CLAZZ_INIT("workqueue", queue_obj_release1);
-static const mr_clazz_t __queue_clazz2
-    = MR_CLAZZ_INIT("workqueue", queue_obj_release2);
+/* Workqueue clazz(dynamic & static) */
+static void queue_release_dyn(mr_object_t *obj);
+static void queue_release(mr_object_t *obj);
+MR_CLAZZ_DYNAMIC_DEFINE(workqueue, queue_release_dyn);
+MR_CLAZZ_DEFINE(workqueue, queue_release);
 
-/* Work clazz(static & dynamic) */
-static void work_obj_release1(mr_object_t *obj);
-static void work_obj_release2(mr_object_t *obj);
-static const mr_clazz_t __work_clazz1
-    = MR_CLAZZ_INIT("work", work_obj_release1);
-static const mr_clazz_t __work_clazz2
-    = MR_CLAZZ_INIT("work", work_obj_release2);
+/* Work clazz(dynamic & static) */
+static void work_release_dyn(mr_object_t *obj);
+static void work_release(mr_object_t *obj);
+MR_CLAZZ_DYNAMIC_DEFINE(work, work_release_dyn);
+MR_CLAZZ_DEFINE(work, work_release);
 
 /* Workqueue lock */
 static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
@@ -42,8 +38,8 @@ static void queue_wakeup(mr_workqueue_t *queue) {
 
     /* Wakeup workqueue */
 #if defined(MR_USE_WORKQUEUE_HOOK)
-    if (queue->hook.wakeup) {
-        queue->hook.wakeup(queue, queue->hook.param);
+    if (queue->hook && queue->hook->wakeup) {
+        queue->hook->wakeup(queue, queue->hook->param);
     }
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 }
@@ -118,9 +114,7 @@ static mr_err_t workqueue_init(mr_workqueue_t *queue, const mr_clazz_t *clazz) {
     mr_list_init(&queue->tlist);
     mr_list_init(&queue->list);
 #if defined(MR_USE_WORKQUEUE_HOOK)
-    queue->hook.suspend = MR_NULL;
-    queue->hook.wakeup = MR_NULL;
-    queue->hook.param = MR_NULL;
+    queue->hook = MR_NULL;
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
     /* Init object */
@@ -133,14 +127,17 @@ static mr_err_t workqueue_init(mr_workqueue_t *queue, const mr_clazz_t *clazz) {
 }
 
 mr_err_t mr_workqueue_init(mr_workqueue_t *queue) {
+    const mr_clazz_t *clazz = MR_CLAZZ_FIND(workqueue);
+
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && (!MR_OBJECT_IS_INITED(queue)));
 
     /* Init workqueue */
-    return workqueue_init(queue, &__queue_clazz1);
+    return workqueue_init(queue, clazz);
 }
 
 mr_workqueue_t *mr_workqueue_create(void) {
+    const mr_clazz_t *clazz = MR_CLAZZ_DYNAMIC_FIND(workqueue);
     mr_workqueue_t *queue;
     mr_err_t ret;
 
@@ -151,7 +148,7 @@ mr_workqueue_t *mr_workqueue_create(void) {
     }
 
     /* Init workqueue */
-    ret = workqueue_init(queue, &__queue_clazz2);
+    ret = workqueue_init(queue, clazz);
     if (ret != 0) {
         mr_free(queue);
         return MR_NULL;
@@ -162,7 +159,7 @@ mr_workqueue_t *mr_workqueue_create(void) {
 mr_err_t mr_workqueue_del(mr_workqueue_t *queue) {
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(queue, &__queue_clazz1, &__queue_clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
 
     /* Mark workqueue as dying */
     mr_atomic_store(&queue->dying, MR_TRUE);
@@ -184,8 +181,8 @@ static void queue_suspend(mr_workqueue_t *queue) {
 
     /* Suspend workqueue */
 #if defined(MR_USE_WORKQUEUE_HOOK)
-    if (queue->hook.suspend) {
-        queue->hook.suspend(queue, queue->hook.param);
+    if (queue->hook && queue->hook->suspend) {
+        queue->hook->suspend(queue, queue->hook->param);
     }
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 }
@@ -199,12 +196,12 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
 
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(queue, &__queue_clazz1, &__queue_clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
 
     /* Reduce unnecessary lock operations */
     if (mr_list_is_empty(&queue->list)
 #if defined(MR_USE_WORKQUEUE_HOOK)
-        && (!queue->hook.suspend)
+        && ((!queue->hook) || (!queue->hook->suspend))
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
     ) {
         return 0;
@@ -258,9 +255,9 @@ mr_err_t mr_workqueue_work(mr_workqueue_t *queue, mr_work_t *work) {
 
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(queue, &__queue_clazz1, &__queue_clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(work, &__work_clazz1, &__work_clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
 
     /* Check if workqueue is dying */
     if (mr_atomic_load(&queue->dying)) {
@@ -301,9 +298,9 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
 
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(queue, &__queue_clazz1, &__queue_clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(work, &__work_clazz1, &__work_clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
     MR_ASSERT(tick < (MR_TICK_MAX / 2));
 
     /* Check if tick is zero */
@@ -364,20 +361,6 @@ _exit:
     return ret;
 }
 
-#if defined(MR_USE_WORKQUEUE_HOOK)
-mr_err_t mr_workqueue_hook_set(mr_workqueue_t *queue,
-                               mr_workqueue_hook_t *hook) {
-    /* Check parameter */
-    MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(queue, &__queue_clazz1, &__queue_clazz2));
-    MR_ASSERT(hook != MR_NULL);
-
-    /* Set workqueue hook */
-    queue->hook = *hook;
-    return 0;
-}
-#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
-
 static void queue_del(mr_workqueue_t *queue) {
     mr_work_t *work;
     int mask;
@@ -407,7 +390,7 @@ static void queue_del(mr_workqueue_t *queue) {
     mr_spinlock_unlock_irqrestore(&__lock, mask);
 }
 
-static mr_workqueue_t *queue_obj_release(mr_object_t *obj) {
+static void queue_release(mr_object_t *obj) {
     mr_workqueue_t *queue;
 
     /* Get workqueue */
@@ -415,22 +398,14 @@ static mr_workqueue_t *queue_obj_release(mr_object_t *obj) {
 
     /* Delete workqueue */
     queue_del(queue);
-    return queue;
 }
 
-static void queue_obj_release1(mr_object_t *obj) {
+static void queue_release_dyn(mr_object_t *obj) {
     /* Release workqueue */
-    queue_obj_release(obj);
-}
-
-static void queue_obj_release2(mr_object_t *obj) {
-    mr_workqueue_t *queue;
-
-    /* Release workqueue */
-    queue = queue_obj_release(obj);
+    queue_release(obj);
 
     /* Free workqueue */
-    mr_free(queue);
+    mr_free(obj);
 }
 
 static mr_err_t work_init(mr_work_t *work, const mr_clazz_t *clazz,
@@ -446,15 +421,18 @@ static mr_err_t work_init(mr_work_t *work, const mr_clazz_t *clazz,
 }
 
 mr_err_t mr_work_init(mr_work_t *work, mr_work_entry_t *entry, void *param) {
+    const mr_clazz_t *clazz = MR_CLAZZ_FIND(work);
+
     /* Check parameter */
     MR_ASSERT((work != MR_NULL) && (!MR_OBJECT_IS_INITED(work)));
     MR_ASSERT(entry != MR_NULL);
 
     /* Init work */
-    return work_init(work, &__work_clazz1, entry, param);
+    return work_init(work, clazz, entry, param);
 }
 
 mr_work_t *mr_work_create(mr_work_entry_t *entry, void *param) {
+    const mr_clazz_t *clazz = MR_CLAZZ_DYNAMIC_FIND(work);
     mr_work_t *work;
     mr_err_t ret;
 
@@ -468,7 +446,7 @@ mr_work_t *mr_work_create(mr_work_entry_t *entry, void *param) {
     }
 
     /* Init work */
-    ret = work_init(work, &__work_clazz2, entry, param);
+    ret = work_init(work, clazz, entry, param);
     if (ret) {
         mr_free(work);
         return MR_NULL;
@@ -479,7 +457,7 @@ mr_work_t *mr_work_create(mr_work_entry_t *entry, void *param) {
 mr_err_t mr_work_del(mr_work_t *work) {
     /* Check parameter */
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(work, &__work_clazz1, &__work_clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
 
     /* Cancel work */
     mr_work_cancel(work);
@@ -495,7 +473,7 @@ mr_err_t mr_work_schedule(mr_work_t *work) {
 
     /* Check parameter */
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(work, &__work_clazz1, &__work_clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
 
     /* Get workqueue */
     queue = mr_workqueue_get(work->queue);
@@ -517,7 +495,7 @@ mr_err_t mr_work_delayed_schedule(mr_work_t *work, mr_tick_t tick) {
 
     /* Check parameter */
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(work, &__work_clazz1, &__work_clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
     MR_ASSERT(tick < (MR_TICK_MAX / 2));
 
     /* Get workqueue */
@@ -550,22 +528,10 @@ static void work_remove(mr_work_t *work) {
 mr_err_t mr_work_cancel(mr_work_t *work) {
     /* Check parameter */
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(work, &__work_clazz1, &__work_clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
 
     /* Remove work */
     work_remove(work);
-    return 0;
-}
-
-mr_err_t mr_work_bind(mr_work_t *work, mr_workqueue_t *queue) {
-    /* Check parameter */
-    MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(work, &__work_clazz1, &__work_clazz2));
-    MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(queue, &__queue_clazz1, &__queue_clazz2));
-
-    /* Set workqueue */
-    work->queue = queue;
     return 0;
 }
 
@@ -580,12 +546,12 @@ static mr_work_t *work_obj_release(mr_object_t *obj) {
     return work;
 }
 
-static void work_obj_release1(mr_object_t *obj) {
+static void work_release(mr_object_t *obj) {
     /* Release work */
     work_obj_release(obj);
 }
 
-static void work_obj_release2(mr_object_t *obj) {
+static void work_release_dyn(mr_object_t *obj) {
     mr_work_t *work;
 
     /* Release work */

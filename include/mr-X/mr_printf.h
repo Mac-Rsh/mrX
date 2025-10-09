@@ -33,9 +33,6 @@ extern "C" {
 #define MR_COLOR_GREEN                  "\033[32m"
 #define MR_COLOR_YELLOW                 "\033[33m"
 #define MR_COLOR_BLUE                   "\033[34m"
-#define MR_COLOR_MAGENTA                "\033[35m"
-#define MR_COLOR_CYAN                   "\033[36m"
-#define MR_COLOR_WHITE                  "\033[37m"
 #define MR_COLOR(_color, _str)          _color _str MR_COLOR_RESET
 #else
 #define MR_COLOR_RESET
@@ -44,9 +41,6 @@ extern "C" {
 #define MR_COLOR_GREEN
 #define MR_COLOR_YELLOW
 #define MR_COLOR_BLUE
-#define MR_COLOR_MAGENTA
-#define MR_COLOR_CYAN
-#define MR_COLOR_WHITE
 #define MR_COLOR(_color, _str)          _str
 #endif /* defined(MR_USE_PRINTF_COLOR) */
 

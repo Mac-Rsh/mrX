@@ -11,16 +11,14 @@
 #include <mr-X/mr_spinlock.h>
 #include <libc/mr_malloc.h>
 
-/* Irq clazz(static & dynamic) */
-static void irq_obj_release1(mr_object_t *obj);
-static void irq_obj_release2(mr_object_t *obj);
-static const mr_clazz_t __clazz1
-    = MR_CLAZZ_INIT("irq", irq_obj_release1);
-static const mr_clazz_t __clazz2
-    = MR_CLAZZ_INIT("irq", irq_obj_release2);
+/* Irq clazz(dynamic & static) */
+static void irq_release_dyn(mr_object_t *obj);
+static void irq_release(mr_object_t *obj);
+MR_CLAZZ_DYNAMIC_DEFINE(irq, irq_release_dyn);
+MR_CLAZZ_DEFINE(irq, irq_release);
 
 #if defined(MR_USE_IRQ_DEFER_HOOK)
-static mr_irq_defer_hook_t __hook = {.wakeup = MR_NULL, .suspend = MR_NULL};
+static const mr_irq_defer_hook_t *__hook = MR_NULL;
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 /* Irq lock */
 static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
@@ -148,6 +146,8 @@ _exit:
 
 mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
                      const mr_irq_ops_t *ops, void *priv) {
+    const mr_clazz_t *clazz = MR_CLAZZ_FIND(irq);
+
     /* Check parameter */
     MR_ASSERT((irq != MR_NULL) && (!MR_OBJECT_IS_INITED(irq)));
     MR_ASSERT(irq_start < MR_CFG_IRQ_TABLE_SIZE);
@@ -156,11 +156,12 @@ mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
     MR_ASSERT(ops != MR_NULL);
 
     /* Init workqueue */
-    return irq_init(irq, &__clazz1, irq_start, irq_end, ops, priv);
+    return irq_init(irq, clazz, irq_start, irq_end, ops, priv);
 }
 
 mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
                         const mr_irq_ops_t *ops, void *priv) {
+    const mr_clazz_t *clazz = MR_CLAZZ_DYNAMIC_FIND(irq);
     mr_irq_t *irq;
     mr_err_t ret;
 
@@ -177,7 +178,7 @@ mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
     }
 
     /* Init irq */
-    ret = irq_init(irq, &__clazz2, irq_start, irq_end, ops, priv);
+    ret = irq_init(irq, clazz, irq_start, irq_end, ops, priv);
     if (ret != 0) {
         mr_free(irq);
         return MR_NULL;
@@ -188,7 +189,7 @@ mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
 mr_err_t mr_irq_del(mr_irq_t *irq) {
     /* Check parameter */
     MR_ASSERT((irq != MR_NULL) && MR_OBJECT_IS_INITED(irq));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(irq, &__clazz1, &__clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(irq, irq));
 
     /* Mark irq as dying */
     mr_atomic_store(&irq->dying, MR_TRUE);
@@ -730,12 +731,12 @@ void mr_irq_defer_execute(void) {
 
 #if defined(MR_USE_IRQ_DEFER_HOOK)
 static void irq_workqueue_hook_wakeup(mr_workqueue_t *queue, void *param) {
-    mr_irq_defer_hook_t *hook;
+    const mr_irq_defer_hook_t *hook;
 
     MR_UNUSED(queue);
 
     /* Check irq defer wakeup hook */
-    hook = (mr_irq_defer_hook_t *)param;
+    hook = *(const mr_irq_defer_hook_t **)param;
     if (!hook->wakeup) {
         return;
     }
@@ -745,12 +746,12 @@ static void irq_workqueue_hook_wakeup(mr_workqueue_t *queue, void *param) {
 }
 
 static void irq_workqueue_hook_suspend(mr_workqueue_t *queue, void *param) {
-    mr_irq_defer_hook_t *hook;
+    const mr_irq_defer_hook_t *hook;
 
     MR_UNUSED(queue);
 
     /* Check irq defer suspend hook */
-    hook = (mr_irq_defer_hook_t *)param;
+    hook = *(const mr_irq_defer_hook_t **)param;
     if (!hook->suspend) {
         return;
     }
@@ -759,12 +760,12 @@ static void irq_workqueue_hook_suspend(mr_workqueue_t *queue, void *param) {
     hook->suspend(hook->param);
 }
 
-mr_err_t mr_irq_defer_hook_set(mr_irq_defer_hook_t *hook) {
+mr_err_t mr_irq_defer_hook_set(const mr_irq_defer_hook_t *hook) {
     /* Check parameter */
     MR_ASSERT(hook != MR_NULL);
 
     /* Set irq defer hook */
-    __hook = *hook;
+    __hook = hook;
     return 0;
 }
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
@@ -785,7 +786,7 @@ static void irq_del(mr_irq_t *irq) {
     mr_spinlock_unlock_irqrestore(&__lock, mask);
 }
 
-static mr_irq_t *irq_obj_release(mr_object_t *obj) {
+static void irq_release(mr_object_t *obj) {
     mr_irq_t *irq;
 
     /* Get irq */
@@ -793,27 +794,19 @@ static mr_irq_t *irq_obj_release(mr_object_t *obj) {
 
     /* Delete irq */
     irq_del(irq);
-    return irq;
 }
 
-static void irq_obj_release1(mr_object_t *obj) {
+static void irq_release_dyn(mr_object_t *obj) {
     /* Release irq */
-    irq_obj_release(obj);
-}
-
-static void irq_obj_release2(mr_object_t *obj) {
-    mr_irq_t *irq;
-
-    /* Release irq */
-    irq = irq_obj_release(obj);
+    irq_release(obj);
 
     /* Free irq */
-    mr_free(irq);
+    mr_free(obj);
 }
 
 void mr_kernel_irq_init(void) {
 #if defined(MR_USE_IRQ_DEFER_HOOK)
-    static mr_workqueue_hook_t queue_hook
+    static const mr_workqueue_hook_t queue_hook
         = {.wakeup = irq_workqueue_hook_wakeup,
            .suspend = irq_workqueue_hook_suspend,
            .param = &__hook};

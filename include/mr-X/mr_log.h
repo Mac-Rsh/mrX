@@ -11,7 +11,7 @@
 
 #include <mr_config.h>
 #if defined(MR_USE_LOG)
-#include <mr-X/mr_printf.h>
+#include <libc/mr_types.h>
 #endif /* defined(MR_USE_LOG) */
 
 #ifdef __cplusplus
@@ -25,18 +25,20 @@ extern "C" {
 
 #if defined(MR_USE_LOG)
 /* Log level definition */
-#define MR_LOG_LEVEL_ERR                (0)
-#define MR_LOG_LEVEL_WRN                (1)
-#define MR_LOG_LEVEL_INF                (2)
-#define MR_LOG_LEVEL_DBG                (3)
-#define MR_LOG_LEVEL_TRC                (4)
+enum mr_log_level {
+    MR_LOG_LEVEL_ERROR,
+    MR_LOG_LEVEL_WARN,
+    MR_LOG_LEVEL_INFO,
+    MR_LOG_LEVEL_DEBUG,
+    MR_LOG_LEVEL_TRACE,
+};
 
 /* Log level mask definition */
 #define MR_LOG_MASK(_level)             (1U << _level)
 
 /* Log default level definition */
 #if !defined(MR_CFG_LOG_LEVEL)
-#define MR_CFG_LOG_LEVEL                MR_LOG_LEVEL_TRC
+#define MR_CFG_LOG_LEVEL                MR_LOG_LEVEL_TRACE
 #endif /* !defined(MR_CFG_LOG_LEVEL) */
 
 /**
@@ -64,44 +66,44 @@ mr_uint32_t mr_log_mask(void);
 
 /* Log format macro definition */
 #define __MR_LOG_FORMAT(_color, _level, _fmt)                                  \
-    (MR_COLOR(_color, "[" _level "/" MR_LOG_TAG "] " _fmt) "\n")
+    (_color " [" _level "/" MR_LOG_TAG "] " _fmt MR_COLOR_RESET "\n")
 
 /* Log macro definition */
-#if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_TRC)
-#define MR_LOG_TRC(_fmt, ...)                                                  \
-    mr_log(MR_LOG_LEVEL_TRC, __MR_LOG_FORMAT(MR_COLOR_WHITE, "TRC", _fmt),     \
+#if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_TRACE)
+#define MR_LOG_TRACE(_fmt, ...)                                                \
+    mr_log(MR_LOG_LEVEL_TRACE, __MR_LOG_FORMAT(MR_COLOR_BLACK, "TRC", _fmt),   \
            ##__VA_ARGS__)
 #else
-#define MR_LOG_TRC(_fmt, ...)           ((void)0)
-#endif /* defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_TRC) */
-#if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_DBG)
-#define MR_LOG_DBG(_fmt, ...)                                                  \
-    mr_log(MR_LOG_LEVEL_DBG, __MR_LOG_FORMAT(MR_COLOR_BLUE, "DBG", _fmt),      \
+#define MR_LOG_TRACE(_fmt, ...)         ((void)0)
+#endif /* defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_TRACE) */
+#if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_DEBUG)
+#define MR_LOG_DEBUG(_fmt, ...)                                                \
+    mr_log(MR_LOG_LEVEL_DEBUG, __MR_LOG_FORMAT(MR_COLOR_BLUE, "DBG", _fmt),    \
            ##__VA_ARGS__)
 #else
-#define MR_LOG_DBG(_fmt, ...)           ((void)0)
-#endif /* defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_DBG) */
-#if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_INF)
-#define MR_LOG_INF(_fmt, ...)                                                  \
-    mr_log(MR_LOG_LEVEL_INF, __MR_LOG_FORMAT(MR_COLOR_GREEN, "INF", _fmt),     \
+#define MR_LOG_DEBUG(_fmt, ...)         ((void)0)
+#endif /* defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_DEBUG) */
+#if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_INFO)
+#define MR_LOG_INFO(_fmt, ...)                                                 \
+    mr_log(MR_LOG_LEVEL_INFO, __MR_LOG_FORMAT(MR_COLOR_GREEN, "INF", _fmt),    \
            ##__VA_ARGS__)
 #else
-#define MR_LOG_INF(_fmt, ...)           ((void)0)
-#endif /* defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_INF) */
-#if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_WRN)
-#define MR_LOG_WRN(_fmt, ...)                                                  \
-    mr_log(MR_LOG_LEVEL_WRN, __MR_LOG_FORMAT(MR_COLOR_YELLOW, "WRN", _fmt),    \
+#define MR_LOG_INFO(_fmt, ...)          ((void)0)
+#endif /* (MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_INFO) */
+#if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_WARN)
+#define MR_LOG_WARN(_fmt, ...)                                                 \
+    mr_log(MR_LOG_LEVEL_WARN, __MR_LOG_FORMAT(MR_COLOR_YELLOW, "WRN", _fmt),   \
            ##__VA_ARGS__)
 #else
-#define MR_LOG_WRN(_fmt, ...)           ((void)0)
-#endif /* defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_WRN) */
-#if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_ERR)
-#define MR_LOG_ERR(_fmt, ...)                                                  \
-    mr_log(MR_LOG_LEVEL_ERR, __MR_LOG_FORMAT(MR_COLOR_RED, "ERR", _fmt),       \
+#define MR_LOG_WARN(_fmt, ...)          ((void)0)
+#endif /* (MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_WARN) */
+#if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_ERROR)
+#define MR_LOG_ERROR(_fmt, ...)                                                \
+    mr_log(MR_LOG_LEVEL_ERROR, __MR_LOG_FORMAT(MR_COLOR_RED, "ERR", _fmt),     \
            ##__VA_ARGS__)
 #else
-#define MR_LOG_ERR(_fmt, ...)           ((void)0)
-#endif /* defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_ERR) */
+#define MR_LOG_ERROR(_fmt, ...)         ((void)0)
+#endif /* (MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_ERROR) */
 #endif /* defined(MR_USE_LOG) */
 
 /** @} */

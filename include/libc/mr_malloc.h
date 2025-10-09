@@ -34,15 +34,21 @@ extern "C" {
 #define mr_realloc(_m, _sz)             realloc(_m, _sz)
 #else
 #if defined(MR_USE_MALLOC)
-/* Memory block magic definition */
-#define MR_MEMBLK_MAGIC                 (0x6d725800U)
+/* Heap magic definition */
+#define MR_HEAP_MAGIC                   (0x6d725800U)
 
-/* Memory block type */
-typedef struct MR_ALIGN(MR_ALIGN_SIZE) mr_memblk {
+/* Heap block type */
+typedef struct mr_heap_block {
     volatile mr_uint32_t magic;
-    struct mr_memblk *next;
+    struct mr_heap_block *next;
     mr_size_t size;
-} mr_memblk_t;
+} mr_heap_block_t;
+
+/* Heap region type */
+typedef struct mr_heap_region {
+    void *address;
+    mr_size_t size;
+} mr_heap_region_t;
 #endif /* defined(MR_USE_MALLOC) */
 
 /**
@@ -85,6 +91,15 @@ void *mr_calloc(mr_size_t num, mr_size_t size);
  * @return The reallocated memory.
  */
 void *mr_realloc(void *mem, mr_size_t size);
+
+/**
+ * @brief This function adds memory regions.
+ *
+ * @param regions The memory regions.
+ *
+ * @note The last region address must be MR_NULL.
+ */
+void mr_heap_region_add(const mr_heap_region_t *regions);
 #endif /* defined(MR_USE_MALLOC_STD) */
 
 /** @} */

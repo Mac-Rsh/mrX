@@ -26,7 +26,7 @@ static mr_irq_t __irq;
 #if defined(MR_USE_IRQ_DEFER_HOOK)
 static void irq_defer_hook_suspend(void *param);
 static void irq_defer_hook_wakeup(void *param);
-static mr_irq_defer_hook_t __hook
+static const mr_irq_defer_hook_t __hook
     = {.suspend = irq_defer_hook_suspend, .wakeup = irq_defer_hook_wakeup};
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 static mr_uint8_t __irqn[] = {

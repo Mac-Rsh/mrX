@@ -256,6 +256,7 @@ MR_INLINE int mr_fls64(mr_uint64_t x) {
     x |= x >> 32;
     x -= x >> 1;
 
+    /* Find last set bit */
     return mr_ffs64(x);
 }
 

@@ -166,7 +166,7 @@ extern "C" {
 typedef void(mr_testcase_entry)(void);
 
 /* Testcase type */
-typedef struct MR_ALIGN(MR_ALIGN_SIZE) mr_testcase {
+typedef struct mr_testcase {
     const char *suite;
     const char *name;
     mr_testcase_entry *entry;
@@ -174,12 +174,13 @@ typedef struct MR_ALIGN(MR_ALIGN_SIZE) mr_testcase {
 
 /* Testcase export macro definition */
 #define __MR_TEST_EXPORT(_suite, _name, _entry, _level)                        \
-    MR_USED const mr_testcase_t __mr_testcase_##_suite##_##_name MR_SECTION(   \
-        "mr_testcase." _level)                                                 \
+    MR_USED const mr_testcase_t                                                \
+        __mr_testcase_##_suite##_##_name MR_SECTION_ALIGN(                     \
+            "mr_testcase." _level)                                             \
         = {.suite = #_suite, .name = #_name, .entry = (_entry)}
 
 /**
- * @brief This macro function defines a testcase.
+ * @brief This macro function exports a testcase.
  *
  * @param _suite The testcase suite name.
  * @param _name The testcase name.

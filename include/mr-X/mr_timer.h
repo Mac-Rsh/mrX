@@ -30,6 +30,7 @@ extern "C" {
 #define MR_TIMER_PERIODIC               (1U << 31)
 
 /* Timer type */
+MR_CLAZZ_EXPORT(timer);
 typedef struct mr_timer {
     mr_object_t parent;
     mr_tick_t itick;
@@ -41,6 +42,21 @@ typedef struct mr_timer {
 
 /* Timer entry type */
 typedef void(mr_timer_entry_t)(mr_timer_t *timer, void *param);
+
+/**
+ * @brief This macro function initializes a timer.
+ *
+ * @param _timer The timer.
+ * @param _entry The timer entry.
+ * @param _param The entry parameter.
+ * @param _tick The timing tick(period: 'tick | MR_TIMER_PERIODIC').
+ */
+#define MR_TIMER_INIT(_timer, _entry, _param, _tick)                           \
+    {.parent = MR_OBJECT_INIT(MR_CLAZZ_FIND(timer)),                           \
+     .itick = (_tick),                                                         \
+     .list = MR_LIST_INIT(&(_timer)->list),                                    \
+     .entry = (_entry),                                                        \
+     .param = (_param)}
 
 /**
  * @brief This function initializes a timer.
@@ -74,6 +90,14 @@ mr_timer_t *mr_timer_create(mr_timer_entry_t *entry, void *param,
 mr_err_t mr_timer_del(mr_timer_t *timer);
 
 /**
+ * @brief This function checks whether a timer is timing.
+ *
+ * @param timer The timer.
+ * @return MR_TRUE on timing, MR_FALSE otherwise.
+ */
+#define MR_TIMER_IS_TIMING(_timer)      (!mr_list_is_empty(&(_timer)->list))
+
+/**
  * @brief This function starts a timer.
  *
  * @param timer The timer.
@@ -95,7 +119,14 @@ mr_err_t mr_timer_stop(mr_timer_t *timer);
  * @param timer The timer.
  * @return The timing tick.
  */
-mr_tick_t mr_timer_tick(mr_timer_t *timer);
+MR_INLINE mr_tick_t mr_timer_tick(mr_timer_t *timer) {
+    /* Check parameter */
+    MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(timer, timer));
+
+    /* Return timer tick */
+    return timer->itick;
+}
 
 /**
  * @brief This function sets timer timing tick.

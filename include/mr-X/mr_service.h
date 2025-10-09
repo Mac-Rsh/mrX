@@ -73,7 +73,7 @@ extern "C" {
  * @param _ali The alignment.
  * @return The aligned value.
  */
-#define MR_ALIGN_UP(_x, _ali)           (((_x) + (_ali)-1) & ~((_ali)-1))
+#define MR_ALIGN_UP(_x, _ali)           (((_x) + (_ali) - 1) & ~((_ali) - 1))
 
 /**
  * @brief This macro function aligns the value down.
@@ -82,7 +82,17 @@ extern "C" {
  * @param _ali The alignment.
  * @return The aligned value.
  */
-#define MR_ALIGN_DOWN(_x, _ali)         ((_x) & ~((_ali)-1))
+#define MR_ALIGN_DOWN(_x, _ali)         ((_x) & ~((_ali) - 1))
+
+/**
+ * @brief This macro function concatenates two strings.
+ *
+ * @param _a The first string.
+ * @param _b The second string.
+ * @return The concatenated string.
+ */
+#define __MR_CAT(_a, _b)                _a##_b
+#define MR_CAT(_a, _b)                  __MR_CAT(_a, _b)
 
 /**
  * @brief This function verifies the parity(even).

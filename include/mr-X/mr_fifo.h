@@ -168,6 +168,17 @@ MR_INLINE mr_uint32_t mr_fifo_avail(mr_fifo_t *fifo) {
 }
 
 /**
+ * @brief This function gets the size of a fifo.
+ *
+ * @param fifo The fifo.
+ * @return The size of the fifo.
+ */
+MR_INLINE mr_uint32_t mr_fifo_size(mr_fifo_t *fifo) {
+    /* Get fifo size */
+    return fifo->mask + 1;
+}
+
+/**
  * @brief This function resets a fifo.
  *
  * @param fifo The fifo.

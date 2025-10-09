@@ -22,25 +22,26 @@ extern "C" {
 
 /* Initcall level definition */
 #define MR_INIT_LEVEL_IRQ               "1.0"
-#define MR_INIT_LEVEL_USER(_level)      "2."_level
+#define MR_INIT_LEVEL_DRIVER            "1.1"
+#define MR_INIT_LEVEL_USER(_level)      "8."_level
 
 /* Initcall entry type */
 typedef void(mr_initcall_entry_t)(void);
 
 /* Initcall type */
-typedef struct MR_ALIGN(MR_ALIGN_SIZE) mr_initcall {
+typedef struct mr_initcall {
     const char *name;
     mr_initcall_entry_t *entry;
 } mr_initcall_t;
 
 /**
- * @brief This macro function defines an initcall.
+ * @brief This macro function exports an initcall.
  *
  * @param _entry The initcall function.
  * @param _level The initcall level.
  */
 #define MR_INIT_EXPORT(_entry, _level)                                         \
-    MR_USED const mr_initcall_t __mr_initcall_##_entry MR_SECTION(             \
+    MR_USED const mr_initcall_t __mr_initcall_##_entry MR_SECTION_ALIGN(       \
         "mr_initcall." _level)                                                 \
         = {.name = #_entry, .entry = (_entry)}
 

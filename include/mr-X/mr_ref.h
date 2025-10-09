@@ -34,7 +34,7 @@ extern "C" {
 #endif /* defined(MR_USE_REF_LONG_COUNT) */
 
 /* Ref type */
-typedef volatile mr_atomic_t            mr_ref_t;
+typedef volatile mr_atomic_t mr_ref_t;
 
 /* Ref release type */
 typedef void(mr_ref_release_t)(mr_ref_t *ref);
@@ -42,7 +42,7 @@ typedef void(mr_ref_release_t)(mr_ref_t *ref);
 /**
  * @brief This macro function initializes a ref.
  */
-#define MR_REF_INIT()                  MR_ATOMIC_INIT(MR_REF_MAGIC | 0x0001U)
+#define MR_REF_INIT()                   MR_ATOMIC_INIT(MR_REF_MAGIC | 0x0001U)
 
 /**
  * @brief This macro function checks if a ref is initialized.
@@ -59,7 +59,7 @@ typedef void(mr_ref_release_t)(mr_ref_t *ref);
  * @param _ref The ref.
  * @return The ref count.
  */
-#define MR_REF_COUNT(_ref)               ((_ref) & (~MR_REF_MAGIC))
+#define MR_REF_COUNT(_ref)              ((_ref) & (~MR_REF_MAGIC))
 
 /**
  * @brief This function initializes a ref.

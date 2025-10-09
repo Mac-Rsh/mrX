@@ -63,4 +63,16 @@
 
 /** @} */
 
+/**
+ * @addtogroup Drivers
+ * @{
+ */
+
+#if defined(MR_USE_DRIVER)
+#include <drivers/mr_driver.h>
+#include <drivers/gpio/mr_gpio.h>
+#endif /* defined(MR_USE_DRIVER) */
+
+/** @} */
+
 #endif /* __MR_X_H__ */

@@ -28,7 +28,8 @@ extern "C" {
 #else
 #error "Compiler not supported"
 #endif /* defined(__GNUC__) || defined(__clang__) || defined(__ARMCC_VERSION) */
-#define MR_ALIGN_SIZE                   (sizeof(void *) * 2)
+#define MR_SECTION_ALIGN(_x)            MR_ALIGN(MR_ALIGN_SIZE) MR_SECTION(_x)
+#define MR_ALIGN_SIZE                   (sizeof(void *))
 #define MR_UNUSED(_x)                   (void)(_x)
 
 /** @} */

@@ -26,8 +26,6 @@ static void end(void) {
 __MR_TEST_EXPORT(sys, end, end, "1.end");
 
 static mr_bool_t testcase_run(const mr_testcase_t *cs) {
-    mr_tick_t tick;
-
     /* Check parameter */
     MR_ASSERT(cs->entry != MR_NULL);
 
@@ -37,25 +35,17 @@ static mr_bool_t testcase_run(const mr_testcase_t *cs) {
     /* Reset test status */
     __mr_test_status = __MR_TEST_MAGIC_PASS;
 
-    /* Get begin tick */
-    tick = mr_clock_tick();
-
     /* Call test entry */
     cs->entry();
 
-    /* Get difference tick */
-    tick = mr_clock_tick() - tick;
-
     /* Test case end */
     if (__mr_test_status == __MR_TEST_MAGIC_PASS) {
-        mr_printf(
-            "[       " MR_COLOR(MR_COLOR_GREEN, "OK") " ] %s.%s (%d tick)\n",
-            cs->suite, cs->name, tick);
+        mr_printf("[       " MR_COLOR(MR_COLOR_GREEN, "OK") " ] %s.%s\n",
+                  cs->suite, cs->name);
         return MR_TRUE;
     } else {
-        mr_printf(
-            "[  " MR_COLOR(MR_COLOR_RED, "FAILED") "  ] %s.%s (%d tick)\n",
-            cs->suite, cs->name, tick);
+        mr_printf("[  " MR_COLOR(MR_COLOR_RED, "FAILED") "  ] %s.%s\n",
+                  cs->suite, cs->name);
         return MR_FALSE;
     }
 }

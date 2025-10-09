@@ -11,13 +11,11 @@
 #include <mr-X/mr_spinlock.h>
 #include <libc/mr_malloc.h>
 
-/* Timer clazz(static & dynamic) */
-static void timer_obj_release1(mr_object_t *obj);
-static void timer_obj_release2(mr_object_t *obj);
-static const mr_clazz_t __clazz1
-    = MR_CLAZZ_INIT("timer", timer_obj_release1);
-static const mr_clazz_t __clazz2
-    = MR_CLAZZ_INIT("timer", timer_obj_release2);
+/* Timer clazz(dynamic & static) */
+static void timer_release_dyn(mr_object_t *obj);
+static void timer_release(mr_object_t *obj);
+MR_CLAZZ_DYNAMIC_DEFINE(timer, timer_release_dyn);
+MR_CLAZZ_DEFINE(timer, timer_release);
 
 /* Timer timing list */
 static mr_list_t __tlist = MR_LIST_INIT(&__tlist);
@@ -38,16 +36,19 @@ static mr_err_t timer_init(mr_timer_t *timer, const mr_clazz_t *clazz,
 
 mr_err_t mr_timer_init(mr_timer_t *timer, mr_timer_entry_t *entry, void *param,
                        mr_tick_t tick) {
+    const mr_clazz_t *clazz = MR_CLAZZ_FIND(timer);
+
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && (!MR_OBJECT_IS_INITED(timer)));
     MR_ASSERT((entry != MR_NULL) && (tick > 0));
 
     /* Init timer */
-    return timer_init(timer, &__clazz1, entry, param, tick);
+    return timer_init(timer, clazz, entry, param, tick);
 }
 
 mr_timer_t *mr_timer_create(mr_timer_entry_t *entry, void *param,
                             mr_tick_t tick) {
+    const mr_clazz_t *clazz = MR_CLAZZ_DYNAMIC_FIND(timer);
     mr_timer_t *timer;
     mr_err_t ret;
 
@@ -61,7 +62,7 @@ mr_timer_t *mr_timer_create(mr_timer_entry_t *entry, void *param,
     }
 
     /* Init timer */
-    ret = timer_init(timer, &__clazz2, entry, param, tick);
+    ret = timer_init(timer, clazz, entry, param, tick);
     if (ret != 0) {
         mr_free(timer);
         return MR_NULL;
@@ -85,7 +86,7 @@ static void timer_remove(mr_timer_t *timer) {
 mr_err_t mr_timer_del(mr_timer_t *timer) {
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(timer, &__clazz1, &__clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(timer, timer));
 
     /* Remove timer */
     timer_remove(timer);
@@ -127,7 +128,7 @@ mr_err_t mr_timer_start(mr_timer_t *timer) {
 
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(timer, &__clazz1, &__clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(timer, timer));
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
@@ -143,20 +144,11 @@ mr_err_t mr_timer_start(mr_timer_t *timer) {
 mr_err_t mr_timer_stop(mr_timer_t *timer) {
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(timer, &__clazz1, &__clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(timer, timer));
 
     /* Remove timer */
     timer_remove(timer);
     return 0;
-}
-
-mr_tick_t mr_timer_tick(mr_timer_t *timer) {
-    /* Check parameter */
-    MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(timer, &__clazz1, &__clazz2));
-
-    /* Return timer tick */
-    return timer->itick;
 }
 
 mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
@@ -164,7 +156,7 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
 
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_OR(timer, &__clazz1, &__clazz2));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(timer, timer));
     MR_ASSERT(tick > 0);
 
     /* Lock */
@@ -181,7 +173,7 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
     return 0;
 }
 
-static mr_timer_t *timer_obj_release(mr_object_t *obj) {
+static void timer_release(mr_object_t *obj) {
     mr_timer_t *timer;
 
     /* Get timer */
@@ -189,22 +181,14 @@ static mr_timer_t *timer_obj_release(mr_object_t *obj) {
 
     /* Remove timer */
     timer_remove(timer);
-    return timer;
 }
 
-static void timer_obj_release1(mr_object_t *obj) {
+static void timer_release_dyn(mr_object_t *obj) {
     /* Release timer */
-    timer_obj_release(obj);
-}
-
-static void timer_obj_release2(mr_object_t *obj) {
-    mr_timer_t *timer;
-
-    /* Release timer */
-    timer = timer_obj_release(obj);
+    timer_release(obj);
 
     /* Free timer */
-    mr_free(timer);
+    mr_free(obj);
 }
 
 static mr_tick_t timer_timeout_check(void) {
