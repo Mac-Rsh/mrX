@@ -221,7 +221,7 @@ mr_err_t mr_waiter_cancel(mr_waiter_t *wait);
 MR_INLINE mr_uint32_t mr_waiter_event(mr_waiter_t *wait) {
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && MR_OBJECT_IS_INITED(wait));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(wait, waiter));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(wait, waiter));
 
     /* Return waiter event */
     return wait->event;

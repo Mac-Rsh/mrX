@@ -189,7 +189,7 @@ mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
 mr_err_t mr_irq_del(mr_irq_t *irq) {
     /* Check parameter */
     MR_ASSERT((irq != MR_NULL) && MR_OBJECT_IS_INITED(irq));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(irq, irq));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(irq, irq));
 
     /* Mark irq as dying */
     mr_atomic_store(&irq->dying, MR_TRUE);

@@ -140,7 +140,7 @@ MR_INLINE mr_err_t mr_workqueue_hook_set(mr_workqueue_t *queue,
                                          const mr_workqueue_hook_t *hook) {
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(queue, workqueue));
     MR_ASSERT(hook != MR_NULL);
 
     /* Set workqueue hook */
@@ -256,9 +256,9 @@ mr_err_t mr_work_cancel(mr_work_t *work);
 MR_INLINE mr_err_t mr_work_bind(mr_work_t *work, mr_workqueue_t *queue) {
     /* Check parameter */
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(work, work));
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(queue, workqueue));
 
     /* Set workqueue */
     work->queue = queue;

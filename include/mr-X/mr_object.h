@@ -153,7 +153,7 @@ mr_err_t mr_object_init(mr_object_t *obj, const mr_clazz_t *clazz);
  * @param _name The clazz name.
  * @return MR_TRUE on success, MR_FALSE otherwise.
  */
-#define MR_OBJECT_CLAZZ_IS_NAME(_obj, _name)                                   \
+#define MR_OBJECT_CLAZZ_IS(_obj, _name)                                        \
     (mr_strcmp(MR_OBJECT_CLAZZ(_obj)->name, #_name) == 0)
 
 /**

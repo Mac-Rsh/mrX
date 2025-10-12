@@ -32,8 +32,8 @@ struct mr_driver;
 /* Driver type definition */
 enum mr_driver_type {
     MR_DRIVER_TYPE_NONE = 0,
-    MR_DRIVER_TYPE_GPIO = 0x100,
-    MR_DRIVER_TYPE_MAX,
+    MR_DRIVER_TYPE_GPIO = 0x0100,
+    MR_DRIVER_TYPE_MASK = 0xff00,
 };
 
 /* Driver flag definition */
@@ -248,7 +248,8 @@ mr_driver_t *mr_driver_create(mr_uint16_t type, const mr_driver_dops_t *dops,
  * @param _drv The driver.
  * @return The driver type.
  */
-#define MR_DRIVER_TYPE(_drv)            (((mr_driver_t *)(_drv))->type)
+#define MR_DRIVER_TYPE(_drv)                                                   \
+    (((mr_driver_t *)(_drv))->type & MR_DRIVER_TYPE_MASK)
 
 /**
  * @brief This macro function checks if a driver is of a type.
@@ -257,7 +258,8 @@ mr_driver_t *mr_driver_create(mr_uint16_t type, const mr_driver_dops_t *dops,
  * @param _type The driver type.
  * @return MR_TRUE if the driver is of the type, MR_FALSE otherwise.
  */
-#define MR_DRIVER_IS_TYPE(_drv, _type)  (MR_DRIVER_TYPE(_drv) == (_type))
+#define MR_DRIVER_IS_TYPE(_drv, _type)                                         \
+    (MR_DRIVER_TYPE(_drv) == ((_type) & MR_DRIVER_TYPE_MASK))
 
 /**
  * @brief This macro function gets the private data.
@@ -300,6 +302,18 @@ mr_err_t mr_driver_del(mr_driver_t *drv);
 mr_err_t mr_driver_setup(mr_driver_t *drv);
 
 /**
+ * @brief This macro function checks a driver.
+ *
+ * @param _drv The driver.
+ * @param _type The driver type.
+ */
+#define MR_DRIVER_ASSERT(_drv, _type)                                          \
+    MR_ASSERT(((_drv) != MR_NULL) && MR_OBJECT_IS_INITED(_drv));               \
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS((_drv), driver));                             \
+    MR_ASSERT(MR_DRIVER_IS_SETUP(_drv));                                       \
+    MR_ASSERT(MR_DRIVER_IS_TYPE((_drv), (_type)))
+
+/**
  * @brief This function shuts down a driver.
  *
  * @param drv The driver.
@@ -322,18 +336,6 @@ void mr_driver_state_set(mr_driver_t *drv, mr_err_t errcode);
  * @return The driver state.
  */
 mr_err_t mr_driver_state(mr_driver_t *drv);
-
-/**
- * @brief This macro function checks a driver.
- *
- * @param _drv The driver.
- * @param _type The driver type.
- */
-#define MR_DRIVER_ASSERT(_drv, _type)                                          \
-    MR_ASSERT(((_drv) != MR_NULL) && MR_OBJECT_IS_INITED(_drv));               \
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME((_drv), driver));                        \
-    MR_ASSERT(MR_DRIVER_IS_SETUP(_drv));                                       \
-    MR_ASSERT(MR_DRIVER_IS_TYPE((_drv), (_type)))
 
 /**
  * @brief This function finds a driver.

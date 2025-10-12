@@ -78,7 +78,7 @@ mr_driver_t *mr_driver_create(mr_uint16_t type, const mr_driver_dops_t *dops,
 mr_err_t mr_driver_del(mr_driver_t *drv) {
     /* Check parameter */
     MR_ASSERT((drv != MR_NULL) && MR_OBJECT_IS_INITED(drv));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(drv, driver));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(drv, driver));
 
     /* Mark driver as dying */
     mr_atomic_fetch_or(&drv->flags, MR_DRIVER_FLAG_DYING);
@@ -121,7 +121,7 @@ mr_err_t mr_driver_setup(mr_driver_t *drv) {
 
     /* Check parameter */
     MR_ASSERT((drv != MR_NULL) && MR_OBJECT_IS_INITED(drv));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(drv, driver));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(drv, driver));
 
     /* Lock driver */
     ret = driver_lock(drv);
@@ -161,7 +161,7 @@ mr_err_t mr_driver_shutdown(mr_driver_t *drv) {
 
     /* Check parameter */
     MR_ASSERT((drv != MR_NULL) && MR_OBJECT_IS_INITED(drv));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(drv, driver));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(drv, driver));
 
     /* Lock driver */
     ret = driver_lock(drv);
@@ -199,7 +199,7 @@ _exit:
 void mr_driver_state_set(mr_driver_t *drv, mr_err_t errcode) {
     /* Check parameter */
     MR_ASSERT((drv != MR_NULL) && MR_OBJECT_IS_INITED(drv));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(drv, driver));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(drv, driver));
     MR_ASSERT(errcode <= 0);
 
     /* Limit error code(0 ~ 255) */
@@ -217,7 +217,7 @@ void mr_driver_state_set(mr_driver_t *drv, mr_err_t errcode) {
 mr_err_t mr_driver_state(mr_driver_t *drv) {
     /* Check parameter */
     MR_ASSERT((drv != MR_NULL) && MR_OBJECT_IS_INITED(drv));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(drv, driver));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(drv, driver));
 
     /* Get driver state */
     return -((mr_err_t)drv->state);

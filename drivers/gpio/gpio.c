@@ -290,7 +290,7 @@ mr_err_t mr_gpio_irq_attach(mr_driver_t *drv, mr_waiter_t *entry) {
     /* Auto set GPIO irq event */
     mr_waiter_event_set(entry, mr_waiter_event(entry) | MR_WAIT_IN);
 
-    /* Request GPIO irq */
+    /* Attach GPIO irq */
     return mr_waiter_wait(entry, &gp_data->irq);
 }
 

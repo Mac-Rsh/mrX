@@ -86,7 +86,7 @@ static void timer_remove(mr_timer_t *timer) {
 mr_err_t mr_timer_del(mr_timer_t *timer) {
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(timer, timer));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(timer, timer));
 
     /* Remove timer */
     timer_remove(timer);
@@ -128,7 +128,7 @@ mr_err_t mr_timer_start(mr_timer_t *timer) {
 
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(timer, timer));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(timer, timer));
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
@@ -144,7 +144,7 @@ mr_err_t mr_timer_start(mr_timer_t *timer) {
 mr_err_t mr_timer_stop(mr_timer_t *timer) {
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(timer, timer));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(timer, timer));
 
     /* Remove timer */
     timer_remove(timer);
@@ -156,7 +156,7 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
 
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(timer, timer));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(timer, timer));
     MR_ASSERT(tick > 0);
 
     /* Lock */

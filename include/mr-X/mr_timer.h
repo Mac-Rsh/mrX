@@ -122,7 +122,7 @@ mr_err_t mr_timer_stop(mr_timer_t *timer);
 MR_INLINE mr_tick_t mr_timer_tick(mr_timer_t *timer) {
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(timer, timer));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(timer, timer));
 
     /* Return timer tick */
     return timer->itick;

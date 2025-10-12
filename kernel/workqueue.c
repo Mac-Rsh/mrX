@@ -159,7 +159,7 @@ mr_workqueue_t *mr_workqueue_create(void) {
 mr_err_t mr_workqueue_del(mr_workqueue_t *queue) {
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(queue, workqueue));
 
     /* Mark workqueue as dying */
     mr_atomic_store(&queue->dying, MR_TRUE);
@@ -196,7 +196,7 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
 
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(queue, workqueue));
 
     /* Reduce unnecessary lock operations */
     if (mr_list_is_empty(&queue->list)
@@ -255,9 +255,9 @@ mr_err_t mr_workqueue_work(mr_workqueue_t *queue, mr_work_t *work) {
 
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(queue, workqueue));
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(work, work));
 
     /* Check if workqueue is dying */
     if (mr_atomic_load(&queue->dying)) {
@@ -298,9 +298,9 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
 
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && MR_OBJECT_IS_INITED(queue));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(queue, workqueue));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(queue, workqueue));
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(work, work));
     MR_ASSERT(tick < (MR_TICK_MAX / 2));
 
     /* Check if tick is zero */
@@ -457,7 +457,7 @@ mr_work_t *mr_work_create(mr_work_entry_t *entry, void *param) {
 mr_err_t mr_work_del(mr_work_t *work) {
     /* Check parameter */
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(work, work));
 
     /* Cancel work */
     mr_work_cancel(work);
@@ -473,7 +473,7 @@ mr_err_t mr_work_schedule(mr_work_t *work) {
 
     /* Check parameter */
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(work, work));
 
     /* Get workqueue */
     queue = mr_workqueue_get(work->queue);
@@ -495,7 +495,7 @@ mr_err_t mr_work_delayed_schedule(mr_work_t *work, mr_tick_t tick) {
 
     /* Check parameter */
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(work, work));
     MR_ASSERT(tick < (MR_TICK_MAX / 2));
 
     /* Get workqueue */
@@ -528,7 +528,7 @@ static void work_remove(mr_work_t *work) {
 mr_err_t mr_work_cancel(mr_work_t *work) {
     /* Check parameter */
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(work, work));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(work, work));
 
     /* Remove work */
     work_remove(work);

@@ -96,7 +96,7 @@ static void waitable_remove(mr_waitable_t *able) {
 mr_err_t mr_waitable_del(mr_waitable_t *able) {
     /* Check parameter */
     MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(able, waitable));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(able, waitable));
 
     /* Remove waitable */
     waitable_remove(able);
@@ -205,7 +205,7 @@ mr_err_t mr_waitable_complete(mr_waitable_t *able) {
 
     /* Check parameter */
     MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(able, waitable));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(able, waitable));
 
     /* Reduce unnecessary check operations */
     if (mr_list_is_empty(&able->list)) {
@@ -223,7 +223,7 @@ mr_err_t mr_waitable_complete(mr_waitable_t *able) {
 mr_err_t mr_waitable_raise(mr_waitable_t *able, mr_uint32_t event) {
     /* Check parameter */
     MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(able, waitable));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(able, waitable));
 
     /* Raise waitable event */
     waitable_handle(able, event);
@@ -312,7 +312,7 @@ static void waiter_remove(mr_waiter_t *wait) {
 mr_err_t mr_waiter_del(mr_waiter_t *wait) {
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && MR_OBJECT_IS_INITED(wait));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(wait, waiter));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(wait, waiter));
 
     /* Remove waiter */
     waiter_remove(wait);
@@ -331,9 +331,9 @@ mr_err_t mr_waiter_wait(mr_waiter_t *wait, mr_waitable_t *able) {
 
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && MR_OBJECT_IS_INITED(wait));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(wait, waiter));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(wait, waiter));
     MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(able, waitable));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(able, waitable));
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
@@ -386,7 +386,7 @@ _exit:
 mr_err_t mr_waiter_cancel(mr_waiter_t *wait) {
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && MR_OBJECT_IS_INITED(wait));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(wait, waiter));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(wait, waiter));
 
     /* Remove waiter */
     waiter_remove(wait);
@@ -398,7 +398,7 @@ mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint32_t event) {
 
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && MR_OBJECT_IS_INITED(wait));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS_NAME(wait, waiter));
+    MR_ASSERT(MR_OBJECT_CLAZZ_IS(wait, waiter));
     MR_ASSERT((event & WAIT_TYPE_MASK) != 0);
 
     /* Lock */
