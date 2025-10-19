@@ -51,8 +51,8 @@ extern "C" {
 #define MR_GPIO_IRQ_EDGE_RISING         (0x1U << 8)
 #define MR_GPIO_IRQ_EDGE_FALLING        (0x2U << 8)
 #define MR_GPIO_IRQ_EDGE_BOTH           (0x3U << 8)
-#define MR_GPIO_IRQ_LEVEL_LOW           (0x4U << 8)
-#define MR_GPIO_IRQ_LEVEL_HIGH          (0x5U << 8)
+#define MR_GPIO_IRQ_LEVEL_HIGH          (0x4U << 8)
+#define MR_GPIO_IRQ_LEVEL_LOW           (0x5U << 8)
 #define MR_GPIO_IRQ_MASK                (0x7U << 8)
 #endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
 

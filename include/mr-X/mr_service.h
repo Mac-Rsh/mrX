@@ -111,25 +111,25 @@ extern "C" {
  * @return The concatenated string.
  */
 #define MR_CAT(...)                                                            \
-    __MR_CAT(MR_CAT_, MR_VA_ARGS_NUM(__VA_ARGS__))(__VA_ARGS__)
+    __MR_CAT(__MR_CAT_, MR_VA_ARGS_NUM(__VA_ARGS__))(__VA_ARGS__)
 #define __MR_CAT_IMPL(_a, ...)          _a##__VA_ARGS__
 #define __MR_CAT(_a, ...)               __MR_CAT_IMPL(_a, __VA_ARGS__)
-#define MR_CAT_0(_a, ...)
-#define MR_CAT_1(_a, ...)               _a
-#define MR_CAT_2(_a, ...)               __MR_CAT(_a, MR_CAT_1(__VA_ARGS__))
-#define MR_CAT_3(_a, ...)               __MR_CAT(_a, MR_CAT_2(__VA_ARGS__))
-#define MR_CAT_4(_a, ...)               __MR_CAT(_a, MR_CAT_3(__VA_ARGS__))
-#define MR_CAT_5(_a, ...)               __MR_CAT(_a, MR_CAT_4(__VA_ARGS__))
-#define MR_CAT_6(_a, ...)               __MR_CAT(_a, MR_CAT_5(__VA_ARGS__))
-#define MR_CAT_7(_a, ...)               __MR_CAT(_a, MR_CAT_6(__VA_ARGS__))
-#define MR_CAT_8(_a, ...)               __MR_CAT(_a, MR_CAT_7(__VA_ARGS__))
-#define MR_CAT_9(_a, ...)               __MR_CAT(_a, MR_CAT_8(__VA_ARGS__))
-#define MR_CAT_10(_a, ...)              __MR_CAT(_a, MR_CAT_9(__VA_ARGS__))
-#define MR_CAT_11(_a, ...)              __MR_CAT(_a, MR_CAT_10(__VA_ARGS__))
-#define MR_CAT_12(_a, ...)              __MR_CAT(_a, MR_CAT_11(__VA_ARGS__))
-#define MR_CAT_13(_a, ...)              __MR_CAT(_a, MR_CAT_12(__VA_ARGS__))
-#define MR_CAT_14(_a, ...)              __MR_CAT(_a, MR_CAT_13(__VA_ARGS__))
-#define MR_CAT_15(_a, ...)              __MR_CAT(_a, MR_CAT_14(__VA_ARGS__))
+#define __MR_CAT_0(_a, ...)
+#define __MR_CAT_1(_a, ...)             _a
+#define __MR_CAT_2(_a, ...)             __MR_CAT(_a, __MR_CAT_1(__VA_ARGS__))
+#define __MR_CAT_3(_a, ...)             __MR_CAT(_a, __MR_CAT_2(__VA_ARGS__))
+#define __MR_CAT_4(_a, ...)             __MR_CAT(_a, __MR_CAT_3(__VA_ARGS__))
+#define __MR_CAT_5(_a, ...)             __MR_CAT(_a, __MR_CAT_4(__VA_ARGS__))
+#define __MR_CAT_6(_a, ...)             __MR_CAT(_a, __MR_CAT_5(__VA_ARGS__))
+#define __MR_CAT_7(_a, ...)             __MR_CAT(_a, __MR_CAT_6(__VA_ARGS__))
+#define __MR_CAT_8(_a, ...)             __MR_CAT(_a, __MR_CAT_7(__VA_ARGS__))
+#define __MR_CAT_9(_a, ...)             __MR_CAT(_a, __MR_CAT_8(__VA_ARGS__))
+#define __MR_CAT_10(_a, ...)            __MR_CAT(_a, __MR_CAT_9(__VA_ARGS__))
+#define __MR_CAT_11(_a, ...)            __MR_CAT(_a, __MR_CAT_10(__VA_ARGS__))
+#define __MR_CAT_12(_a, ...)            __MR_CAT(_a, __MR_CAT_11(__VA_ARGS__))
+#define __MR_CAT_13(_a, ...)            __MR_CAT(_a, __MR_CAT_12(__VA_ARGS__))
+#define __MR_CAT_14(_a, ...)            __MR_CAT(_a, __MR_CAT_13(__VA_ARGS__))
+#define __MR_CAT_15(_a, ...)            __MR_CAT(_a, __MR_CAT_14(__VA_ARGS__))
 
 /**
  * @brief This macro function concatenates n strings with a separator.
@@ -139,37 +139,76 @@ extern "C" {
  * @return The concatenated string.
  */
 #define MR_CAT_SEP(_s, ...)                                                    \
-    __MR_CAT(MR_CAT_SEP_, MR_VA_ARGS_NUM(__VA_ARGS__))(_s, __VA_ARGS__)
-#define MR_CAT_SEP_0(_s, _a, ...)
-#define MR_CAT_SEP_1(_s, _a, ...)       MR_CAT(_s, _a)
-#define MR_CAT_SEP_2(_s, _a, ...)                                              \
-    MR_CAT(_s, _a, MR_CAT_SEP_1(_s, __VA_ARGS__))
-#define MR_CAT_SEP_3(_s, _a, ...)                                              \
-    MR_CAT(_s, _a, MR_CAT_SEP_2(_s, __VA_ARGS__))
-#define MR_CAT_SEP_4(_s, _a, ...)                                              \
-    MR_CAT(_s, _a, MR_CAT_SEP_3(_s, __VA_ARGS__))
-#define MR_CAT_SEP_5(_s, _a, ...)                                              \
-    MR_CAT(_s, _a, MR_CAT_SEP_4(_s, __VA_ARGS__))
-#define MR_CAT_SEP_6(_s, _a, ...)                                              \
-    MR_CAT(_s, _a, MR_CAT_SEP_5(_s, __VA_ARGS__))
-#define MR_CAT_SEP_7(_s, _a, ...)                                              \
-    MR_CAT(_s, _a, MR_CAT_SEP_6(_s, __VA_ARGS__))
-#define MR_CAT_SEP_8(_s, _a, ...)                                              \
-    MR_CAT(_s, _a, MR_CAT_SEP_7(_s, __VA_ARGS__))
-#define MR_CAT_SEP_9(_s, _a, ...)                                              \
-    MR_CAT(_s, _a, MR_CAT_SEP_8(_s, __VA_ARGS__))
-#define MR_CAT_SEP_10(_s, _a, ...)                                             \
-    MR_CAT(_s, _a, MR_CAT_SEP_9(_s, __VA_ARGS__))
-#define MR_CAT_SEP_11(_s, _a, ...)                                             \
-    MR_CAT(_s, _a, MR_CAT_SEP_10(_s, __VA_ARGS__))
-#define MR_CAT_SEP_12(_s, _a, ...)                                             \
-    MR_CAT(_s, _a, MR_CAT_SEP_11(_s, __VA_ARGS__))
-#define MR_CAT_SEP_13(_s, _a, ...)                                             \
-    MR_CAT(_s, _a, MR_CAT_SEP_12(_s, __VA_ARGS__))
-#define MR_CAT_SEP_14(_s, _a, ...)                                             \
-    MR_CAT(_s, _a, MR_CAT_SEP_13(_s, __VA_ARGS__))
-#define MR_CAT_SEP_15(_s, _a, ...)                                             \
-    MR_CAT(_s, _a, MR_CAT_SEP_14(_s, __VA_ARGS__))
+    MR_CAT(__MR_CAT_SEP_, MR_VA_ARGS_NUM(__VA_ARGS__))(_s, __VA_ARGS__)
+#define __MR_CAT_SEP_0(_s, _a, ...)
+#define __MR_CAT_SEP_1(_s, _a, ...)     MR_CAT(_s, _a)
+#define __MR_CAT_SEP_2(_s, _a, ...)                                            \
+    MR_CAT(_s, _a, __MR_CAT_SEP_1(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_3(_s, _a, ...)                                            \
+    MR_CAT(_s, _a, __MR_CAT_SEP_2(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_4(_s, _a, ...)                                            \
+    MR_CAT(_s, _a, __MR_CAT_SEP_3(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_5(_s, _a, ...)                                            \
+    MR_CAT(_s, _a, __MR_CAT_SEP_4(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_6(_s, _a, ...)                                            \
+    MR_CAT(_s, _a, __MR_CAT_SEP_5(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_7(_s, _a, ...)                                            \
+    MR_CAT(_s, _a, __MR_CAT_SEP_6(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_8(_s, _a, ...)                                            \
+    MR_CAT(_s, _a, __MR_CAT_SEP_7(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_9(_s, _a, ...)                                            \
+    MR_CAT(_s, _a, __MR_CAT_SEP_8(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_10(_s, _a, ...)                                           \
+    MR_CAT(_s, _a, __MR_CAT_SEP_9(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_11(_s, _a, ...)                                           \
+    MR_CAT(_s, _a, __MR_CAT_SEP_10(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_12(_s, _a, ...)                                           \
+    MR_CAT(_s, _a, __MR_CAT_SEP_11(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_13(_s, _a, ...)                                           \
+    MR_CAT(_s, _a, __MR_CAT_SEP_12(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_14(_s, _a, ...)                                           \
+    MR_CAT(_s, _a, __MR_CAT_SEP_13(_s, __VA_ARGS__))
+#define __MR_CAT_SEP_15(_s, _a, ...)                                           \
+    MR_CAT(_s, _a, __MR_CAT_SEP_14(_s, __VA_ARGS__))
+
+/**
+ * @brief This macro function conditionally compiles a code.
+ *
+ * @param _c The condition.
+ * @param _if The code to compile if the condition is true.
+ * @param _else The code to compile if the condition is false.
+ * @return The code to compile.
+ *
+ * @note If '_c' == 1, 'MR_CAT(__MR_MACRO_IF_TRUE, _c)' becomes
+ * '__MR_MACRO_IF_TRUE1', which is defined as '__CONDTRUE1,'. The trailing comma
+ * artificially creates an extra argument, turning the call into
+ * '__MR_MACRO_IF_IMPL(__CONDTRUE1, _if, _else)'. Here '_if' and '_else' are
+ * still subject to immediate expansion. If '_if' contains an unprotected comma,
+ * it will be split into separate arguments and the parameter list will be
+ * corrupted. To prevent this, '_if' must be delivered inside an extra pair of
+ * parentheses '()'. Those parentheses would, however, break most C statements,
+ * so we need to strip them afterward. By pasting '__MR_MACRO_IF_DE_BRACKET' in
+ * front of '()' we obtain '__MR_MACRO_IF_DE_BRACKET (_if)' which expands a
+ * second time into '__VA_ARGS__' and the protective parentheses vanish, leaving
+ * valid C code. Isn't that amazing? If you don't get it, just paste this whole
+ * block into any AI and let it walk you through.
+ */
+#define MR_MACRO_IF(_c, _if, _else)                                            \
+    __MR_MACRO_IF(MR_CAT(__MR_MACRO_IF_TRUE, _c), _if, _else)
+#define __MR_MACRO_IF_IMPL(_c, _e, ...) __MR_MACRO_IF_DE_BRACKET _e
+#define __MR_MACRO_IF_DE_BRACKET(...)   __VA_ARGS__
+#define __MR_MACRO_IF_TRUE1             __CONDTRUE1,
+#define __MR_MACRO_IF(_c, _if, _else)   __MR_MACRO_IF_IMPL(_c _if, _else)
+
+/**
+ * @brief This macro function checks if a macro is used.
+ *
+ * @param _m The macro.
+ * @return MR_TRUE if the macro is used, MR_FALSE otherwise.
+ *
+ * @note The macro must 1.
+ */
+#define MR_MACRO_IS_USED(_m)            MR_MACRO_IF(_m, (1), (0))
 
 /**
  * @brief This function verifies the parity(even).

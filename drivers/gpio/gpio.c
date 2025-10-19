@@ -46,6 +46,7 @@ mr_err_t mr_gpio_pin_mode_set(const mr_driver_t *drv, mr_uint32_t pin,
                               mr_uint32_t mode) {
     mr_gpio_data_t *gp_data;
     mr_gpio_ops_t *gp_ops;
+    mr_uint8_t value;
     mr_err_t ret;
 
     /* Check parameter */
@@ -66,13 +67,6 @@ mr_err_t mr_gpio_pin_mode_set(const mr_driver_t *drv, mr_uint32_t pin,
         return -MR_EINVAL;
     }
 
-    /* Set pin active level */
-    if (!(mode & MR_GPIO_ACTIVE_LOW)) {
-        gp_data->invert &= ~(1U << pin);
-    } else {
-        gp_data->invert |= (1U << pin);
-    }
-
     /* Set pin mode */
     ret = gp_ops->pin_mode_set(drv, pin, mode);
     if (ret != 0) {
@@ -81,7 +75,9 @@ mr_err_t mr_gpio_pin_mode_set(const mr_driver_t *drv, mr_uint32_t pin,
 
     /* If pin is output, set pin default value */
     if (mode & MR_GPIO_DIR_OUTPUT) {
-        return gp_ops->pin_set(drv, pin, !!(mode & MR_GPIO_LEVEL_MASK));
+        value = (!!(mode & MR_GPIO_LEVEL_MASK))
+              ^ (!!(gp_data->invert & (1U << pin)));
+        return gp_ops->pin_set(drv, pin, value);
     }
     return 0;
 }

@@ -55,10 +55,10 @@ class ConfigGenerator:
             subprocess.run(['menuconfig'], stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, check=True)
         except subprocess.CalledProcessError as e:
-            self.logger.error(f"Error: {e}")
+            self.logger.error(f"Menuconfig failed: {e}")
             sys.exit(1)
 
-    def generate_config_file(self) -> None:
+    def generate_config(self) -> None:
         """
         Generate configuration file from Kconfig.
         """
@@ -70,14 +70,14 @@ class ConfigGenerator:
             kconf.write_autoconf(str(self.output_path))
 
             # Generate config file
-            self._process_config_file()
+            self._export_header()
             self.logger.info(
                 f"Configuration file generated: {self.output_path}")
         except Exception as e:
-            self.logger.error(f"Configuration generation failed: {e}")
+            self.logger.error(f"Generate config failed: {e}")
             sys.exit(1)
 
-    def _process_config_file(self) -> None:
+    def _export_header(self) -> None:
         """
         Process the configuration file.
         """
@@ -85,11 +85,6 @@ class ConfigGenerator:
             content = f.read()
             f.truncate(0)
             f.seek(0)
-
-            # Remove 'CONFIG_' and 'MR_USE_XXX' following number
-            content = content.replace("#define CONFIG_", "#define ")
-            content = re.sub(r'#define MR_USE_(\w+) (\d+)',
-                             r'#define MR_USE_\1', content)
 
             # Write modified header with guards and extern C
             content = (f"/* Auto-generated configuration file */\n"
@@ -99,7 +94,7 @@ class ConfigGenerator:
                        "#ifdef __cplusplus\n"
                        "extern \"C\" {\n"
                        "#endif /* __cplusplus */\n\n"
-                       f"{content}"
+                       f"{content.replace("#define CONFIG_", "#define ")}"
                        "\n#ifdef __cplusplus\n"
                        "}\n"
                        "#endif /* __cplusplus */\n\n"
@@ -146,7 +141,7 @@ def main() -> None:
     """
     config_generator = ConfigGenerator.create_from_args()
     config_generator.run_menuconfig()
-    config_generator.generate_config_file()
+    config_generator.generate_config()
 
 
 if __name__ == "__main__":
