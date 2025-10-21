@@ -12,6 +12,7 @@ config MR_USE_DRIVER_GPIO
 # IRQ
 # ==================================
 config MR_USE_DRIVER_GPIO_IRQ
+    depends on MR_USE_DRIVER_GPIO
     select MR_USE_DRIVER_IRQ
     bool "Use GPIO irq"
     default n

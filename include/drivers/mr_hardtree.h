@@ -113,31 +113,32 @@ extern "C" {
 /**
  * @brief This macro function checks whether the instance exists.
  *
- * @param _name The instance name.
+ * @param _compat The compatible name.
  * @return MR_TRUE if the instance exists, MR_FALSE otherwise.
  */
-#define MR_HT_HAS_INST(_name)                                                  \
-    MR_MACRO_IS_USED(MR_CAT(MR_HT_INST_, _name, _EXIST))
+#define MR_HT_HAS_INST(_compat)                                                \
+    MR_MACRO_IS_USED(MR_CAT(MR_HT_INST_, _compat, _EXIST))
 
 /**
- * @brief This macro function gets the instance from the name.
+ * @brief This macro function gets the node from the name.
  *
- * @param _name The instance name.
- * @param _inst_id The instance id.
- * @return The instance.
+ * @param _compat The compatible name.
+ * @param _id The instance id.
+ * @return The node.
  */
-#define MR_HT_INST(_name, _inst_id)    MR_CAT(MR_HT_INST_, _name, _, _inst_id)
+#define MR_HT_INST(_compat, _id)   MR_CAT(MR_HT_INST_, _compat, _, _id)
 
 /**
- * @brief This macro function iterates over all instances of a given name.
+ * @brief This macro function iterates over all instances of the compatible
+ * name.
  *
- * @param _name The instance name.
+ * @param _compat The compatible name.
  * @param _fn The function to be called, like: fn(i, ...), where i is the index.
  * @param ... The arguments to be passed to the function.
  */
-#define MR_HT_INST_FOREACH(_name, _fn, ...)                                    \
-    MR_MACRO_IF(MR_HT_HAS_INST(_name),                                         \
-                (MR_CAT(MR_HT_INST_, _name)(_fn, __VA_ARGS__)), ())
+#define MR_HT_INST_FOREACH(_compat, _fn, ...)                                  \
+    MR_MACRO_IF(MR_HT_HAS_INST(_compat),                                       \
+                (MR_CAT(MR_HT_INST_, _compat)(_fn, __VA_ARGS__)), ())
 #endif /* defined(MR_USE_DRIVER_HARDTREE) */
 
 /** @} */
