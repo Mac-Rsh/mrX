@@ -154,7 +154,9 @@ extern "C" {
  */
 #define MR_HT_INST_FOREACH(_compat, _fn, ...)                                  \
     MR_MACRO_IF(MR_HT_HAS_INST(_compat),                                       \
-                (MR_CAT(__MR_HT_INST_, _compat)(_fn, __VA_ARGS__)), ())
+                (MR_LISTIFY(MR_CAT(__MR_HT_INST_, _compat, _NUM), , _fn,       \
+                            __VA_ARGS__)),                                     \
+                ())
 
 /**
  * @brief This macro function gets the name from the instance.
