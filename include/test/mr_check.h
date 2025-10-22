@@ -11,6 +11,7 @@
 
 #include <mr_config.h>
 #if defined(MR_USE_TEST)
+#include <mr-X/mr_service.h>
 #include <mr-X/mr_printf.h>
 #include <libc/mr_types.h>
 #endif /* defined(MR_USE_TEST) */
@@ -50,8 +51,8 @@ extern mr_uint32_t __mr_test_status;
         _type __a = (_type)(_a);                                               \
         _type __b = (_type)(_b);                                               \
         if (!(__a _cond __b)) {                                                \
-            __MR_TEST_PRINTF(#_a " " #_cond " " #_b, #_a, __a, #_b, __b,       \
-                             _fmt);                                            \
+            __MR_TEST_PRINTF(MR_STR(_a) " " MR_STR(_cond) " " MR_STR(_b),      \
+                             MR_STR(_a), __a, MR_STR(_b), __b, _fmt);          \
             __mr_test_status = ~__MR_TEST_MAGIC_PASS;                          \
         }                                                                      \
     } while (0)
@@ -62,8 +63,9 @@ extern mr_uint32_t __mr_test_status;
         _type __e = (_type)(_e);                                               \
         _type __c = (__a > __b) ? (__a - __b) : (__b - __a);                   \
         if (!(__c <= __e)) {                                                   \
-            __MR_TEST_PRINTF("| " #_a " - " #_b " | <= " #_e, #_a, __a, #_b,   \
-                             __b, _fmt);                                       \
+            __MR_TEST_PRINTF(                                                  \
+                "| " MR_STR(_a) " - " MR_STR(_b) " | <= " MR_STR(_e),          \
+                MR_STR(_a), __a, MR_STR(_b), __b, _fmt);                       \
             __mr_test_status = ~__MR_TEST_MAGIC_PASS;                          \
         }                                                                      \
     } while (0)
@@ -86,15 +88,15 @@ extern mr_uint32_t __mr_test_status;
 
 /* Test condition macros definition */
 #define __MR_TEST_COND_INT(_a, _cond, _b)                                      \
-    __MR_TEST_##_cond(_a, _b, mr_int64_t, "%lld")
+    MR_CAT(__MR_TEST_, _cond)(_a, _b, mr_int64_t, "%lld")
 #define __MR_TEST_COND_UINT(_a, _cond, _b)                                     \
-    __MR_TEST_##_cond(_a, _b, mr_uint64_t, "%llu")
+    MR_CAT(__MR_TEST_, _cond)(_a, _b, mr_uint64_t, "%llu")
 #define __MR_TEST_COND_PTR(_a, _cond, _b)                                      \
-    __MR_TEST_##_cond(_a, _b, mr_ptr_t, "%p")
+    MR_CAT(__MR_TEST_, _cond)(_a, _b, mr_ptr_t, "%p")
 #define __MR_TEST_COND_FLOAT(_a, _cond, _b)                                    \
-    __MR_TEST_##_cond(_a, _b, mr_f32_t, "%f")
+    MR_CAT(__MR_TEST_, _cond)(_a, _b, mr_f32_t, "%f")
 #define __MR_TEST_COND_DOUBLE(_a, _cond, _b)                                   \
-    __MR_TEST_##_cond(_a, _b, mr_f64_t, "%lf")
+    MR_CAT(__MR_TEST_, _cond)(_a, _b, mr_f64_t, "%lf")
 #define __MR_TEST_COND_NEAR(_a, _b, _e)                                        \
     __MR_TEST_NEAR(_a, _b, _e, mr_f64_t, "%lf")
 

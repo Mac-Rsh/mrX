@@ -6,7 +6,6 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/mr_service.h>
 #include <mr-X/mr_object.h>
 
 mr_err_t mr_object_init(mr_object_t *obj, const mr_clazz_t *clazz) {

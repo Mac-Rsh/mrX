@@ -105,6 +105,15 @@ extern "C" {
     _n
 
 /**
+ * @brief This macro function gets the string length.
+ *
+ * @param _s The string.
+ * @return The string length.
+ */
+#define MR_STR(_s)                      __MR_STR_IMPL(_s)
+#define __MR_STR_IMPL(_s)               #_s
+
+/**
  * @brief This macro function concatenates n strings.
  *
  * @param ... The strings.

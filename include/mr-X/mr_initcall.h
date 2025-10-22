@@ -9,6 +9,7 @@
 #ifndef __MR_INITCALL_H__
 #define __MR_INITCALL_H__
 
+#include <mr-X/mr_service.h>
 #include <libc/mr_compiler.h>
 
 #ifdef __cplusplus
@@ -41,9 +42,9 @@ typedef struct mr_initcall {
  * @param _level The initcall level.
  */
 #define MR_INIT_EXPORT(_entry, _level)                                         \
-    MR_USED const mr_initcall_t __mr_initcall_##_entry MR_SECTION_ALIGN(       \
-        "mr_initcall." _level)                                                 \
-        = {.name = #_entry, .entry = (_entry)}
+    MR_USED const mr_initcall_t MR_CAT(__mr_initcall_, _entry)                 \
+        MR_SECTION_ALIGN("mr_initcall." _level)                                \
+        = {.name = MR_STR(_entry), .entry = (_entry)}
 
 /**
  * @brief This function does initcalls(kernel).

@@ -11,6 +11,7 @@
 
 #include <mr_config.h>
 #if defined(MR_USE_DRIVER)
+#include <drivers/mr_hardtree.h>
 #include <mr-X/mr_object.h>
 #if defined(MR_USE_DRIVER_IRQ)
 #include <mr-X/mr_wait.h>
@@ -89,7 +90,7 @@ typedef struct mr_driver_entry {
  * @param _deinit The deinitialization function.
  */
 #define MR_DRIVER_DOPS_DEFINE(_type, _init, _deinit)                           \
-    const mr_driver_dops_t __mr_driver_dops_##_type                            \
+    const mr_driver_dops_t MR_CAT(__mr_driver_dops_, _type)                    \
         = MR_DRIVER_DOPS_INIT(_init, _deinit)
 
 /**
@@ -100,7 +101,7 @@ typedef struct mr_driver_entry {
  * @param _deinit The deinitialization function.
  */
 #define MR_DRIVER_DOPS_DYNAMIC_DEFINE(_type, _init, _deinit)                   \
-    const mr_driver_dops_t __mr_driver_dops_dynamic_##_type                    \
+    const mr_driver_dops_t MR_CAT(__mr_driver_dops_dynamic_, _type)            \
         = MR_DRIVER_DOPS_INIT(_init, _deinit)
 
 /**
@@ -109,7 +110,7 @@ typedef struct mr_driver_entry {
  * @param _type The driver type.
  */
 #define MR_DRIVER_DOPS_EXPORT(_type)                                           \
-    extern const mr_driver_dops_t __mr_driver_dops_##_type
+    extern const mr_driver_dops_t MR_CAT(__mr_driver_dops_, _type)
 
 /**
  * @brief This macro function exports a dynamic driver operations.
@@ -117,7 +118,7 @@ typedef struct mr_driver_entry {
  * @param _type The driver type.
  */
 #define MR_DRIVER_DOPS_DYNAMIC_EXPORT(_type)                                   \
-    extern const mr_driver_dops_t __mr_driver_dops_dynamic_##_type
+    extern const mr_driver_dops_t MR_CAT(__mr_driver_dops_dynamic_, _type)
 
 /**
  * @brief This macro function finds a driver operations.
@@ -125,7 +126,7 @@ typedef struct mr_driver_entry {
  * @param _type The driver type.
  * @return The driver operations.
  */
-#define MR_DRIVER_DOPS_FIND(_type)      (&__mr_driver_dops_##_type)
+#define MR_DRIVER_DOPS_FIND(_type)      (&MR_CAT(__mr_driver_dops_, _type))
 
 /**
  * @brief This macro function gets a dynamic driver operations.
@@ -134,7 +135,7 @@ typedef struct mr_driver_entry {
  * @return The dynamic driver operations.
  */
 #define MR_DRIVER_DOPS_DYNAMIC_FIND(_type)                                     \
-    (&__mr_driver_dops_dynamic_##_type)
+    (&MR_CAT(__mr_driver_dops_dynamic_, _type))
 
 /**
  * @brief This macro function initializes a driver.
@@ -167,8 +168,8 @@ typedef struct mr_driver_entry {
  * @param _ops The private operations.
  */
 #define MR_DRIVER_DEFINE(_name, _type, _dops, _data, _priv, _ops)              \
-    mr_driver_t __mr_driver_##_name                                            \
-        = MR_DRIVER_INIT(&__mr_driver_entry_##_name, (_type), (_dops),         \
+    mr_driver_t MR_CAT(__mr_driver_, _name)                                    \
+        = MR_DRIVER_INIT(&MR_CAT(__mr_driver_entry_, _name), (_type), (_dops), \
                          (_data), (_priv), (_ops))
 
 /**
@@ -176,14 +177,16 @@ typedef struct mr_driver_entry {
  *
  * @param _name The driver name.
  */
-#define MR_DRIVER_EXPORT(_name)         extern mr_driver_t __mr_driver_##_name
+#define MR_DRIVER_EXPORT(_name)                                                \
+    extern mr_driver_t MR_CAT(__mr_driver_, _name)
 
 /**
  * @brief This macro function finds a driver.
  *
  * @param _name The driver name.
+ * @return The driver.
  */
-#define MR_DRIVER_FIND(_name)           (&__mr_driver_##_name)
+#define MR_DRIVER_FIND(_name)           (&MR_CAT(__mr_driver_, _name))
 
 /**
  * @brief This macro function installs a driver.
@@ -200,9 +203,9 @@ typedef struct mr_driver_entry {
  */
 #define MR_DRIVER_INSTALL(_name, _type, _dops, _data, _priv, _ops, _level)     \
     MR_DRIVER_DEFINE(_name, _type, _dops, _data, _priv, _ops);                 \
-    MR_USED const mr_driver_entry_t                                            \
-        __mr_driver_entry_##_name MR_SECTION_ALIGN("mr_driver." _level)        \
-        = {.name = #_name, .driver = MR_DRIVER_FIND(_name)}
+    MR_USED const mr_driver_entry_t MR_CAT(__mr_driver_entry_, _name)          \
+        MR_SECTION_ALIGN("mr_driver." _level)                                  \
+        = {.name = MR_STR(_name), .driver = MR_DRIVER_FIND(_name)}
 
 /**
  * @brief This macro function imports a driver.
@@ -212,7 +215,8 @@ typedef struct mr_driver_entry {
  * @note Why is there a separate import interface? You don't want to deal with
  * complex underlying inclusion relationships either, do you.
  */
-#define MR_DRIVER_IMPORT(_name)         extern mr_driver_t __mr_driver_##_name
+#define MR_DRIVER_IMPORT(_name)                                                \
+    extern mr_driver_t MR_CAT(__mr_driver_, _name)
 
 /**
  * @brief This function initializes a driver.
@@ -368,6 +372,54 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
     /* Put driver reference */
     return mr_object_put((mr_object_t *)drv);
 }
+
+#if defined(MR_USE_DRIVER_HARDTREE)
+/**
+ * @brief This macro function finds a driver through hardtree.
+ *
+ * @param _node The node.
+ * @return The driver.
+ */
+#define MR_DRIVER_HT_FIND(_node)        MR_DRIVER_FIND(MR_HT_NODE_NAME(_node))
+
+/**
+ * @brief This macro function installs a driver through hardtree.
+ *
+ * @param _id The instance id.
+ * @param _type The driver type.
+ * @param _dops The driver operations.
+ * @param _data The driver data.
+ * @param _priv The private data.
+ * @param _ops The private operations.
+ */
+#define MR_DRIVER_HT_INSTALL(_id, _type, _dops, _data, _priv, _ops)            \
+    MR_DRIVER_INSTALL(MR_HT_INST_NAME(MR_HT_COMPAT, _id), _type, _dops, _data, \
+                      _priv, _ops, MR_HT_INST_INIT_LEVEL(MR_HT_COMPAT, _id))
+
+/**
+ * @brief This macro function installs all drivers through hardtree.
+ *
+ * @param _fn The function.
+ * @param ... The arguments.
+ */
+#define MR_DRIVER_HT_INSTALL_FOREACH(_fn, ...)                                 \
+    MR_HT_INST_FOREACH(MR_HT_COMPAT, _fn, __VA_ARGS__)
+
+/**
+ * @brief This macro function imports a driver through hardtree.
+ *
+ * @param _node The node.
+ */
+#define MR_DRIVER_HT_IMPORT(_node)      MR_DRIVER_IMPORT(MR_HT_NODE_NAME(_node))
+
+/**
+ * @brief This macro function gets the node from the instance id.
+ *
+ * @param _id The instance id.
+ * @return The node.
+ */
+#define MR_DRIVER_HT_INST(_id)          MR_HT_INST(MR_HT_COMPAT, _id)
+#endif /* defined(MR_USE_DRIVER_HARDTREE) */
 #endif /* defined(MR_USE_DRIVER) */
 
 /** @} */

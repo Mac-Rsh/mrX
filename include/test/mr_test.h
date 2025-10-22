@@ -174,10 +174,9 @@ typedef struct mr_testcase {
 
 /* Testcase export macro definition */
 #define __MR_TEST_EXPORT(_suite, _name, _entry, _level)                        \
-    MR_USED const mr_testcase_t                                                \
-        __mr_testcase_##_suite##_##_name MR_SECTION_ALIGN(                     \
-            "mr_testcase." _level)                                             \
-        = {.suite = #_suite, .name = #_name, .entry = (_entry)}
+    MR_USED const mr_testcase_t MR_CAT(__mr_testcase_, _suite, _, _name)       \
+        MR_SECTION_ALIGN("mr_testcase." _level)                                \
+        = {.suite = MR_STR(_suite), .name = MR_STR(_name), .entry = (_entry)}
 
 /**
  * @brief This macro function exports a testcase.

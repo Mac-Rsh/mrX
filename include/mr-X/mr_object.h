@@ -9,6 +9,7 @@
 #ifndef __MR_OBJECT_H__
 #define __MR_OBJECT_H__
 
+#include <mr-X/mr_service.h>
 #include <mr-X/mr_ref.h>
 #include <libc/mr_errno.h>
 #include <libc/mr_string.h>
@@ -68,7 +69,8 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _release The release function.
  */
 #define MR_CLAZZ_DEFINE(_name, _release)                                       \
-    const mr_clazz_t __mr_clazz_##_name = MR_CLAZZ_INIT(#_name, (_release))
+    const mr_clazz_t MR_CAT(__mr_clazz_, _name)                                \
+        = MR_CLAZZ_INIT(MR_STR(_name), (_release))
 
 /**
  * @brief This macro function defines a dynamic clazz.
@@ -77,8 +79,8 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _release The release function.
  */
 #define MR_CLAZZ_DYNAMIC_DEFINE(_name, _release)                               \
-    const mr_clazz_t __mr_clazz_dynamic_##_name                                \
-        = MR_CLAZZ_INIT(#_name, (_release))
+    const mr_clazz_t MR_CAT(__mr_clazz_dynamic_, _name)                        \
+        = MR_CLAZZ_INIT(MR_STR(_name), (_release))
 
 /**
  * @brief This macro function exports a clazz.
@@ -86,7 +88,7 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _name The clazz name.
  */
 #define MR_CLAZZ_EXPORT(_name)                                                 \
-    extern const mr_clazz_t __mr_clazz_##_name
+    extern const mr_clazz_t MR_CAT(__mr_clazz_, _name)
 
 /**
  * @brief This macro function exports a dynamic clazz.
@@ -94,7 +96,7 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _name The clazz name.
  */
 #define MR_CLAZZ_DYNAMIC_EXPORT(_name)                                         \
-    extern const mr_clazz_t __mr_clazz_dynamic_##_name
+    extern const mr_clazz_t MR_CAT(__mr_clazz_dynamic_, _name)
 
 /**
  * @brief This macro function finds a clazz.
@@ -102,14 +104,14 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _name The clazz name.
  * @return The clazz.
  */
-#define MR_CLAZZ_FIND(_name)            (&__mr_clazz_##_name)
+#define MR_CLAZZ_FIND(_name)            (&MR_CAT(__mr_clazz_, _name))
 
 /**
  * @brief This macro function finds a dynamic clazz.
  * @param _name The clazz name.
  * @return The dynamic clazz.
  */
-#define MR_CLAZZ_DYNAMIC_FIND(_name)    (&__mr_clazz_dynamic_##_name)
+#define MR_CLAZZ_DYNAMIC_FIND(_name)    (&MR_CAT(__mr_clazz_dynamic_, _name))
 
 /**
  * @brief This macro function initializes an object.
@@ -154,7 +156,7 @@ mr_err_t mr_object_init(mr_object_t *obj, const mr_clazz_t *clazz);
  * @return MR_TRUE on success, MR_FALSE otherwise.
  */
 #define MR_OBJECT_CLAZZ_IS(_obj, _name)                                        \
-    (mr_strcmp(MR_OBJECT_CLAZZ(_obj)->name, #_name) == 0)
+    (mr_strcmp(MR_OBJECT_CLAZZ(_obj)->name, MR_STR(_name)) == 0)
 
 /**
  * @brief This function deletes an object.

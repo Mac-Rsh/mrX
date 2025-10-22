@@ -9,7 +9,7 @@
 #ifndef __MR_DRIVER_HARDTREE_H__
 #define __MR_DRIVER_HARDTREE_H__
 
-#include <drivers/mr_driver.h>
+#include <mr_config.h>
 #if defined(MR_USE_DRIVER_HARDTREE)
 #include <mr-X/mr_listify.h>
 #include <mr_hardgen.h>
@@ -42,7 +42,7 @@ extern "C" {
  * @return The node.
  */
 #define MR_HT_PATH(...)                                                        \
-    MR_CAT(MR_HT_NODE, MR_CAT_SEP(_S_, __VA_ARGS__))
+    MR_CAT(__MR_HT_NODE, MR_CAT_SEP(_S_, __VA_ARGS__))
 
 /**
  * @brief This macro function checks whether the label exists.
@@ -59,7 +59,24 @@ extern "C" {
  * @param _name The label name.
  * @return The node.
  */
-#define MR_HT_LABEL(_name)              MR_CAT(MR_HT_LABEL, MR_CAT(_, _name))
+#define MR_HT_LABEL(_name)              MR_CAT(__MR_HT_LABEL, MR_CAT(_, _name))
+
+/**
+ * @brief This macro function checks whether the alias exists.
+ *
+ * @param _name The alias name.
+ * @return MR_TRUE if the alias exists, MR_FALSE otherwise.
+ */
+#define MR_HT_HAS_ALIAS(_name)                                                 \
+    MR_MACRO_IS_USED(MR_CAT(MR_HT_ALIAS(_name), _EXIST))
+
+/**
+ * @brief This macro function gets the node from the alias.
+ *
+ * @param _name The alias name.
+ * @return The node.
+ */
+#define MR_HT_ALIAS(_name)              MR_CAT(__MR_HT_ALIAS, MR_CAT(_, _name))
 
 /**
  * @brief This macro function checks whether the property exists.
@@ -90,43 +107,42 @@ extern "C" {
  * @return The property value or the default value.
  */
 #define MR_HT_PROP_OR(_node, _prop, _default)                                  \
-    MR_MACRO_IF(MR_HT_HAS_PROP(_node, _prop), MR_HT_PROP(_node, _prop),        \
-                _default)
+    MR_MACRO_IF(MR_HT_HAS_PROP(_node, _prop), (MR_HT_PROP(_node, _prop)),      \
+                (_default))
 
 /**
- * @brief This macro function checks whether the alias exists.
+ * @brief This macro function gets the name from the node.
  *
- * @param _name The alias name.
- * @return MR_TRUE if the alias exists, MR_FALSE otherwise.
+ * @param _node The node.
+ * @return The node name.
  */
-#define MR_HT_HAS_ALIAS(_name)                                                 \
-    MR_MACRO_IS_USED(MR_CAT(MR_HT_ALIAS(_name), _EXIST))
+#define MR_HT_NODE_NAME(_node)          MR_HT_PROP(_node, name)
 
 /**
- * @brief This macro function gets the node from the alias.
+ * @brief This macro function gets the id from the node.
  *
- * @param _name The alias name.
- * @return The node.
+ * @param _node The node.
+ * @return The node id.
  */
-#define MR_HT_ALIAS(_name)              MR_CAT(MR_HT_ALIAS, MR_CAT(_, _name))
+#define MR_HT_NODE_ID(_node)            MR_HT_PROP(_node, id)
 
 /**
- * @brief This macro function checks whether the instance exists.
+ * @brief This macro function checks whether the instances exist.
  *
  * @param _compat The compatible name.
  * @return MR_TRUE if the instance exists, MR_FALSE otherwise.
  */
 #define MR_HT_HAS_INST(_compat)                                                \
-    MR_MACRO_IS_USED(MR_CAT(MR_HT_INST_, _compat, _EXIST))
+    MR_MACRO_IS_USED(MR_CAT(__MR_HT_INST_, _compat, _EXIST))
 
 /**
- * @brief This macro function gets the node from the name.
+ * @brief This macro function gets the node from the compatible name.
  *
  * @param _compat The compatible name.
  * @param _id The instance id.
  * @return The node.
  */
-#define MR_HT_INST(_compat, _id)   MR_CAT(MR_HT_INST_, _compat, _, _id)
+#define MR_HT_INST(_compat, _id)   MR_CAT(__MR_HT_INST_, _compat, _, _id)
 
 /**
  * @brief This macro function iterates over all instances of the compatible
@@ -138,7 +154,27 @@ extern "C" {
  */
 #define MR_HT_INST_FOREACH(_compat, _fn, ...)                                  \
     MR_MACRO_IF(MR_HT_HAS_INST(_compat),                                       \
-                (MR_CAT(MR_HT_INST_, _compat)(_fn, __VA_ARGS__)), ())
+                (MR_CAT(__MR_HT_INST_, _compat)(_fn, __VA_ARGS__)), ())
+
+/**
+ * @brief This macro function gets the name from the instance.
+ *
+ * @param _compat The compatible name.
+ * @param _id The instance id.
+ * @return The instance name.
+ */
+#define MR_HT_INST_NAME(_compat, _id)                                          \
+    MR_HT_NODE_NAME(MR_HT_INST(_compat, _id))
+
+/**
+ * @brief This macro function gets the level from the instance.
+ *
+ * @param _compat The compatible name.
+ * @param _id The instance id.
+ * @return The instance init level.
+ */
+#define MR_HT_INST_INIT_LEVEL(_compat, _id)                                    \
+    MR_HT_PROP(MR_HT_INST(_compat, _id), level)
 #endif /* defined(MR_USE_DRIVER_HARDTREE) */
 
 /** @} */
