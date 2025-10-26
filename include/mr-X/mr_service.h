@@ -181,6 +181,11 @@ extern "C" {
     MR_CAT(_s, _a, __MR_CAT_SEP_14(_s, __VA_ARGS__))
 
 /**
+ * @brief This macro function strips the brackets from a code.
+ */
+#define MR_DE_BRACKET(...)              __VA_ARGS__
+
+/**
  * @brief This macro function conditionally compiles a code.
  *
  * @param _c The condition.
@@ -196,16 +201,15 @@ extern "C" {
  * it will be split into separate arguments and the parameter list will be
  * corrupted. To prevent this, '_if' must be delivered inside an extra pair of
  * parentheses '()'. Those parentheses would, however, break most C statements,
- * so we need to strip them afterward. By pasting '__MR_MACRO_IF_DE_BRACKET' in
- * front of '()' we obtain '__MR_MACRO_IF_DE_BRACKET (_if)' which expands a
- * second time into '__VA_ARGS__' and the protective parentheses vanish, leaving
- * valid C code. Isn't that amazing? If you don't get it, just paste this whole
- * block into any AI and let it walk you through.
+ * so we need to strip them afterward. By pasting 'MR_DE_BRACKET' in front of
+ * '()' we obtain 'MR_DE_BRACKET (_if)' which expands a second time into
+ * '__VA_ARGS__' and the protective parentheses vanish, leaving valid C code.
+ * Isn't that amazing? If you don't get it, just paste this whole block into any
+ * AI and let it walk you through.
  */
 #define MR_MACRO_IF(_c, _if, _else)                                            \
     __MR_MACRO_IF(MR_CAT(__MR_MACRO_IF_TRUE, _c), _if, _else)
-#define __MR_MACRO_IF_IMPL(_c, _e, ...) __MR_MACRO_IF_DE_BRACKET _e
-#define __MR_MACRO_IF_DE_BRACKET(...)   __VA_ARGS__
+#define __MR_MACRO_IF_IMPL(_c, _e, ...) MR_DE_BRACKET _e
 #define __MR_MACRO_IF_TRUE1             __CONDTRUE1,
 #define __MR_MACRO_IF(_c, _if, _else)   __MR_MACRO_IF_IMPL(_c _if, _else)
 

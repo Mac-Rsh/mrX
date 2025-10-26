@@ -406,19 +406,18 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
     MR_HT_INST_FOREACH(MR_HT_COMPAT, _fn, __VA_ARGS__)
 
 /**
- * @brief This macro function imports a driver through hardtree.
- *
- * @param _node The node.
- */
-#define MR_DRIVER_HT_IMPORT(_node)      MR_DRIVER_IMPORT(MR_HT_NODE_NAME(_node))
-
-/**
  * @brief This macro function gets the node from the instance id.
  *
  * @param _id The instance id.
  * @return The node.
  */
 #define MR_DRIVER_HT_INST(_id)          MR_HT_INST(MR_HT_COMPAT, _id)
+
+/* All drivers defined through hardtree are exported here, and accessing these
+ * drivers no longer requires import or export */
+#define __MR_DRIVER_HT_EXPORT(_id)                                             \
+    MR_DRIVER_EXPORT(MR_HT_NODE_NAME(MR_HT_NODE(_id)));
+MR_HT_NODE_FOREACH(__MR_DRIVER_HT_EXPORT);
 #endif /* defined(MR_USE_DRIVER_HARDTREE) */
 #endif /* defined(MR_USE_DRIVER) */
 

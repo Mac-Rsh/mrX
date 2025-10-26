@@ -239,7 +239,7 @@ mr_err_t mr_gpio_irq_handle(mr_driver_t *drv, mr_uint32_t pin);
 #define MR_GPIO_HT_INSTALL(_id, _priv, _ops)                                   \
     static mr_gpio_data_t __mr_gpio_data_##_id                                 \
         = {.exist_mask                                                         \
-           = MR_HT_PROP_OR(MR_DRIVER_HT_INST(_id), exist_mask, MR_UINT32_MAX), \
+           = MR_HT_PROP_OR(MR_DRIVER_HT_INST(_id), exist_mask, 0xffffffff),    \
            .invert = MR_HT_PROP_OR(MR_DRIVER_HT_INST(_id), invert, 0)};        \
     MR_DRIVER_HT_INSTALL(_id, MR_DRIVER_TYPE_GPIO, MR_DRIVER_DOPS_FIND(gpio),  \
                          &__mr_gpio_data_##_id, _priv, _ops);
