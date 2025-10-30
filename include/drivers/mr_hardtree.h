@@ -42,7 +42,7 @@ extern "C" {
  * @return The node.
  */
 #define MR_HT_PATH(...)                                                        \
-    MR_CAT(__MR_HT_NODE, MR_CAT_SEP(_S_, __VA_ARGS__))
+    MR_CAT(__MR_HT_N, MR_CAT_SEP(_S_, ##__VA_ARGS__))
 
 /**
  * @brief This macro function checks whether the label exists.
@@ -59,7 +59,7 @@ extern "C" {
  * @param _name The label name.
  * @return The node.
  */
-#define MR_HT_LABEL(_name)              MR_CAT(__MR_HT_LABEL, MR_CAT(_, _name))
+#define MR_HT_LABEL(_name)              MR_HT_PATH(LABEL, _name)
 
 /**
  * @brief This macro function checks whether the alias exists.
@@ -76,72 +76,7 @@ extern "C" {
  * @param _name The alias name.
  * @return The node.
  */
-#define MR_HT_ALIAS(_name)              MR_CAT(__MR_HT_ALIAS, MR_CAT(_, _name))
-
-/**
- * @brief This macro function checks whether the property exists.
- *
- * @param _node The node.
- * @param _prop The property name.
- * @return MR_TRUE if the property exists, MR_FALSE otherwise.
- */
-#define MR_HT_HAS_PROP(_node, _prop)                                           \
-    MR_MACRO_IS_USED(MR_CAT(_node, MR_CAT(_P_, _prop), _EXIST))
-
-/**
- * @brief This macro function gets the property from the node.
- *
- * @param _node The node.
- * @param _prop The property name.
- * @return The property value.
- */
-#define MR_HT_PROP(_node, _prop)        MR_CAT(_node, MR_CAT(_P_, _prop))
-
-/**
- * @brief This macro function gets the property from the node or returns a
- * default value.
- *
- * @param _node The node.
- * @param _prop The property name.
- * @param _default The default value.
- * @return The property value or the default value.
- */
-#define MR_HT_PROP_OR(_node, _prop, _default)                                  \
-    MR_MACRO_IF(MR_HT_HAS_PROP(_node, _prop), (MR_HT_PROP(_node, _prop)),      \
-                (_default))
-
-/**
- * @brief This macro function gets the node from the id.
- *
- * @param _id The node id.
- * @return The node.
- */
-#define MR_HT_NODE(_id)                 MR_HT_PATH(_id)
-
-/**
- * @brief This macro function iterates over all node.
- *
- * @param _fn The function to be called, like: fn(i, ...), where i is the index.
- * @param ... The arguments to be passed to the function.
- */
-#define MR_HT_NODE_FOREACH(_fn, ...)                                           \
-    MR_LISTIFY(__MR_HT_NODE_NUM, , _fn, ##__VA_ARGS__)
-
-/**
- * @brief This macro function gets the node name from the node.
- *
- * @param _node The node.
- * @return The node name.
- */
-#define MR_HT_NODE_NAME(_node)          MR_HT_PROP(_node, node_name)
-
-/**
- * @brief This macro function gets the node id from the node.
- *
- * @param _node The node.
- * @return The node id.
- */
-#define MR_HT_NODE_ID(_node)            MR_HT_PROP(_node, node_id)
+#define MR_HT_ALIAS(_name)              MR_HT_PATH(ALIAS, _name)
 
 /**
  * @brief This macro function checks whether the instances exist.
@@ -150,7 +85,7 @@ extern "C" {
  * @return MR_TRUE if the instance exists, MR_FALSE otherwise.
  */
 #define MR_HT_HAS_INST(_compat)                                                \
-    MR_MACRO_IS_USED(MR_CAT(__MR_HT_INST_, _compat, _EXIST))
+    MR_MACRO_IS_USED(MR_CAT(MR_HT_PATH(INST, _compat), _EXIST))
 
 /**
  * @brief This macro function gets the node from the compatible name.
@@ -159,7 +94,7 @@ extern "C" {
  * @param _id The instance id.
  * @return The node.
  */
-#define MR_HT_INST(_compat, _id)        MR_CAT(__MR_HT_INST_, _compat, _, _id)
+#define MR_HT_INST(_compat, _id)        MR_HT_PATH(INST, _compat, _id)
 
 /**
  * @brief This macro function iterates over all instances of the compatible
@@ -171,29 +106,49 @@ extern "C" {
  */
 #define MR_HT_INST_FOREACH(_compat, _fn, ...)                                  \
     MR_MACRO_IF(MR_HT_HAS_INST(_compat),                                       \
-                (MR_LISTIFY(MR_CAT(__MR_HT_INST_, _compat, _NUM), , _fn,       \
-                            ##__VA_ARGS__)),                                   \
+                (MR_LISTIFY(MR_CAT(MR_HT_PATH(INST, _compat), _NUM), ;         \
+                 , _fn, ##__VA_ARGS__)),                                       \
                 ())
 
 /**
- * @brief This macro function gets the node name from the instance.
+ * @brief This macro function checks whether the property exists.
  *
- * @param _compat The compatible name.
- * @param _id The instance id.
- * @return The node name.
+ * @param _node The node.
+ * @param _prop The property name.
+ * @return MR_TRUE if the property exists, MR_FALSE otherwise.
  */
-#define MR_HT_INST_NAME(_compat, _id)                                          \
-    MR_HT_NODE_NAME(MR_HT_INST(_compat, _id))
+#define MR_HT_HAS_NODE_PROP(_node, _prop)                                      \
+    MR_MACRO_IS_USED(MR_CAT(_node, MR_CAT_SEP(_P_, _prop), _EXIST))
 
 /**
- * @brief This macro function gets the init level from the instance.
+ * @brief This macro function gets the property from the node.
  *
- * @param _compat The compatible name.
- * @param _id The instance id.
- * @return The init level.
+ * @param _node The node.
+ * @param _prop The property name.
+ * @return The property value.
  */
-#define MR_HT_INST_INIT_LEVEL(_compat, _id)                                    \
-    MR_HT_PROP(MR_HT_INST(_compat, _id), init_level)
+#define MR_HT_NODE_PROP(_node, _prop)   MR_CAT(_node, MR_CAT_SEP(_P_, _prop))
+
+/**
+ * @brief This macro function gets the property from the node or returns a
+ * default value.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @param _default The default value.
+ * @return The property value or the default value.
+ */
+#define MR_HT_NODE_PROP_OR(_node, _prop, _default)                             \
+    MR_MACRO_IF(MR_HT_HAS_NODE_PROP(_node, _prop),                             \
+                (MR_HT_NODE_PROP(_node, _prop)), (_default))
+
+/**
+ * @brief This macro function gets the node name.
+ *
+ * @param _node The node.
+ * @return The node name.
+ */
+#define MR_HT_NODE_NAME(_node)          MR_HT_NODE_PROP(_node, NAME)
 #endif /* defined(MR_USE_DRIVER_HARDTREE) */
 
 /** @} */

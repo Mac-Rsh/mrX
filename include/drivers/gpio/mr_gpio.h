@@ -230,28 +230,29 @@ mr_err_t mr_gpio_irq_handle(mr_driver_t *drv, mr_uint32_t pin);
 
 #if defined(MR_USE_DRIVER_HARDTREE)
 /**
- * @brief This macro function installs a GPIO driver through hardtree.
+ * @brief This macro function installs a GPIO instance through hardtree.
  *
  * @param _id The instance id.
  * @param _priv The GPIO private data.
  * @param _ops The GPIO operations.
  */
-#define MR_GPIO_HT_INSTALL(_id, _priv, _ops)                                   \
+#define MR_HT_INST_GPIO_INSTALL(_id, _priv, _ops)                              \
     static mr_gpio_data_t __mr_gpio_data_##_id                                 \
-        = {.exist_mask                                                         \
-           = MR_HT_PROP_OR(MR_DRIVER_HT_INST(_id), exist_mask, 0xffffffff),    \
-           .invert = MR_HT_PROP_OR(MR_DRIVER_HT_INST(_id), invert, 0)};        \
-    MR_DRIVER_HT_INSTALL(_id, MR_DRIVER_TYPE_GPIO, MR_DRIVER_DOPS_FIND(gpio),  \
-                         &__mr_gpio_data_##_id, _priv, _ops);
+        = {.exist_mask = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id),            \
+                                            exist_mask, 0xffffffff),           \
+           .invert = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), invert, 0)};   \
+    MR_HT_INST_DRIVER_INSTALL(_id, MR_DRIVER_TYPE_GPIO,                        \
+                              MR_DRIVER_DOPS_FIND(gpio),                       \
+                              &__mr_gpio_data_##_id, _priv, _ops);
 
 /**
- * @brief This macro function installs all GPIO drivers through hardtree.
+ * @brief This macro function installs all GPIO instances.
  *
  * @param _priv The GPIO private data.
  * @param _ops The GPIO operations.
  */
-#define MR_GPIO_HT_INSTALL_FOREACH(_priv, _ops)                                \
-    MR_DRIVER_HT_INSTALL_FOREACH(MR_GPIO_HT_INSTALL, _priv, _ops)
+#define MR_HT_GPIO_INSTALL_FOREACH(_priv, _ops)                                \
+    MR_HT_INST_DRIVER_FOREACH(MR_HT_INST_GPIO_INSTALL, _priv, _ops)
 #endif /* defined(MR_USE_DRIVER_HARDTREE) */
 #endif /* defined(MR_USE_DRIVER_GPIO) */
 

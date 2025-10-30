@@ -148,37 +148,37 @@ extern "C" {
  * @return The concatenated string.
  */
 #define MR_CAT_SEP(_s, ...)                                                    \
-    MR_CAT(__MR_CAT_SEP_, MR_VA_ARGS_NUM(__VA_ARGS__))(_s, __VA_ARGS__)
+    MR_CAT(__MR_CAT_SEP_, MR_VA_ARGS_NUM(__VA_ARGS__))(_s, ##__VA_ARGS__)
 #define __MR_CAT_SEP_0(_s, _a, ...)
 #define __MR_CAT_SEP_1(_s, _a, ...)     MR_CAT(_s, _a)
 #define __MR_CAT_SEP_2(_s, _a, ...)                                            \
-    MR_CAT(_s, _a, __MR_CAT_SEP_1(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_1(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_3(_s, _a, ...)                                            \
-    MR_CAT(_s, _a, __MR_CAT_SEP_2(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_2(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_4(_s, _a, ...)                                            \
-    MR_CAT(_s, _a, __MR_CAT_SEP_3(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_3(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_5(_s, _a, ...)                                            \
-    MR_CAT(_s, _a, __MR_CAT_SEP_4(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_4(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_6(_s, _a, ...)                                            \
-    MR_CAT(_s, _a, __MR_CAT_SEP_5(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_5(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_7(_s, _a, ...)                                            \
-    MR_CAT(_s, _a, __MR_CAT_SEP_6(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_6(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_8(_s, _a, ...)                                            \
-    MR_CAT(_s, _a, __MR_CAT_SEP_7(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_7(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_9(_s, _a, ...)                                            \
-    MR_CAT(_s, _a, __MR_CAT_SEP_8(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_8(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_10(_s, _a, ...)                                           \
-    MR_CAT(_s, _a, __MR_CAT_SEP_9(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_9(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_11(_s, _a, ...)                                           \
-    MR_CAT(_s, _a, __MR_CAT_SEP_10(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_10(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_12(_s, _a, ...)                                           \
-    MR_CAT(_s, _a, __MR_CAT_SEP_11(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_11(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_13(_s, _a, ...)                                           \
-    MR_CAT(_s, _a, __MR_CAT_SEP_12(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_12(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_14(_s, _a, ...)                                           \
-    MR_CAT(_s, _a, __MR_CAT_SEP_13(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_13(_s, ##__VA_ARGS__))
 #define __MR_CAT_SEP_15(_s, _a, ...)                                           \
-    MR_CAT(_s, _a, __MR_CAT_SEP_14(_s, __VA_ARGS__))
+    MR_CAT(_s, _a, __MR_CAT_SEP_14(_s, ##__VA_ARGS__))
 
 /**
  * @brief This macro function strips the brackets from a code.

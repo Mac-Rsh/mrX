@@ -375,15 +375,22 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
 
 #if defined(MR_USE_DRIVER_HARDTREE)
 /**
- * @brief This macro function finds a driver through hardtree.
+ * @brief This macro function checks whether the driver instance exist.
  *
- * @param _node The node.
- * @return The driver.
+ * @return MR_TRUE if the driver instance exist, MR_FALSE otherwise.
  */
-#define MR_DRIVER_HT_FIND(_node)        MR_DRIVER_FIND(MR_HT_NODE_NAME(_node))
+#define MR_HT_HAS_INST_DRIVER()         MR_HT_HAS_INST(MR_HT_COMPAT)
 
 /**
- * @brief This macro function installs a driver through hardtree.
+ * @brief This macro function gets the driver instance.
+ *
+ * @param _id The instance id.
+ * @return The driver instance.
+ */
+#define MR_HT_INST_DRIVER(_id)          MR_HT_INST(MR_HT_COMPAT, _id)
+
+/**
+ * @brief This macro function installs a driver instance through hardtree.
  *
  * @param _id The instance id.
  * @param _type The driver type.
@@ -392,32 +399,33 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
  * @param _priv The private data.
  * @param _ops The private operations.
  */
-#define MR_DRIVER_HT_INSTALL(_id, _type, _dops, _data, _priv, _ops)            \
-    MR_DRIVER_INSTALL(MR_HT_INST_NAME(MR_HT_COMPAT, _id), _type, _dops, _data, \
-                      _priv, _ops, MR_HT_INST_INIT_LEVEL(MR_HT_COMPAT, _id))
+#define MR_HT_INST_DRIVER_INSTALL(_id, _type, _dops, _data, _priv, _ops)       \
+    MR_DRIVER_INSTALL(MR_HT_NODE_NAME(MR_HT_INST_DRIVER(_id)), _type, _dops,   \
+                      _data, _priv, _ops,                                      \
+                      MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), INIT_LEVEL,   \
+                                         MR_DRIVER_LEVEL_DEFER))
 
 /**
- * @brief This macro function installs all drivers through hardtree.
+ * @brief This macro function iterates over all driver instances.
  *
- * @param _fn The function.
- * @param ... The arguments.
+ * @param _fn The function to be called, like: fn(i, ...), where i is the index.
  */
-#define MR_DRIVER_HT_INSTALL_FOREACH(_fn, ...)                                 \
-    MR_HT_INST_FOREACH(MR_HT_COMPAT, _fn, __VA_ARGS__)
+#define MR_HT_INST_DRIVER_FOREACH(_fn, ...)                                    \
+    MR_HT_INST_FOREACH(MR_HT_COMPAT, _fn, ##__VA_ARGS__)
 
 /**
- * @brief This macro function gets the node from the instance id.
+ * @brief This macro function finds a driver through hardtree.
  *
- * @param _id The instance id.
- * @return The node.
+ * @param _node The node.
+ * @return The driver.
  */
-#define MR_DRIVER_HT_INST(_id)          MR_HT_INST(MR_HT_COMPAT, _id)
+#define MR_HT_DRIVER_FIND(_node)        MR_DRIVER_FIND(MR_HT_NODE_NAME(_node))
 
-/* All drivers defined through hardtree are exported here, and accessing these
- * drivers no longer requires import or export */
-#define __MR_DRIVER_HT_EXPORT(_id)                                             \
-    MR_DRIVER_EXPORT(MR_HT_NODE_NAME(MR_HT_NODE(_id)));
-MR_HT_NODE_FOREACH(__MR_DRIVER_HT_EXPORT);
+/* All driver instances defined through hardtree are exported here, and
+ * accessing these drivers no longer requires import or export */
+#define __MR_HT_INST_DRIVER_EXPORT(_id)                                        \
+    MR_DRIVER_EXPORT(MR_HT_NODE_NAME(MR_HT_INST(DRIVER, _id)))
+MR_HT_INST_FOREACH(DRIVER, __MR_HT_INST_DRIVER_EXPORT);
 #endif /* defined(MR_USE_DRIVER_HARDTREE) */
 #endif /* defined(MR_USE_DRIVER) */
 
