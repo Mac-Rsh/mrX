@@ -6,9 +6,9 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <libc/mr_string.h>
+#include <mr-X/libc/mr_string.h>
 #if defined(MR_USE_STRING)
-#include <libc/mr_errno.h>
+#include <mr-X/libc/mr_errno.h>
 #endif /* defined(MR_USE_STRING) */
 
 #if defined(MR_USE_STRING)

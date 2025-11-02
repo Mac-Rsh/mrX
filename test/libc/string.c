@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <test/mr_test.h>
+#include <mr-X/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#include <libc/mr_string.h>
-#include <libc/mr_malloc.h>
+#include <mr-X/libc/mr_string.h>
+#include <mr-X/libc/mr_malloc.h>
 
 /* -------------------------------------------------------------------------- */
 /* Utilities: fill / verify canary pattern                                    */

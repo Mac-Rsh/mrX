@@ -6,16 +6,16 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <drivers/mr_driver.h>
+#include <mr-X/drivers/mr_driver.h>
 #if defined(MR_USE_DRIVER)
-#include <mr-X/mr_initcall.h>
-#include <libc/mr_malloc.h>
+#include <mr-X/kernel/mr_initcall.h>
+#include <mr-X/libc/mr_malloc.h>
+#include <mr-X/libc/mr_string.h>
 
-/* Driver clazz(dynamic & static) */
-static void driver_release_dyn(mr_object_t *obj);
-static void driver_release(mr_object_t *obj);
-MR_CLAZZ_DYNAMIC_DEFINE(driver, driver_release_dyn);
-MR_CLAZZ_DEFINE(driver, driver_release);
+/* Driver clazzes(static & dynamic) */
+static void driver_dynamic_release(mr_object_t *obj);
+static void driver_statik_release(mr_object_t *obj);
+MR_CLAZZES_DEFINE(driver, driver_statik_release, driver_dynamic_release);
 
 /* Driver start/defer/end sections */
 MR_DRIVER_INSTALL(start, 0, MR_NULL, MR_NULL, MR_NULL, MR_NULL, "0.end");
@@ -41,7 +41,8 @@ static mr_err_t driver_init(mr_driver_t *drv, const mr_clazz_t *clazz,
 mr_err_t mr_driver_init(mr_driver_t *drv, mr_uint16_t type,
                         const mr_driver_dops_t *dops, void *data, void *priv,
                         void *ops) {
-    const mr_clazz_t *clazz = MR_CLAZZ_FIND(driver);
+    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(driver);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
 
     /* Check parameter */
     MR_ASSERT((drv != MR_NULL) && (!MR_OBJECT_IS_INITED(drv)));
@@ -53,7 +54,8 @@ mr_err_t mr_driver_init(mr_driver_t *drv, mr_uint16_t type,
 
 mr_driver_t *mr_driver_create(mr_uint16_t type, const mr_driver_dops_t *dops,
                               void *data, void *priv, void *ops) {
-    const mr_clazz_t *clazz = MR_CLAZZ_DYNAMIC_FIND(driver);
+    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(driver);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
     mr_driver_t *drv;
     mr_err_t ret;
 
@@ -78,7 +80,7 @@ mr_driver_t *mr_driver_create(mr_uint16_t type, const mr_driver_dops_t *dops,
 mr_err_t mr_driver_del(mr_driver_t *drv) {
     /* Check parameter */
     MR_ASSERT((drv != MR_NULL) && MR_OBJECT_IS_INITED(drv));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(drv, driver));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(drv, driver));
 
     /* Mark driver as dying */
     mr_atomic_fetch_or(&drv->flags, MR_DRIVER_FLAG_DYING);
@@ -106,8 +108,8 @@ static mr_err_t driver_lock(mr_driver_t *drv) {
         }
 
         /* Try to mark driver as locked */
-    } while (!mr_atomic_compare_exchange(&drv->flags, &flags,
-                                         flags | MR_DRIVER_FLAG_LOCK));
+        flags |= MR_DRIVER_FLAG_LOCK;
+    } while (!mr_atomic_compare_exchange(&drv->flags, &flags, flags));
     return 0;
 }
 
@@ -121,7 +123,7 @@ mr_err_t mr_driver_setup(mr_driver_t *drv) {
 
     /* Check parameter */
     MR_ASSERT((drv != MR_NULL) && MR_OBJECT_IS_INITED(drv));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(drv, driver));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(drv, driver));
 
     /* Lock driver */
     ret = driver_lock(drv);
@@ -161,7 +163,7 @@ mr_err_t mr_driver_shutdown(mr_driver_t *drv) {
 
     /* Check parameter */
     MR_ASSERT((drv != MR_NULL) && MR_OBJECT_IS_INITED(drv));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(drv, driver));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(drv, driver));
 
     /* Lock driver */
     ret = driver_lock(drv);
@@ -194,33 +196,6 @@ _exit:
     /* Unlock driver */
     driver_unlock(drv);
     return ret;
-}
-
-void mr_driver_state_set(mr_driver_t *drv, mr_err_t errcode) {
-    /* Check parameter */
-    MR_ASSERT((drv != MR_NULL) && MR_OBJECT_IS_INITED(drv));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(drv, driver));
-    MR_ASSERT(errcode <= 0);
-
-    /* Limit error code(0 ~ 255) */
-    if (errcode < 0) {
-        errcode = -errcode;
-    }
-    if (errcode > (mr_err_t)MR_UINT8_MAX) {
-        errcode = MR_UINT8_MAX;
-    }
-
-    /* Set driver state */
-    drv->state = (mr_uint8_t)errcode;
-}
-
-mr_err_t mr_driver_state(mr_driver_t *drv) {
-    /* Check parameter */
-    MR_ASSERT((drv != MR_NULL) && MR_OBJECT_IS_INITED(drv));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(drv, driver));
-
-    /* Get driver state */
-    return -((mr_err_t)drv->state);
 }
 
 mr_driver_t *mr_driver_find(const char *name) {
@@ -265,12 +240,12 @@ static mr_driver_t *driver_obj_release(mr_object_t *obj) {
     return drv;
 }
 
-static void driver_release(mr_object_t *obj) {
+static void driver_statik_release(mr_object_t *obj) {
     /* Release driver */
     driver_obj_release(obj);
 }
 
-static void driver_release_dyn(mr_object_t *obj) {
+static void driver_dynamic_release(mr_object_t *obj) {
     mr_driver_t *drv;
 
     /* Release driver */

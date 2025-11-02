@@ -6,9 +6,9 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/mr_log.h>
+#include <mr-X/kernel/mr_log.h>
 #if defined(MR_USE_LOG)
-#include <mr-X/mr_printf.h>
+#include <mr-X/kernel/mr_printf.h>
 
 /* Log level mask */
 static mr_uint32_t __level = 0xffffffffU;

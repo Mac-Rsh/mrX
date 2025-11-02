@@ -6,22 +6,20 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/mr_wait.h>
+#include <mr-X/kernel/mr_wait.h>
 #if defined(MR_USE_WAIT)
-#include <mr-X/mr_spinlock.h>
-#include <libc/mr_malloc.h>
+#include <mr-X/kernel/mr_spinlock.h>
+#include <mr-X/libc/mr_malloc.h>
 
-/* Waitable clazz(dynamic & static) */
-static void able_release_dyn(mr_object_t *obj);
-static void able_release(mr_object_t *obj);
-MR_CLAZZ_DYNAMIC_DEFINE(waitable, able_release_dyn);
-MR_CLAZZ_DEFINE(waitable, able_release);
+/* Waitable clazzes(static & dynamic) */
+static void able_statik_release(mr_object_t *obj);
+static void able_dynamic_release(mr_object_t *obj);
+MR_CLAZZES_DEFINE(waitable, able_statik_release, able_dynamic_release);
 
-/* Waiter clazz(dynamic & static) */
-static void wait_release_dyn(mr_object_t *obj);
-static void wait_release(mr_object_t *obj);
-MR_CLAZZ_DYNAMIC_DEFINE(waiter, wait_release_dyn);
-MR_CLAZZ_DEFINE(waiter, wait_release);
+/* Waiter clazzes(static & dynamic) */
+static void wait_dynamic_release(mr_object_t *obj);
+static void wait_statik_release(mr_object_t *obj);
+MR_CLAZZES_DEFINE(waiter, wait_statik_release, wait_dynamic_release);
 
 /* Wait lock */
 static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
@@ -45,7 +43,8 @@ static mr_err_t waitable_init(mr_waitable_t *able, const mr_clazz_t *clazz,
 
 mr_err_t mr_waitable_init(mr_waitable_t *able, mr_waitable_check_t *check,
                           void *param) {
-    const mr_clazz_t *clazz = MR_CLAZZ_FIND(waitable);
+    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(waitable);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
 
     /* Check parameter */
     MR_ASSERT((able != MR_NULL) && (!MR_OBJECT_IS_INITED(able)));
@@ -55,7 +54,8 @@ mr_err_t mr_waitable_init(mr_waitable_t *able, mr_waitable_check_t *check,
 }
 
 mr_waitable_t *mr_waitable_create(mr_waitable_check_t *check, void *param) {
-    const mr_clazz_t *clazz = MR_CLAZZ_DYNAMIC_FIND(waitable);
+    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(waitable);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
     mr_waitable_t *able;
     mr_err_t ret;
 
@@ -96,7 +96,7 @@ static void waitable_remove(mr_waitable_t *able) {
 mr_err_t mr_waitable_del(mr_waitable_t *able) {
     /* Check parameter */
     MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(able, waitable));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(able, waitable));
 
     /* Remove waitable */
     waitable_remove(able);
@@ -205,7 +205,7 @@ mr_err_t mr_waitable_complete(mr_waitable_t *able) {
 
     /* Check parameter */
     MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(able, waitable));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(able, waitable));
 
     /* Reduce unnecessary check operations */
     if (mr_list_is_empty(&able->list)) {
@@ -223,14 +223,14 @@ mr_err_t mr_waitable_complete(mr_waitable_t *able) {
 mr_err_t mr_waitable_raise(mr_waitable_t *able, mr_uint32_t event) {
     /* Check parameter */
     MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(able, waitable));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(able, waitable));
 
     /* Raise waitable event */
     waitable_handle(able, event);
     return 0;
 }
 
-static void able_release(mr_object_t *obj) {
+static void able_statik_release(mr_object_t *obj) {
     mr_waitable_t *waitable;
 
     /* Get waitable */
@@ -240,9 +240,9 @@ static void able_release(mr_object_t *obj) {
     waitable_remove(waitable);
 }
 
-static void able_release_dyn(mr_object_t *obj) {
+static void able_dynamic_release(mr_object_t *obj) {
     /* Release waitable */
-    able_release(obj);
+    able_statik_release(obj);
 
     /* Free waitable */
     mr_free(obj);
@@ -262,7 +262,8 @@ static mr_err_t waiter_init(mr_waiter_t *wait, const mr_clazz_t *clazz,
 
 mr_err_t mr_waiter_init(mr_waiter_t *wait, mr_waiter_entry_t *entry,
                         void *param, mr_uint32_t event) {
-    const mr_clazz_t *clazz = MR_CLAZZ_FIND(waiter);
+    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(waiter);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
 
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && (!MR_OBJECT_IS_INITED(wait)));
@@ -274,7 +275,8 @@ mr_err_t mr_waiter_init(mr_waiter_t *wait, mr_waiter_entry_t *entry,
 
 mr_waiter_t *mr_waiter_create(mr_waiter_entry_t *entry, void *param,
                               mr_uint32_t event) {
-    const mr_clazz_t *clazz = MR_CLAZZ_DYNAMIC_FIND(waiter);
+    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(waiter);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
     mr_waiter_t *wait;
     mr_err_t ret;
 
@@ -312,7 +314,7 @@ static void waiter_remove(mr_waiter_t *wait) {
 mr_err_t mr_waiter_del(mr_waiter_t *wait) {
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && MR_OBJECT_IS_INITED(wait));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(wait, waiter));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(wait, waiter));
 
     /* Remove waiter */
     waiter_remove(wait);
@@ -331,9 +333,9 @@ mr_err_t mr_waiter_wait(mr_waiter_t *wait, mr_waitable_t *able) {
 
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && MR_OBJECT_IS_INITED(wait));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(wait, waiter));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(wait, waiter));
     MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(able, waitable));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(able, waitable));
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
@@ -386,7 +388,7 @@ _exit:
 mr_err_t mr_waiter_cancel(mr_waiter_t *wait) {
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && MR_OBJECT_IS_INITED(wait));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(wait, waiter));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(wait, waiter));
 
     /* Remove waiter */
     waiter_remove(wait);
@@ -398,7 +400,7 @@ mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint32_t event) {
 
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && MR_OBJECT_IS_INITED(wait));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(wait, waiter));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(wait, waiter));
     MR_ASSERT((event & WAIT_TYPE_MASK) != 0);
 
     /* Lock */
@@ -415,7 +417,7 @@ mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint32_t event) {
     return 0;
 }
 
-static void wait_release(mr_object_t *obj) {
+static void wait_statik_release(mr_object_t *obj) {
     mr_waiter_t *waiter;
 
     /* Get waiter */
@@ -425,9 +427,9 @@ static void wait_release(mr_object_t *obj) {
     waiter_remove(waiter);
 }
 
-static void wait_release_dyn(mr_object_t *obj) {
+static void wait_dynamic_release(mr_object_t *obj) {
     /* Release waiter */
-    wait_release(obj);
+    wait_statik_release(obj);
 
     /* Free waiter */
     mr_free(obj);

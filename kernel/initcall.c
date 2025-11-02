@@ -6,9 +6,9 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/mr_initcall.h>
-#include <libc/mr_assert.h>
-#include <libc/mr_types.h>
+#include <mr-X/kernel/mr_initcall.h>
+#include <mr-X/libc/mr_assert.h>
+#include <mr-X/libc/mr_types.h>
 
 /* Kernel and user init status */
 static volatile mr_bool_t __kstatus = MR_FALSE;

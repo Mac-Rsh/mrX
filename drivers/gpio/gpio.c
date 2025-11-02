@@ -6,20 +6,21 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <drivers/gpio/mr_gpio.h>
+#include <mr-X/drivers/gpio/mr_gpio.h>
 #if defined(MR_USE_DRIVER_GPIO)
-#include <libc/mr_malloc.h>
+#include <mr-X/libc/mr_malloc.h>
 
-/* GPIO driver operations(dynamic & static) */
-static mr_err_t gpio_deinit_dyn(const mr_driver_t *drv);
-static mr_err_t gpio_deinit(const mr_driver_t *drv);
+/* GPIO driver operations(static & dynamic) */
 static mr_err_t gpio_init(const mr_driver_t *drv);
-MR_DRIVER_DOPS_DYNAMIC_DEFINE(gpio, gpio_init, gpio_deinit_dyn);
-MR_DRIVER_DOPS_DEFINE(gpio, gpio_init, gpio_deinit);
+static mr_err_t gpio_statik_deinit(const mr_driver_t *drv);
+static mr_err_t gpio_dynamic_deinit(const mr_driver_t *drv);
+MR_DRIVER_DOPSES_DEFINE(gpio, gpio_init, gpio_statik_deinit,
+                        gpio_dynamic_deinit);
 
 mr_err_t mr_gpio_init(mr_driver_t *drv, mr_gpio_data_t *data, void *priv,
                       mr_gpio_ops_t *ops) {
-    const mr_driver_dops_t *dops = MR_DRIVER_DOPS_FIND(gpio);
+    const mr_driver_dopses_t *dopses = MR_DRIVER_DOPSES_FIND(gpio);
+    const mr_driver_dops_t *dops = MR_DRIVER_DOPSES_STATIK(dopses);
 
     /* Check parameter */
     MR_ASSERT(drv != MR_NULL);
@@ -32,7 +33,8 @@ mr_err_t mr_gpio_init(mr_driver_t *drv, mr_gpio_data_t *data, void *priv,
 
 mr_driver_t *mr_gpio_create(mr_gpio_data_t *data, void *priv,
                             mr_gpio_ops_t *ops) {
-    const mr_driver_dops_t *dops = MR_DRIVER_DOPS_DYNAMIC_FIND(gpio);
+    const mr_driver_dopses_t *dopses = MR_DRIVER_DOPSES_FIND(gpio);
+    const mr_driver_dops_t *dops = MR_DRIVER_DOPSES_DYNAMIC(dopses);
 
     /* Check parameter */
     MR_ASSERT(data != MR_NULL);
@@ -329,7 +331,7 @@ static mr_err_t gpio_init(const mr_driver_t *drv) {
     return 0;
 }
 
-static mr_err_t gpio_deinit(const mr_driver_t *drv) {
+static mr_err_t gpio_statik_deinit(const mr_driver_t *drv) {
     mr_gpio_data_t *gp_data;
 
     /* Check parameter */
@@ -347,11 +349,11 @@ static mr_err_t gpio_deinit(const mr_driver_t *drv) {
     return 0;
 }
 
-static mr_err_t gpio_deinit_dyn(const mr_driver_t *drv) {
+static mr_err_t gpio_dynamic_deinit(const mr_driver_t *drv) {
     mr_err_t ret;
 
     /* Deinit GPIO */
-    ret = gpio_deinit(drv);
+    ret = gpio_statik_deinit(drv);
     if (ret != 0) {
         return ret;
     }

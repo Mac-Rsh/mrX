@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <libc/mr_malloc.h>
+#include <mr-X/libc/mr_malloc.h>
 #if defined(MR_USE_MALLOC)
-#include <port/mr_port_irq.h>
-#include <libc/mr_string.h>
+#include <mr-X/port/mr_port_irq.h>
+#include <mr-X/libc/mr_string.h>
 
 /* Heap memory */
 #if !defined(MR_CFG_HEAP_SIZE)

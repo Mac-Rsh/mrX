@@ -16,23 +16,23 @@
  * @{
  */
 
-#include <mr-X/mr_clock.h>
-#include <mr-X/mr_fifo.h>
-#include <mr-X/mr_hook.h>
-#include <mr-X/mr_initcall.h>
-#include <mr-X/mr_irq.h>
-#include <mr-X/mr_list.h>
-#include <mr-X/mr_listify.h>
-#include <mr-X/mr_log.h>
-#include <mr-X/mr_object.h>
-#include <mr-X/mr_printf.h>
-#include <mr-X/mr_ref.h>
-#include <mr-X/mr_service.h>
-#include <mr-X/mr_spinlock.h>
-#include <mr-X/mr_timer.h>
-#include <mr-X/mr_version.h>
-#include <mr-X/mr_wait.h>
-#include <mr-X/mr_workqueue.h>
+#include <mr-X/kernel/mr_clock.h>
+#include <mr-X/kernel/mr_fifo.h>
+#include <mr-X/kernel/mr_hook.h>
+#include <mr-X/kernel/mr_initcall.h>
+#include <mr-X/kernel/mr_irq.h>
+#include <mr-X/kernel/mr_list.h>
+#include <mr-X/kernel/mr_listify.h>
+#include <mr-X/kernel/mr_log.h>
+#include <mr-X/kernel/mr_object.h>
+#include <mr-X/kernel/mr_printf.h>
+#include <mr-X/kernel/mr_ref.h>
+#include <mr-X/kernel/mr_service.h>
+#include <mr-X/kernel/mr_spinlock.h>
+#include <mr-X/kernel/mr_timer.h>
+#include <mr-X/kernel/mr_version.h>
+#include <mr-X/kernel/mr_wait.h>
+#include <mr-X/kernel/mr_workqueue.h>
 
 /** @} */
 
@@ -41,15 +41,15 @@
  * @{
  */
 
-#include <libc/mr_assert.h>
-#include <libc/mr_atomic.h>
-#include <libc/mr_compiler.h>
-#include <libc/mr_errno.h>
-#include <libc/mr_malloc.h>
-#include <libc/mr_sprintf.h>
-#include <libc/mr_sscanf.h>
-#include <libc/mr_string.h>
-#include <libc/mr_types.h>
+#include <mr-X/libc/mr_assert.h>
+#include <mr-X/libc/mr_atomic.h>
+#include <mr-X/libc/mr_compiler.h>
+#include <mr-X/libc/mr_errno.h>
+#include <mr-X/libc/mr_malloc.h>
+#include <mr-X/libc/mr_sprintf.h>
+#include <mr-X/libc/mr_sscanf.h>
+#include <mr-X/libc/mr_string.h>
+#include <mr-X/libc/mr_types.h>
 
 /** @} */
 
@@ -58,9 +58,9 @@
  * @{
  */
 
-#include <port/mr_port_assert.h>
-#include <port/mr_port_irq.h>
-#include <port/mr_port_output.h>
+#include <mr-X/port/mr_port_assert.h>
+#include <mr-X/port/mr_port_irq.h>
+#include <mr-X/port/mr_port_output.h>
 
 /** @} */
 
@@ -70,8 +70,13 @@
  */
 
 #if defined(MR_USE_DRIVER)
-#include <drivers/mr_driver.h>
-#include <drivers/gpio/mr_gpio.h>
+#include <mr-X/drivers/mr_driver.h>
+#if defined(MR_USE_DRIVER_GPIO)
+#include <mr-X/drivers/gpio/mr_gpio.h>
+#endif /* defined(MR_USE_DRIVER_GPIO) */
+#if defined(MR_USE_DRIVER_UART)
+#include <mr-X/drivers/uart/mr_uart.h>
+#endif /* defined(MR_USE_DRIVER_UART) */
 #endif /* defined(MR_USE_DRIVER) */
 
 /** @} */

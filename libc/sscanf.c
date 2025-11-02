@@ -6,7 +6,7 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <libc/mr_sscanf.h>
+#include <mr-X/libc/mr_sscanf.h>
 #if defined(MR_USE_SSCANF)
 #include <stdarg.h>
 #include <stdio.h>

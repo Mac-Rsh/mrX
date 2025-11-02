@@ -6,16 +6,15 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/mr_irq.h>
+#include <mr-X/kernel/mr_irq.h>
 #if defined(MR_USE_IRQ)
-#include <mr-X/mr_spinlock.h>
-#include <libc/mr_malloc.h>
+#include <mr-X/kernel/mr_spinlock.h>
+#include <mr-X/libc/mr_malloc.h>
 
-/* Irq clazz(dynamic & static) */
-static void irq_release_dyn(mr_object_t *obj);
-static void irq_release(mr_object_t *obj);
-MR_CLAZZ_DYNAMIC_DEFINE(irq, irq_release_dyn);
-MR_CLAZZ_DEFINE(irq, irq_release);
+/* Irq clazzes(static & dynamic) */
+static void irq_dynamic_release(mr_object_t *obj);
+static void irq_statik_release(mr_object_t *obj);
+MR_CLAZZES_DEFINE(irq, irq_statik_release, irq_dynamic_release);
 
 #if defined(MR_USE_IRQ_DEFER_HOOK)
 static const mr_irq_defer_hook_t *__hook = MR_NULL;
@@ -146,7 +145,8 @@ _exit:
 
 mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
                      const mr_irq_ops_t *ops, void *priv) {
-    const mr_clazz_t *clazz = MR_CLAZZ_FIND(irq);
+    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(irq);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
 
     /* Check parameter */
     MR_ASSERT((irq != MR_NULL) && (!MR_OBJECT_IS_INITED(irq)));
@@ -161,7 +161,8 @@ mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
 
 mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
                         const mr_irq_ops_t *ops, void *priv) {
-    const mr_clazz_t *clazz = MR_CLAZZ_DYNAMIC_FIND(irq);
+    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(irq);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
     mr_irq_t *irq;
     mr_err_t ret;
 
@@ -189,7 +190,7 @@ mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
 mr_err_t mr_irq_del(mr_irq_t *irq) {
     /* Check parameter */
     MR_ASSERT((irq != MR_NULL) && MR_OBJECT_IS_INITED(irq));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(irq, irq));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(irq, irq));
 
     /* Mark irq as dying */
     mr_atomic_store(&irq->dying, MR_TRUE);
@@ -786,7 +787,7 @@ static void irq_del(mr_irq_t *irq) {
     mr_spinlock_unlock_irqrestore(&__lock, mask);
 }
 
-static void irq_release(mr_object_t *obj) {
+static void irq_statik_release(mr_object_t *obj) {
     mr_irq_t *irq;
 
     /* Get irq */
@@ -796,9 +797,9 @@ static void irq_release(mr_object_t *obj) {
     irq_del(irq);
 }
 
-static void irq_release_dyn(mr_object_t *obj) {
+static void irq_dynamic_release(mr_object_t *obj) {
     /* Release irq */
-    irq_release(obj);
+    irq_statik_release(obj);
 
     /* Free irq */
     mr_free(obj);

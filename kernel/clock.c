@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/mr_clock.h>
-#include <mr-X/mr_hook.h>
-#include <libc/mr_assert.h>
-#include <libc/mr_atomic.h>
+#include <mr-X/kernel/mr_clock.h>
+#include <mr-X/kernel/mr_hook.h>
+#include <mr-X/libc/mr_assert.h>
+#include <mr-X/libc/mr_atomic.h>
 
 /* Clock hook entry */
 #if !defined(MR_CFG_CLOCK_HOOK_SIZE)

@@ -6,16 +6,15 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/mr_timer.h>
+#include <mr-X/kernel/mr_timer.h>
 #if defined(MR_USE_TIMER)
-#include <mr-X/mr_spinlock.h>
-#include <libc/mr_malloc.h>
+#include <mr-X/kernel/mr_spinlock.h>
+#include <mr-X/libc/mr_malloc.h>
 
-/* Timer clazz(dynamic & static) */
-static void timer_release_dyn(mr_object_t *obj);
-static void timer_release(mr_object_t *obj);
-MR_CLAZZ_DYNAMIC_DEFINE(timer, timer_release_dyn);
-MR_CLAZZ_DEFINE(timer, timer_release);
+/* Timer clazzes(static & dynamic) */
+static void timer_statik_release(mr_object_t *obj);
+static void timer_dynamic_release(mr_object_t *obj);
+MR_CLAZZES_DEFINE(timer, timer_statik_release, timer_dynamic_release);
 
 /* Timer timing list */
 static mr_list_t __tlist = MR_LIST_INIT(&__tlist);
@@ -36,7 +35,8 @@ static mr_err_t timer_init(mr_timer_t *timer, const mr_clazz_t *clazz,
 
 mr_err_t mr_timer_init(mr_timer_t *timer, mr_timer_entry_t *entry, void *param,
                        mr_tick_t tick) {
-    const mr_clazz_t *clazz = MR_CLAZZ_FIND(timer);
+    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(timer);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
 
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && (!MR_OBJECT_IS_INITED(timer)));
@@ -48,7 +48,8 @@ mr_err_t mr_timer_init(mr_timer_t *timer, mr_timer_entry_t *entry, void *param,
 
 mr_timer_t *mr_timer_create(mr_timer_entry_t *entry, void *param,
                             mr_tick_t tick) {
-    const mr_clazz_t *clazz = MR_CLAZZ_DYNAMIC_FIND(timer);
+    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(timer);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
     mr_timer_t *timer;
     mr_err_t ret;
 
@@ -86,7 +87,7 @@ static void timer_remove(mr_timer_t *timer) {
 mr_err_t mr_timer_del(mr_timer_t *timer) {
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(timer, timer));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(timer, timer));
 
     /* Remove timer */
     timer_remove(timer);
@@ -128,7 +129,7 @@ mr_err_t mr_timer_start(mr_timer_t *timer) {
 
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(timer, timer));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(timer, timer));
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__lock);
@@ -144,7 +145,7 @@ mr_err_t mr_timer_start(mr_timer_t *timer) {
 mr_err_t mr_timer_stop(mr_timer_t *timer) {
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(timer, timer));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(timer, timer));
 
     /* Remove timer */
     timer_remove(timer);
@@ -156,7 +157,7 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
 
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
-    MR_ASSERT(MR_OBJECT_CLAZZ_IS(timer, timer));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(timer, timer));
     MR_ASSERT(tick > 0);
 
     /* Lock */
@@ -173,7 +174,7 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
     return 0;
 }
 
-static void timer_release(mr_object_t *obj) {
+static void timer_statik_release(mr_object_t *obj) {
     mr_timer_t *timer;
 
     /* Get timer */
@@ -183,9 +184,9 @@ static void timer_release(mr_object_t *obj) {
     timer_remove(timer);
 }
 
-static void timer_release_dyn(mr_object_t *obj) {
+static void timer_dynamic_release(mr_object_t *obj) {
     /* Release timer */
-    timer_release(obj);
+    timer_statik_release(obj);
 
     /* Free timer */
     mr_free(obj);

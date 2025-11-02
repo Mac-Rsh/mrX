@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <test/mr_test.h>
+#include <mr-X/test/mr_test.h>
 #if defined(MR_USE_TEST)
 #if defined(MR_USE_IRQ)
-#include <mr-X/mr_irq.h>
+#include <mr-X/kernel/mr_irq.h>
 
 static mr_uint8_t last_priority = 0;
 static mr_uint8_t last_type = 0;

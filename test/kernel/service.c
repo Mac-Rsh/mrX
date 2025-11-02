@@ -6,9 +6,9 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <test/mr_test.h>
+#include <mr-X/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#include <mr-X/mr_service.h>
+#include <mr-X/kernel/mr_service.h>
 
 typedef struct {
     int a;

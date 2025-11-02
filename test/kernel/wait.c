@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <test/mr_test.h>
+#include <mr-X/test/mr_test.h>
 #if defined(MR_USE_TEST)
 #if defined(MR_USE_WAIT)
-#include <mr-X/mr_wait.h>
+#include <mr-X/kernel/mr_wait.h>
 
 static void *last_param = MR_NULL;
 static mr_uint32_t last_event = 0;
