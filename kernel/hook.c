@@ -6,9 +6,9 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/kernel/mr_spinlock.h>
-#include <mr-X/kernel/mr_hook.h>
-#include <mr-X/libc/mr_assert.h>
+#include <mrX/kernel/mr_spinlock.h>
+#include <mrX/kernel/mr_hook.h>
+#include <mrX/libc/mr_assert.h>
 
 /* Hook lock */
 static mr_spinlock_t __lock = MR_SPINLOCK_INIT();

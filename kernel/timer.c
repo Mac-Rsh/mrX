@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/kernel/mr_timer.h>
+#include <mrX/kernel/mr_timer.h>
 #if defined(MR_USE_TIMER)
-#include <mr-X/kernel/mr_spinlock.h>
-#include <mr-X/libc/mr_malloc.h>
+#include <mrX/kernel/mr_spinlock.h>
+#include <mrX/libc/mr_malloc.h>
 
 /* Timer clazzes(static & dynamic) */
 static void timer_statik_release(mr_object_t *obj);

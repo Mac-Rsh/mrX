@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/kernel/mr_irq.h>
+#include <mrX/kernel/mr_irq.h>
 #if defined(MR_USE_IRQ)
-#include <mr-X/kernel/mr_spinlock.h>
-#include <mr-X/libc/mr_malloc.h>
+#include <mrX/kernel/mr_spinlock.h>
+#include <mrX/libc/mr_malloc.h>
 
 /* Irq clazzes(static & dynamic) */
 static void irq_dynamic_release(mr_object_t *obj);

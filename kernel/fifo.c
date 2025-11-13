@@ -6,9 +6,9 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/kernel/mr_fifo.h>
-#include <mr-X/libc/mr_string.h>
-#include <mr-X/libc/mr_malloc.h>
+#include <mrX/kernel/mr_fifo.h>
+#include <mrX/libc/mr_string.h>
+#include <mrX/libc/mr_malloc.h>
 
 /* Fifo align macro function */
 #define FIFO_ALIGN_POW2_UP(_size)                                              \
@@ -18,7 +18,9 @@
 mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
                          mr_uint32_t elemsz) {
     /* Align size(down to power of 2) */
-    size = FIFO_ALIGN_POW2_DOWN(MR_MAX(size, 1) / elemsz);
+    elemsz = (elemsz != 0) ? elemsz : 1;
+    size = (size != 0) ? size : 1;
+    size = FIFO_ALIGN_POW2_DOWN(size / elemsz);
 
     /* Init fifo */
     mr_atomic_init(&fifo->ridx, 0);
@@ -213,7 +215,7 @@ mr_uint32_t mr_fifo_write_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
 
 mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
                                     void **buf, mr_uint32_t want) {
-    mr_uint32_t cap, avail, index, size;
+    mr_uint32_t cap, index, size;
 
     /* Limit wants */
     cap = fifo->mask + 1;
@@ -222,12 +224,6 @@ mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
     }
     if (want == 0) {
         return 0;
-    }
-
-    /* Limit size */
-    avail = mr_fifo_avail(fifo);
-    if (want > avail) {
-        mr_fifo_skip(fifo, want - avail);
     }
 
     /* Get write index */

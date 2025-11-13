@@ -6,10 +6,13 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/kernel/mr_clock.h>
-#include <mr-X/kernel/mr_hook.h>
-#include <mr-X/libc/mr_assert.h>
-#include <mr-X/libc/mr_atomic.h>
+#include <mrX/kernel/mr_clock.h>
+#include <mrX/kernel/mr_hook.h>
+#include <mrX/libc/mr_assert.h>
+#include <mrX/libc/mr_atomic.h>
+#if defined(MR_USE_CLOCK_HIRES)
+#include <mrX/port/mr_port_clock.h>
+#endif /* defined(MR_USE_CLOCK_HIRES) */
 
 /* Clock hook entry */
 #if !defined(MR_CFG_CLOCK_HOOK_SIZE)
@@ -70,3 +73,77 @@ mr_err_t mr_clock_hook_add(mr_clock_hook_t *entry) {
     /* Add hook to clock */
     return mr_hook_add(&__hook, entry);
 }
+
+#if defined(MR_USE_CLOCK_HIRES)
+mr_hires_tick_t mr_clock_hires_tick(void) {
+    /* Get clock high resolution tick */
+    return (mr_hires_tick_t)mr_port_clock_hires_tick();
+}
+
+void mr_clock_hires_tick_set(mr_hires_tick_t tick) {
+    /* Set clock high resolution tick */
+    mr_port_clock_hires_tick_set((mr_uint64_t)tick);
+}
+
+mr_hires_timestamp_t mr_clock_hires_tick2timestamp(mr_hires_tick_t tick,
+                                                   int time_zone) {
+    const mr_uint64_t tick_correct = 1000000ULL / MR_CFG_HIRES_TICK_PER_SECOND;
+    const mr_uint8_t day_of_month_comm[]
+        = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    const mr_uint8_t day_of_month_leap[]
+        = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    mr_hires_timestamp_t timestamp;
+    const mr_uint8_t *day_of_month;
+    mr_uint16_t day_of_year;
+    mr_uint64_t tick_zone;
+    mr_bool_t is_leap;
+
+    /* Limit time zone */
+    time_zone = time_zone <= 12 ? time_zone : 12;
+    time_zone = time_zone >= -12 ? time_zone : -12;
+
+    /* Correct to the microsecond */
+    tick *= tick_correct;
+
+    /* Time zone(UTC + n) */
+    tick_zone = (mr_uint64_t)tick + ((mr_uint64_t)time_zone * 3600000000ULL);
+
+    /* Microsecond ~ hour */
+    timestamp.microsecond = (mr_uint16_t)(tick_zone % 1000);
+    tick_zone /= 1000;
+    timestamp.millisecond = (mr_uint16_t)(tick_zone % 1000);
+    tick_zone /= 1000;
+    timestamp.second = (mr_uint8_t)(tick_zone % 60);
+    tick_zone /= 60;
+    timestamp.minute = (mr_uint8_t)(tick_zone % 60);
+    tick_zone /= 60;
+    timestamp.hour = (mr_uint8_t)(tick_zone % 24);
+    tick_zone /= 24;
+
+    /* Year */
+    timestamp.year = 1970;
+    while (1) {
+        /* Check if year is leap year */
+        is_leap = ((timestamp.year % 4 == 0) && (timestamp.year % 100 != 0))
+               || (timestamp.year % 400 == 0);
+        day_of_year = is_leap ? 366 : 365;
+        if (tick_zone < day_of_year) {
+            break;
+        }
+        tick_zone -= day_of_year;
+        timestamp.year++;
+    }
+
+    /* Month */
+    day_of_month = is_leap ? day_of_month_leap : day_of_month_comm;
+    for (timestamp.month = 1;
+         tick_zone >= (mr_uint64_t)day_of_month[timestamp.month - 1];
+         timestamp.month++) {
+        tick_zone -= (mr_uint64_t)day_of_month[timestamp.month - 1];
+    }
+
+    /* Day */
+    timestamp.day = (mr_uint8_t)(tick_zone + 1);
+    return timestamp;
+}
+#endif /* defined(MR_USE_CLOCK_HIRES) */

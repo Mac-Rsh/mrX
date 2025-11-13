@@ -6,18 +6,20 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/test/mr_test.h>
+#include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#include <mr-X/kernel/mr_hook.h>
+#include <mrX/kernel/mr_hook.h>
 
+/* -------------------------------------------------------------------------- */
+/* Utilities: hook function                                                   */
 static void test_hook_entry(void) {
 }
 
 /* -------------------------------------------------------------------------- */
 /* Test: Hook static init                                                     */
 static void test_hook_static_init(void) {
-    static mr_ptr_t buf[4];
-    static mr_hook_t hook = MR_HOOK_INIT(buf, 4);
+    mr_ptr_t buf[4];
+    mr_hook_t hook = MR_HOOK_INIT(buf, 4);
 
     mr_hook_init(&hook, buf, 4);
     MR_TEST_ASSERT_EQ_INT(hook.size, 4);

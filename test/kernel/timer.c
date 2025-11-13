@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/test/mr_test.h>
+#include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
 #if defined(MR_USE_TIMER)
-#include <mr-X/kernel/mr_timer.h>
+#include <mrX/kernel/mr_timer.h>
 
 static mr_timer_t *last_timer = MR_NULL;
 static void *last_param = MR_NULL;

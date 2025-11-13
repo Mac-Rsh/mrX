@@ -6,85 +6,228 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/test/mr_test.h>
+#include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#include <mr-X/kernel/mr_object.h>
+#include <mrX/kernel/mr_object.h>
+#include <mrX/libc/mr_string.h>
 
-typedef struct test_obj {
+/* Track release function calls */
+static int test_object_statik_release_called = 0;
+static int test_object_dynamic_release_called = 0;
+
+/* Mock release handlers */
+static void test_object_statik_release(struct mr_object *obj)
+{
+    MR_UNUSED(obj);
+    test_object_statik_release_called++;
+}
+
+static void test_object_dynamic_release(struct mr_object *obj)
+{
+    MR_UNUSED(obj);
+    test_object_dynamic_release_called++;
+}
+
+/* Define test clazzes */
+MR_CLAZZES_DEFINE(test_object, test_object_statik_release, test_object_dynamic_release);
+
+/* -------------------------------------------------------------------------- */
+/* Test: Normal object initialization */
+static void test_object_init_normal(void)
+{
     mr_object_t obj;
-    int data;
-} test_obj_t;
+    mr_err_t ret;
 
-static void test_obj_release(struct mr_object *obj) {
-    test_obj_t *t = (test_obj_t *)obj;
-    t->data = -1;
+    mr_memset(&obj, 0, sizeof(obj));
+    ret = mr_object_init(&obj, MR_CLAZZES_STATIK(MR_CLAZZES_FIND(test_object)));
+
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(&obj), MR_TRUE);
+    MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&obj), MR_CLAZZES_STATIK(MR_CLAZZES_FIND(test_object)));
+
+    mr_object_del(&obj);
 }
-
-static const mr_clazz_t test_clazz = MR_CLAZZ_INIT("test", test_obj_release);
+MR_TEST_EXPORT(object, init_normal, test_object_init_normal);
 
 /* -------------------------------------------------------------------------- */
-/* Test: Static initializer                                                   */
-static void test_object_static_init(void) {
-    static test_obj_t o = {.obj = MR_OBJECT_INIT(&test_clazz), .data = 42};
+/* Test: Initialize with NULL object pointer */
+static void test_object_init_null_obj(void)
+{
+    mr_err_t ret;
 
-    MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(&o.obj), MR_TRUE);
-    MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&o.obj), &test_clazz);
+    ret = mr_object_init(MR_NULL, MR_CLAZZES_STATIK(MR_CLAZZES_FIND(test_object)));
+    MR_TEST_ASSERT_EQ_INT(ret, -MR_EINVAL);
 }
-MR_TEST_EXPORT(object, static_init, test_object_static_init);
+MR_TEST_EXPORT(object, init_null_obj, test_object_init_null_obj);
 
 /* -------------------------------------------------------------------------- */
-/* Test: Dynamic init / del                                                   */
-static void test_object_init_del(void) {
-    test_obj_t o;
+/* Test: Re-initialize already initialized object */
+static void test_object_init_already_inited(void)
+{
+    mr_object_t obj;
+    mr_err_t ret;
 
-    MR_TEST_ASSERT_EQ_INT(mr_object_init(&o.obj, &test_clazz), 0);
-    MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(&o.obj), MR_TRUE);
+    mr_object_init(&obj, MR_CLAZZES_STATIK(MR_CLAZZES_FIND(test_object)));
+    ret = mr_object_init(&obj, MR_CLAZZES_DYNAMIC(MR_CLAZZES_FIND(test_object)));
 
-    mr_object_del(&o.obj);
-    MR_TEST_ASSERT_EQ_INT(o.data, -1);
+    MR_TEST_ASSERT_EQ_INT(ret, -MR_EINVAL);
+    mr_object_del(&obj);
 }
-MR_TEST_EXPORT(object, init_del, test_object_init_del);
+MR_TEST_EXPORT(object, init_already_inited, test_object_init_already_inited);
 
 /* -------------------------------------------------------------------------- */
-/* Test: Get / put reference counting                                         */
-static void test_object_refcount(void) {
-    mr_object_t *p;
-    test_obj_t o;
+/* Test: Normal object deletion */
+static void test_object_del_normal(void)
+{
+    mr_object_t obj;
 
-    mr_object_init(&o.obj, &test_clazz);
+    test_object_dynamic_release_called = 0;
+    mr_object_init(&obj, MR_CLAZZES_DYNAMIC(MR_CLAZZES_FIND(test_object)));
+    mr_object_del(&obj);
 
-    p = mr_object_get(&o.obj);
-    MR_TEST_ASSERT_EQ_PTR(p, &o.obj);
-
-    p = mr_object_get(&o.obj);
-    MR_TEST_ASSERT_EQ_PTR(p, &o.obj);
-    MR_TEST_ASSERT_EQ_INT(mr_object_put(&o.obj), MR_FALSE);
-    MR_TEST_ASSERT_EQ_INT(mr_object_put(&o.obj), MR_FALSE);
-    MR_TEST_ASSERT_EQ_INT(mr_object_put(&o.obj), MR_TRUE);
-
-    MR_TEST_ASSERT_EQ_PTR(mr_object_get(MR_NULL), MR_NULL);
-    MR_TEST_ASSERT_EQ_PTR(mr_object_get(&o.obj), MR_NULL);
-
-    MR_TEST_ASSERT_EQ_INT(mr_object_put(MR_NULL), MR_TRUE);
-    MR_TEST_ASSERT_EQ_INT(mr_object_put(&o.obj), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(test_object_dynamic_release_called, 1);
 }
-MR_TEST_EXPORT(object, refcount, test_object_refcount);
+MR_TEST_EXPORT(object, del_normal, test_object_del_normal);
 
 /* -------------------------------------------------------------------------- */
-/* Test: Null and double-init protection                                      */
-static void test_object_invalid(void) {
-    test_obj_t o;
-
-    MR_TEST_ASSERT_EQ_INT(mr_object_init(MR_NULL, &test_clazz), -MR_EINVAL);
-    MR_TEST_ASSERT_EQ_INT(mr_object_init(&o.obj, MR_NULL), 0);
-
-    mr_object_init(&o.obj, &test_clazz);
-    MR_TEST_ASSERT_EQ_INT(mr_object_init(&o.obj, &test_clazz), -MR_EINVAL);
-
+/* Test: Delete NULL pointer */
+static void test_object_del_null(void)
+{
+    test_object_statik_release_called = 0;
     mr_object_del(MR_NULL);
-    mr_object_del(&o.obj);
-    mr_object_del(&o.obj);
-    MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(&o.obj), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(test_object_statik_release_called, 0);
 }
-MR_TEST_EXPORT(object, invalid, test_object_invalid);
+MR_TEST_EXPORT(object, del_null, test_object_del_null);
+
+/* -------------------------------------------------------------------------- */
+/* Test: Delete uninitialized object */
+static void test_object_del_uninit(void)
+{
+    mr_object_t obj;
+
+    test_object_statik_release_called = 0;
+    mr_memset(&obj, 0, sizeof(obj));
+    mr_object_del(&obj);
+
+    MR_TEST_ASSERT_EQ_INT(test_object_statik_release_called, 0);
+}
+MR_TEST_EXPORT(object, del_uninit, test_object_del_uninit);
+
+/* -------------------------------------------------------------------------- */
+/* Test: Reference counting with get/put */
+static void test_object_get_put_refcount(void)
+{
+    mr_object_t obj;
+    mr_object_t *ret_obj;
+    mr_bool_t ret_bool;
+
+    test_object_statik_release_called = 0;
+    mr_object_init(&obj, MR_CLAZZES_STATIK(MR_CLAZZES_FIND(test_object)));
+
+    ret_obj = mr_object_get(&obj);
+    MR_TEST_ASSERT_EQ_PTR(ret_obj, &obj);
+
+    ret_obj = mr_object_get(&obj);
+    MR_TEST_ASSERT_EQ_PTR(ret_obj, &obj);
+
+    ret_bool = mr_object_put(&obj);
+    MR_TEST_ASSERT_EQ_INT(ret_bool, MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(test_object_statik_release_called, 0);
+
+    ret_bool = mr_object_put(&obj);
+    MR_TEST_ASSERT_EQ_INT(ret_bool, MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(test_object_statik_release_called, 0);
+
+    ret_bool = mr_object_put(&obj);
+    MR_TEST_ASSERT_EQ_INT(ret_bool, MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(test_object_statik_release_called, 1);
+}
+MR_TEST_EXPORT(object, get_put_refcount, test_object_get_put_refcount);
+
+/* -------------------------------------------------------------------------- */
+/* Test: Get NULL pointer */
+static void test_object_get_null(void)
+{
+    mr_object_t *ret_obj;
+
+    ret_obj = mr_object_get(MR_NULL);
+    MR_TEST_ASSERT_EQ_PTR(ret_obj, MR_NULL);
+}
+MR_TEST_EXPORT(object, get_null, test_object_get_null);
+
+/* -------------------------------------------------------------------------- */
+/* Test: Get uninitialized object */
+static void test_object_get_uninit(void)
+{
+    mr_object_t obj;
+    mr_object_t *ret_obj;
+
+    mr_memset(&obj, 0, sizeof(obj));
+    ret_obj = mr_object_get(&obj);
+    MR_TEST_ASSERT_EQ_PTR(ret_obj, MR_NULL);
+}
+MR_TEST_EXPORT(object, get_uninit, test_object_get_uninit);
+
+/* -------------------------------------------------------------------------- */
+/* Test: Put NULL pointer */
+static void test_object_put_null(void)
+{
+    mr_bool_t ret_bool;
+
+    ret_bool = mr_object_put(MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret_bool, MR_TRUE);
+}
+MR_TEST_EXPORT(object, put_null, test_object_put_null);
+
+/* -------------------------------------------------------------------------- */
+/* Test: Put uninitialized object */
+static void test_object_put_uninit(void)
+{
+    mr_object_t obj;
+    mr_bool_t ret_bool;
+
+    mr_memset(&obj, 0, sizeof(obj));
+    ret_bool = mr_object_put(&obj);
+    MR_TEST_ASSERT_EQ_INT(ret_bool, MR_TRUE);
+}
+MR_TEST_EXPORT(object, put_uninit, test_object_put_uninit);
+
+/* -------------------------------------------------------------------------- */
+/* Test: MR_OBJECT_IS_CLAZZES macro */
+static void test_object_is_clazzes(void)
+{
+    mr_object_t obj;
+
+    mr_object_init(&obj, MR_CLAZZES_STATIK(MR_CLAZZES_FIND(test_object)));
+    MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_CLAZZES(&obj, test_object), MR_TRUE);
+
+    mr_object_del(&obj);
+}
+MR_TEST_EXPORT(object, is_clazzes, test_object_is_clazzes);
+
+/* -------------------------------------------------------------------------- */
+/* Test: Complete object lifecycle */
+static void test_object_lifecycle(void)
+{
+    mr_object_t obj;
+    mr_object_t *obj1, *obj2, *obj3;
+
+    test_object_dynamic_release_called = 0;
+    mr_object_init(&obj, MR_CLAZZES_DYNAMIC(MR_CLAZZES_FIND(test_object)));
+
+    obj1 = mr_object_get(&obj);
+    obj2 = mr_object_get(&obj);
+    obj3 = mr_object_get(&obj);
+
+    MR_TEST_ASSERT_EQ_PTR(obj1, &obj);
+    MR_TEST_ASSERT_EQ_PTR(obj2, &obj);
+    MR_TEST_ASSERT_EQ_PTR(obj3, &obj);
+
+    MR_TEST_ASSERT_EQ_INT(mr_object_put(&obj), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(mr_object_put(&obj), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(mr_object_put(&obj), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(mr_object_put(&obj), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(test_object_dynamic_release_called, 1);
+}
+MR_TEST_EXPORT(object, lifecycle, test_object_lifecycle);
 #endif /* defined(MR_USE_TEST) */

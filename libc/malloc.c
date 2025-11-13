@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/libc/mr_malloc.h>
+#include <mrX/libc/mr_malloc.h>
 #if defined(MR_USE_MALLOC)
-#include <mr-X/port/mr_port_irq.h>
-#include <mr-X/libc/mr_string.h>
+#include <mrX/port/mr_port_irq.h>
+#include <mrX/libc/mr_string.h>
 
 /* Heap memory */
 #if !defined(MR_CFG_HEAP_SIZE)
@@ -21,6 +21,8 @@
 static mr_uint8_t MR_ALIGN(MR_ALIGN_SIZE) __heap[MR_CFG_HEAP_SIZE];
 /* Heap block head */
 static mr_heap_block_t __blk_head = {.next = MR_NULL};
+/* Heap information */
+static mr_heap_info_t __heap_info;
 
 /* Heap definition */
 #define HEAP_ALIGN(_val, _ali)          (((_val) + (_ali) - 1) & ~((_ali) - 1))
@@ -47,6 +49,9 @@ static void heap_insert_block(mr_heap_block_t *blk) {
         if (merge == (void *)blk) {
             prev->size += blk->size + sizeof(mr_heap_block_t);
             blk = prev;
+
+            /* Decrease fragment number */
+            __heap_info.frag_num--;
         }
 
         /* Merge with the next block */
@@ -59,6 +64,9 @@ static void heap_insert_block(mr_heap_block_t *blk) {
                 prev->next = blk;
                 blk = prev;
             }
+
+            /* Decrease fragment number */
+            __heap_info.frag_num--;
         }
     }
 
@@ -127,8 +135,20 @@ void *mr_malloc(mr_size_t size) {
 
         /* Insert the new block */
         heap_insert_block(new);
+
+        /* Increase fragment number */
+        __heap_info.frag_num++;
     }
+
+    /* Update used & free bytes */
+    __heap_info.used_bytes += blk->size;
+    __heap_info.free_bytes -= blk->size;
 _exit:
+    /* Increase fail count */
+    if (!mem) {
+        __heap_info.fail_count++;
+    }
+
     /* Enable interrupt */
     mr_port_irq_enable(mask);
     return mem;
@@ -149,11 +169,15 @@ void mr_free(void *mem) {
     /* Check the block */
     blk = (mr_heap_block_t *)((mr_uint8_t *)mem - sizeof(mr_heap_block_t));
     if (blk->magic == MR_HEAP_MAGIC) {
-        /* Insert the free block */
-        heap_insert_block(blk);
+        /* Update used & free bytes */
+        __heap_info.used_bytes -= blk->size;
+        __heap_info.free_bytes += blk->size;
 
         /* Mark the block as free */
         blk->magic = ~MR_HEAP_MAGIC;
+
+        /* Insert the free block */
+        heap_insert_block(blk);
     }
 
     /* Enable interrupt */
@@ -225,8 +249,8 @@ void *mr_realloc(void *mem, mr_size_t size) {
 }
 
 static mr_heap_block_t *heap_block_make(mr_ptr_t mem, mr_size_t size) {
-    mr_uintptr_t offset;
     mr_heap_block_t *blk;
+    mr_uintptr_t offset;
 
     /* Set the block information */
     blk = (mr_heap_block_t *)HEAP_ALIGN((mr_uintptr_t)mem, MR_ALIGN_SIZE);
@@ -235,6 +259,13 @@ static mr_heap_block_t *heap_block_make(mr_ptr_t mem, mr_size_t size) {
     blk->size = size - offset;
     blk->next = MR_NULL;
     blk->magic = ~MR_HEAP_MAGIC;
+
+    /* Update used & free bytes and fragment number */
+    if (blk->size > 0) {
+        __heap_info.total_bytes += blk->size;
+        __heap_info.free_bytes += blk->size;
+        __heap_info.frag_num++;
+    }
     return blk;
 }
 
@@ -263,6 +294,48 @@ void mr_heap_region_add(const mr_heap_region_t *regions) {
         heap_insert_block(blk_head);
         heap_insert_block(blk);
     }
+}
+
+static void heap_information_full_get(mr_heap_info_t *info) {
+    mr_size_t free_max, free_cnt;
+    mr_heap_block_t *blk;
+
+    /* Get the full information */
+    for (free_max = 0, free_cnt = 0, blk = __blk_head.next; blk;
+         blk = blk->next) {
+        if (blk->size > free_max) {
+            free_max = blk->size;
+        }
+        free_cnt++;
+    }
+    if (info->free_bytes > 0) {
+        info->disp_ratio_kb
+            = ((mr_f32_t)free_cnt * 1024.0f) / (mr_f32_t)info->free_bytes;
+        info->frag_ratio
+            = 1.0f - ((mr_f32_t)free_max / (mr_f32_t)info->free_bytes);
+    }
+    info->max_free_bytes = free_max;
+}
+
+mr_heap_info_t mr_heap_information(mr_bool_t lazy) {
+    mr_heap_info_t info;
+    int mask;
+
+    /* Disable interrupt */
+    mask = mr_port_irq_disable();
+
+    /* It's too time-consuming. I can only be lazy */
+    if (!lazy) {
+        /* Get the max free block size */
+        heap_information_full_get(&__heap_info);
+    }
+
+    /* Copy heap information */
+    info = __heap_info;
+
+    /* Enable interrupt */
+    mr_port_irq_enable(mask);
+    return info;
 }
 
 void mr_libc_malloc_init(void) {

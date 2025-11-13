@@ -6,14 +6,14 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/test/mr_test.h>
+#include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#include <mr-X/libc/mr_atomic.h>
+#include <mrX/libc/mr_atomic.h>
 
 /* -------------------------------------------------------------------------- */
 /* Test: static init                                                          */
 static void test_atomic_static_init(void) {
-    static mr_atomic_t v = MR_ATOMIC_INIT(12345);
+    mr_atomic_t v = MR_ATOMIC_INIT(12345);
 
     MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 12345);
 }

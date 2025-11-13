@@ -6,9 +6,9 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr_config.h>
+#include <mrX/mr_config.h>
 #if defined(MR_USE_ENTRY)
-#include <mr-X/kernel/mr_initcall.h>
+#include <mrX/kernel/mr_initcall.h>
 
 static void entry(void) {
     /* Kernel init */
@@ -19,7 +19,7 @@ static void entry(void) {
 #if defined(__ARMCC_VERSION)
 extern int $Super$$main(void);
 int $Sub$$main(void) {
-    /* mr-X entry */
+    /* mrX entry */
     entry();
 
     /* Real entry */
@@ -29,7 +29,7 @@ int $Sub$$main(void) {
 #else
 extern int main(void);
 int mr_entry(void) {
-    /* mr-X entry */
+    /* mrX entry */
     entry();
 
     /* Real entry */

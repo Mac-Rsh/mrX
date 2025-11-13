@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/kernel/mr_wait.h>
+#include <mrX/kernel/mr_wait.h>
 #if defined(MR_USE_WAIT)
-#include <mr-X/kernel/mr_spinlock.h>
-#include <mr-X/libc/mr_malloc.h>
+#include <mrX/kernel/mr_spinlock.h>
+#include <mrX/libc/mr_malloc.h>
 
 /* Waitable clazzes(static & dynamic) */
 static void able_statik_release(mr_object_t *obj);

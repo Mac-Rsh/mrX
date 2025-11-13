@@ -6,7 +6,7 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/libc/mr_sprintf.h>
+#include <mrX/libc/mr_sprintf.h>
 #if defined(MR_USE_SPRINTF)
 
 /* Modifier definition */

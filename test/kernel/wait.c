@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/test/mr_test.h>
+#include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
 #if defined(MR_USE_WAIT)
-#include <mr-X/kernel/mr_wait.h>
+#include <mrX/kernel/mr_wait.h>
 
 static void *last_param = MR_NULL;
 static mr_uint32_t last_event = 0;
@@ -174,6 +174,9 @@ static void test_waitable_edge_level(void) {
 
     mr_waitable_complete(&waitable);
     MR_TEST_ASSERT_EQ_INT(trig_status, 3);
+
+    mr_waitable_raise(&waitable, MR_WAIT_IN);
+    MR_TEST_ASSERT_EQ_INT(trig_status, 4);
 
     mr_waitable_del(&waitable);
     mr_waiter_del(&waiter_edge);

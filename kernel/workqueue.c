@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/kernel/mr_workqueue.h>
+#include <mrX/kernel/mr_workqueue.h>
 #if defined(MR_USE_WORKQUEUE)
-#include <mr-X/kernel/mr_spinlock.h>
-#include <mr-X/libc/mr_malloc.h>
+#include <mrX/kernel/mr_spinlock.h>
+#include <mrX/libc/mr_malloc.h>
 
 /* Workqueue clazzes(static & dynamic) */
 static void queue_dynamic_release(mr_object_t *obj);

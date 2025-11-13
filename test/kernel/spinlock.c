@@ -6,9 +6,9 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/test/mr_test.h>
+#include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#include <mr-X/kernel/mr_spinlock.h>
+#include <mrX/kernel/mr_spinlock.h>
 
 /* -------------------------------------------------------------------------- */
 /* Test: static initializer                                                   */

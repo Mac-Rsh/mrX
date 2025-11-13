@@ -6,12 +6,12 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/kernel/mr_printf.h>
+#include <mrX/kernel/mr_printf.h>
 #if defined(MR_USE_PRINTF)
-#include <mr-X/port/mr_port_output.h>
-#include <mr-X/libc/mr_sprintf.h>
+#include <mrX/port/mr_port_output.h>
+#include <mrX/libc/mr_sprintf.h>
 #if defined(MR_USE_PRINTF_SAFE)
-#include <mr-X/libc/mr_malloc.h>
+#include <mrX/libc/mr_malloc.h>
 #endif /* defined(MR_USE_PRINTF_SAFE) */
 
 int mr_vprintf(const char *fmt, mr_va_list args) {

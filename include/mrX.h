@@ -1,0 +1,84 @@
+/**
+ * @copyright (c) 2024-2025, MacRsh
+ *
+ * @license SPDX-License-Identifier: Apache-2.0
+ *
+ * @date 2024-09-06        MacRsh        First version
+ */
+
+#ifndef __MRX_H__
+#define __MRX_H__
+
+#include <mrX/mr_config.h>
+
+/**
+ * @addtogroup Kernel
+ * @{
+ */
+
+#include <mrX/kernel/mr_clock.h>
+#include <mrX/kernel/mr_fifo.h>
+#include <mrX/kernel/mr_hook.h>
+#include <mrX/kernel/mr_initcall.h>
+#include <mrX/kernel/mr_irq.h>
+#include <mrX/kernel/mr_list.h>
+#include <mrX/kernel/mr_listify.h>
+#include <mrX/kernel/mr_log.h>
+#include <mrX/kernel/mr_object.h>
+#include <mrX/kernel/mr_printf.h>
+#include <mrX/kernel/mr_ref.h>
+#include <mrX/kernel/mr_service.h>
+#include <mrX/kernel/mr_spinlock.h>
+#include <mrX/kernel/mr_timer.h>
+#include <mrX/kernel/mr_version.h>
+#include <mrX/kernel/mr_wait.h>
+#include <mrX/kernel/mr_workqueue.h>
+
+/** @} */
+
+/**
+ * @addtogroup Libc
+ * @{
+ */
+
+#include <mrX/libc/mr_assert.h>
+#include <mrX/libc/mr_atomic.h>
+#include <mrX/libc/mr_compiler.h>
+#include <mrX/libc/mr_errno.h>
+#include <mrX/libc/mr_malloc.h>
+#include <mrX/libc/mr_sprintf.h>
+#include <mrX/libc/mr_sscanf.h>
+#include <mrX/libc/mr_string.h>
+#include <mrX/libc/mr_types.h>
+
+/** @} */
+
+/**
+ * @addtogroup Port
+ * @{
+ */
+
+#include <mrX/port/mr_port_assert.h>
+#include <mrX/port/mr_port_irq.h>
+#include <mrX/port/mr_port_output.h>
+
+/** @} */
+
+/**
+ * @addtogroup Drivers
+ * @{
+ */
+
+#if defined(MR_USE_DRIVER)
+#include <mrX/drivers/mr_driver.h>
+#if defined(MR_USE_DRIVER_GPIO)
+#include <mrX/drivers/gpio/mr_gpio.h>
+#endif /* defined(MR_USE_DRIVER_GPIO) */
+#if defined(MR_USE_DRIVER_UART)
+#include <mrX/drivers/uart/mr_uart.h>
+#endif /* defined(MR_USE_DRIVER_UART) */
+#endif /* defined(MR_USE_DRIVER) */
+
+/** @} */
+
+#endif /* __MRX_H__ */

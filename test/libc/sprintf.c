@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/test/mr_test.h>
+#include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#include <mr-X/libc/mr_sprintf.h>
-#include <mr-X/libc/mr_string.h>
+#include <mrX/libc/mr_sprintf.h>
+#include <mrX/libc/mr_string.h>
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf basic integer formatting                                     */

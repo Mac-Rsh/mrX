@@ -1,0 +1,135 @@
+menu "Kernel options"
+
+# ==================================
+# ENTRY
+# ==================================
+config MR_USE_ENTRY
+    bool "Use entry"
+    default n
+
+# ==================================
+# REF
+# ==================================
+config MR_USE_REF_LONG_COUNT
+    bool "Use ref long count"
+    default n
+
+# ==================================
+# CLOCK
+# ==================================
+config MR_CFG_CLOCK_HOOK_SIZE
+    int "Clock hook size"
+    default 2
+    range 2 128
+
+config MR_CFG_TICK_PER_SECOND
+    int "Tick per-second"
+    default 1000
+    range 1 2147483647
+
+config MR_USE_CLOCK_HIRES
+    bool "Use clock high resolution"
+    default n
+
+config MR_CFG_HIRES_TICK_PER_SECOND
+    int "High resolution tick per-second"
+    default 1000000
+    range 1 1000000
+
+# ==================================
+# PRINTF
+# ==================================
+config MR_USE_PRINTF
+    bool "Use printf"
+    default n
+
+config MR_CFG_PRINTF_BUF_SIZE
+    depends on MR_USE_PRINTF
+    int "Printf buffer size"
+    default 64
+    range 8 65535
+
+config MR_USE_PRINTF_COLOR
+    depends on MR_USE_PRINTF
+    bool "Use printf color"
+    default n
+
+config MR_USE_PRINTF_SAFE
+    depends on MR_USE_PRINTF
+    bool "Use printf safe"
+    default n
+
+# ==================================
+# LOG
+# ==================================
+config MR_USE_LOG
+    select MR_USE_PRINTF
+    bool "Use log"
+    default n
+
+config MR_CFG_LOG_LEVEL
+    depends on MR_USE_LOG
+    int "Log level"
+    default 4
+    range 0 4
+
+config MR_CFG_LOG_TIME_ZONE
+    depends on MR_USE_CLOCK_HIRES
+    depends on MR_USE_LOG
+    int "Log time zone"
+    default 8
+    range -12 12
+
+# ==================================
+# TIMER
+# ==================================
+config MR_USE_TIMER
+    bool "Use timer"
+    default y
+
+# ==================================
+# WORKQUEUE
+# ==================================
+config MR_USE_WORKQUEUE
+    select MR_USE_TIMER
+    bool "Use workqueue"
+    default y
+
+config MR_USE_WORKQUEUE_HOOK
+    depends on MR_USE_WORKQUEUE
+    bool "Use workqueue hook"
+    default n
+
+# ==================================
+# IRQ
+# ==================================
+config MR_USE_IRQ
+    bool "Use irq"
+    default y
+
+config MR_CFG_IRQ_TABLE_SIZE
+    depends on MR_USE_IRQ
+    int "Irq table size"
+    default 16
+    range 2 1024
+
+config MR_USE_IRQ_DEFER
+    depends on MR_USE_IRQ
+    select MR_USE_WORKQUEUE
+    bool "Use irq defer"
+    default y
+
+config MR_USE_IRQ_DEFER_HOOK
+    depends on MR_USE_IRQ_DEFER
+    select MR_USE_WORKQUEUE_HOOK
+    bool "Use irq defer hook"
+    default n
+
+# ==================================
+# WAIT
+# ==================================
+config MR_USE_WAIT
+    bool "Use wait"
+    default y
+
+endmenu

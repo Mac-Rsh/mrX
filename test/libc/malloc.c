@@ -6,9 +6,9 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mr-X/test/mr_test.h>
+#include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#include <mr-X/libc/mr_malloc.h>
+#include <mrX/libc/mr_malloc.h>
 
 /* -------------------------------------------------------------------------- */
 /* Utility: fill/verify canary pattern                                        */
@@ -34,7 +34,7 @@ static int canary_verify(void *p, mr_size_t usable) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Basic malloc/free test: allocate, write pattern, verify, free */
+/* Test: allocate, write pattern, verify, free                                */
 static void test_malloc_free_basic(void) {
     mr_size_t usable;
     void *p;
@@ -69,7 +69,7 @@ static void test_malloc_free_basic(void) {
 MR_TEST_EXPORT(malloc, free_basic, test_malloc_free_basic);
 
 /* -------------------------------------------------------------------------- */
-/* calloc test: memory must be zero-filled                                    */
+/* Test: memory must be zero-filled                                           */
 static void test_calloc_zero(void) {
     const mr_size_t n = 16, sz = 32;
     mr_size_t usable, i;
@@ -103,7 +103,7 @@ static void test_calloc_zero(void) {
 MR_TEST_EXPORT(malloc, calloc_zero, test_calloc_zero);
 
 /* -------------------------------------------------------------------------- */
-/* realloc test: resize buffer and retain original data                       */
+/* Test: resize buffer and retain original data                               */
 static void test_realloc_resize(void) {
     void *p1, *p2, *p3;
 
@@ -128,7 +128,7 @@ MR_TEST_EXPORT(malloc, realloc_resize, test_realloc_resize);
 
 #if defined(MR_USE_MALLOC)
 /* -------------------------------------------------------------------------- */
-/* Zero-size malloc should return NULL                                        */
+/* Test: Zero-size malloc should return NULL                                  */
 static void test_malloc_zero(void) {
     void *p;
 
@@ -139,7 +139,7 @@ MR_TEST_EXPORT(malloc, malloc_zero, test_malloc_zero);
 #endif /* defined(MR_USE_MALLOC) */
 
 /* -------------------------------------------------------------------------- */
-/* Fragmentation & merge test: allocate, free, re-allocate                    */
+/* Test: allocate, free, re-allocate                                          */
 static void test_frag_merge(void) {
     enum {
         NUM = 16,
@@ -173,7 +173,7 @@ static void test_frag_merge(void) {
 MR_TEST_EXPORT(malloc, frag_merge, test_frag_merge);
 
 /* -------------------------------------------------------------------------- */
-/* Large allocation test (may fail gracefully if heap too small)              */
+/* Test: may fail gracefully if heap too small                                */
 static void test_malloc_max(void) {
     const mr_size_t huge = 3 * 1024;
     mr_size_t usable;
@@ -196,4 +196,19 @@ static void test_malloc_max(void) {
     }
 }
 MR_TEST_EXPORT(malloc, malloc_max, test_malloc_max);
+
+/* -------------------------------------------------------------------------- */
+/* Test: add memory region                                                    */
+static void test_malloc_region(void) {
+    static mr_uint8_t test_mem1[128];
+    static mr_uint8_t test_mem2[256];
+    const mr_heap_region_t regions[] = {
+        {.address = test_mem1, .size = sizeof(test_mem1)},
+        {.address = test_mem2, .size = sizeof(test_mem2)},
+        {.address = MR_NULL, .size = 0}
+    };
+
+    mr_heap_region_add(regions);
+}
+MR_TEST_EXPORT(malloc, malloc_ragion, test_malloc_region);
 #endif /* defined(MR_USE_TEST) */
