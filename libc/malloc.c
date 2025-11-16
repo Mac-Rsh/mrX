@@ -296,7 +296,7 @@ void mr_heap_region_add(const mr_heap_region_t *regions) {
     }
 }
 
-static void heap_information_full_get(mr_heap_info_t *info) {
+static void heap_information_full_update(mr_heap_info_t *info) {
     mr_size_t free_max, free_cnt;
     mr_heap_block_t *blk;
 
@@ -326,8 +326,8 @@ mr_heap_info_t mr_heap_information(mr_bool_t lazy) {
 
     /* It's too time-consuming. I can only be lazy */
     if (!lazy) {
-        /* Get the max free block size */
-        heap_information_full_get(&__heap_info);
+        /* Update the full information */
+        heap_information_full_update(&__heap_info);
     }
 
     /* Copy heap information */

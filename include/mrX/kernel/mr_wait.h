@@ -213,6 +213,17 @@ mr_err_t mr_waiter_wait(mr_waiter_t *wait, mr_waitable_t *able);
 mr_err_t mr_waiter_cancel(mr_waiter_t *wait);
 
 /**
+ * @brief This function sets waiter waiting event.
+ *
+ * @param wait The waiter.
+ * @param event The waiting event.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note If the waiter is waiting, it will be canceled.
+ */
+mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint32_t event);
+
+/**
  * @brief This function gets waiter waiting event.
  *
  * @param wait The waiter.
@@ -226,17 +237,6 @@ MR_INLINE mr_uint32_t mr_waiter_event(mr_waiter_t *wait) {
     /* Return waiter event */
     return wait->event;
 }
-
-/**
- * @brief This function sets waiter waiting event.
- *
- * @param wait The waiter.
- * @param event The waiting event.
- * @return 0 on success, a negative error code on failure.
- *
- * @note If the waiter is waiting, it will be canceled.
- */
-mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint32_t event);
 
 /**
  * @brief This function gets a waiter.

@@ -12,10 +12,10 @@
 #include <mrX/mr_config.h>
 #if defined(MR_USE_TYPES_STD)
 #include <stdbool.h>
-#include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 #endif /* defined(MR_USE_TYPES_STD) */
+#include <stdarg.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -127,22 +127,11 @@ typedef mr_size_t                       mr_uintptr_t;
 typedef float                           mr_f32_t;
 typedef double                          mr_f64_t;
 
-/* Variable argument list type */
-#if defined(MR_USE_TYPES_STD)
+/* Variable argument list type(cross-platform issues are complex, use STD) */
 typedef va_list                         mr_va_list;
 #define mr_va_start(_a, _l)             va_start(_a, _l)
 #define mr_va_arg(_a, _t)               va_arg(_a, _t)
 #define mr_va_end(_a)                   va_end(_a)
-#else
-typedef char *                          mr_va_list;
-#define __mr_va_align(_t)                                                      \
-    ((sizeof(_t) + (sizeof(mr_ptr_t) - 1)) & (~(sizeof(mr_ptr_t) - 1)))
-#define mr_va_start(_a, _l)                                                    \
-    ((_a) = (mr_va_list) & (_l) + __mr_va_align(_l))
-#define mr_va_arg(_a, _t)                                                      \
-    ((_a) += __mr_va_align(_t), *(_t *)((_a) - __mr_va_align(_t)))
-#define mr_va_end(_a)                   ((_a) = (mr_va_list)0)
-#endif /* defined(MR_USE_TYPES_STD) */
 
 /** @} */
 

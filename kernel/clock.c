@@ -75,23 +75,25 @@ mr_err_t mr_clock_hook_add(mr_clock_hook_t *entry) {
 }
 
 #if defined(MR_USE_CLOCK_HIRES)
-mr_hires_tick_t mr_clock_hires_tick(void) {
-    /* Get clock high resolution tick */
-    return (mr_hires_tick_t)mr_port_clock_hires_tick();
-}
-
 void mr_clock_hires_tick_set(mr_hires_tick_t tick) {
     /* Set clock high resolution tick */
     mr_port_clock_hires_tick_set((mr_uint64_t)tick);
 }
 
-mr_hires_timestamp_t mr_clock_hires_tick2timestamp(mr_hires_tick_t tick,
-                                                   int time_zone) {
-    const mr_uint64_t tick_correct = 1000000ULL / MR_CFG_HIRES_TICK_PER_SECOND;
+mr_hires_tick_t mr_clock_hires_tick(void) {
+    /* Get clock high resolution tick */
+    return (mr_hires_tick_t)mr_port_clock_hires_tick();
+}
+
+mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
+                                             int time_zone) {
     const mr_uint8_t day_of_month_comm[]
         = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     const mr_uint8_t day_of_month_leap[]
         = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    const mr_uint64_t tick_correct
+        = (1000000ULL + (MR_CFG_HIRES_TICK_PER_SECOND / 2))
+        / MR_CFG_HIRES_TICK_PER_SECOND;
     mr_hires_timestamp_t timestamp;
     const mr_uint8_t *day_of_month;
     mr_uint16_t day_of_year;

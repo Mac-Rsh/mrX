@@ -48,7 +48,7 @@ static void test_clock_tickless(void) {
 }
 MR_TEST_EXPORT(clock, tickless, test_clock_tickless);
 
-#if defined(MR_USE_CLOCK_HIGH_RES)
+#if defined(MR_USE_CLOCK_HIRES)
 /* Test: High resolution tick */
 static void test_clock_hires_tick(void) {
     mr_hires_tick_t initial_tick, current_tick;
@@ -66,7 +66,7 @@ static void test_clock_hires_tick2timestamp(void) {
     mr_hires_timestamp_t timestamp;
     const mr_uint8_t time_zone = 8;
 
-    timestamp = mr_clock_hires_tick2timestamp(test_tick, time_zone);
+    timestamp = mr_hires_tick2timestamp(test_tick, time_zone);
     MR_TEST_ASSERT_EQ_INT(timestamp.year, 2024);
     MR_TEST_ASSERT_EQ_INT(timestamp.month, 9);
     MR_TEST_ASSERT_EQ_INT(timestamp.day, 6);
@@ -75,5 +75,5 @@ static void test_clock_hires_tick2timestamp(void) {
     MR_TEST_ASSERT_EQ_INT(timestamp.second, 0);
 }
 MR_TEST_EXPORT(clock, hires_tick2timestamp, test_clock_hires_tick2timestamp);
-#endif /* defined(MR_USE_CLOCK_HIGH_RES) */
+#endif /* defined(MR_USE_CLOCK_HIRES) */
 #endif /* defined(MR_USE_TEST) */

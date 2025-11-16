@@ -21,15 +21,6 @@ extern "C" {
  */
 
 /**
- * @brief This function gets the high resolution clock tick.
- *
- * @return The current high resolution tick.
- *
- * @note Platform implementation.
- */
-extern mr_uint64_t mr_port_clock_hires_tick(void);
-
-/**
  * @brief This function sets the high resolution clock tick.
  *
  * @param tick The high resolution tick.
@@ -37,6 +28,15 @@ extern mr_uint64_t mr_port_clock_hires_tick(void);
  * @note Platform implementation.
  */
 extern void mr_port_clock_hires_tick_set(mr_uint64_t tick);
+
+/**
+ * @brief This function gets the high resolution clock tick.
+ *
+ * @return The current high resolution tick.
+ *
+ * @note Platform implementation.
+ */
+extern mr_uint64_t mr_port_clock_hires_tick(void);
 
 /** @} */
 

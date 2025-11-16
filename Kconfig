@@ -1,6 +1,6 @@
-mainmenu "MR-X"
+mainmenu "mrX"
 
 # ==================================
 # RSOURCE
 # ==================================
-rsource "include/*/Kconfig"
+rsource "include/mrX/*/Kconfig"

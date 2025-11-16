@@ -90,13 +90,6 @@ mr_err_t mr_clock_hook_add(mr_clock_hook_t *entry);
 
 #if defined(MR_USE_CLOCK_HIRES)
 /**
- * @brief This function gets the high resolution clock tick.
- *
- * @return The current high resolution tick.
- */
-mr_hires_tick_t mr_clock_hires_tick(void);
-
-/**
  * @brief This function sets the high resolution clock tick.
  *
  * @param tick The high resolution tick.
@@ -104,14 +97,21 @@ mr_hires_tick_t mr_clock_hires_tick(void);
 void mr_clock_hires_tick_set(mr_hires_tick_t tick);
 
 /**
- * @brief This function converts the high resolution clock tick to timestamp.
+ * @brief This function gets the high resolution clock tick.
+ *
+ * @return The current high resolution tick.
+ */
+mr_hires_tick_t mr_clock_hires_tick(void);
+
+/**
+ * @brief This function converts the high resolution tick to timestamp.
  *
  * @param tick The high resolution tick.
  * @param time_zone The time zone(UTC + n).
  * @return The timestamp.
  */
-mr_hires_timestamp_t mr_clock_hires_tick2timestamp(mr_hires_tick_t tick,
-                                                   int time_zone);
+mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
+                                             int time_zone);
 #endif /* defined(MR_USE_CLOCK_HIRES) */
 
 /** @} */

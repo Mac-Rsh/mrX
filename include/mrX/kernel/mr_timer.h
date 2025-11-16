@@ -114,6 +114,17 @@ mr_err_t mr_timer_start(mr_timer_t *timer);
 mr_err_t mr_timer_stop(mr_timer_t *timer);
 
 /**
+ * @brief This function sets timer timing tick.
+ *
+ * @param timer The timer.
+ * @param tick The timing tick.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note If the timer is running, it will be stopped.
+ */
+mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick);
+
+/**
  * @brief This function gets timer timing tick.
  *
  * @param timer The timer.
@@ -127,17 +138,6 @@ MR_INLINE mr_tick_t mr_timer_tick(mr_timer_t *timer) {
     /* Return timer tick */
     return timer->itick;
 }
-
-/**
- * @brief This function sets timer timing tick.
- *
- * @param timer The timer.
- * @param tick The timing tick.
- * @return 0 on success, a negative error code on failure.
- *
- * @note If the timer is running, it will be stopped.
- */
-mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick);
 
 /**
  * @brief This function gets a timer.

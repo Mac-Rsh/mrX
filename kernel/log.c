@@ -17,13 +17,16 @@ static mr_uint32_t __level = 0xffffffffU;
 #if defined(MR_USE_CLOCK_HIRES)
 static void log_timestamp_print(void) {
     mr_hires_timestamp_t timestamp;
+    mr_hires_tick_t tick;
+
+    /* Get high resolution tick */
+    tick = mr_clock_hires_tick();
 
     /* Get high resolution timestamp */
 #if !defined(MR_CFG_LOG_TIME_ZONE)
 #define MR_CFG_LOG_TIME_ZONE            (8)
 #endif /* !defined(MR_CFG_LOG_TIME_ZONE) */
-    timestamp = mr_clock_hires_tick2timestamp(mr_clock_hires_tick(),
-                                              MR_CFG_LOG_TIME_ZONE);
+    timestamp = mr_hires_tick2timestamp(tick, MR_CFG_LOG_TIME_ZONE);
 
     /* Print timestamp */
     mr_printf("[%04d-%02d-%02d-%02d:%02d:%02d:%03d:%03d]", timestamp.year,

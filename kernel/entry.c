@@ -15,7 +15,7 @@ static void entry(void) {
     mr_kernel_init();
 }
 
-/* MR-X entry point */
+/* mrX entry point */
 #if defined(__ARMCC_VERSION)
 extern int $Super$$main(void);
 int $Sub$$main(void) {

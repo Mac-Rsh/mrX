@@ -14,7 +14,7 @@
  * @{
  */
 
-/* MR-X version definition */
+/* mrX version definition */
 #define MR_VERSION_MAJOR                (1U)
 #define MR_VERSION_MINOR                (0U)
 #define MR_VERSION_PATCH                (0U)

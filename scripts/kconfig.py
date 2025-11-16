@@ -39,7 +39,7 @@ class ConfigGenerator:
         # Set default values
         self.kconfig_path = kconfig_path or Path('Kconfig')
         self.config_path = config_path or Path('.config')
-        self.output_path = output_path or Path('include/mr_config.h')
+        self.output_path = output_path or Path('include/mrX/mr_config.h')
 
         # Setup logging
         logging.basicConfig(level=logging.INFO,
@@ -111,7 +111,7 @@ class ConfigGenerator:
         """
         parser = argparse.ArgumentParser(
             description="Generate configuration files from Kconfig.",
-            epilog="Example: python kconfig.py -k Kconfig -c .config -f include/mr_config.h"
+            epilog="Example: python kconfig.py -k Kconfig -c .config -f include/mrX/mr_config.h"
         )
         parser.add_argument(
             "-k", "--kconfig",
@@ -128,8 +128,8 @@ class ConfigGenerator:
         parser.add_argument(
             "-f", "--file",
             type=Path,
-            default=Path("include/mr_config.h"),
-            help="Output file (default: include/mr_config.h)"
+            default=Path("include/mrX/mr_config.h"),
+            help="Output file (default: include/mrX/mr_config.h)"
         )
         args = parser.parse_args()
         return cls(args.kconfig, args.config, args.file)

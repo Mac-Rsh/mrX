@@ -10,7 +10,8 @@
 #include <mrX/libc/mr_assert.h>
 #include <mrX/libc/mr_types.h>
 
-/* Kernel and user init status */
+/* Kernel and user init status(atomics may be soft-implemented and not yet
+ * initialize) */
 static volatile mr_bool_t __kstatus = MR_FALSE;
 static volatile mr_bool_t __ustatus = MR_FALSE;
 
@@ -33,11 +34,11 @@ void mr_kernel_init(void) {
         __kstatus = MR_TRUE;
     }
 
-#if defined(MR_USE_BOARD)
-    /* Init board */
-    extern void mr_board_init(void);
-    mr_board_init();
-#endif /* defined(MR_USE_BOARD) */
+#if defined(MR_USE_PLATFORM)
+    /* Init platform */
+    extern void mr_platform_init(void);
+    mr_platform_init();
+#endif /* defined(MR_USE_PLATFORM) */
 
 #if defined(MR_USE_MALLOC)
     /* Init malloc */
