@@ -34,8 +34,8 @@ static void queue_wakeup(mr_workqueue_t *queue) {
         return;
     }
 
-    /* Wakeup workqueue */
 #if defined(MR_USE_WORKQUEUE_HOOK)
+    /* Wakeup workqueue */
     if (queue->hook && queue->hook->wakeup) {
         queue->hook->wakeup(queue, queue->hook->param);
     }
@@ -179,8 +179,8 @@ static void queue_suspend(mr_workqueue_t *queue) {
         return;
     }
 
-    /* Suspend workqueue */
 #if defined(MR_USE_WORKQUEUE_HOOK)
+    /* Suspend workqueue */
     if (queue->hook && queue->hook->suspend) {
         queue->hook->suspend(queue, queue->hook->param);
     }

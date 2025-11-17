@@ -6,13 +6,11 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
+#include <mrX/port/mr_port_clock.h>
 #include <mrX/kernel/mr_clock.h>
 #include <mrX/kernel/mr_hook.h>
 #include <mrX/libc/mr_assert.h>
 #include <mrX/libc/mr_atomic.h>
-#if defined(MR_USE_CLOCK_HIRES)
-#include <mrX/port/mr_port_clock.h>
-#endif /* defined(MR_USE_CLOCK_HIRES) */
 
 /* Clock hook entry */
 #if !defined(MR_CFG_CLOCK_HOOK_SIZE)

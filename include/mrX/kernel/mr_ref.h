@@ -34,7 +34,7 @@ extern "C" {
 #endif /* defined(MR_USE_REF_LONG_COUNT) */
 
 /* Ref type */
-typedef volatile mr_atomic_t mr_ref_t;
+typedef volatile mr_atomic_t            mr_ref_t;
 
 /* Ref release type */
 typedef void(mr_ref_release_t)(mr_ref_t *ref);

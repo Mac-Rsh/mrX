@@ -76,7 +76,7 @@ MR_INLINE mr_atomic_t mr_atomic_load(volatile mr_atomic_t *atomic) {
 /**
  * @brief This function stores an atomic.
  *
- * @param atomic The atomic..
+ * @param atomic The atomic.
  * @param val The stored value.
  */
 MR_INLINE void mr_atomic_store(volatile mr_atomic_t *atomic, mr_atomic_t val) {
@@ -162,7 +162,7 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_add(volatile mr_atomic_t *atomic,
     /* Disable interrupt */
     mask = mr_port_irq_disable();
 
-    /* Fetch and add atomic */
+    /* Fetch and '+' atomic */
     tmp = *atomic;
     *atomic += val;
 
@@ -186,7 +186,7 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_sub(volatile mr_atomic_t *atomic,
     /* Disable interrupt */
     mask = mr_port_irq_disable();
 
-    /* Fetch and subtract atomic */
+    /* Fetch and '-' atomic */
     tmp = *atomic;
     *atomic -= val;
 
@@ -210,7 +210,7 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_and(volatile mr_atomic_t *atomic,
     /* Disable interrupt */
     mask = mr_port_irq_disable();
 
-    /* Fetch and and atomic */
+    /* Fetch and '&' atomic */
     tmp = *atomic;
     *atomic &= val;
 
@@ -234,7 +234,7 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_or(volatile mr_atomic_t *atomic,
     /* Disable interrupt */
     mask = mr_port_irq_disable();
 
-    /* Fetch and or atomic */
+    /* Fetch and '|' atomic */
     tmp = *atomic;
     *atomic |= val;
 
@@ -258,7 +258,7 @@ MR_INLINE mr_atomic_t mr_atomic_fetch_xor(volatile mr_atomic_t *atomic,
     /* Disable interrupt */
     mask = mr_port_irq_disable();
 
-    /* Fetch and xor atomic */
+    /* Fetch and '^' atomic */
     tmp = *atomic;
     *atomic ^= val;
 

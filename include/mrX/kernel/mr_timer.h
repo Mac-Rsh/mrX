@@ -90,20 +90,20 @@ mr_timer_t *mr_timer_create(mr_timer_entry_t *entry, void *param,
 mr_err_t mr_timer_del(mr_timer_t *timer);
 
 /**
- * @brief This function checks whether a timer is timing.
- *
- * @param timer The timer.
- * @return MR_TRUE on timing, MR_FALSE otherwise.
- */
-#define MR_TIMER_IS_TIMING(_timer)      (!mr_list_is_empty(&(_timer)->list))
-
-/**
  * @brief This function starts a timer.
  *
  * @param timer The timer.
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_timer_start(mr_timer_t *timer);
+
+/**
+ * @brief This function checks whether a timer is timing.
+ *
+ * @param timer The timer.
+ * @return MR_TRUE on timing, MR_FALSE otherwise.
+ */
+#define MR_TIMER_IS_TIMING(_timer)      (!mr_list_is_empty(&(_timer)->list))
 
 /**
  * @brief This function stops a timer.

@@ -90,14 +90,14 @@ mr_err_t mr_clock_hook_add(mr_clock_hook_t *entry);
 
 #if defined(MR_USE_CLOCK_HIRES)
 /**
- * @brief This function sets the high resolution clock tick.
+ * @brief This function sets the clock high resolution tick.
  *
  * @param tick The high resolution tick.
  */
 void mr_clock_hires_tick_set(mr_hires_tick_t tick);
 
 /**
- * @brief This function gets the high resolution clock tick.
+ * @brief This function gets the clock high resolution tick.
  *
  * @return The current high resolution tick.
  */

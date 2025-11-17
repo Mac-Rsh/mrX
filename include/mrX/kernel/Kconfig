@@ -35,7 +35,7 @@ config MR_CFG_HIRES_TICK_PER_SECOND
     depends on MR_USE_CLOCK_HIRES
     int "High resolution tick per-second"
     default 1000000
-    range 1 1000000
+    range MR_USE_CLOCK_HIRES 1000000
 
 # ==================================
 # PRINTF

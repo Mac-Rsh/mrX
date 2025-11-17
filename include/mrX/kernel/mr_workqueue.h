@@ -214,14 +214,6 @@ mr_work_t *mr_work_create(mr_work_entry_t *entry, void *param);
 mr_err_t mr_work_del(mr_work_t *work);
 
 /**
- * @brief This macro function checks if a work is running.
- *
- * @param _work The work.
- * @return MR_TRUE if the work is running, MR_FALSE otherwise.
- */
-#define MR_WORK_IS_RUNNING(_work)       (!mr_list_is_empty(&(_work)->list))
-
-/**
  * @brief This function schedules a work.
  *
  * @param work The work.
@@ -237,6 +229,14 @@ mr_err_t mr_work_schedule(mr_work_t *work);
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_work_delayed_schedule(mr_work_t *work, mr_tick_t tick);
+
+/**
+ * @brief This macro function checks if a work is running.
+ *
+ * @param _work The work.
+ * @return MR_TRUE if the work is running, MR_FALSE otherwise.
+ */
+#define MR_WORK_IS_RUNNING(_work)       (!mr_list_is_empty(&(_work)->list))
 
 /**
  * @brief This function cancels a work.

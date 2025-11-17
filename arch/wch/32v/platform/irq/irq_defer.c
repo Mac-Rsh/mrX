@@ -10,12 +10,6 @@
 #if defined(MR_USE_IRQ_DEFER_HOOK)
 #include <mrX/kernel/mr_irq.h>
 
-/* Irq defer hook */
-static void irq_defer_hook_suspend(void *param);
-static void irq_defer_hook_wakeup(void *param);
-static const mr_irq_defer_hook_t __hook
-    = {.suspend = irq_defer_hook_suspend, .wakeup = irq_defer_hook_wakeup};
-
 static void irq_defer_hook_suspend(void *priv) {
     MR_UNUSED(priv);
 
@@ -33,6 +27,9 @@ static void irq_defer_hook_wakeup(void *priv) {
 
 void mr_platform_irq_defer_init(void) {
 #if defined(MR_USE_IRQ_DEFER_HOOK)
+    const mr_irq_defer_hook_t __hook
+        = {.suspend = irq_defer_hook_suspend, .wakeup = irq_defer_hook_wakeup};
+
     /* Init irq defer hook */
     mr_irq_defer_hook_set(&__hook);
 

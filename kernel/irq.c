@@ -807,7 +807,7 @@ static void irq_dynamic_release(mr_object_t *obj) {
 
 void mr_kernel_irq_init(void) {
 #if defined(MR_USE_IRQ_DEFER_HOOK)
-    static const mr_workqueue_hook_t queue_hook
+    const mr_workqueue_hook_t queue_hook
         = {.wakeup = irq_workqueue_hook_wakeup,
            .suspend = irq_workqueue_hook_suspend,
            .param = &__hook};

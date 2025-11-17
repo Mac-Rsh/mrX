@@ -20,8 +20,8 @@
 
 static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
                            int prec, char eff, int base, mr_uint64_t num) {
-    static const char sdigits[] = "0123456789abcdef";
-    static const char ldigits[] = "0123456789ABCDEF";
+    const char sdigits[] = "0123456789abcdef";
+    const char ldigits[] = "0123456789ABCDEF";
     char fill, sign, tmp[64];
     const char *digits;
     int i;
