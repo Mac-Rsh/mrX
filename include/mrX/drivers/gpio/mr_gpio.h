@@ -198,8 +198,8 @@ MR_INLINE mr_err_t mr_gpio_del(mr_driver_t *drv) {
  * @param config The GPIO pin configuration.
  * @return 0 on success, a negative error code on failure.
  */
-mr_err_t mr_gpio_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
-                               const mr_gpio_config_t *config);
+mr_err_t mr_gpio_pin_configure(mr_driver_t *drv, mr_uint32_t pin,
+                               mr_gpio_config_t *config);
 
 /**
  * @brief This function gets a GPIO pin configuration.
@@ -209,7 +209,7 @@ mr_err_t mr_gpio_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
  * @param config The GPIO pin configuration.
  * @return 0 on success, a negative error code on failure.
  */
-mr_err_t mr_gpio_pin_configuration(const mr_driver_t *drv, mr_uint32_t pin,
+mr_err_t mr_gpio_pin_configuration(mr_driver_t *drv, mr_uint32_t pin,
                                    mr_gpio_config_t *config);
 
 /**
@@ -220,7 +220,7 @@ mr_err_t mr_gpio_pin_configuration(const mr_driver_t *drv, mr_uint32_t pin,
  * @param value The GPIO pin value.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_gpio_pin_write(const mr_driver_t *drv, mr_uint32_t pin,
+MR_INLINE mr_err_t mr_gpio_pin_write(mr_driver_t *drv, mr_uint32_t pin,
                                      mr_uint8_t value) {
     mr_gpio_data_t *gp_data;
     mr_gpio_ops_t *gp_ops;
@@ -252,7 +252,7 @@ MR_INLINE mr_err_t mr_gpio_pin_write(const mr_driver_t *drv, mr_uint32_t pin,
  * @param pin The GPIO pin.
  * @return The GPIO pin value on success, a negative error code on failure.
  */
-MR_INLINE int mr_gpio_pin_read(const mr_driver_t *drv, mr_uint32_t pin) {
+MR_INLINE int mr_gpio_pin_read(mr_driver_t *drv, mr_uint32_t pin) {
     mr_gpio_data_t *gp_data;
     mr_gpio_ops_t *gp_ops;
     mr_uint8_t value;
@@ -333,7 +333,7 @@ MR_INLINE mr_err_t mr_gpio_pin_output(mr_driver_t *drv, mr_uint32_t pin,
  * @param pin The GPIO pin.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_gpio_pin_toggle(const mr_driver_t *drv, mr_uint32_t pin) {
+MR_INLINE mr_err_t mr_gpio_pin_toggle(mr_driver_t *drv, mr_uint32_t pin) {
     mr_gpio_data_t *gp_data;
     mr_gpio_ops_t *gp_ops;
     mr_uint8_t value;
@@ -372,8 +372,7 @@ MR_INLINE mr_err_t mr_gpio_pin_toggle(const mr_driver_t *drv, mr_uint32_t pin) {
  * @param mask The GPIO port value mask.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_gpio_port_write(const mr_driver_t *drv,
-                                      mr_uint32_t mask) {
+MR_INLINE mr_err_t mr_gpio_port_write(mr_driver_t *drv, mr_uint32_t mask) {
     mr_gpio_data_t *gp_data;
     mr_gpio_ops_t *gp_ops;
 
@@ -398,8 +397,7 @@ MR_INLINE mr_err_t mr_gpio_port_write(const mr_driver_t *drv,
  * @param mask The GPIO port value mask.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_gpio_port_read(const mr_driver_t *drv,
-                                     mr_uint32_t *mask) {
+MR_INLINE mr_err_t mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask) {
     mr_gpio_data_t *gp_data;
     mr_gpio_ops_t *gp_ops;
     mr_err_t ret;
@@ -429,7 +427,7 @@ MR_INLINE mr_err_t mr_gpio_port_read(const mr_driver_t *drv,
  * @param drv The GPIO driver.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_gpio_port_toggle(const mr_driver_t *drv) {
+MR_INLINE mr_err_t mr_gpio_port_toggle(mr_driver_t *drv) {
     mr_gpio_ops_t *gp_ops;
     mr_uint32_t mask;
     mr_err_t ret;
@@ -547,15 +545,6 @@ MR_INLINE mr_bool_t mr_gpio_put(mr_driver_t *drv) {
     MR_HT_INST_DRIVER_INSTALL(                                                 \
         _id, MR_DRIVER_CLAZZES_STATIK(MR_DRIVER_CLAZZES_FIND(gpio)),           \
         MR_DRIVER_TYPE_GPIO, &__mr_gpio_data_##_id, _priv, _ops)
-
-/**
- * @brief This macro function installs all GPIO instances.
- *
- * @param _priv The GPIO private data.
- * @param _ops The GPIO operations.
- */
-#define MR_HT_GPIO_INSTALL_FOREACH(_priv, _ops)                                \
-    MR_HT_INST_DRIVER_FOREACH(MR_HT_INST_GPIO_INSTALL, _priv, _ops)
 #endif /* defined(MR_USE_DRIVER_HARDTREE) */
 #endif /* defined(MR_USE_DRIVER_GPIO) */
 

@@ -120,6 +120,14 @@ mr_err_t mr_waitable_complete(mr_waitable_t *able);
 mr_err_t mr_waitable_raise(mr_waitable_t *able, mr_uint32_t event);
 
 /**
+ * @brief This function cancels all waiters.
+ *
+ * @param able The waitable.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_waitable_cancel_all(mr_waitable_t *able);
+
+/**
  * @brief This function gets a waitable.
  *
  * @param able The waitable.

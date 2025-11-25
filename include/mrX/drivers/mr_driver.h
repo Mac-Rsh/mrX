@@ -193,9 +193,9 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
      .flags = MR_ATOMIC_INIT(0),                                               \
      .type = (_type),                                                          \
      .state = 0,                                                               \
-     .data = (_data),                                                          \
-     .priv = (_priv),                                                          \
-     .ops = (_ops)}
+     .data = (mr_ptr_t)(_data),                                                \
+     .priv = (mr_ptr_t)(_priv),                                                \
+     .ops = (mr_ptr_t)(_ops)}
 
 /**
  * @brief This macro function defines a driver.
@@ -309,6 +309,14 @@ mr_driver_t *mr_driver_create(const mr_driver_clazz_t *dclazz, mr_uint16_t type,
  * @return The private data.
  */
 #define MR_DRIVER_DATA(_drv)            ((void *)((mr_driver_t *)(_drv))->data)
+
+/**
+ * @brief This macro function gets the private data.
+ *
+ * @param _drv The driver.
+ * @return The private data.
+ */
+#define MR_DRIVER_PRIV(_drv)            ((void *)((mr_driver_t *)(_drv))->priv)
 
 /**
  * @brief This macro function gets the private operations.

@@ -77,6 +77,16 @@ extern "C" {
 #define MR_ALIGN_DOWN(_x, _ali)         ((_x) & ~((_ali) - 1))
 
 /**
+ * @brief This macro function performs integer division with rounding.
+ *
+ * @param _a The dividend.
+ * @param _b The divisor.
+ * @return The rounded quotient.
+ */
+#define MR_ROUND_DIV(_a, _b)                                                   \
+    (((_a) + ((((_a) ^ (_b)) >= 0) ? (_b) : -(_b)) / 2) / (_b))
+
+/**
  * @brief This macro function makes a local variable.
  *
  * @param _type The local variable type.

@@ -56,7 +56,7 @@ static void test_clock_hires_tick(void) {
     initial_tick = mr_clock_hires_tick();
     mr_clock_hires_tick_set(initial_tick + 10000);
     current_tick = mr_clock_hires_tick();
-    MR_TEST_ASSERT_NEAR(current_tick, initial_tick, 10);
+    MR_TEST_ASSERT_NEAR(current_tick, initial_tick + 10000, 10);
 }
 MR_TEST_EXPORT(clock, hires_tick, test_clock_hires_tick);
 

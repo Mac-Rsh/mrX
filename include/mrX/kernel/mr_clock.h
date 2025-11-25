@@ -26,7 +26,7 @@ extern "C" {
 #define MR_CFG_TICK_PER_SECOND          (1000U)
 #endif /* !defined(MR_CFG_TICK_PER_SECOND) */
 
-/* Clock type */
+/* Clock tick type */
 typedef mr_uint32_t                     mr_tick_t;
 #define MR_TICK_MAX                     MR_UINT32_MAX
 
@@ -55,6 +55,10 @@ typedef struct mr_hires_timestamp {
     mr_uint16_t microsecond;
 } mr_hires_timestamp_t;
 #endif /* defined(MR_USE_CLOCK_HIRES) */
+
+/* Clock uptime type */
+typedef mr_uint64_t                     mr_uptime_t;
+#define MR_UPTIME_MAX                   MR_UINT64_MAX
 
 /* Clock hook type */
 typedef mr_tick_t(mr_clock_hook_t)(void);
@@ -113,6 +117,13 @@ mr_hires_tick_t mr_clock_hires_tick(void);
 mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
                                              int time_zone);
 #endif /* defined(MR_USE_CLOCK_HIRES) */
+
+/**
+ * @brief This function gets the clock uptime.
+ *
+ * @return The current uptime.
+ */
+mr_uptime_t mr_clock_uptime(void);
 
 /** @} */
 

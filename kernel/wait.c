@@ -22,7 +22,7 @@ static void wait_statik_release(mr_object_t *obj);
 MR_CLAZZES_DEFINE(waiter, wait_statik_release, wait_dynamic_release);
 
 /* Wait lock */
-static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
+static mr_spinlock_t __wait_lock = MR_SPINLOCK_INIT();
 
 /* Wait event mask definition */
 #define WAIT_TYPE_MASK                  (0x70000000U)
@@ -74,12 +74,12 @@ mr_waitable_t *mr_waitable_create(mr_waitable_check_t *check, void *param) {
     return able;
 }
 
-static void waitable_remove(mr_waitable_t *able) {
+static void waitable_cancel_all(mr_waitable_t *able) {
     mr_waiter_t *waiter;
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__wait_lock);
 
     /* Clear waiting list */
     while (!mr_list_is_empty(&able->list)) {
@@ -90,7 +90,7 @@ static void waitable_remove(mr_waitable_t *able) {
     }
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__wait_lock, mask);
 }
 
 mr_err_t mr_waitable_del(mr_waitable_t *able) {
@@ -99,7 +99,7 @@ mr_err_t mr_waitable_del(mr_waitable_t *able) {
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(able, waitable));
 
     /* Remove waitable */
-    waitable_remove(able);
+    waitable_cancel_all(able);
 
     /* Delete object */
     mr_object_del((mr_object_t *)able);
@@ -155,7 +155,7 @@ static void waitable_handle(mr_waitable_t *able, mr_uint32_t event) {
     mr_list_init(&oplist);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__wait_lock);
 
     /* Get edge and level event */
     event_edge = event & ~able->last;
@@ -187,17 +187,17 @@ static void waitable_handle(mr_waitable_t *able, mr_uint32_t event) {
         param = (void *)waiter->param;
 
         /* Unlock */
-        mr_spinlock_unlock_irqrestore(&__lock, mask);
+        mr_spinlock_unlock_irqrestore(&__wait_lock, mask);
 
         /* Call waiter entry */
         entry(waiter, param, event);
 
         /* Lock */
-        mask = mr_spinlock_lock_irqsave(&__lock);
+        mask = mr_spinlock_lock_irqsave(&__wait_lock);
     }
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__wait_lock, mask);
 }
 
 mr_err_t mr_waitable_complete(mr_waitable_t *able) {
@@ -230,6 +230,16 @@ mr_err_t mr_waitable_raise(mr_waitable_t *able, mr_uint32_t event) {
     return 0;
 }
 
+mr_err_t mr_waitable_cancel_all(mr_waitable_t *able) {
+    /* Check parameter */
+    MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(able, waitable));
+
+    /* Cancel all waiters */
+    waitable_cancel_all(able);
+    return 0;
+}
+
 static void able_statik_release(mr_object_t *obj) {
     mr_waitable_t *waitable;
 
@@ -237,7 +247,7 @@ static void able_statik_release(mr_object_t *obj) {
     waitable = MR_CONTAINER_OF(obj, mr_waitable_t, parent);
 
     /* Remove waitable */
-    waitable_remove(waitable);
+    waitable_cancel_all(waitable);
 }
 
 static void able_dynamic_release(mr_object_t *obj) {
@@ -302,13 +312,13 @@ static void waiter_remove(mr_waiter_t *wait) {
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__wait_lock);
 
     /* Remove waiter from waiting list */
     mr_list_del(&wait->list);
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__wait_lock, mask);
 }
 
 mr_err_t mr_waiter_del(mr_waiter_t *wait) {
@@ -338,7 +348,7 @@ mr_err_t mr_waiter_wait(mr_waiter_t *wait, mr_waitable_t *able) {
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(able, waitable));
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__wait_lock);
 
     /* Check if waiter is waiting */
     if (MR_WAITER_IS_WAITING(wait)) {
@@ -357,7 +367,7 @@ mr_err_t mr_waiter_wait(mr_waiter_t *wait, mr_waitable_t *able) {
     }
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__wait_lock, mask);
 
     /* Get waitable event */
     event = waitable_check(able);
@@ -381,7 +391,7 @@ mr_err_t mr_waiter_wait(mr_waiter_t *wait, mr_waitable_t *able) {
     return 0;
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__wait_lock, mask);
     return ret;
 }
 
@@ -404,7 +414,7 @@ mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint32_t event) {
     MR_ASSERT((event & WAIT_TYPE_MASK) != 0);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__wait_lock);
 
     /* Remove waiter from waiting list */
     mr_list_del(&wait->list);
@@ -413,7 +423,7 @@ mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint32_t event) {
     wait->event = event;
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__wait_lock, mask);
     return 0;
 }
 

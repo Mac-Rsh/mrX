@@ -8,9 +8,8 @@
 
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#include "mrX/libc/mr_string.h"
-
 #include <mrX/kernel/mr_fifo.h>
+#include <mrX/libc/mr_string.h>
 
 typedef struct {
     int id;

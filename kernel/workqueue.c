@@ -22,7 +22,7 @@ static void work_statik_release(mr_object_t *obj);
 MR_CLAZZES_DEFINE(work, work_statik_release, work_dynamic_release);
 
 /* Workqueue lock */
-static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
+static mr_spinlock_t __work_lock = MR_SPINLOCK_INIT();
 
 static void queue_wakeup(mr_workqueue_t *queue) {
     mr_atomic_t last;
@@ -57,7 +57,7 @@ static void queue_timer_entry(mr_timer_t *timer, void *param) {
     }
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__work_lock);
 
     /* Check timeout work */
     for (tickless = 0, tick = mr_clock_tick();
@@ -88,7 +88,7 @@ static void queue_timer_entry(mr_timer_t *timer, void *param) {
     }
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 
     /* Wakeup workqueue */
     queue_wakeup(queue);
@@ -211,7 +211,7 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
     mr_list_init(&oplist);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__work_lock);
 
     /* Replace the running list with the operation list (to prevent node removal
      * in the middle) */
@@ -232,17 +232,17 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
         param = (void *)work->param;
 
         /* Unlock */
-        mr_spinlock_unlock_irqrestore(&__lock, mask);
+        mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 
         /* Call work entry */
         entry(work, param);
 
         /* Lock */
-        mask = mr_spinlock_lock_irqsave(&__lock);
+        mask = mr_spinlock_lock_irqsave(&__work_lock);
     }
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 
     /* Suspend workqueue */
     queue_suspend(queue);
@@ -265,7 +265,7 @@ mr_err_t mr_workqueue_work(mr_workqueue_t *queue, mr_work_t *work) {
     }
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__work_lock);
 
     /* Check if work is running */
     if (MR_WORK_IS_RUNNING(work)) {
@@ -278,14 +278,14 @@ mr_err_t mr_workqueue_work(mr_workqueue_t *queue, mr_work_t *work) {
     work->queue = queue;
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 
     /* Wakeup workqueue */
     queue_wakeup(queue);
     return 0;
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__work_lock, mask);
     return ret;
 }
 
@@ -315,7 +315,7 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
     }
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__work_lock);
 
     /* Check if work is running */
     if (MR_WORK_IS_RUNNING(work)) {
@@ -357,7 +357,7 @@ _set:
     ret = 0;
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__work_lock, mask);
     return ret;
 }
 
@@ -372,7 +372,7 @@ static void queue_del(mr_workqueue_t *queue) {
     mr_timer_del(&queue->timer);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__work_lock);
 
     /* Remove work from workqueue timing list */
     while (!mr_list_is_empty(&queue->tlist)) {
@@ -387,7 +387,7 @@ static void queue_del(mr_workqueue_t *queue) {
     }
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 }
 
 static void queue_statik_release(mr_object_t *obj) {
@@ -518,13 +518,13 @@ static void work_remove(mr_work_t *work) {
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__work_lock);
 
     /* Remove work from running list */
     mr_list_del(&work->list);
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 }
 
 mr_err_t mr_work_cancel(mr_work_t *work) {

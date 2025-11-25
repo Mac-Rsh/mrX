@@ -11,9 +11,9 @@
 #include <mrX/libc/mr_malloc.h>
 
 /* Fifo align macro function */
+#define FIFO_ALIGN_POW2_DOWN(_size)     (1U << (mr_fls32(_size) - 1))
 #define FIFO_ALIGN_POW2_UP(_size)                                              \
     (((_size) & ((_size) - 1)) ? (1U << mr_fls32(_size)) : (_size))
-#define FIFO_ALIGN_POW2_DOWN(_size)     (1U << (mr_fls32(_size) - 1))
 
 mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
                          mr_uint32_t elemsz) {

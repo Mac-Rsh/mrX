@@ -8,11 +8,8 @@
 
 #include <mrX/platform/mr_platform.h>
 #if defined(MR_USE_CLOCK_HIRES)
-#include <mrX/kernel/mr_spinlock.h>
 #include <mrX/kernel/mr_clock.h>
 
-/* High resolution clock lock */
-static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
 /* High resolution clock coarse tick */
 static mr_uint64_t __hires_coarse_tick = 0;
 
@@ -23,29 +20,19 @@ static mr_uint64_t __hires_coarse_tick = 0;
 
 void SysTick_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void SysTick_Handler(void) {
-    int mask;
-
     /* Clear the interrupt */
     SysTick->SR &= ~(1 << 0);
 
 #if defined(MR_USE_CLOCK_HIRES)
-    /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
-
-    /* Increase hires coarse tick */
+    /* Increase coarse tick */
     __hires_coarse_tick += HIRES_COARSE_INTERVAL;
-
-    /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
-#else
-    MR_UNUSED(mask);
 #endif /* defined(MR_USE_CLOCK_HIRES) */
 
     /* Increase clock */
     mr_clock_increase(1);
 }
 
-void mr_platform_clock_init(mr_uint32_t per_second) {
+void ch32_platform_clock_init(mr_uint32_t per_second) {
     /* Init systick */
     SysTick->CTLR = 0;
     SysTick->CMP = (SystemCoreClock / per_second) - 1;
@@ -63,43 +50,52 @@ void mr_platform_clock_init(mr_uint32_t per_second) {
 
 #if defined(MR_USE_CLOCK_HIRES)
 mr_uint64_t mr_port_clock_hires_tick(void) {
-    mr_uint64_t thin_tick, hires_tick;
-    int mask;
+    mr_uint64_t thin, coarse, coarse2, hires;
+    mr_uint32_t retry;
 
-    /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    /* Get current coarse tick */
+    coarse = __hires_coarse_tick;
 
-    /* Get high resolution clock thin tick */
-    thin_tick = SysTick->CNT * HIRES_COARSE_INTERVAL;
-    thin_tick /= SysTick->CMP;
+    /* Dual sampling */
+    for (retry = 5; retry > 0; retry--) {
+        /* Get current thin tick */
+        thin = SysTick->CNT * HIRES_COARSE_INTERVAL;
+        thin /= SysTick->CMP;
 
-    /* Get high resolution clock tick */
-    hires_tick = __hires_coarse_tick + thin_tick;
+        /* Calculate high resolution tick */
+        hires = coarse + thin;
 
-    /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
-    return hires_tick;
+        /* Check if coarse tick is updated */
+        coarse2 = __hires_coarse_tick;
+        if (coarse2 != coarse) {
+            /* Retry */
+            coarse = coarse2;
+            continue;
+        }
+
+        /* No updated */
+        break;
+    }
+    return hires;
 }
 
 void mr_port_clock_hires_tick_set(mr_uint64_t tick) {
-    mr_uint64_t thin_tick, coarse_tick;
-    int mask;
+    mr_uint64_t thin, coarse;
 
-    /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    /* Stop systick */
+    SysTick->CTLR = 0;
 
-    /* Set high resolution clock thin & coarse tick */
-    thin_tick = tick % HIRES_COARSE_INTERVAL;
-    coarse_tick = tick - thin_tick;
-    thin_tick *= SysTick->CMP;
-    thin_tick += (HIRES_COARSE_INTERVAL / 2);
-    thin_tick /= HIRES_COARSE_INTERVAL;
-    SysTick->CNT = thin_tick;
+    /* Set thin tick */
+    thin = tick % HIRES_COARSE_INTERVAL;
+    coarse = tick - thin;
+    thin = (thin * SysTick->CMP) + (HIRES_COARSE_INTERVAL / 2);
+    thin /= HIRES_COARSE_INTERVAL;
+    SysTick->CNT = thin;
 
-    /* Set hires coarse tick */
-    __hires_coarse_tick = coarse_tick;
+    /* Set coarse tick */
+    __hires_coarse_tick = coarse;
 
-    /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    /* Start systick */
+    SysTick->CTLR = 0xf;
 }
 #endif /* defined(MR_USE_CLOCK_HIRES) */

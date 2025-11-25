@@ -11,10 +11,10 @@
 
 void mr_platform_init(void) {
     /* Init platform clock */
-    extern void mr_platform_clock_init(mr_uint32_t per_second);
-    mr_platform_clock_init(MR_CFG_TICK_PER_SECOND);
+    extern void ch32_platform_clock_init(mr_uint32_t per_second);
+    ch32_platform_clock_init(MR_CFG_TICK_PER_SECOND);
 
     /* Init platform irq defer */
-    extern void mr_platform_irq_defer_init(void);
-    mr_platform_irq_defer_init();
+    extern void ch32_platform_irq_defer_init(void);
+    ch32_platform_irq_defer_init();
 }

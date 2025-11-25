@@ -12,7 +12,7 @@
 #include <mrX/kernel/mr_clock.h>
 
 /* Log level mask */
-static mr_uint32_t __level = 0xffffffffU;
+static mr_uint32_t __log_level = 0xffffffffU;
 
 #if defined(MR_USE_CLOCK_HIRES)
 static void log_timestamp_print(void) {
@@ -35,13 +35,19 @@ static void log_timestamp_print(void) {
 }
 #else
 static void log_timestamp_print(void) {
-    mr_tick_t tick;
+    mr_uint32_t millisecond;
+    mr_uptime_t uptime;
+    mr_uint64_t second;
 
-    /* Get relative timestamp */
-    tick = mr_clock_tick();
+    /* Get clock uptime */
+    uptime = mr_clock_uptime();
+
+    /* Microsecond ~ second */
+    millisecond = (mr_uint32_t)(uptime % 1000);
+    second = (mr_uint64_t)uptime / 1000;
 
     /* Print timestamp */
-    mr_printf("[%10u]", tick);
+    mr_printf("[%9llu.%03u]", second, millisecond);
 }
 #endif /* defined(MR_USE_CLOCK_HIRES) */
 
@@ -54,7 +60,7 @@ void mr_log(mr_uint32_t level, const char *fmt, ...) {
     }
 
     /* Check if log level is enabled */
-    if (!((1U << level) & __level)) {
+    if (!((1U << level) & __log_level)) {
         /* Output is disabled */
         return;
     }
@@ -70,11 +76,11 @@ void mr_log(mr_uint32_t level, const char *fmt, ...) {
 
 void mr_log_mask_set(mr_uint32_t mask) {
     /* Set log level mask */
-    __level = mask;
+    __log_level = mask;
 }
 
 mr_uint32_t mr_log_mask(void) {
     /* Get log level mask */
-    return __level;
+    return __log_level;
 }
 #endif /* defined(MR_USE_LOG) */

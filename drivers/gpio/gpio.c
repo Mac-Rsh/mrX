@@ -17,8 +17,8 @@ static mr_err_t gpio_dynamic_deinit(const mr_driver_t *drv);
 MR_DRIVER_CLAZZES_DEFINE(gpio, gpio_init, gpio_statik_deinit,
                          gpio_dynamic_deinit);
 
-mr_err_t mr_gpio_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
-                                const mr_gpio_config_t *config) {
+mr_err_t mr_gpio_pin_configure(mr_driver_t *drv, mr_uint32_t pin,
+                               mr_gpio_config_t *config) {
     mr_gpio_data_t *gp_data;
     mr_gpio_ops_t *gp_ops;
     mr_uint8_t value;
@@ -54,8 +54,8 @@ mr_err_t mr_gpio_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
     return 0;
 }
 
-mr_err_t mr_gpio_pin_configuration(const mr_driver_t *drv, mr_uint32_t pin,
-                                mr_gpio_config_t *config) {
+mr_err_t mr_gpio_pin_configuration(mr_driver_t *drv, mr_uint32_t pin,
+                                   mr_gpio_config_t *config) {
     mr_gpio_data_t *gp_data;
     mr_gpio_ops_t *gp_ops;
 

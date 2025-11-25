@@ -10,6 +10,14 @@
 #if defined(MR_USE_IRQ_DEFER_HOOK)
 #include <mrX/kernel/mr_irq.h>
 
+void SW_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void SW_Handler(void) {
+#if defined(MR_USE_IRQ_DEFER)
+    /* Execute irq defer */
+    mr_irq_defer_execute();
+#endif /* defined(MR_USE_IRQ_DEFER) */
+}
+
 static void irq_defer_hook_suspend(void *priv) {
     MR_UNUSED(priv);
 
@@ -25,9 +33,9 @@ static void irq_defer_hook_wakeup(void *priv) {
 }
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 
-void mr_platform_irq_defer_init(void) {
+void ch32_platform_irq_defer_init(void) {
 #if defined(MR_USE_IRQ_DEFER_HOOK)
-    const mr_irq_defer_hook_t __hook
+    static const mr_irq_defer_hook_t __hook
         = {.suspend = irq_defer_hook_suspend, .wakeup = irq_defer_hook_wakeup};
 
     /* Init irq defer hook */

@@ -17,9 +17,9 @@ static void timer_dynamic_release(mr_object_t *obj);
 MR_CLAZZES_DEFINE(timer, timer_statik_release, timer_dynamic_release);
 
 /* Timer timing list */
-static mr_list_t __tlist = MR_LIST_INIT(&__tlist);
+static mr_list_t __timer_list = MR_LIST_INIT(&__timer_list);
 /* Timer lock */
-static mr_spinlock_t __lock = MR_SPINLOCK_INIT();
+static mr_spinlock_t __timer_lock = MR_SPINLOCK_INIT();
 
 static mr_err_t timer_init(mr_timer_t *timer, const mr_clazz_t *clazz,
                            mr_ptr_t entry, mr_ptr_t param, mr_tick_t tick) {
@@ -75,13 +75,13 @@ static void timer_remove(mr_timer_t *timer) {
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__timer_lock);
 
     /* Remove timer from timing list */
     mr_list_del(&timer->list);
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__timer_lock, mask);
 }
 
 mr_err_t mr_timer_del(mr_timer_t *timer) {
@@ -107,7 +107,7 @@ static void timer_insert(mr_timer_t *timer) {
     timer->ttick = mr_clock_tick() + tick;
 
     /* Insert timer into timing list */
-    MR_LIST_FOR_EACH(l, &__tlist) {
+    MR_LIST_FOR_EACH(l, &__timer_list) {
         t = MR_LIST_ENTRY(l, mr_timer_t, list);
 
         /* Compare timeout tick */
@@ -121,7 +121,7 @@ static void timer_insert(mr_timer_t *timer) {
     }
 
     /* It is the last timer */
-    mr_list_move(&timer->list, &__tlist);
+    mr_list_move(&timer->list, &__timer_list);
 }
 
 mr_err_t mr_timer_start(mr_timer_t *timer) {
@@ -132,13 +132,13 @@ mr_err_t mr_timer_start(mr_timer_t *timer) {
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(timer, timer));
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__timer_lock);
 
     /* Insert timer */
     timer_insert(timer);
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__timer_lock, mask);
     return 0;
 }
 
@@ -161,7 +161,7 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
     MR_ASSERT(tick > 0);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__timer_lock);
 
     /* Remove timer from timing list */
     mr_list_del(&timer->list);
@@ -170,7 +170,7 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
     timer->itick = tick;
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
+    mr_spinlock_unlock_irqrestore(&__timer_lock, mask);
     return 0;
 }
 
@@ -193,7 +193,7 @@ static void timer_dynamic_release(mr_object_t *obj) {
 }
 
 static mr_tick_t timer_timeout_check(void) {
-    mr_tick_t tickless, tick;
+    mr_tick_t tless, tick;
     mr_timer_entry_t *entry;
     mr_timer_t *timer;
     mr_list_t oplist;
@@ -204,16 +204,16 @@ static mr_tick_t timer_timeout_check(void) {
     mr_list_init(&oplist);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__lock);
+    mask = mr_spinlock_lock_irqsave(&__timer_lock);
 
     /* Check timeout timer */
-    for (tickless = 0, tick = mr_clock_tick(); !mr_list_is_empty(&__tlist);) {
-        timer = MR_LIST_ENTRY(__tlist.next, mr_timer_t, list);
+    for (tless = 0, tick = mr_clock_tick(); !mr_list_is_empty(&__timer_list);) {
+        timer = MR_LIST_ENTRY(__timer_list.next, mr_timer_t, list);
 
         /* Check timeout tick */
         if ((tick - timer->ttick) >= (MR_TICK_MAX / 2)) {
             /* There will be no timeout timer after that */
-            tickless = timer->ttick - tick;
+            tless = timer->ttick - tick;
             break;
         }
 
@@ -225,13 +225,13 @@ static mr_tick_t timer_timeout_check(void) {
         param = (void *)timer->param;
 
         /* Unlock */
-        mr_spinlock_unlock_irqrestore(&__lock, mask);
+        mr_spinlock_unlock_irqrestore(&__timer_lock, mask);
 
         /* Call timer entry */
         entry(timer, param);
 
         /* Lock */
-        mask = mr_spinlock_lock_irqsave(&__lock);
+        mask = mr_spinlock_lock_irqsave(&__timer_lock);
 
         /* Check that the timer has not been moved */
         if (mr_list_is_empty(&oplist)) {
@@ -247,8 +247,8 @@ static mr_tick_t timer_timeout_check(void) {
     }
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__lock, mask);
-    return tickless;
+    mr_spinlock_unlock_irqrestore(&__timer_lock, mask);
+    return tless;
 }
 
 void mr_kernel_timer_init(void) {

@@ -57,10 +57,10 @@ typedef struct mr_heap_info {
     mr_size_t free_bytes;
     mr_size_t fail_count;
     mr_size_t frag_num;
-    /* Full */
+    /* Full(‰) */
     mr_size_t max_free_bytes;
-    mr_f32_t disp_ratio_kb;
-    mr_f32_t frag_ratio;
+    mr_size_t disp_kb_ratio;
+    mr_size_t frag_ratio;
 } mr_heap_info_t;
 #endif /* defined(MR_USE_MALLOC) */
 

@@ -7,13 +7,12 @@
  */
 
 #include <mrX/kernel/mr_initcall.h>
-#include <mrX/libc/mr_assert.h>
 #include <mrX/libc/mr_types.h>
 
 /* Kernel and user init status(atomics may be soft-implemented and not yet
  * initialize) */
-static volatile mr_bool_t __kstatus = MR_FALSE;
-static volatile mr_bool_t __ustatus = MR_FALSE;
+static volatile mr_bool_t __initcall_kstatus = MR_FALSE;
+static volatile mr_bool_t __initcall_ustatus = MR_FALSE;
 
 static void start(void) {
     /* User init start */
@@ -27,11 +26,11 @@ MR_INIT_EXPORT(end, "9.end");
 
 void mr_kernel_init(void) {
     /* Check kernel init status */
-    if (__kstatus) {
+    if (__initcall_kstatus) {
         /* Kernel already init */
         return;
     } else {
-        __kstatus = MR_TRUE;
+        __initcall_kstatus = MR_TRUE;
     }
 
 #if defined(MR_USE_PLATFORM)
@@ -67,17 +66,15 @@ void mr_user_init(void) {
     mr_kernel_init();
 
     /* Check user init status */
-    if (__ustatus) {
+    if (__initcall_ustatus) {
         /* User already init */
         return;
     } else {
-        __ustatus = MR_TRUE;
+        __initcall_ustatus = MR_TRUE;
     }
 
     /* Each init calls */
     for (call = start; call <= end; call++) {
-        MR_ASSERT(call->entry != MR_NULL);
-
         /* Call init call entry */
         call->entry();
     }

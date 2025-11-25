@@ -7,27 +7,24 @@
  */
 
 #include <mrX/platform/mr_platform.h>
-#include <mrX/libc/mr_compiler.h>
-
-/* Irq nest counter */
-static volatile int __irq_nest = 0;
 
 int mr_port_irq_disable(void) {
-    /* Disable interrupt */
-    __disable_irq();
+    int mask;
 
-    /* Increment irq nest */
-    return (++__irq_nest);
+#if defined(MR_USE_WCH_SERIES_V00X)
+    asm("csrrw %0, mstatus, %1":"=r"(mask):"r"(0x1880));
+#elif defined(MR_USE_WCH_SERIES_V10X)
+    asm("csrrw %0, mstatus, %1":"=r"(mask):"r"(0x1800));
+#elif defined(MR_USE_WCH_SERIES_V20X)
+    asm("csrrw %0, mstatus, %1":"=r"(mask):"r"(0x1800));
+#elif defined(MR_USE_WCH_SERIES_V30X)
+    asm("csrrw %0, mstatus, %1":"=r"(mask):"r"(0x7800));
+#else
+#error "Series not supported, please select a series"
+#endif /* defined(MR_USE_WCH_SERIES_V00X) */
+    return mask;
 }
 
 void mr_port_irq_enable(int mask) {
-    MR_UNUSED(mask);
-
-    /* Decrement irq nest */
-    if ((--__irq_nest) > 0) {
-        return;
-    }
-
-    /* Enable interrupt */
-    __enable_irq();
+    asm("csrw mstatus, %0": :"r"(mask));
 }

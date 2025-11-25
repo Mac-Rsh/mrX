@@ -20,7 +20,7 @@
 #endif /* MR_CFG_HEAP_SIZE */
 static mr_uint8_t MR_ALIGN(MR_ALIGN_SIZE) __heap[MR_CFG_HEAP_SIZE];
 /* Heap block head */
-static mr_heap_block_t __blk_head = {.next = MR_NULL};
+static mr_heap_block_t __heap_blk_head = {.next = MR_NULL};
 /* Heap information */
 static mr_heap_info_t __heap_info;
 
@@ -34,7 +34,7 @@ static void heap_insert_block(mr_heap_block_t *blk) {
     void *merge;
 
     /* Search for the previous block */
-    for (prev = &__blk_head; prev->next; prev = prev->next) {
+    for (prev = &__heap_blk_head; prev->next; prev = prev->next) {
         if (prev->next < blk) {
             continue;
         }
@@ -92,7 +92,7 @@ void *mr_malloc(mr_size_t size) {
     mask = mr_port_irq_disable();
 
     /* Check if the heap is empty */
-    prev = &__blk_head;
+    prev = &__heap_blk_head;
     if (!prev->next) {
         mem = MR_NULL;
         goto _exit;
@@ -301,7 +301,7 @@ static void heap_information_full_update(mr_heap_info_t *info) {
     mr_heap_block_t *blk;
 
     /* Get the full information */
-    for (free_max = 0, free_cnt = 0, blk = __blk_head.next; blk;
+    for (free_max = 0, free_cnt = 0, blk = __heap_blk_head.next; blk;
          blk = blk->next) {
         if (blk->size > free_max) {
             free_max = blk->size;
@@ -309,10 +309,14 @@ static void heap_information_full_update(mr_heap_info_t *info) {
         free_cnt++;
     }
     if (info->free_bytes > 0) {
-        info->disp_ratio_kb
-            = ((mr_f32_t)free_cnt * 1024.0f) / (mr_f32_t)info->free_bytes;
-        info->frag_ratio
-            = 1.0f - ((mr_f32_t)free_max / (mr_f32_t)info->free_bytes);
+        info->disp_kb_ratio = (free_cnt * 102400U) / info->free_bytes;
+        if (info->disp_kb_ratio > 1000U) {
+            info->disp_kb_ratio = 1000U;
+        }
+        info->frag_ratio = 1000U - (free_max * 1000U / info->free_bytes);
+    } else {
+        info->disp_kb_ratio = 0U;
+        info->frag_ratio = 0U;
     }
     info->max_free_bytes = free_max;
 }
@@ -345,7 +349,7 @@ void mr_libc_malloc_init(void) {
     blk = heap_block_make(__heap, sizeof(__heap));
 
     /* Insert the first block */
-    __blk_head.next = blk;
-    __blk_head.size = 0;
+    __heap_blk_head.next = blk;
+    __heap_blk_head.size = 0;
 }
 #endif /* defined(MR_USE_MALLOC) */

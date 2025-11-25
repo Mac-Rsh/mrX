@@ -11,18 +11,21 @@ config MR_USE_PLATFORM
 # ==================================
 choice
     prompt "Series"
-    default MR_USE_SERIES_V30X
+    default MR_USE_WCH_SERIES_XXX
 
-    config MR_USE_SERIES_V00X
+    config MR_USE_WCH_SERIES_XXX
+        bool "XXX"
+
+    config MR_USE_WCH_SERIES_V00X
         bool "V00X"
 
-    config MR_USE_SERIES_V10X
+    config MR_USE_WCH_SERIES_V10X
         bool "V10X"
 
-    config MR_USE_SERIES_V20X
+    config MR_USE_WCH_SERIES_V20X
         bool "V20X"
 
-    config MR_USE_SERIES_V30X
+    config MR_USE_WCH_SERIES_V30X
         bool "V30X"
 endchoice
 
