@@ -254,6 +254,27 @@ mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
                                     void **buf, mr_uint32_t want);
 
 /**
+ * @brief This function finishes a buffer claimed by mr_fifo_overwrite_claim().
+ *
+ * @param fifo The fifo.
+ * @param num The element number.
+ * @return The actual written element number.
+ */
+MR_INLINE mr_uint32_t mr_fifo_overwrite_finish(mr_fifo_t *fifo,
+                                               mr_uint32_t num) {
+    mr_uint32_t avail;
+
+    /* Finish buffer */
+    num = MR_MIN(num, mr_fifo_size(fifo));
+    avail = mr_fifo_avail(fifo);
+    if (avail < num) {
+        mr_atomic_fetch_add(&fifo->ridx, (mr_atomic_t)(num - avail));
+    }
+    mr_atomic_fetch_add(&fifo->widx, (mr_atomic_t)num);
+    return num;
+}
+
+/**
  * @brief This function claims a buffer to read from a fifo.
  *
  * @param fifo The fifo.

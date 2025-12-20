@@ -28,6 +28,7 @@
 #include <mrX/kernel/mr_printf.h>
 #include <mrX/kernel/mr_ref.h>
 #include <mrX/kernel/mr_service.h>
+#include <mrX/kernel/mr_slab.h>
 #include <mrX/kernel/mr_spinlock.h>
 #include <mrX/kernel/mr_timer.h>
 #include <mrX/kernel/mr_version.h>

@@ -95,12 +95,12 @@ mr_hires_tick_t mr_clock_hires_tick(void) {
 
 mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
                                              int time_zone) {
+    const mr_uint64_t tick_correct
+        = MR_ROUND_DIV(1000000ULL, MR_CFG_HIRES_TICK_PER_SECOND);
     const mr_uint8_t day_of_month_comm[]
         = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     const mr_uint8_t day_of_month_leap[]
         = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    const mr_uint64_t tick_correct
-        = MR_ROUND_DIV(1000000ULL, MR_CFG_HIRES_TICK_PER_SECOND);
     mr_hires_timestamp_t timestamp;
     const mr_uint8_t *day_of_month;
     mr_uint16_t day_of_year;

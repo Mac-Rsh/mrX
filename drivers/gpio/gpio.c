@@ -19,8 +19,8 @@ MR_DRIVER_CLAZZES_DEFINE(gpio, gpio_init, gpio_statik_deinit,
 
 mr_err_t mr_gpio_pin_configure(mr_driver_t *drv, mr_uint32_t pin,
                                mr_gpio_config_t *config) {
+    const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
-    mr_gpio_ops_t *gp_ops;
     mr_uint8_t value;
     mr_err_t ret;
 
@@ -56,8 +56,8 @@ mr_err_t mr_gpio_pin_configure(mr_driver_t *drv, mr_uint32_t pin,
 
 mr_err_t mr_gpio_pin_configuration(mr_driver_t *drv, mr_uint32_t pin,
                                    mr_gpio_config_t *config) {
+    const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
-    mr_gpio_ops_t *gp_ops;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
@@ -89,16 +89,11 @@ static mr_err_t gpio_init(const mr_driver_t *drv) {
     /* Get GPIO data */
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
 
-#if defined(MR_USE_DRIVER_GPIO_IRQ)
     /* Init GPIO irq */
     ret = mr_waitable_init(&gp_data->irq, MR_NULL, MR_NULL);
     if (ret != 0) {
         return ret;
     }
-#else
-    MR_UNUSED(gp_data);
-    MR_UNUSED(ret);
-#endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
     return 0;
 }
 
@@ -111,12 +106,8 @@ static mr_err_t gpio_statik_deinit(const mr_driver_t *drv) {
     /* Get GPIO data */
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
 
-#if defined(MR_USE_DRIVER_GPIO_IRQ)
     /* Deinit GPIO irq */
     mr_waitable_del(&gp_data->irq);
-#else
-    MR_UNUSED(gp_data);
-#endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
     return 0;
 }
 

@@ -25,17 +25,19 @@ extern "C" {
  */
 
 #if defined(MR_USE_WAIT)
-/* Wait event definition */
-#define MR_WAIT_IN                      (0x10000000U)
-#define MR_WAIT_OUT                     (0x20000000U)
-#define MR_WAIT_ERR                     (0x40000000U)
-#define MR_WAIT_EDGE                    (0x80000000U)
+/* Wait event type definition */
+#define MR_WAIT_IN                      (1ULL << 60)
+#define MR_WAIT_OUT                     (1ULL << 61)
+#define MR_WAIT_ERR                     (1ULL << 62)
+#define MR_WAIT_EDGE                    (1ULL << 63)
+#define MR_WAIT_EVENT_MASK                                                     \
+    (~(MR_WAIT_IN | MR_WAIT_OUT | MR_WAIT_ERR | MR_WAIT_EDGE))
 
 /* Waitable type */
 MR_CLAZZES_EXPORT(waitable);
 typedef struct mr_waitable {
     mr_object_t parent;
-    mr_uint32_t last;
+    mr_uint64_t last;
     mr_atomic_t gen;
     mr_list_t list;
     mr_ptr_t check;
@@ -43,13 +45,13 @@ typedef struct mr_waitable {
 } mr_waitable_t;
 
 /* Wait check type */
-typedef mr_uint32_t(mr_waitable_check_t)(mr_waitable_t *waitable, void *param);
+typedef mr_uint64_t(mr_waitable_check_t)(mr_waitable_t *waitable, void *param);
 
 /* Waiter type */
 MR_CLAZZES_EXPORT(waiter);
 typedef struct mr_waiter {
     mr_object_t parent;
-    mr_uint32_t event;
+    mr_uint64_t event;
     mr_list_t list;
     mr_ptr_t entry;
     mr_ptr_t param;
@@ -57,7 +59,7 @@ typedef struct mr_waiter {
 
 /* Wait entry type */
 typedef void(mr_waiter_entry_t)(mr_waiter_t *waiter, void *param,
-                                mr_uint32_t event);
+                                mr_uint64_t event);
 
 /**
  * @brief This macro function initializes a waitable.
@@ -117,7 +119,7 @@ mr_err_t mr_waitable_complete(mr_waitable_t *able);
  * @param event The wait event.
  * @return 0 on success, a negative error code on failure.
  */
-mr_err_t mr_waitable_raise(mr_waitable_t *able, mr_uint32_t event);
+mr_err_t mr_waitable_raise(mr_waitable_t *able, mr_uint64_t event);
 
 /**
  * @brief This function cancels all waiters.
@@ -174,7 +176,7 @@ MR_INLINE mr_bool_t mr_waitable_put(mr_waitable_t *able) {
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_waiter_init(mr_waiter_t *wait, mr_waiter_entry_t *entry,
-                        void *param, mr_uint32_t event);
+                        void *param, mr_uint64_t event);
 
 /**
  * @brief This function creates a waiter.
@@ -185,7 +187,7 @@ mr_err_t mr_waiter_init(mr_waiter_t *wait, mr_waiter_entry_t *entry,
  * @return The waiter on success, NULL on failure.
  */
 mr_waiter_t *mr_waiter_create(mr_waiter_entry_t *entry, void *param,
-                              mr_uint32_t event);
+                              mr_uint64_t event);
 
 /**
  * @brief This function deletes a waiter.
@@ -229,7 +231,7 @@ mr_err_t mr_waiter_cancel(mr_waiter_t *wait);
  *
  * @note If the waiter is waiting, it will be canceled.
  */
-mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint32_t event);
+mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint64_t event);
 
 /**
  * @brief This function gets waiter waiting event.
@@ -237,7 +239,7 @@ mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint32_t event);
  * @param wait The waiter.
  * @return The waiting event.
  */
-MR_INLINE mr_uint32_t mr_waiter_event(mr_waiter_t *wait) {
+MR_INLINE mr_uint64_t mr_waiter_event(mr_waiter_t *wait) {
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && MR_OBJECT_IS_INITED(wait));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(wait, waiter));

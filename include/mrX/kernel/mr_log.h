@@ -24,17 +24,17 @@ extern "C" {
  */
 
 #if defined(MR_USE_LOG)
+/* Log level mask definition */
+#define MR_LOG_MASK(_level)             (1U << (_level))
+
 /* Log level definition */
-enum mr_log_level {
+typedef enum mr_log_level {
     MR_LOG_LEVEL_ERR,
     MR_LOG_LEVEL_WRN,
     MR_LOG_LEVEL_INF,
     MR_LOG_LEVEL_DBG,
     MR_LOG_LEVEL_TRC,
-};
-
-/* Log level mask definition */
-#define MR_LOG_MASK(_level)             (1U << (_level))
+} mr_log_level_t;
 
 /* Log default level definition */
 #if !defined(MR_CFG_LOG_LEVEL)

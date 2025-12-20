@@ -9,7 +9,6 @@
 #ifndef __MR_SLAB_H__
 #define __MR_SLAB_H__
 
-#include <mrX/kernel/mr_service.h>
 #include <mrX/libc/mr_atomic.h>
 
 #ifdef __cplusplus
@@ -22,7 +21,7 @@ extern "C" {
  */
 
 /* Slab bitmap size */
-#define MR_SLAB_BITMAP_SIZE(_num)       (((_num) + 31) >> 5)
+#define MR_SLAB_MAP_SIZE(_num)          (((_num) + 31) >> 5)
 
 /* Slab type */
 typedef struct mr_slab {
@@ -40,7 +39,7 @@ typedef struct mr_slab {
  * @param _num The memory number.
  */
 #define MR_SLAB_INIT(_buf, _size, _num)                                        \
-    {.map = *MR_MAKE_LOCAL(mr_atomic_t[MR_SLAB_BITMAP_SIZE(_num)]),            \
+    {.map = ((mr_atomic_t[MR_SLAB_MAP_SIZE(_num)]){}),                         \
      .buf = (mr_uint8_t *)(_buf),                                              \
      .size = (_size),                                                          \
      .num = (_num)}
@@ -60,6 +59,44 @@ void *mr_slab_alloc(mr_slab_t *slab);
  * @param mem The memory.
  */
 void mr_slab_free(mr_slab_t *slab, void *mem);
+
+/**
+ * @brief This function converts a memory pointer to a memory index.
+ *
+ * @param slab The slab.
+ * @param mem The memory.
+ * @return The memory index.
+ */
+MR_INLINE int mr_slab_ptr2index(mr_slab_t *slab, void *mem) {
+    mr_uint32_t off;
+
+    /* Check parameter */
+    if ((mem >= (void *)(slab->buf + (slab->num * slab->size)))
+        || (mem < (void *)slab->buf)) {
+        return -1;
+    }
+
+    /* Get bit index */
+    off = (mr_uint32_t)((mr_uint8_t *)mem - slab->buf) / slab->size;
+    return (int)off;
+}
+
+/**
+ * @brief This function converts a memory index to a memory pointer.
+ *
+ * @param slab The slab.
+ * @param index The memory index.
+ * @return The memory pointer.
+ */
+MR_INLINE void *mr_slab_index2ptr(mr_slab_t *slab, int index) {
+    /* Check parameter */
+    if ((index < 0) || (index >= (int)slab->num)) {
+        return MR_NULL;
+    }
+
+    /* Return memory */
+    return slab->buf + ((mr_uint32_t)index * slab->size);
+}
 
 /** @} */
 

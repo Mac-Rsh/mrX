@@ -13,7 +13,7 @@ void *mr_slab_alloc(mr_slab_t *slab) {
     mr_uint32_t i, bit, mask, off;
     mr_atomic_t last;
 
-    for (i = 0; i < MR_SLAB_BITMAP_SIZE(slab->num); i++) {
+    for (i = 0; i < MR_SLAB_MAP_SIZE(slab->num); i++) {
         /* Get current bitmap */
         last = mr_atomic_load(&slab->map[i]);
 
@@ -51,7 +51,7 @@ void mr_slab_free(mr_slab_t *slab, void *mem) {
     mr_uint32_t off, i, bit;
 
     /* Check parameter */
-    if ((mem > (void *)(slab->buf + (slab->num * slab->size)))
+    if ((mem >= (void *)(slab->buf + (slab->num * slab->size)))
         || (mem < (void *)slab->buf)) {
         return;
     }

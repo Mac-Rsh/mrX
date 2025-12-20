@@ -25,8 +25,8 @@ MR_CLAZZES_DEFINE(waiter, wait_statik_release, wait_dynamic_release);
 static mr_spinlock_t __wait_lock = MR_SPINLOCK_INIT();
 
 /* Wait event mask definition */
-#define WAIT_TYPE_MASK                  (0x70000000U)
-#define WAIT_MASK                       (0x7fffffffU)
+#define WAIT_TYPE_MASK                  (MR_WAIT_IN | MR_WAIT_OUT | MR_WAIT_ERR)
+#define WAIT_MASK                       (~MR_WAIT_EDGE)
 
 static mr_err_t waitable_init(mr_waitable_t *able, const mr_clazz_t *clazz,
                               mr_ptr_t check, mr_ptr_t param) {
@@ -106,9 +106,9 @@ mr_err_t mr_waitable_del(mr_waitable_t *able) {
     return 0;
 }
 
-static mr_uint32_t waitable_check(mr_waitable_t *able) {
+static mr_uint64_t waitable_check(mr_waitable_t *able) {
     mr_waitable_check_t *check;
-    mr_uint32_t event;
+    mr_uint64_t event;
     mr_atomic_t gen;
     void *param;
 
@@ -138,8 +138,8 @@ static mr_uint32_t waitable_check(mr_waitable_t *able) {
     return event & WAIT_MASK;
 }
 
-static void waitable_handle(mr_waitable_t *able, mr_uint32_t event) {
-    mr_uint32_t event_level, event_edge;
+static void waitable_handle(mr_waitable_t *able, mr_uint64_t event) {
+    mr_uint64_t event_level, event_edge;
     mr_waiter_entry_t *entry;
     mr_waiter_t *waiter;
     mr_list_t oplist;
@@ -201,7 +201,7 @@ static void waitable_handle(mr_waitable_t *able, mr_uint32_t event) {
 }
 
 mr_err_t mr_waitable_complete(mr_waitable_t *able) {
-    mr_uint32_t event;
+    mr_uint64_t event;
 
     /* Check parameter */
     MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
@@ -220,7 +220,7 @@ mr_err_t mr_waitable_complete(mr_waitable_t *able) {
     return 0;
 }
 
-mr_err_t mr_waitable_raise(mr_waitable_t *able, mr_uint32_t event) {
+mr_err_t mr_waitable_raise(mr_waitable_t *able, mr_uint64_t event) {
     /* Check parameter */
     MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(able, waitable));
@@ -259,7 +259,7 @@ static void able_dynamic_release(mr_object_t *obj) {
 }
 
 static mr_err_t waiter_init(mr_waiter_t *wait, const mr_clazz_t *clazz,
-                            mr_ptr_t entry, mr_ptr_t param, mr_uint32_t event) {
+                            mr_ptr_t entry, mr_ptr_t param, mr_uint64_t event) {
     /* Init waiter */
     mr_list_init(&wait->list);
     wait->event = event;
@@ -271,27 +271,27 @@ static mr_err_t waiter_init(mr_waiter_t *wait, const mr_clazz_t *clazz,
 }
 
 mr_err_t mr_waiter_init(mr_waiter_t *wait, mr_waiter_entry_t *entry,
-                        void *param, mr_uint32_t event) {
+                        void *param, mr_uint64_t event) {
     const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(waiter);
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
 
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && (!MR_OBJECT_IS_INITED(wait)));
-    MR_ASSERT((entry != MR_NULL) && ((event & WAIT_TYPE_MASK) != 0));
+    MR_ASSERT(entry != MR_NULL);
 
     /* Init waiter */
     return waiter_init(wait, clazz, entry, param, event);
 }
 
 mr_waiter_t *mr_waiter_create(mr_waiter_entry_t *entry, void *param,
-                              mr_uint32_t event) {
+                              mr_uint64_t event) {
     const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(waiter);
     const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
     mr_waiter_t *wait;
     mr_err_t ret;
 
     /* Check parameter */
-    MR_ASSERT((entry != MR_NULL) && ((event & WAIT_TYPE_MASK) != 0));
+    MR_ASSERT(entry != MR_NULL);
 
     /* Create waiter */
     wait = mr_malloc(sizeof(mr_waiter_t));
@@ -336,7 +336,7 @@ mr_err_t mr_waiter_del(mr_waiter_t *wait) {
 
 mr_err_t mr_waiter_wait(mr_waiter_t *wait, mr_waitable_t *able) {
     mr_waiter_entry_t *entry;
-    mr_uint32_t event;
+    mr_uint64_t event;
     mr_err_t ret;
     void *param;
     int mask;
@@ -371,8 +371,9 @@ mr_err_t mr_waiter_wait(mr_waiter_t *wait, mr_waitable_t *able) {
 
     /* Get waitable event */
     event = waitable_check(able);
+
+    /* Check if event is untyped */
     if ((event & WAIT_TYPE_MASK) == 0) {
-        /* No waitable event(untyped events will be discarded) */
         return 0;
     }
 
@@ -405,13 +406,12 @@ mr_err_t mr_waiter_cancel(mr_waiter_t *wait) {
     return 0;
 }
 
-mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint32_t event) {
+mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint64_t event) {
     int mask;
 
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && MR_OBJECT_IS_INITED(wait));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(wait, waiter));
-    MR_ASSERT((event & WAIT_TYPE_MASK) != 0);
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__wait_lock);

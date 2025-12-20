@@ -82,19 +82,20 @@ class ConfigGenerator:
         Process the configuration file.
         """
         with open(self.output_path, 'r+') as f:
-            content = f.read()
+            time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            content = f.read().replace("#define CONFIG_", "#define ")
             f.truncate(0)
             f.seek(0)
 
             # Write modified header with guards and extern C
             content = (f"/* Auto-generated configuration file */\n"
-                       f"/* Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} */\n\n"
+                       f"/* Generated on: {time} */\n\n"
                        "#ifndef __MR_CONFIG_H__\n"
                        "#define __MR_CONFIG_H__\n\n"
                        "#ifdef __cplusplus\n"
                        "extern \"C\" {\n"
                        "#endif /* __cplusplus */\n\n"
-                       f"{content.replace("#define CONFIG_", "#define ")}"
+                       f"{content}"
                        "\n#ifdef __cplusplus\n"
                        "}\n"
                        "#endif /* __cplusplus */\n\n"

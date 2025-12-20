@@ -38,7 +38,6 @@ typedef struct drv_gpio_priv {
     uint32_t RCCx;
 } drv_gpio_priv_t;
 
-#if defined(MR_USE_DRIVER_GPIO_IRQ)
 /* GPIO irq map type */
 typedef struct drv_gpio_irq_map {
     const mr_driver_t *drv;
@@ -99,16 +98,13 @@ static uint8_t GPIOx2GPIOSource(GPIO_TypeDef *GPIOx) {
 #endif /* defined(GPIOG) */
     return 0;
 }
-#endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
 
 static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
                                   const mr_gpio_config_t *config) {
     drv_gpio_priv_t *priv = MR_DRIVER_PRIV(drv);
     GPIO_InitTypeDef GPIO_InitStructure;
-#if defined(MR_USE_DRIVER_GPIO_IRQ)
     EXTI_InitTypeDef EXTI_InitStructure;
     NVIC_InitTypeDef NVIC_InitStructure;
-#endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
     uint16_t PINx = (1U << pin);
 
     switch (config->mode) {
@@ -142,7 +138,6 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
             }
             break;
         }
-#if defined(MR_USE_DRIVER_GPIO_IRQ)
         case MR_GPIO_MODE_IRQ_RISING: {
             EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPD;
@@ -158,13 +153,11 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
             break;
         }
-#endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
         default: {
             return -MR_EINVAL;
         }
     }
 
-#if defined(MR_USE_DRIVER_GPIO_IRQ)
     /* Configure EXTI */
     if (config->mode >= MR_GPIO_MODE_IRQ_RISING) {
         /* Check if the pin is already used */
@@ -235,7 +228,6 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
     NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
     NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;
     NVIC_Init(&NVIC_InitStructure);
-#endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
 
     /* Configure GPIO */
     RCC_APB2PeriphClockCmd(priv->RCCx, ENABLE);
@@ -281,11 +273,9 @@ static mr_err_t drv_pin_configuration(const mr_driver_t *drv, mr_uint32_t pin,
                 }
             }
         }
-#if defined(MR_USE_DRIVER_GPIO_IRQ)
         if (drv == __drv_gpio_irq_map[pin].drv) {
             config->mode = __drv_gpio_irq_map[pin].mode;
         }
-#endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
     } else {
         config->mode = MR_GPIO_MODE_OUTPUT;
         config->pull = MR_GPIO_PULL_NONE;
@@ -342,7 +332,6 @@ static mr_err_t drv_port_read(const mr_driver_t *drv, mr_uint32_t *mask) {
     return 0;
 }
 
-#if defined(MR_USE_DRIVER_GPIO_IRQ)
 static void drv_gpio_irq_handle(mr_uint32_t pin) {
     mr_driver_t *drv = (mr_driver_t *)__drv_gpio_irq_map[pin].drv;
 
@@ -476,7 +465,6 @@ void EXTI15_10_IRQHandler(void) {
     }
 }
 #endif /* defined(MR_USE_WCH_SERIES_V00X) */
-#endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
 
 /* Instance install */
 #define WCH_GPIO_HT_INST_GPIO_INSTALL(_id, _ops)                               \

@@ -1,0 +1,11 @@
+menu "UART options"
+
+# ==================================
+# UART
+# ==================================
+config MR_USE_DRIVER_UART
+    select MR_USE_DRIVER
+    bool "Use UART"
+    default n
+
+endmenu

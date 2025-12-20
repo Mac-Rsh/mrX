@@ -11,12 +11,12 @@
 #if defined(MR_USE_WAIT)
 #include <mrX/kernel/mr_wait.h>
 
+static mr_uint64_t last_event = 0;
 static void *last_param = MR_NULL;
-static mr_uint32_t last_event = 0;
 static int trig_status = 0;
 
 static void test_waiter_cb(mr_waiter_t *waiter, void *param,
-                           mr_uint32_t event) {
+                           mr_uint64_t event) {
     MR_UNUSED(waiter);
     MR_UNUSED(param);
     trig_status++;
@@ -87,7 +87,7 @@ static void test_waiter_create_del(void) {
 }
 MR_TEST_EXPORT(wait, waiter_create_del, test_waiter_create_del);
 
-static mr_uint32_t test_check_basic(mr_waitable_t *w, void *p) {
+static mr_uint64_t test_check_basic(mr_waitable_t *w, void *p) {
     MR_UNUSED(w);
     MR_UNUSED(p);
     return MR_WAIT_IN;
@@ -186,7 +186,7 @@ MR_TEST_EXPORT(wait, edge_level, test_waitable_edge_level);
 
 /* -------------------------------------------------------------------------- */
 /* Test: Multiple waiters on same waitable                                    */
-static mr_uint32_t test_check_multi(mr_waitable_t *w, void *p) {
+static mr_uint64_t test_check_multi(mr_waitable_t *w, void *p) {
     MR_UNUSED(w);
     MR_UNUSED(p);
     return MR_WAIT_OUT;
@@ -223,8 +223,8 @@ MR_TEST_EXPORT(wait, multiple_waiters, test_multiple_waiters);
 
 /* -------------------------------------------------------------------------- */
 /* Test: Race / generation skip                                               */
-static mr_uint32_t test_check_race(mr_waitable_t *w, void *p) {
-    static mr_uint32_t gen = 0;
+static mr_uint64_t test_check_race(mr_waitable_t *w, void *p) {
+    static mr_uint64_t gen = 0;
 
     MR_UNUSED(p);
     if ((gen++) == 0)

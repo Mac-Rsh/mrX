@@ -30,14 +30,6 @@ extern "C" {
 #if defined(MR_USE_DRIVER)
 struct mr_driver;
 
-/* Driver type definition */
-enum mr_driver_type {
-    MR_DRIVER_TYPE_NONE = 0,
-    MR_DRIVER_TYPE_GPIO = 0x0100,
-    MR_DRIVER_TYPE_UART = 0x0200,
-    MR_DRIVER_TYPE_MASK = 0xff00,
-};
-
 /* Driver flag definition */
 #define MR_DRIVER_FLAG_SETUP            (1U << 0)
 #define MR_DRIVER_FLAG_LOCK             (1U << 1)
@@ -49,6 +41,14 @@ enum mr_driver_type {
 #define MR_DRIVER_LEVEL_NORMAL          "3"
 #define MR_DRIVER_LEVEL_LAST            "4"
 #define MR_DRIVER_LEVEL_DEFER           "9"
+
+/* Driver type definition */
+typedef enum mr_driver_type {
+    MR_DRIVER_TYPE_NONE = 0,
+    MR_DRIVER_TYPE_GPIO = 0x0100,
+    MR_DRIVER_TYPE_UART = 0x0200,
+    MR_DRIVER_TYPE_MASK = 0xff00,
+} mr_driver_type_t;
 
 /* Driver operation type */
 typedef mr_err_t(mr_driver_operation_t)(const struct mr_driver *drv);

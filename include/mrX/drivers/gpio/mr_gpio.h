@@ -29,13 +29,11 @@ typedef enum mr_gpio_mode {
     MR_GPIO_MODE_ANALOG,
     MR_GPIO_MODE_INPUT,
     MR_GPIO_MODE_OUTPUT,
-#if defined(MR_USE_DRIVER_GPIO_IRQ)
     MR_GPIO_MODE_IRQ_RISING,
     MR_GPIO_MODE_IRQ_FALLING,
     MR_GPIO_MODE_IRQ_EDGE,
     MR_GPIO_MODE_IRQ_HIGH,
     MR_GPIO_MODE_IRQ_LOW,
-#endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
 } mr_gpio_mode_t;
 
 /* GPIO alternate definition */
@@ -77,9 +75,7 @@ MR_DRIVER_CLAZZES_EXPORT(gpio);
 typedef struct mr_gpio_data {
     mr_uint32_t exist_mask;
     mr_uint32_t invert;
-#if defined(MR_USE_DRIVER_GPIO_IRQ)
     mr_waitable_t irq;
-#endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
 } mr_gpio_data_t;
 
 /* GPIO operations type */
@@ -222,8 +218,8 @@ mr_err_t mr_gpio_pin_configuration(mr_driver_t *drv, mr_uint32_t pin,
  */
 MR_INLINE mr_err_t mr_gpio_pin_write(mr_driver_t *drv, mr_uint32_t pin,
                                      mr_uint8_t value) {
+    const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
-    mr_gpio_ops_t *gp_ops;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
@@ -253,8 +249,8 @@ MR_INLINE mr_err_t mr_gpio_pin_write(mr_driver_t *drv, mr_uint32_t pin,
  * @return The GPIO pin value on success, a negative error code on failure.
  */
 MR_INLINE int mr_gpio_pin_read(mr_driver_t *drv, mr_uint32_t pin) {
+    const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
-    mr_gpio_ops_t *gp_ops;
     mr_uint8_t value;
     mr_err_t ret;
 
@@ -294,8 +290,8 @@ MR_INLINE mr_err_t mr_gpio_pin_input(mr_driver_t *drv, mr_uint32_t pin,
     mr_gpio_config_t config;
 
     /* Configure GPIO pin as input */
+    config.pull = (mr_uint8_t)pull & 0x3U;
     config.mode = MR_GPIO_MODE_INPUT;
-    config.pull = (mr_uint8_t)pull;
     config.alt = MR_FALSE;
 
     /* Configure GPIO pin */
@@ -316,11 +312,11 @@ MR_INLINE mr_err_t mr_gpio_pin_output(mr_driver_t *drv, mr_uint32_t pin,
     mr_gpio_config_t config;
 
     /* Configure GPIO pin as output */
+    config.otype = (mr_uint8_t)otype & 0x1U;
     config.mode = MR_GPIO_MODE_OUTPUT;
-    config.otype = (mr_uint8_t)otype;
     config.pull = MR_GPIO_PULL_NONE;
+    config.level = value & 0x1U;
     config.alt = MR_FALSE;
-    config.level = value;
 
     /* Configure GPIO pin */
     return mr_gpio_pin_configure(drv, pin, &config);
@@ -334,8 +330,8 @@ MR_INLINE mr_err_t mr_gpio_pin_output(mr_driver_t *drv, mr_uint32_t pin,
  * @return 0 on success, a negative error code on failure.
  */
 MR_INLINE mr_err_t mr_gpio_pin_toggle(mr_driver_t *drv, mr_uint32_t pin) {
+    const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
-    mr_gpio_ops_t *gp_ops;
     mr_uint8_t value;
     mr_err_t ret;
 
@@ -373,8 +369,8 @@ MR_INLINE mr_err_t mr_gpio_pin_toggle(mr_driver_t *drv, mr_uint32_t pin) {
  * @return 0 on success, a negative error code on failure.
  */
 MR_INLINE mr_err_t mr_gpio_port_write(mr_driver_t *drv, mr_uint32_t mask) {
+    const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
-    mr_gpio_ops_t *gp_ops;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
@@ -398,8 +394,8 @@ MR_INLINE mr_err_t mr_gpio_port_write(mr_driver_t *drv, mr_uint32_t mask) {
  * @return 0 on success, a negative error code on failure.
  */
 MR_INLINE mr_err_t mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask) {
+    const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
-    mr_gpio_ops_t *gp_ops;
     mr_err_t ret;
 
     /* Check parameter */
@@ -428,7 +424,7 @@ MR_INLINE mr_err_t mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask) {
  * @return 0 on success, a negative error code on failure.
  */
 MR_INLINE mr_err_t mr_gpio_port_toggle(mr_driver_t *drv) {
-    mr_gpio_ops_t *gp_ops;
+    const mr_gpio_ops_t *gp_ops;
     mr_uint32_t mask;
     mr_err_t ret;
 
@@ -451,16 +447,12 @@ MR_INLINE mr_err_t mr_gpio_port_toggle(mr_driver_t *drv) {
     return gp_ops->port_write(drv, mask);
 }
 
-#if defined(MR_USE_DRIVER_GPIO_IRQ)
 /**
  * @brief This function attaches a GPIO interrupt.
  *
  * @param drv The GPIO driver.
  * @param entry The GPIO interrupt entry.
  * @return 0 on success, a negative error code on failure.
- *
- * @note The function will handle the event types for you internally, don't
- * worry.
  */
 MR_INLINE mr_err_t mr_gpio_irq_attach(mr_driver_t *drv, mr_waiter_t *entry) {
     mr_gpio_data_t *gp_data;
@@ -478,14 +470,6 @@ MR_INLINE mr_err_t mr_gpio_irq_attach(mr_driver_t *drv, mr_waiter_t *entry) {
 }
 
 /**
- * @brief This macro function gets a GPIO interrupt pin from an event.
- *
- * @param _pin The GPIO pin.
- * @return The GPIO interrupt pin.
- */
-#define MR_GPIO_IRQ_EVENT_PIN(_event)   ((_event) & 0x0fffffffU)
-
-/**
  * @brief This function handles a GPIO interrupt.
  *
  * @param drv The GPIO driver.
@@ -494,6 +478,7 @@ MR_INLINE mr_err_t mr_gpio_irq_attach(mr_driver_t *drv, mr_waiter_t *entry) {
  */
 MR_INLINE mr_err_t mr_gpio_irq_handle(mr_driver_t *drv, mr_uint32_t pin) {
     mr_gpio_data_t *gp_data;
+    mr_uint64_t event;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
@@ -503,10 +488,10 @@ MR_INLINE mr_err_t mr_gpio_irq_handle(mr_driver_t *drv, mr_uint32_t pin) {
     /* Get GPIO data */
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
 
-    /* Raise GPIO irq */
-    return mr_waitable_raise(&gp_data->irq, MR_WAIT_IN | pin);
+    /* Raise GPIO EXTI event */
+    event = MR_WAIT_IN | (1ULL << pin);
+    return mr_waitable_raise(&gp_data->irq, event);
 }
-#endif /* defined(MR_USE_DRIVER_GPIO_IRQ) */
 
 /**
  * @brief This function gets a GPIO driver.
