@@ -56,86 +56,6 @@ mr_err_t mr_uart_configuration(mr_driver_t *drv, mr_uart_config_t *config) {
     return 0;
 }
 
-static int uart_write_poll(mr_driver_t *drv, const mr_uint8_t *buf,
-                           mr_uint32_t size) {
-    const mr_uart_ops_t *ur_ops;
-    mr_uint32_t count;
-    mr_err_t ret;
-
-    /* Get UART operations */
-    ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
-
-    /* Write UART data */
-    for (count = 0; count < size; count++) {
-        do {
-            ret = ur_ops->write(drv, buf[count]);
-        } while (ret == (-MR_EAGAIN));
-        if (ret != 0) {
-            return (count > 0) ? (int)count : ret;
-        }
-    }
-    return (int)count;
-}
-
-static int uart_write_int(mr_driver_t *drv, const mr_uint8_t *buf,
-                          mr_uint32_t size) {
-    const mr_uart_ops_t *ur_ops;
-    mr_uart_data_t *ur_data;
-    mr_uint32_t count;
-    mr_bool_t is_busy;
-    mr_err_t ret;
-
-    /* Get UART data and operations */
-    ur_data = (mr_uart_data_t *)MR_DRIVER_DATA(drv);
-    ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
-
-    /* Write UART data to fifo */
-    count = mr_fifo_write(&ur_data->tx_fifo.fifo, buf, (mr_uint32_t)size);
-    if (count == 0) {
-        return 0;
-    }
-
-    /* Enable UART TX INT */
-    ret = ur_ops->tx_int_is_busy(drv, &is_busy);
-    if (ret != 0) {
-        return ret;
-    }
-    if (!is_busy) {
-        ur_ops->tx_int_control(drv, MR_TRUE);
-    }
-    return (int)count;
-}
-
-static int uart_read_poll(mr_driver_t *drv, mr_uint8_t *buf, mr_uint32_t size) {
-    const mr_uart_ops_t *ur_ops;
-    mr_uint32_t count;
-    mr_err_t ret;
-
-    /* Get UART operations */
-    ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
-
-    /* Read UART data */
-    for (count = 0; count < size; count++) {
-        do {
-            ret = ur_ops->read(drv, &buf[count]);
-        } while (ret == (-MR_EAGAIN));
-        if (ret != 0) {
-            return (count > 0) ? (int)count : ret;
-        }
-    }
-    return (int)count;
-}
-
-static int uart_read_int(mr_driver_t *drv, mr_uint8_t *buf, mr_uint32_t size) {
-    mr_uart_data_t *ur_data;
-
-    /* Get UART data */
-    ur_data = (mr_uart_data_t *)MR_DRIVER_DATA(drv);
-
-    /* Read UART data from fifo */
-    return (int)mr_fifo_read(&ur_data->rx_fifo.fifo, buf, size);
-}
-
 static mr_err_t uart_fifo_alloc(mr_uart_fifo_t *fifo, mr_uint32_t want) {
     mr_uint32_t actual;
 
@@ -168,7 +88,7 @@ static int uart_tx_fifo_configure(mr_driver_t *drv, mr_uint32_t want) {
     ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Check if UART TX supports INT */
-    if (ur_data->tx != uart_write_int) {
+    if ((!ur_ops->tx_int_control) || (!ur_ops->tx_int_is_busy)) {
         return -MR_EPERM;
     }
 
@@ -221,7 +141,7 @@ static int uart_rx_fifo_configure(mr_driver_t *drv, mr_uint32_t want) {
     ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Check if UART RX supports INT */
-    if (ur_data->rx != uart_read_int) {
+    if ((!ur_ops->rx_int_control) || (!ur_ops->rx_int_is_busy)) {
         return -MR_EPERM;
     }
 
@@ -414,18 +334,6 @@ static mr_err_t uart_init(const mr_driver_t *drv) {
     ret = mr_waitable_init(&ur_data->irq, uart_waitable_check, (void *)drv);
     if (ret != 0) {
         return ret;
-    }
-
-    /* Init UART TX&RX operation */
-    if (ur_ops->tx_int_control && ur_ops->tx_int_is_busy) {
-        ur_data->tx = uart_write_int;
-    } else {
-        ur_data->tx = uart_write_poll;
-    }
-    if (ur_ops->rx_int_control && ur_ops->rx_int_is_busy) {
-        ur_data->rx = uart_read_int;
-    } else {
-        ur_data->rx = uart_read_poll;
     }
 
     /* Configure UART with default configuration */

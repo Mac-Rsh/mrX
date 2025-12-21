@@ -86,8 +86,6 @@ typedef struct mr_uart_data {
     mr_uart_fifo_t tx_fifo;
     mr_uart_fifo_t rx_fifo;
     mr_waitable_t irq;
-    int (*tx)(mr_driver_t *drv, const mr_uint8_t *buf, mr_uint32_t size);
-    int (*rx)(mr_driver_t *drv, mr_uint8_t *buf, mr_uint32_t size);
 } mr_uart_data_t;
 
 /* UART operations type */
@@ -123,7 +121,7 @@ typedef struct mr_uart_ops {
                    .bits_order = (_bits_order)},                               \
         .tx_fifo = {.size = (_tx_fifo_size)},                                  \
         .rx_fifo = {.size = (_rx_fifo_size)},                                  \
-    }
+}
 
 /**
  * @brief This macro function defines an UART driver.
@@ -267,7 +265,78 @@ int mr_uart_rx_fifo_configure(mr_driver_t *drv, mr_uint32_t want);
 mr_err_t mr_uart_rx_fifo_configuration(mr_driver_t *drv, mr_uint32_t *actual);
 
 /**
- * @brief This function writes an UART.
+ * @brief This function writes an UART data in polling mode.
+ *
+ * @param drv The UART driver.
+ * @param buf The buffer to write.
+ * @param size The size of buffer.
+ * @return The number of bytes written on success, a negative error code on
+ * failure.
+ */
+MR_INLINE int mr_uart_poll_write(mr_driver_t *drv, const void *buf,
+                                 mr_uint32_t size) {
+    const mr_uart_ops_t *ur_ops;
+    const mr_uint8_t *buff;
+    mr_uint32_t count;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_UART);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+    MR_ASSERT((buf != MR_NULL) || (size == 0));
+
+    /* Get UART operations */
+    ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Write UART data */
+    for (buff = buf, count = 0; count < size; count++) {
+        do {
+            ret = ur_ops->write(drv, buff[count]);
+        } while (ret == (-MR_EAGAIN));
+        if (ret != 0) {
+            return (count > 0) ? (int)count : ret;
+        }
+    }
+    return (int)count;
+}
+
+/**
+ * @brief This function reads an UART data in polling mode.
+ *
+ * @param drv The UART driver.
+ * @param buf The buffer to read.
+ * @param size The size of buffer.
+ * @return The number of bytes read on success, a negative error code on
+ * failure.
+ */
+MR_INLINE int mr_uart_poll_read(mr_driver_t *drv, void *buf, mr_uint32_t size) {
+    const mr_uart_ops_t *ur_ops;
+    mr_uint32_t count;
+    mr_uint8_t *buff;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_UART);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+    MR_ASSERT((buf != MR_NULL) || (size == 0));
+
+    /* Get UART operations */
+    ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Read UART data */
+    for (buff = buf, count = 0; count < size; count++) {
+        do {
+            ret = ur_ops->read(drv, &buff[count]);
+        } while (ret == (-MR_EAGAIN));
+        if (ret != 0) {
+            return (count > 0) ? (int)count : ret;
+        }
+    }
+    return (int)count;
+}
+
+/**
+ * @brief This function writes an UART data in fifo mode.
  *
  * @param drv The UART driver.
  * @param buf The UART buffer.
@@ -275,9 +344,13 @@ mr_err_t mr_uart_rx_fifo_configuration(mr_driver_t *drv, mr_uint32_t *actual);
  * @return The actual size of written data on success, a negative error code on
  * failure.
  */
-MR_INLINE int mr_uart_write(mr_driver_t *drv, const void *buf,
-                            mr_uint32_t size) {
+MR_INLINE int mr_uart_fifo_write(mr_driver_t *drv, const void *buf,
+                                 mr_uint32_t size) {
+    const mr_uart_ops_t *ur_ops;
     mr_uart_data_t *ur_data;
+    mr_uint32_t count;
+    mr_bool_t is_busy;
+    mr_err_t ret;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_UART);
@@ -285,15 +358,29 @@ MR_INLINE int mr_uart_write(mr_driver_t *drv, const void *buf,
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT((buf != MR_NULL) || (size == 0));
 
-    /* Get UART data */
+    /* Get UART data and operations */
     ur_data = (mr_uart_data_t *)MR_DRIVER_DATA(drv);
+    ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Write UART */
-    return ur_data->tx(drv, (const mr_uint8_t *)buf, size);
+    /* Write UART data to fifo */
+    count = mr_fifo_write(&ur_data->tx_fifo.fifo, buf, (mr_uint32_t)size);
+    if (count == 0) {
+        return 0;
+    }
+
+    /* Enable UART TX INT */
+    ret = ur_ops->tx_int_is_busy(drv, &is_busy);
+    if (ret != 0) {
+        return ret;
+    }
+    if (!is_busy) {
+        ur_ops->tx_int_control(drv, MR_TRUE);
+    }
+    return (int)count;
 }
 
 /**
- * @brief This function reads an UART.
+ * @brief This function reads an UART data in fifo mode.
  *
  * @param drv The UART driver.
  * @param buf The UART buffer.
@@ -301,24 +388,41 @@ MR_INLINE int mr_uart_write(mr_driver_t *drv, const void *buf,
  * @return The actual size of read data on success, a negative error code on
  * failure.
  */
-MR_INLINE int mr_uart_read(mr_driver_t *drv, void *buf, mr_uint32_t size) {
+MR_INLINE int mr_uart_fifo_read(mr_driver_t *drv, void *buf, mr_uint32_t size) {
     mr_uart_data_t *ur_data;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_UART);
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
-    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT((buf != MR_NULL) || (size == 0));
 
     /* Get UART data */
     ur_data = (mr_uart_data_t *)MR_DRIVER_DATA(drv);
 
-    /* Read UART */
-    return ur_data->rx(drv, (mr_uint8_t *)buf, size);
+    /* Read UART data from fifo */
+    return (int)mr_fifo_read(&ur_data->rx_fifo.fifo, buf, size);
 }
 
 /**
- * @brief This function puts a character to an UART.
+ * @brief This function puts an UART character in polling mode.
+ *
+ * @param drv The UART driver.
+ * @param c The character.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_uart_poll_putchar(mr_driver_t *drv, char c) {
+    int ret;
+
+    /* Poll putchar */
+    ret = mr_uart_poll_write(drv, &c, sizeof(c));
+    if (ret < 0) {
+        return ret;
+    }
+    return (ret == sizeof(c)) ? 0 : -MR_EAGAIN;
+}
+
+/**
+ * @brief This function puts an UART character in fifo mode.
  *
  * @param drv The UART driver.
  * @param c The character.
@@ -327,8 +431,8 @@ MR_INLINE int mr_uart_read(mr_driver_t *drv, void *buf, mr_uint32_t size) {
 MR_INLINE mr_err_t mr_uart_putchar(mr_driver_t *drv, char c) {
     int ret;
 
-    /* Putchar */
-    ret = mr_uart_write(drv, &c, sizeof(c));
+    /* Fifo putchar */
+    ret = mr_uart_fifo_write(drv, &c, sizeof(c));
     if (ret < 0) {
         return ret;
     }
@@ -336,16 +440,33 @@ MR_INLINE mr_err_t mr_uart_putchar(mr_driver_t *drv, char c) {
 }
 
 /**
- * @brief This function gets a character from an UART.
+ * @brief This function gets an UART character in polling mode.
  *
  * @param drv The UART driver.
  * @return The character on success, a negative error code on failure.
  */
-MR_INLINE int mr_uart_getchar(mr_driver_t *drv) {
+MR_INLINE int mr_uart_poll_getchar(mr_driver_t *drv) {
+    int ret, c;
+
+    /* Poll getchar */
+    ret = mr_uart_poll_read(drv, &c, sizeof(char));
+    if (ret < 0) {
+        return ret;
+    }
+    return (ret == sizeof(char)) ? (char)c : -MR_EAGAIN;
+}
+
+/**
+ * @brief This function gets an UART character in fifo mode.
+ *
+ * @param drv The UART driver.
+ * @return The character on success, a negative error code on failure.
+ */
+MR_INLINE int mr_uart_fifo_getchar(mr_driver_t *drv) {
     int ret, c;
 
     /* Getchar */
-    ret = mr_uart_read(drv, &c, sizeof(char));
+    ret = mr_uart_fifo_read(drv, &c, sizeof(char));
     if (ret < 0) {
         return ret;
     }
@@ -426,8 +547,8 @@ MR_INLINE mr_bool_t mr_uart_put(mr_driver_t *drv) {
                            MR_UART_PARITY_NONE),                               \
         MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), bits_order,                 \
                            MR_UART_BITS_ORDER_LSB),                            \
-        MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), tx_fifo_size, 32),          \
-        MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), rx_fifo_size, 64));         \
+        MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), tx_fifo_size, 4),           \
+        MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), rx_fifo_size, 16));         \
     MR_HT_INST_DRIVER_INSTALL(                                                 \
         _id, MR_DRIVER_CLAZZES_STATIK(MR_DRIVER_CLAZZES_FIND(uart)),           \
         MR_DRIVER_TYPE_UART, &__mr_uart_data_##_id, _priv, _ops)

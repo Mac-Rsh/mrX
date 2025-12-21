@@ -380,22 +380,26 @@ void UART8_IRQHandler(void) {
 
 /* Instance install */
 #define WCH_UART_HT_INST_UART_INSTALL(_id, _ops)                               \
-    static drv_uart_priv_t __drv_uart_priv_##_id                               \
-        = {.UARTx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), base),             \
-           .RCCx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), clk),               \
-           .TX_GPIOx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), tx_gpio),       \
-           .TX_GPIOx_RCCx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), tx_clk),   \
-           .TX_GPIOx_PINx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), tx_pin),   \
-           .RX_GPIOx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), rx_gpio),       \
-           .RX_GPIOx_RCCx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), rx_clk),   \
-           .RX_GPIOx_PINx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), rx_pin),   \
-           .TX_RX_GPIOx_remap                                                  \
-           = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), tx_rx_remap),             \
-           .irqn = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), irqn),              \
-           .irq_prio_preempt                                                   \
-           = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), prio_preempt, 1),      \
-           .irq_prio_sub                                                       \
-           = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), prio_sub, 1)};         \
+    static drv_uart_priv_t __drv_uart_priv_##_id = {                           \
+        .UARTx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), base),                \
+        .RCCx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), clk),                  \
+        .TX_GPIOx = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), tx_gpio, NULL), \
+        .TX_GPIOx_RCCx                                                         \
+        = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), tx_clk, 0),               \
+        .TX_GPIOx_PINx                                                         \
+        = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), tx_pin, 0),               \
+        .RX_GPIOx = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), rx_gpio, NULL), \
+        .RX_GPIOx_RCCx                                                         \
+        = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), rx_clk, 0),               \
+        .RX_GPIOx_PINx                                                         \
+        = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), rx_pin, 0),               \
+        .TX_RX_GPIOx_remap                                                     \
+        = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), tx_rx_remap, 0),          \
+        .irqn = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), irqn, 0),           \
+        .irq_prio_preempt                                                      \
+        = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), prio_preempt, 1),         \
+        .irq_prio_sub                                                          \
+        = MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), prio_sub, 1)};            \
     MR_HT_INST_UART_INSTALL(_id, &__drv_uart_priv_##_id, _ops)
 MR_HT_INST_DRIVER_FOREACH(WCH_UART_HT_INST_UART_INSTALL, &__drv_uart_ops);
 #endif /* defined (MR_USE_DRIVER_UART) */
