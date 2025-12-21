@@ -13,9 +13,7 @@
 #if defined(MR_USE_DRIVER)
 #include <mrX/drivers/mr_hardtree.h>
 #include <mrX/kernel/mr_object.h>
-#if defined(MR_USE_DRIVER_IRQ)
 #include <mrX/kernel/mr_wait.h>
-#endif /* defined(MR_USE_DRIVER_IRQ) */
 #endif /* defined(MR_USE_DRIVER) */
 
 #ifdef __cplusplus

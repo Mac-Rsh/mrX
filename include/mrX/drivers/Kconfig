@@ -4,13 +4,8 @@ menu "Drivers options"
 # DRIVER
 # ==================================
 config MR_USE_DRIVER
-    bool "Use driver"
-    default n
-
-config MR_USE_DRIVER_IRQ
-    depends on MR_USE_DRIVER
     select MR_USE_WAIT
-    bool "Use driver irq"
+    bool "Use driver"
     default n
 
 config MR_USE_DRIVER_HARDTREE

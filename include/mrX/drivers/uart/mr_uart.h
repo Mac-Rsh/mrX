@@ -94,8 +94,8 @@ typedef struct mr_uart_data {
 typedef struct mr_uart_ops {
     mr_err_t (*configure)(const mr_driver_t *drv,
                           const mr_uart_config_t *config);
-    mr_err_t (*write)(const mr_driver_t *drv, mr_uint8_t value);
-    mr_err_t (*read)(const mr_driver_t *drv, mr_uint8_t *value);
+    mr_err_t (*write)(const mr_driver_t *drv, mr_uint8_t data);
+    mr_err_t (*read)(const mr_driver_t *drv, mr_uint8_t *data);
     mr_err_t (*tx_int_control)(const mr_driver_t *drv, mr_bool_t enable);
     mr_err_t (*tx_int_is_busy)(const mr_driver_t *drv, mr_bool_t *busy);
     mr_err_t (*rx_int_control)(const mr_driver_t *drv, mr_bool_t enable);
@@ -349,7 +349,7 @@ MR_INLINE int mr_uart_getchar(mr_driver_t *drv) {
     if (ret < 0) {
         return ret;
     }
-    return (ret == sizeof(char)) ? c : -MR_EAGAIN;
+    return (ret == sizeof(char)) ? (char)c : -MR_EAGAIN;
 }
 
 /**
