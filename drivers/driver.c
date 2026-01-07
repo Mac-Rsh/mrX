@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -131,7 +131,7 @@ mr_err_t mr_driver_setup(mr_driver_t *drv) {
     }
 
     /* Check if driver is set up */
-    if (drv->flags & MR_DRIVER_FLAG_SETUP) {
+    if (mr_atomic_load(&drv->flags) & MR_DRIVER_FLAG_SETUP) {
         ret = 0;
         goto _exit;
     }
@@ -171,7 +171,7 @@ mr_err_t mr_driver_shutdown(mr_driver_t *drv) {
     }
 
     /* Check if driver is set up */
-    if (!(drv->flags & MR_DRIVER_FLAG_SETUP)) {
+    if (!(mr_atomic_load(&drv->flags) & MR_DRIVER_FLAG_SETUP)) {
         ret = 0;
         goto _exit;
     }

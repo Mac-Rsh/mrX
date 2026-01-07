@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -48,7 +48,7 @@ mr_err_t mr_gpio_pin_configure(mr_driver_t *drv, mr_uint32_t pin,
 
     /* If pin is output, write pin default value */
     if (config->mode == MR_GPIO_MODE_OUTPUT) {
-        value = (!!config->level) ^ (!!(gp_data->invert & (1U << pin)));
+        value = (!!config->level) ^ (!!(gp_data->invert_mask & (1U << pin)));
         return gp_ops->pin_write(drv, pin, value);
     }
     return 0;

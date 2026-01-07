@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -17,38 +17,38 @@ static mr_int32_t last_irq = -1;
 static int handle_count = 0;
 
 static void irq_priority_set(mr_uint32_t irq, mr_uint8_t priority, void *priv) {
-    MR_UNUSED(priv);
+    MR_IGNORE(priv);
 
     last_irq = (mr_int32_t)irq;
     last_priority = priority;
 }
 
 static void irq_type_set(mr_uint32_t irq, mr_uint8_t type, void *priv) {
-    MR_UNUSED(priv);
+    MR_IGNORE(priv);
 
     last_irq = (mr_int32_t)irq;
     last_type = type;
 }
 
 static void irq_enable(mr_uint32_t irq, void *priv) {
-    MR_UNUSED(priv);
+    MR_IGNORE(priv);
 
     last_irq = (mr_int32_t)irq;
 }
 
 static void irq_unmask(mr_uint32_t irq, void *priv) {
-    MR_UNUSED(irq);
-    MR_UNUSED(priv);
+    MR_IGNORE(irq);
+    MR_IGNORE(priv);
 }
 
 static void irq_disable(mr_uint32_t irq, void *priv) {
-    MR_UNUSED(priv);
+    MR_IGNORE(priv);
     last_irq = (mr_int32_t)irq;
 }
 
 void irq_mask(mr_uint32_t irq, void *priv) {
-    MR_UNUSED(irq);
-    MR_UNUSED(priv);
+    MR_IGNORE(irq);
+    MR_IGNORE(priv);
 }
 
 /* Mock irq operations */
@@ -62,8 +62,8 @@ static mr_irq_ops_t mock_irq_ops = {
 };
 
 static mr_irq_return_t test_irq_handler(mr_uint32_t irq, void *owner) {
-    MR_UNUSED(irq);
-    MR_UNUSED(owner);
+    MR_IGNORE(irq);
+    MR_IGNORE(owner);
     handle_count++;
     return MR_IRQ_HANDLED;
 }
@@ -345,12 +345,12 @@ MR_TEST_EXPORT(irq, error_cases, test_irq_error_cases);
 static int irq_hook_status = 0;
 
 static void irq_hook_suspend(void *param) {
-    MR_UNUSED(param);
+    MR_IGNORE(param);
     irq_hook_status = 0;
 }
 
 static void irq_hook_wakeup(void *param) {
-    MR_UNUSED(param);
+    MR_IGNORE(param);
     irq_hook_status = 1;
 }
 
@@ -361,8 +361,8 @@ static mr_irq_defer_hook_t mock_irq_hook
 /* -------------------------------------------------------------------------- */
 /* Test: IRQ defer request */
 static mr_irq_return_t test_defer_handler(mr_uint32_t irq, void *owner) {
-    MR_UNUSED(irq);
-    MR_UNUSED(owner);
+    MR_IGNORE(irq);
+    MR_IGNORE(owner);
     return MR_IRQ_DEFERRED;
 }
 

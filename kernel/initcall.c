@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -7,6 +7,7 @@
  */
 
 #include <mrX/kernel/mr_initcall.h>
+#include <mrX/libc/mr_assert.h>
 #include <mrX/libc/mr_types.h>
 
 /* Kernel and user init status(atomics may be soft-implemented and not yet
@@ -61,6 +62,9 @@ void mr_user_init(void) {
     const mr_initcall_t *start = &__mr_initcall_start;
     const mr_initcall_t *end = &__mr_initcall_end;
     const mr_initcall_t *call;
+
+    /* Check link address */
+    MR_ASSERT(start < end);
 
     /* Kernel */
     mr_kernel_init();

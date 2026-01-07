@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -15,7 +15,7 @@ static void *last_param = MR_NULL;
 static int work_run_count = 0;
 
 static void test_work_entry(struct mr_work *work, void *param) {
-    MR_UNUSED(work);
+    MR_IGNORE(work);
     work_run_count++;
     last_param = param;
 }
@@ -259,14 +259,14 @@ static int hook_suspend_called = 0;
 static int hook_wakeup_called = 0;
 
 static void test_hook_suspend(struct mr_workqueue *queue, void *param) {
-    MR_UNUSED(queue);
-    MR_UNUSED(param);
+    MR_IGNORE(queue);
+    MR_IGNORE(param);
     hook_suspend_called = 1;
 }
 
 static void test_hook_wakeup(struct mr_workqueue *queue, void *param) {
-    MR_UNUSED(queue);
-    MR_UNUSED(param);
+    MR_IGNORE(queue);
+    MR_IGNORE(param);
     hook_wakeup_called = 1;
 }
 

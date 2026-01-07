@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -193,6 +193,86 @@ mr_err_t mr_uart_rx_fifo_configuration(mr_driver_t *drv, mr_uint32_t *actual) {
     return 0;
 }
 
+static int uart_tx_poll(mr_driver_t *drv, const mr_uint8_t *buf,
+                        mr_uint32_t size) {
+    const mr_uart_ops_t *ur_ops;
+    mr_uint32_t count;
+    mr_err_t ret;
+
+    /* Get UART operations */
+    ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Write UART data */
+    for (count = 0; count < size; count++) {
+        do {
+            ret = ur_ops->write(drv, buf[count]);
+        } while (ret == (-MR_EAGAIN));
+        if (ret != 0) {
+            return (count > 0) ? (int)count : ret;
+        }
+    }
+    return (int)count;
+}
+
+static int uart_tx_fifo(mr_driver_t *drv, const mr_uint8_t *buf,
+                        mr_uint32_t size) {
+    const mr_uart_ops_t *ur_ops;
+    mr_uart_data_t *ur_data;
+    mr_uint32_t count;
+    mr_bool_t is_busy;
+    mr_err_t ret;
+
+    /* Get UART data and operations */
+    ur_data = (mr_uart_data_t *)MR_DRIVER_DATA(drv);
+    ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Write UART data to fifo */
+    count = mr_fifo_write(&ur_data->tx_fifo.fifo, buf, size);
+    if (count == 0) {
+        return 0;
+    }
+
+    /* Enable UART TX INT */
+    ret = ur_ops->tx_int_is_busy(drv, &is_busy);
+    if (ret != 0) {
+        return ret;
+    }
+    if (!is_busy) {
+        ur_ops->tx_int_control(drv, MR_TRUE);
+    }
+    return (int)count;
+}
+
+static int uart_rx_poll(mr_driver_t *drv, mr_uint8_t *buf, mr_uint32_t size) {
+    const mr_uart_ops_t *ur_ops;
+    mr_uint32_t count;
+    mr_err_t ret;
+
+    /* Get UART operations */
+    ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Read UART data */
+    for (count = 0; count < size; count++) {
+        do {
+            ret = ur_ops->read(drv, &buf[count]);
+        } while (ret == (-MR_EAGAIN));
+        if (ret != 0) {
+            return (count > 0) ? (int)count : ret;
+        }
+    }
+    return (int)count;
+}
+
+static int uart_rx_fifo(mr_driver_t *drv, mr_uint8_t *buf, mr_uint32_t size) {
+    mr_uart_data_t *ur_data;
+
+    /* Get UART data */
+    ur_data = (mr_uart_data_t *)MR_DRIVER_DATA(drv);
+
+    /* Read UART data from fifo */
+    return (int)mr_fifo_read(&ur_data->rx_fifo.fifo, buf, size);
+}
+
 mr_err_t mr_uart_irq_handle(mr_driver_t *drv, mr_uint32_t irq_type,
                             mr_uint32_t irq_data) {
     mr_uint32_t count, actual, i;
@@ -297,7 +377,7 @@ static mr_uint64_t uart_waitable_check(mr_waitable_t *waitable, void *param) {
 
     /* Get UART data */
     ur_data = (mr_uart_data_t *)MR_DRIVER_DATA((mr_driver_t *)param);
-    MR_UNUSED(waitable);
+    MR_IGNORE(waitable);
     event = 0;
 
     /* Check if UART TX fifo is not full */
@@ -322,9 +402,27 @@ static mr_err_t uart_init(const mr_driver_t *drv) {
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
 
-    /* Get UART data */
+    /* Get UART data and operations */
     ur_data = (mr_uart_data_t *)MR_DRIVER_DATA(drv);
     ur_ops = (mr_uart_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Init UART TX&RX operations */
+    if (ur_data->tx_ops_mode == MR_UART_OPS_MODE_INT) {
+        if ((!ur_ops->tx_int_control) || (!ur_ops->tx_int_is_busy)) {
+            return -MR_ENOSYS;
+        }
+        ur_data->tx = uart_tx_fifo;
+    } else {
+        ur_data->tx = uart_tx_poll;
+    }
+    if (ur_data->rx_ops_mode == MR_UART_OPS_MODE_INT) {
+        if ((!ur_ops->rx_int_control) || (!ur_ops->rx_int_is_busy)) {
+            return -MR_ENOSYS;
+        }
+        ur_data->rx = uart_rx_fifo;
+    } else {
+        ur_data->rx = uart_rx_poll;
+    }
 
     /* Init UART TX&RX fifo */
     mr_fifo_init(&ur_data->tx_fifo.fifo, MR_NULL, 0, 1);

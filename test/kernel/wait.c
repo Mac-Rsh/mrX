@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -17,8 +17,8 @@ static int trig_status = 0;
 
 static void test_waiter_cb(mr_waiter_t *waiter, void *param,
                            mr_uint64_t event) {
-    MR_UNUSED(waiter);
-    MR_UNUSED(param);
+    MR_IGNORE(waiter);
+    MR_IGNORE(param);
     trig_status++;
     last_event = event;
     last_param = param;
@@ -88,8 +88,8 @@ static void test_waiter_create_del(void) {
 MR_TEST_EXPORT(wait, waiter_create_del, test_waiter_create_del);
 
 static mr_uint64_t test_check_basic(mr_waitable_t *w, void *p) {
-    MR_UNUSED(w);
-    MR_UNUSED(p);
+    MR_IGNORE(w);
+    MR_IGNORE(p);
     return MR_WAIT_IN;
 }
 
@@ -187,8 +187,8 @@ MR_TEST_EXPORT(wait, edge_level, test_waitable_edge_level);
 /* -------------------------------------------------------------------------- */
 /* Test: Multiple waiters on same waitable                                    */
 static mr_uint64_t test_check_multi(mr_waitable_t *w, void *p) {
-    MR_UNUSED(w);
-    MR_UNUSED(p);
+    MR_IGNORE(w);
+    MR_IGNORE(p);
     return MR_WAIT_OUT;
 }
 
@@ -226,7 +226,7 @@ MR_TEST_EXPORT(wait, multiple_waiters, test_multiple_waiters);
 static mr_uint64_t test_check_race(mr_waitable_t *w, void *p) {
     static mr_uint64_t gen = 0;
 
-    MR_UNUSED(p);
+    MR_IGNORE(p);
     if ((gen++) == 0)
     {
         mr_waitable_complete(w);

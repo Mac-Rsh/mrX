@@ -6,6 +6,8 @@
  * @date 2025-11-11        MacRsh        First version
  */
 
+#include "mrX/libc/mr_types.h"
+
 #include <mrX/platform/mr_platform.h>
 #if defined(MR_USE_CLOCK_HIRES)
 #include <mrX/kernel/mr_clock.h>
@@ -99,3 +101,31 @@ void mr_port_clock_hires_tick_set(mr_uint64_t tick) {
     SysTick->CTLR = 0xf;
 }
 #endif /* defined(MR_USE_CLOCK_HIRES) */
+
+void mr_port_clock_busy_wait(mr_uint32_t us) {
+    mr_uint64_t cur, last, start, end;
+
+    /* Calculate wait time */
+    end = us * ((SysTick->CMP + 1) / 1000000ULL / MR_CFG_TICK_PER_SECOND);
+    cur = SysTick->CNT;
+    us = 0;
+
+    /* Init start time */
+    start = last = cur;
+
+    do {
+        /* Get current tick */
+        cur = SysTick->CNT;
+
+        /* Check if tick will be rewound */
+        if (cur > last) {
+            us += (start + 1);
+            start = cur;
+        }
+
+        /* Iterate */
+        last = cur;
+
+        /* Check if tick is reached */
+    } while ((us + (start - cur)) < end);
+}

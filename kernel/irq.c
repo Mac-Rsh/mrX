@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -21,7 +21,7 @@ MR_CLAZZES_DEFINE(irq, irq_statik_release, irq_dynamic_release);
 static const mr_irq_defer_hook_t *__irq_hook = MR_NULL;
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 /* Irq lock */
-static mr_spinlock_t __irq_look = MR_SPINLOCK_INIT();
+static mr_spinlock_t __irq_lock = MR_SPINLOCK_INIT();
 /* Irq descriptor table */
 #if !defined(MR_CFG_IRQ_TABLE_SIZE)
 #define MR_CFG_IRQ_TABLE_SIZE           (32)
@@ -32,8 +32,6 @@ static mr_irq_desc_t __irq_table[MR_CFG_IRQ_TABLE_SIZE];
 static mr_workqueue_t __irq_defer_queue;
 #endif /* defined(MR_USE_IRQ_DEFER) */
 
-/* Irq action pending definition */
-#define IRQ_ACTION_PENDING              (1U << 31)
 /* Irq flags definition */
 #define IRQ_FLAG_TYPE_MASK              (0x0fU)
 /* Irq priority default definition */
@@ -117,7 +115,7 @@ static mr_err_t irq_init(mr_irq_t *irq, const mr_clazz_t *clazz,
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__irq_look);
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
     /* Insert irq to table */
     ret = irq_table_insert(irq, irq_start, irq_end);
@@ -140,7 +138,7 @@ static mr_err_t irq_init(mr_irq_t *irq, const mr_clazz_t *clazz,
     }
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
     return ret;
 }
 
@@ -209,13 +207,13 @@ static void irq_action_defer_entry(mr_work_t *work, void *param) {
     void *owner;
     int mask;
 
-    MR_UNUSED(work);
+    MR_IGNORE(work);
 
     /* Get irq action */
     action = (mr_irq_action_t *)param;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__irq_look);
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
     /* Save irq action entry, owner and irq */
     entry = (mr_irq_entry_t *)action->defer_entry;
@@ -223,7 +221,7 @@ static void irq_action_defer_entry(mr_work_t *work, void *param) {
     irq = action->irq;
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
 
     /* Check if irq action was freed */
     if (!owner) {
@@ -256,13 +254,14 @@ static mr_irq_action_t *irq_action_alloc(mr_uint32_t irq, mr_irq_entry_t *entry,
     }
     action->defer_entry = defer_entry;
 #else
-    MR_UNUSED(defer_entry);
-    MR_UNUSED(ret);
+    MR_IGNORE(defer_entry);
+    MR_IGNORE(ret);
 #endif /* MR_USE_IRQ_DEFER */
 
     /* Init irq action */
+    action->irq = irq & ((1U << 31) - 1);
+    action->pending = MR_FALSE;
     action->next = MR_NULL;
-    action->irq = irq;
     action->entry = entry;
     action->owner = owner;
     return action;
@@ -308,7 +307,7 @@ static mr_err_t irq_request(mr_uint32_t irq, mr_uint16_t flags,
     int mask;
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__irq_look);
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
     /* Check if irq is dying */
     desc = &__irq_table[irq];
@@ -360,7 +359,7 @@ static mr_err_t irq_request(mr_uint32_t irq, mr_uint16_t flags,
     ret = 0;
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
     return ret;
 }
 
@@ -420,7 +419,7 @@ mr_err_t mr_irq_free(mr_uint32_t irq, void *owner) {
     MR_ASSERT(owner != MR_NULL);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__irq_look);
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
     /* Check if irq is dying */
     desc = &__irq_table[irq];
@@ -437,7 +436,7 @@ mr_err_t mr_irq_free(mr_uint32_t irq, void *owner) {
         }
 
         /* Check if irq action is pending */
-        if ((*a)->irq & IRQ_ACTION_PENDING) {
+        if ((*a)->pending) {
             /* Mark irq action, defer free */
             (*a)->owner = MR_NULL;
             ret = 0;
@@ -467,7 +466,7 @@ mr_err_t mr_irq_free(mr_uint32_t irq, void *owner) {
     ret = 0;
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
     return ret;
 }
 
@@ -480,7 +479,7 @@ mr_err_t mr_irq_enable(mr_uint32_t irq) {
     MR_ASSERT(irq < MR_CFG_IRQ_TABLE_SIZE);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__irq_look);
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
     /* Check if irq is dying */
     desc = &__irq_table[irq];
@@ -494,7 +493,7 @@ mr_err_t mr_irq_enable(mr_uint32_t irq) {
     ret = 0;
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
     return ret;
 }
 
@@ -507,7 +506,7 @@ mr_err_t mr_irq_disable(mr_uint32_t irq) {
     MR_ASSERT(irq < MR_CFG_IRQ_TABLE_SIZE);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__irq_look);
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
     /* Check if irq is dying */
     desc = &__irq_table[irq];
@@ -521,7 +520,7 @@ mr_err_t mr_irq_disable(mr_uint32_t irq) {
     ret = 0;
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
     return ret;
 }
 
@@ -533,7 +532,7 @@ int mr_irq_type(mr_uint32_t irq) {
     MR_ASSERT(irq < MR_CFG_IRQ_TABLE_SIZE);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__irq_look);
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
     /* Check if irq is not exist */
     desc = &__irq_table[irq];
@@ -546,7 +545,7 @@ int mr_irq_type(mr_uint32_t irq) {
     ret = (mr_uint8_t)(desc->flags & IRQ_FLAG_TYPE_MASK);
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
     return ret;
 }
 
@@ -559,7 +558,7 @@ mr_err_t mr_irq_priority_set(mr_uint32_t irq, mr_uint8_t priority) {
     MR_ASSERT(irq < MR_CFG_IRQ_TABLE_SIZE);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__irq_look);
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
     /* Check if irq is dying */
     desc = &__irq_table[irq];
@@ -573,7 +572,7 @@ mr_err_t mr_irq_priority_set(mr_uint32_t irq, mr_uint8_t priority) {
     ret = 0;
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
     return ret;
 }
 
@@ -585,7 +584,7 @@ int mr_irq_priority(mr_uint32_t irq) {
     MR_ASSERT(irq < MR_CFG_IRQ_TABLE_SIZE);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__irq_look);
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
     /* Check if irq is not exist */
     desc = &__irq_table[irq];
@@ -598,7 +597,7 @@ int mr_irq_priority(mr_uint32_t irq) {
     ret = (mr_uint8_t)desc->priority;
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
     return ret;
 }
 
@@ -614,7 +613,7 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
     MR_ASSERT(irq < MR_CFG_IRQ_TABLE_SIZE);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__irq_look);
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
     /* Check if irq is dying */
     desc = &__irq_table[irq];
@@ -638,23 +637,23 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
         }
 
         /* Mark irq action pending */
-        action->irq |= IRQ_ACTION_PENDING;
+        action->pending = MR_TRUE;
 
         /* Save irq action entry and owner */
         entry = (mr_irq_entry_t *)action->entry;
         owner = (void *)action->owner;
 
         /* Unlock */
-        mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+        mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
 
         /* Call irq action entry */
         ret = entry(irq, owner);
 
         /* Lock */
-        mask = mr_spinlock_lock_irqsave(&__irq_look);
+        mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
         /* Mark irq action not pending */
-        action->irq &= ~IRQ_ACTION_PENDING;
+        action->pending = MR_FALSE;
 
         /* Check if irq action is being freed */
         if (!action->owner) {
@@ -709,7 +708,7 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
     mr_irq_put(desc->irq);
 _exit:
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
     return ret;
 }
 
@@ -735,7 +734,7 @@ void mr_irq_defer_execute(void) {
 static void irq_workqueue_hook_wakeup(mr_workqueue_t *queue, void *param) {
     const mr_irq_defer_hook_t *hook;
 
-    MR_UNUSED(queue);
+    MR_IGNORE(queue);
 
     /* Check irq defer wakeup hook */
     hook = *(const mr_irq_defer_hook_t **)param;
@@ -750,7 +749,7 @@ static void irq_workqueue_hook_wakeup(mr_workqueue_t *queue, void *param) {
 static void irq_workqueue_hook_suspend(mr_workqueue_t *queue, void *param) {
     const mr_irq_defer_hook_t *hook;
 
-    MR_UNUSED(queue);
+    MR_IGNORE(queue);
 
     /* Check irq defer suspend hook */
     hook = *(const mr_irq_defer_hook_t **)param;
@@ -779,13 +778,13 @@ static void irq_del(mr_irq_t *irq) {
     mr_atomic_store(&irq->dying, MR_TRUE);
 
     /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__irq_look);
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
     /* Remove irq from table */
     irq_table_remove(irq);
 
     /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__irq_look, mask);
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
 }
 
 static void irq_statik_release(mr_object_t *obj) {

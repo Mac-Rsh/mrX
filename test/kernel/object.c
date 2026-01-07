@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -18,13 +18,13 @@ static int test_object_dynamic_release_called = 0;
 /* Mock release handlers */
 static void test_object_statik_release(struct mr_object *obj)
 {
-    MR_UNUSED(obj);
+    MR_IGNORE(obj);
     test_object_statik_release_called++;
 }
 
 static void test_object_dynamic_release(struct mr_object *obj)
 {
-    MR_UNUSED(obj);
+    MR_IGNORE(obj);
     test_object_dynamic_release_called++;
 }
 

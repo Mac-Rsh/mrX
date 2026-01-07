@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -124,6 +124,15 @@ mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
  * @return The current uptime.
  */
 mr_uptime_t mr_clock_uptime(void);
+
+/**
+ * @brief This function busy waits for a specified number of microseconds.
+ *
+ * @param us The number of microseconds to wait.
+ *
+ * @note It won't give up the CPU.
+ */
+void mr_clock_busy_wait(mr_uint32_t us);
 
 /** @} */
 

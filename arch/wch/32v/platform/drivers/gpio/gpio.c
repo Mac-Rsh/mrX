@@ -10,7 +10,7 @@
 #if defined(MR_USE_DRIVER_GPIO)
 #include <mrX/drivers/gpio/mr_gpio.h>
 
-/* Hard tree compatible */
+/* HardTree compatible */
 #define MR_HT_COMPAT                    wch_ch32v_gpio
 
 /* Driver GPIO operations */
@@ -24,7 +24,7 @@ static mr_err_t drv_pin_read(const mr_driver_t *drv, mr_uint32_t pin,
                              mr_uint8_t *value);
 static mr_err_t drv_port_write(const mr_driver_t *drv, mr_uint32_t mask);
 static mr_err_t drv_port_read(const mr_driver_t *drv, mr_uint32_t *mask);
-static const mr_gpio_ops_t __drv_gpio_ops
+MR_UNUSED static const mr_gpio_ops_t __drv_gpio_ops
     = {.pin_configure = drv_pin_configure,
        .pin_configuration = drv_pin_configuration,
        .pin_write = drv_pin_write,
@@ -266,7 +266,7 @@ static mr_err_t drv_pin_configuration(const mr_driver_t *drv, mr_uint32_t pin,
             config->mode = MR_GPIO_MODE_INPUT;
             config->pull = MR_GPIO_PULL_NONE;
             if (CNFr == 0x2) {
-                if (priv->GPIOx->INDR & 0x1) {
+                if (priv->GPIOx->INDR & (1U << pin)) {
                     config->pull = MR_GPIO_PULL_UP;
                 } else {
                     config->pull = MR_GPIO_PULL_DOWN;
@@ -427,13 +427,13 @@ void EXTI9_5_IRQHandler(void) {
         EXTI_ClearITPendingBit(EXTI_Line7);
         drv_gpio_irq_handle(7);
     }
-    if (EXTI_GetITStatus(EXTI_Line9) != RESET) {
-        drv_gpio_irq_handle(9);
-        EXTI_ClearITPendingBit(EXTI_Line9);
-    }
     if (EXTI_GetITStatus(EXTI_Line8) != RESET) {
-        drv_gpio_irq_handle(8);
         EXTI_ClearITPendingBit(EXTI_Line8);
+        drv_gpio_irq_handle(8);
+    }
+    if (EXTI_GetITStatus(EXTI_Line9) != RESET) {
+        EXTI_ClearITPendingBit(EXTI_Line9);
+        drv_gpio_irq_handle(9);
     }
 }
 void EXTI15_10_IRQHandler(void)
@@ -467,10 +467,10 @@ void EXTI15_10_IRQHandler(void) {
 #endif /* defined(MR_USE_WCH_SERIES_V00X) */
 
 /* Instance install */
-#define WCH_GPIO_HT_INST_GPIO_INSTALL(_id, _ops)                               \
+#define WCH_HT_GPIO_INST_GPIO_INSTALL(_id, _ops)                               \
     static drv_gpio_priv_t __drv_gpio_priv_##_id                               \
-        = {.GPIOx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), base),             \
-           .RCCx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), clk)};              \
+        = {.GPIOx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), wch_gpiox),        \
+           .RCCx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), wch_rccx)};         \
     MR_HT_INST_GPIO_INSTALL(_id, &__drv_gpio_priv_##_id, _ops)
-MR_HT_INST_DRIVER_FOREACH(WCH_GPIO_HT_INST_GPIO_INSTALL, &__drv_gpio_ops);
+MR_HT_INST_DRIVER_FOREACH(WCH_HT_GPIO_INST_GPIO_INSTALL, &__drv_gpio_ops);
 #endif /* defined (MR_USE_DRIVER_GPIO) */

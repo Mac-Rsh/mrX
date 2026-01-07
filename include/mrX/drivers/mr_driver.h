@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -43,8 +43,10 @@ struct mr_driver;
 /* Driver type definition */
 typedef enum mr_driver_type {
     MR_DRIVER_TYPE_NONE = 0,
-    MR_DRIVER_TYPE_GPIO = 0x0100,
-    MR_DRIVER_TYPE_UART = 0x0200,
+    MR_DRIVER_TYPE_RAM = 0x0100,
+    MR_DRIVER_TYPE_GPIO = 0x0200,
+    MR_DRIVER_TYPE_UART = 0x0300,
+    MR_DRIVER_TYPE_I2C = 0x0400,
     MR_DRIVER_TYPE_MASK = 0xff00,
 } mr_driver_type_t;
 
@@ -369,6 +371,21 @@ mr_err_t mr_driver_setup(mr_driver_t *drv);
 mr_err_t mr_driver_shutdown(mr_driver_t *drv);
 
 /**
+ * @brief This function gets a driver type.
+ *
+ * @param drv The driver.
+ * @return The driver type.
+ */
+MR_INLINE mr_uint16_t mr_driver_type(mr_driver_t *drv) {
+    /* Check parameter */
+    MR_ASSERT((drv != MR_NULL) && MR_OBJECT_IS_INITED(drv));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(drv, driver));
+
+    /* Get driver type */
+    return (mr_uint16_t)drv->type;
+}
+
+/**
  * @brief This function sets a driver state.
  *
  * @param drv The driver.
@@ -431,7 +448,8 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
     return mr_object_put((mr_object_t *)drv);
 }
 
-#if defined(MR_USE_DRIVER_HARDTREE)
+/* ================================ HardTree ================================ */
+
 /**
  * @brief This macro function checks whether the driver instance exist.
  *
@@ -484,7 +502,6 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
 #define __MR_HT_INST_DRIVER_EXPORT(_id)                                        \
     MR_DRIVER_EXPORT(MR_HT_NODE_NAME(MR_HT_INST(DRIVER, _id)))
 MR_HT_INST_FOREACH(DRIVER, __MR_HT_INST_DRIVER_EXPORT);
-#endif /* defined(MR_USE_DRIVER_HARDTREE) */
 #endif /* defined(MR_USE_DRIVER) */
 
 /** @} */

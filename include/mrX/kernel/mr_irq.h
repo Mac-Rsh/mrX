@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -76,7 +76,8 @@ typedef struct mr_irq {
 /* Irq action type */
 typedef struct mr_irq_action {
     struct mr_irq_action *next;
-    mr_uint32_t irq;
+    mr_uint32_t pending: 1;
+    mr_uint32_t irq: 31;
     mr_ptr_t entry;
     mr_ptr_t owner;
 #if defined(MR_USE_IRQ_DEFER)

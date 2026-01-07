@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -37,6 +37,16 @@ extern void mr_port_clock_hires_tick_set(mr_uint64_t tick);
  * @note Platform implementation.
  */
 extern mr_uint64_t mr_port_clock_hires_tick(void);
+
+/**
+ * @brief This function busy waits for a specified number of microseconds.
+ *
+ * @param us The number of microseconds to wait.
+ *
+ * @note Platform implementation.
+ * @note Don't give up the CPU.
+ */
+extern void mr_port_clock_busy_wait(mr_uint32_t us);
 
 /** @} */
 

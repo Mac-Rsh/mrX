@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -9,11 +9,8 @@
 #ifndef __MR_DRIVER_HARDTREE_H__
 #define __MR_DRIVER_HARDTREE_H__
 
-#include <mrX/mr_config.h>
-#if defined(MR_USE_DRIVER_HARDTREE)
 #include <mrX/kernel/mr_listify.h>
 #include <mrX/mr_hardgen.h>
-#endif /* defined(MR_USE_DRIVER_HARDTREE) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,7 +22,7 @@ extern "C" {
  */
 
 /* The implementation mechanism of HT is based on 'zephyr' */
-#if defined(MR_USE_DRIVER_HARDTREE)
+
 /**
  * @brief This macro function checks whether the path exists.
  *
@@ -106,7 +103,7 @@ extern "C" {
  */
 #define MR_HT_INST_FOREACH(_compat, _fn, ...)                                  \
     MR_MACRO_IF(MR_HT_HAS_INST(_compat),                                       \
-                (MR_LISTIFY(MR_CAT(MR_HT_PATH(INST, _compat), _NUM), ;         \
+                (MR_LISTIFY(MR_CAT(MR_HT_PATH(INST, _compat), _NUM), (;)       \
                  , _fn, ##__VA_ARGS__)),                                       \
                 ())
 
@@ -143,13 +140,97 @@ extern "C" {
                 (MR_HT_NODE_PROP(_node, _prop)), (_default))
 
 /**
+ * @brief This macro function checks whether an indexed element of a property
+ *        array exists.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @param _elem The element name.
+ * @param _idx The index into the property array.
+ * @return MR_TRUE if the indexed element exists, MR_FALSE otherwise.
+ */
+#define MR_HT_HAS_NODE_PROP_ELEM(_node, _prop, _elem, _idx)                    \
+    MR_HT_HAS_NODE_PROP(_node, MR_CAT(_prop, _E_, _elem, _I_, _idx))
+
+/**
+ * @brief This macro function gets an indexed element from a property array.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @param _elem The element name.
+ * @param _idx The index into the property array.
+ * @return The indexed property value.
+ */
+#define MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, _idx)                        \
+    MR_HT_NODE_PROP(_node, MR_CAT(_prop, _E_, _elem, _I_, _idx))
+
+/**
+ * @brief This macro function gets an indexed element from a property array or
+ *        returns a default value.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @param _elem The element name.
+ * @param _idx The index into the property array.
+ * @param _default The default value.
+ * @return The indexed property value or the default value.
+ */
+#define MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, _idx, _default)           \
+    MR_MACRO_IF(MR_HT_HAS_NODE_PROP_ELEM(_node, _prop, _elem, _idx),           \
+                (MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, _idx)), (_default))
+
+/**
+ * @brief This macro function iterates over all indexed elements of a property
+ *        array.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @param _fn The function to be called, like: fn(i, ...), where i is the index.
+ * @param ... The arguments to be passed to the function.
+ */
+#define MR_HT_NODE_PROP_ELEM_FOREACH(_node, _prop, _fn, ...)                   \
+    MR_LISTIFY_NEST(MR_CAT(_node, _P_, _prop, _E, _NUM), (, ), _fn, _node,     \
+                    _prop, ##__VA_ARGS__)
+
+/**
  * @brief This macro function gets the node name.
  *
  * @param _node The node.
  * @return The node name.
  */
 #define MR_HT_NODE_NAME(_node)          MR_HT_NODE_PROP(_node, NAME)
-#endif /* defined(MR_USE_DRIVER_HARDTREE) */
+
+/**
+ * @brief This macro function checks whether the node has a parent.
+ *
+ * @param _node The node.
+ * @return MR_TRUE if the node has a parent, MR_FALSE otherwise.
+ */
+#define MR_HT_NODE_HAS_PARENT(_node)    MR_HT_HAS_NODE_PROP(_node, PARENT)
+
+/**
+ * @brief This macro function gets the node parent.
+ *
+ * @param _node The node.
+ * @return The node parent.
+ */
+#define MR_HT_NODE_PARENT(_node)        MR_HT_NODE_PROP(_node, PARENT)
+
+/**
+ * @brief This macro function checks whether the node has an address.
+ *
+ * @param _node The node.
+ * @return MR_TRUE if the node has an address, MR_FALSE otherwise.
+ */
+#define MR_HT_NODE_HAS_ADDR(_node)    MR_HT_HAS_NODE_PROP(_node, ADDR)
+
+/**
+ * @brief This macro function gets the node address.
+ *
+ * @param _node The node.
+ * @return The node address.
+ */
+#define MR_HT_NODE_ADDR(_node)        MR_HT_NODE_PROP(_node, ADDR)
 
 /** @} */
 

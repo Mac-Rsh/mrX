@@ -1,0 +1,17 @@
+menu "I2C options"
+
+# ==================================
+# I2C
+# ==================================
+config MR_USE_DRIVER_I2C
+    select MR_USE_DRIVER
+    bool "Use I2C"
+    default n
+
+config MR_USE_DRIVER_I2C_GPIOS
+    depends on MR_USE_DRIVER_I2C
+    select MR_USE_DRIVER_GPIO
+    bool "Use I2C-GPIOS"
+    default n
+
+endmenu

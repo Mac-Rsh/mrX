@@ -8,11 +8,6 @@ config MR_USE_DRIVER
     bool "Use driver"
     default n
 
-config MR_USE_DRIVER_HARDTREE
-    depends on MR_USE_DRIVER
-    bool "Use hardtree"
-    default y
-
 # ==================================
 # RSOURCE
 # ==================================

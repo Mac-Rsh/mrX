@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -192,6 +192,8 @@ extern "C" {
 
 /**
  * @brief This macro function strips the brackets from a code.
+ *
+ * @param ... The code.
  */
 #define MR_DE_BRACKET(...)              __VA_ARGS__
 

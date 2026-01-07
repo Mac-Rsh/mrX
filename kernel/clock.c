@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -162,13 +162,12 @@ mr_uptime_t mr_clock_uptime(void) {
         = MR_ROUND_DIV(1000ULL, MR_CFG_TICK_PER_SECOND);
     mr_atomic_t thin, coarse, coarse2;
     mr_uint64_t uptime;
-    mr_uint32_t retry;
 
     /* Get current coarse tick */
     coarse = mr_atomic_load(&__clock_uptime);
 
     /* Dual sampling */
-    for (retry = 3; retry > 0; retry--) {
+    do {
         /* Get current thin tick */
         thin = mr_atomic_load(&__clock_tick);
 
@@ -182,9 +181,14 @@ mr_uptime_t mr_clock_uptime(void) {
 
         /* No updated */
         break;
-    }
+    } while (1);
 
     /* Calculate uptime */
     uptime = ((mr_uint64_t)coarse * MR_TICK_MAX) + (mr_uint64_t)thin;
     return (mr_uptime_t)(uptime * time_correct);
+}
+
+void mr_clock_busy_wait(mr_uint32_t us) {
+    /* Don't give up the CPU */
+    mr_port_clock_busy_wait(us);
 }

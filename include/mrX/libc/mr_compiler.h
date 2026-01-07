@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -22,6 +22,7 @@ extern "C" {
 #if defined(__GNUC__) || defined(__clang__) || defined(__ARMCC_VERSION)
 #define MR_ALIGN(_x)                    __attribute__((aligned(_x)))
 #define MR_SECTION(_x)                  __attribute__((section(_x)))
+#define MR_UNUSED                       __attribute__((unused))
 #define MR_USED                         __attribute__((used))
 #define MR_WEAK                         __attribute__((weak))
 #define MR_INLINE                       static __inline
@@ -30,7 +31,7 @@ extern "C" {
 #endif /* defined(__GNUC__) || defined(__clang__) || defined(__ARMCC_VERSION) */
 #define MR_SECTION_ALIGN(_x)            MR_ALIGN(MR_ALIGN_SIZE) MR_SECTION(_x)
 #define MR_ALIGN_SIZE                   (sizeof(void *))
-#define MR_UNUSED(_x)                   (void)(_x)
+#define MR_IGNORE(_x)                   (void)(_x)
 
 /** @} */
 

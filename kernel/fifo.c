@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -64,6 +64,11 @@ void mr_fifo_free(mr_fifo_t *fifo) {
 mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data) {
     mr_uint32_t index;
 
+    /* Check if fifo is not initialized */
+    if (!fifo->buf) {
+        return 0;
+    }
+
     /* Check if fifo is full */
     if (mr_fifo_is_full(fifo)) {
         return 0;
@@ -84,6 +89,11 @@ mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data) {
 mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data) {
     mr_uint32_t index;
 
+    /* Check if fifo is not initialized */
+    if (!fifo->buf) {
+        return 0;
+    }
+
     /* Check if fifo is empty */
     if (mr_fifo_is_empty(fifo)) {
         return 0;
@@ -103,6 +113,11 @@ mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data) {
 
 mr_uint32_t mr_fifo_write(mr_fifo_t *fifo, const void *buf, mr_uint32_t num) {
     mr_uint32_t avail, num2, index, size, n;
+
+    /* Check if fifo is not initialized */
+    if (!fifo->buf) {
+        return 0;
+    }
 
     /* Limit number */
     avail = mr_fifo_avail(fifo);
@@ -135,6 +150,11 @@ mr_uint32_t mr_fifo_overwrite(mr_fifo_t *fifo, const void *buf,
                               mr_uint32_t num) {
     mr_uint32_t cap, avail;
 
+    /* Check if fifo is not initialized */
+    if (!fifo->buf) {
+        return 0;
+    }
+
     /* Limit number */
     cap = fifo->mask + 1;
     if (num > cap) {
@@ -154,6 +174,11 @@ mr_uint32_t mr_fifo_overwrite(mr_fifo_t *fifo, const void *buf,
 
 mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
     mr_uint32_t avail, num2, index, size, n;
+
+    /* Check if fifo is not initialized */
+    if (!fifo->buf) {
+        return 0;
+    }
 
     /* Limit number */
     avail = mr_fifo_len(fifo);
@@ -184,6 +209,11 @@ mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
 mr_uint32_t mr_fifo_write_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
                                 mr_uint32_t want) {
     mr_uint32_t avail, index, size;
+
+    /* Check if fifo is not initialized */
+    if (!fifo->buf) {
+        return 0;
+    }
 
     /* Limit wants */
     avail = mr_fifo_avail(fifo);
@@ -217,6 +247,11 @@ mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
                                     void **buf, mr_uint32_t want) {
     mr_uint32_t cap, index, size;
 
+    /* Check if fifo is not initialized */
+    if (!fifo->buf) {
+        return 0;
+    }
+
     /* Limit wants */
     cap = fifo->mask + 1;
     if (want > cap) {
@@ -248,6 +283,11 @@ mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
 mr_uint32_t mr_fifo_read_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
                                mr_uint32_t want) {
     mr_uint32_t avail, index, size;
+
+    /* Check if fifo is not initialized */
+    if (!fifo->buf) {
+        return 0;
+    }
 
     /* Limit wants */
     avail = mr_fifo_len(fifo);

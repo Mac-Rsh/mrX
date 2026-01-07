@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -205,6 +205,10 @@ void *mr_calloc(mr_size_t num, mr_size_t size) {
     void *mem;
 
     /* Calculate the total size */
+    if ((num != 0) && (size > MR_SIZE_MAX / num)) {
+        /* Overflow */
+        return MR_NULL;
+    }
     total = num * size;
     if (total == 0) {
         return MR_NULL;
@@ -235,7 +239,7 @@ void *mr_realloc(void *mem, mr_size_t size) {
 
     /* Reallocate memory */
     new = mr_malloc(size);
-    if (!new && (size > 0)) {
+    if ((!new) && (size > 0)) {
         /* Not enough memory */
         return MR_NULL;
     }

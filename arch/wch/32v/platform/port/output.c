@@ -11,7 +11,7 @@
 #include <mrX/libc/mr_types.h>
 
 int mr_port_output(const char *buf, mr_size_t size) {
-    MR_UNUSED(buf);
-    MR_UNUSED(size);
+    MR_IGNORE(buf);
+    MR_IGNORE(size);
     return 0;
 }

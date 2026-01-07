@@ -19,14 +19,14 @@ void SW_Handler(void) {
 }
 
 static void irq_defer_hook_suspend(void *priv) {
-    MR_UNUSED(priv);
+    MR_IGNORE(priv);
 
     /* Clear soft irq */
     SysTick->CTLR &= ~(1U << 31);
 }
 
 static void irq_defer_hook_wakeup(void *priv) {
-    MR_UNUSED(priv);
+    MR_IGNORE(priv);
 
     /* Trigger soft irq */
     SysTick->CTLR |= (1U << 31);

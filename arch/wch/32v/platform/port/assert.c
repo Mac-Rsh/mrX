@@ -10,7 +10,7 @@
 #include <mrX/libc/mr_compiler.h>
 
 void mr_port_assert(const char *file, int line, const char *expr) {
-    MR_UNUSED(file);
-    MR_UNUSED(line);
-    MR_UNUSED(expr);
+    MR_IGNORE(file);
+    MR_IGNORE(line);
+    MR_IGNORE(expr);
 }

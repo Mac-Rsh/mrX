@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -70,11 +70,11 @@ typedef struct mr_gpio_config {
     mr_uint8_t level: 1;
 } mr_gpio_config_t;
 
-/* GPIO date type */
+/* GPIO data type */
 MR_DRIVER_CLAZZES_EXPORT(gpio);
 typedef struct mr_gpio_data {
     mr_uint32_t exist_mask;
-    mr_uint32_t invert;
+    mr_uint32_t invert_mask;
     mr_waitable_t irq;
 } mr_gpio_data_t;
 
@@ -96,10 +96,10 @@ typedef struct mr_gpio_ops {
  * @brief This macro function initializes a GPIO data.
  *
  * @param _exist_mask The GPIO exist mask.
- * @param _invert The GPIO invert mask.
+ * @param _invert_mask The GPIO invert mask.
  */
-#define MR_GPIO_DATA_INIT(_exist_mask, _invert)                                \
-    {.exist_mask = (_exist_mask), .invert = (_invert)}
+#define MR_GPIO_DATA_INIT(_exist_mask, _invert_mask)                           \
+    {.exist_mask = (_exist_mask), .invert_mask = (_invert_mask)}
 
 /**
  * @brief This macro function defines a GPIO driver.
@@ -214,12 +214,14 @@ mr_err_t mr_gpio_pin_configuration(mr_driver_t *drv, mr_uint32_t pin,
  * @param drv The GPIO driver.
  * @param pin The GPIO pin.
  * @param value The GPIO pin value.
- * @return 0 on success, a negative error code on failure.
+ * @return The number of bytes written on success, a negative error code on
+ * failure.
  */
-MR_INLINE mr_err_t mr_gpio_pin_write(mr_driver_t *drv, mr_uint32_t pin,
-                                     mr_uint8_t value) {
+MR_INLINE int mr_gpio_pin_write(mr_driver_t *drv, mr_uint32_t pin,
+                                mr_uint8_t value) {
     const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
+    mr_err_t ret;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
@@ -237,8 +239,12 @@ MR_INLINE mr_err_t mr_gpio_pin_write(mr_driver_t *drv, mr_uint32_t pin,
     }
 
     /* Write pin value */
-    value = (!!value) ^ (!!(gp_data->invert & (1U << pin)));
-    return gp_ops->pin_write(drv, pin, value);
+    value = (!!value) ^ (!!(gp_data->invert_mask & (1U << pin)));
+    ret = gp_ops->pin_write(drv, pin, value);
+    if (ret != 0) {
+        return (int)ret;
+    }
+    return sizeof(value);
 }
 
 /**
@@ -246,12 +252,14 @@ MR_INLINE mr_err_t mr_gpio_pin_write(mr_driver_t *drv, mr_uint32_t pin,
  *
  * @param drv The GPIO driver.
  * @param pin The GPIO pin.
- * @return The GPIO pin value on success, a negative error code on failure.
+ * @param value The GPIO pin value.
+ * @return The number of bytes read on success, a negative error code on
+ * failure.
  */
-MR_INLINE int mr_gpio_pin_read(mr_driver_t *drv, mr_uint32_t pin) {
+MR_INLINE int mr_gpio_pin_read(mr_driver_t *drv, mr_uint32_t pin,
+                               mr_uint8_t *value) {
     const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
-    mr_uint8_t value;
     mr_err_t ret;
 
     /* Check parameter */
@@ -270,11 +278,12 @@ MR_INLINE int mr_gpio_pin_read(mr_driver_t *drv, mr_uint32_t pin) {
     }
 
     /* Read pin value */
-    ret = gp_ops->pin_read(drv, pin, &value);
+    ret = gp_ops->pin_read(drv, pin, value);
     if (ret != 0) {
         return (int)ret;
     }
-    return (int)((!!value) ^ (!!(gp_data->invert & (1U << pin))));
+    *value = (!!(*value)) ^ (!!(gp_data->invert_mask & (1U << pin)));
+    return sizeof(*value);
 }
 
 /**
@@ -327,9 +336,10 @@ MR_INLINE mr_err_t mr_gpio_pin_output(mr_driver_t *drv, mr_uint32_t pin,
  *
  * @param drv The GPIO driver.
  * @param pin The GPIO pin.
- * @return 0 on success, a negative error code on failure.
+ * @return The number of bytes toggle on success, a negative error code on
+ * failure.
  */
-MR_INLINE mr_err_t mr_gpio_pin_toggle(mr_driver_t *drv, mr_uint32_t pin) {
+MR_INLINE int mr_gpio_pin_toggle(mr_driver_t *drv, mr_uint32_t pin) {
     const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
     mr_uint8_t value;
@@ -353,12 +363,16 @@ MR_INLINE mr_err_t mr_gpio_pin_toggle(mr_driver_t *drv, mr_uint32_t pin) {
     /* Read pin value */
     ret = gp_ops->pin_read(drv, pin, &value);
     if (ret != 0) {
-        return ret;
+        return (int)ret;
     }
 
     /* Toggle pin value */
     value = (!!value) ^ 0x1U;
-    return gp_ops->pin_write(drv, pin, value);
+    ret = gp_ops->pin_write(drv, pin, value);
+    if (ret != 0) {
+        return (int)ret;
+    }
+    return sizeof(value);
 }
 
 /**
@@ -366,11 +380,13 @@ MR_INLINE mr_err_t mr_gpio_pin_toggle(mr_driver_t *drv, mr_uint32_t pin) {
  *
  * @param drv The GPIO driver.
  * @param mask The GPIO port value mask.
- * @return 0 on success, a negative error code on failure.
+ * @return The number of bytes written on success, a negative error code on
+ * failure.
  */
-MR_INLINE mr_err_t mr_gpio_port_write(mr_driver_t *drv, mr_uint32_t mask) {
+MR_INLINE int mr_gpio_port_write(mr_driver_t *drv, mr_uint32_t mask) {
     const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
+    mr_err_t ret;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
@@ -382,8 +398,12 @@ MR_INLINE mr_err_t mr_gpio_port_write(mr_driver_t *drv, mr_uint32_t mask) {
     gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Write port value mask */
-    mask = mask ^ gp_data->invert;
-    return gp_ops->port_write(drv, mask);
+    mask = mask ^ gp_data->invert_mask;
+    ret = gp_ops->port_write(drv, mask);
+    if (ret != 0) {
+        return (int)ret;
+    }
+    return sizeof(mask);
 }
 
 /**
@@ -391,9 +411,10 @@ MR_INLINE mr_err_t mr_gpio_port_write(mr_driver_t *drv, mr_uint32_t mask) {
  *
  * @param drv The GPIO driver.
  * @param mask The GPIO port value mask.
- * @return 0 on success, a negative error code on failure.
+ * @return The number of bytes read on success, a negative error code on
+ * failure.
  */
-MR_INLINE mr_err_t mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask) {
+MR_INLINE int mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask) {
     const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
     mr_err_t ret;
@@ -411,19 +432,20 @@ MR_INLINE mr_err_t mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask) {
     /* Read port value mask */
     ret = gp_ops->port_read(drv, mask);
     if (ret != 0) {
-        return ret;
+        return (int)ret;
     }
-    *mask = *mask ^ gp_data->invert;
-    return 0;
+    *mask = *mask ^ gp_data->invert_mask;
+    return sizeof(*mask);
 }
 
 /**
  * @brief This function toggles a GPIO port.
  *
  * @param drv The GPIO driver.
- * @return 0 on success, a negative error code on failure.
+ * @return The number of bytes toggle on success, a negative error code on
+ * failure.
  */
-MR_INLINE mr_err_t mr_gpio_port_toggle(mr_driver_t *drv) {
+MR_INLINE int mr_gpio_port_toggle(mr_driver_t *drv) {
     const mr_gpio_ops_t *gp_ops;
     mr_uint32_t mask;
     mr_err_t ret;
@@ -439,12 +461,16 @@ MR_INLINE mr_err_t mr_gpio_port_toggle(mr_driver_t *drv) {
     /* Get port value */
     ret = gp_ops->port_read(drv, &mask);
     if (ret != 0) {
-        return ret;
+        return (int)ret;
     }
 
     /* Toggle port value */
     mask = mask ^ 0xffffffffU;
-    return gp_ops->port_write(drv, mask);
+    ret = gp_ops->port_write(drv, mask);
+    if (ret != 0) {
+        return (int)ret;
+    }
+    return sizeof(mask);
 }
 
 /**
@@ -515,7 +541,8 @@ MR_INLINE mr_bool_t mr_gpio_put(mr_driver_t *drv) {
     return mr_driver_put(drv);
 }
 
-#if defined(MR_USE_DRIVER_HARDTREE)
+/* ================================ HardTree ================================ */
+
 /**
  * @brief This macro function installs a GPIO instance through hardtree.
  *
@@ -526,11 +553,59 @@ MR_INLINE mr_bool_t mr_gpio_put(mr_driver_t *drv) {
 #define MR_HT_INST_GPIO_INSTALL(_id, _priv, _ops)                              \
     static mr_gpio_data_t __mr_gpio_data_##_id = MR_GPIO_DATA_INIT(            \
         MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), exist_mask, 0xffffffffU),   \
-        MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), invert, 0));                \
+        MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), invert_mask, 0x0U));        \
     MR_HT_INST_DRIVER_INSTALL(                                                 \
         _id, MR_DRIVER_CLAZZES_STATIK(MR_DRIVER_CLAZZES_FIND(gpio)),           \
         MR_DRIVER_TYPE_GPIO, &__mr_gpio_data_##_id, _priv, _ops)
-#endif /* defined(MR_USE_DRIVER_HARDTREE) */
+
+/* GPIO hardtree specification type */
+typedef struct mr_ht_gpio_spec {
+    mr_driver_t *drv;
+    mr_uint8_t pin;
+    mr_gpio_config_t config;
+} mr_ht_gpio_spec_t;
+
+/**
+ * @brief This macro function creates a GPIO specification structure from
+ *        hardtree properties.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @return The initialized mr_ht_gpio_spec_t structure.
+ *
+ * @note Property cells: [phandle, pin, mode, alt, pull, otype, level].
+ */
+#define MR_HT_GPIO_SPEC(_node, _prop)   __MR_HT_GPIO_SPEC_IMPL(0, _node, _prop)
+#define __MR_HT_GPIO_SPEC_IMPL(_elem, _node, _prop)                            \
+    {                                                                          \
+        .drv                                                                   \
+            = MR_HT_DRIVER_FIND(MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0)), \
+            .pin = (mr_uint8_t)MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 1),   \
+            .config                                                            \
+            = {.mode = MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, 2,         \
+                                               MR_GPIO_MODE_ANALOG),           \
+               .alt                                                            \
+               = MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, 3, MR_FALSE),    \
+               .pull = MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, 4,         \
+                                               MR_GPIO_PULL_NONE),             \
+               .otype = MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, 5,        \
+                                                MR_GPIO_OTYPE_PP),             \
+               .level = MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, 6,        \
+                                                MR_GPIO_LEVEL_LOW),            \
+              }                                                                \
+    }
+
+/**
+ * @brief This macro function iterates over all GPIO specification elements
+ *        in a property array and creates corresponding structures.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ *
+ * @note Property cells: [phandle, pin, mode, alt, pull, otype, level].
+ */
+#define MR_HT_GPIO_SPEC_FOREACH(_node, _prop)                                  \
+    MR_HT_NODE_PROP_ELEM_FOREACH(_node, _prop, __MR_HT_GPIO_SPEC_IMPL)
 #endif /* defined(MR_USE_DRIVER_GPIO) */
 
 /** @} */

@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2025, MacRsh
+ * @copyright (c) 2024-2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -72,12 +72,18 @@
 
 #if defined(MR_USE_DRIVER)
 #include <mrX/drivers/mr_driver.h>
+#if defined(MR_USE_DRIVER_RAM)
+#include <mrX/drivers/ram/mr_ram.h>
+#endif /* defined(MR_USE_DRIVER_RAM) */
 #if defined(MR_USE_DRIVER_GPIO)
 #include <mrX/drivers/gpio/mr_gpio.h>
 #endif /* defined(MR_USE_DRIVER_GPIO) */
 #if defined(MR_USE_DRIVER_UART)
 #include <mrX/drivers/uart/mr_uart.h>
 #endif /* defined(MR_USE_DRIVER_UART) */
+#if defined(MR_USE_DRIVER_I2C)
+#include <mrX/drivers/i2c/mr_i2c.h>
+#endif /* defined(MR_USE_DRIVER_I2C) */
 #endif /* defined(MR_USE_DRIVER) */
 
 /** @} */
