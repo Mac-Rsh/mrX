@@ -49,7 +49,7 @@ typedef struct mr_hook {
  */
 MR_INLINE void mr_hook_init(mr_hook_t *hook, mr_ptr_t *entry,
                             mr_uint16_t size) {
-    /* Initialize hook */
+    /* Init hook */
     hook->entry = entry;
     hook->size = size;
     hook->next = 0;

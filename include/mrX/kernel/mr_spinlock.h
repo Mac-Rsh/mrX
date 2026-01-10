@@ -48,7 +48,7 @@ MR_INLINE void mr_spinlock_lock(mr_spinlock_t *lock) {
     mr_atomic_t unlock;
 
     do {
-        /* Initialize unlock value */
+        /* Init unlock value */
         mr_atomic_init(&unlock, 0);
 
         /* Try to lock spinlock */

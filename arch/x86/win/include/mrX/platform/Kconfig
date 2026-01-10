@@ -1,0 +1,9 @@
+menu "Platform options"
+
+# ==================================
+# PLATFORM
+# ==================================
+config MR_USE_PLATFORM
+    def_bool y
+
+endmenu

@@ -6,8 +6,6 @@
  * @date 2025-11-11        MacRsh        First version
  */
 
-#include "mrX/libc/mr_types.h"
-
 #include <mrX/platform/mr_platform.h>
 #if defined(MR_USE_CLOCK_HIRES)
 #include <mrX/kernel/mr_clock.h>
