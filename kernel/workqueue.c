@@ -390,7 +390,7 @@ static void queue_del(mr_workqueue_t *queue) {
     mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 }
 
-static void queue_statik_release(mr_object_t *obj) {
+static mr_workqueue_t *workqueue_obj_release(mr_object_t *obj) {
     mr_workqueue_t *queue;
 
     /* Get workqueue */
@@ -398,14 +398,22 @@ static void queue_statik_release(mr_object_t *obj) {
 
     /* Delete workqueue */
     queue_del(queue);
+    return queue;
+}
+
+static void queue_statik_release(mr_object_t *obj) {
+    /* Release workqueue */
+    workqueue_obj_release(obj);
 }
 
 static void queue_dynamic_release(mr_object_t *obj) {
+    mr_workqueue_t *queue;
+
     /* Release workqueue */
-    queue_statik_release(obj);
+    queue = workqueue_obj_release(obj);
 
     /* Free workqueue */
-    mr_free(obj);
+    mr_free(queue);
 }
 
 static mr_err_t work_init(mr_work_t *work, const mr_clazz_t *clazz,

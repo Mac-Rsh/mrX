@@ -9,8 +9,10 @@
 #include <mrX/kernel/mr_irq.h>
 #if defined(MR_USE_IRQ)
 #include <mrX/kernel/mr_spinlock.h>
-#include <mrX/kernel/mr_slab.h>
 #include <mrX/libc/mr_malloc.h>
+#if !defined(MR_CFG_IRQ_TABLE_SIZE)
+#include <mrX/kernel/mr_slab.h>
+#endif /* !defined(MR_CFG_IRQ_TABLE_SIZE) */
 
 /* Irq clazzes(static & dynamic) */
 static void irq_dynamic_release(mr_object_t *obj);
@@ -787,7 +789,7 @@ static void irq_del(mr_irq_t *irq) {
     mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
 }
 
-static void irq_statik_release(mr_object_t *obj) {
+static mr_irq_t *irq_obj_release(mr_object_t *obj) {
     mr_irq_t *irq;
 
     /* Get irq */
@@ -795,14 +797,22 @@ static void irq_statik_release(mr_object_t *obj) {
 
     /* Delete irq */
     irq_del(irq);
+    return irq;
+}
+
+static void irq_statik_release(mr_object_t *obj) {
+    /* Release irq */
+    irq_obj_release(obj);
 }
 
 static void irq_dynamic_release(mr_object_t *obj) {
+    mr_irq_t *irq;
+
     /* Release irq */
-    irq_statik_release(obj);
+    irq = irq_obj_release(obj);
 
     /* Free irq */
-    mr_free(obj);
+    mr_free(irq);
 }
 
 void mr_kernel_irq_init(void) {

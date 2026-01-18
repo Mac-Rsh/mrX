@@ -174,7 +174,7 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
     return 0;
 }
 
-static void timer_statik_release(mr_object_t *obj) {
+static mr_timer_t *timer_obj_release(mr_object_t *obj) {
     mr_timer_t *timer;
 
     /* Get timer */
@@ -182,14 +182,22 @@ static void timer_statik_release(mr_object_t *obj) {
 
     /* Remove timer */
     timer_remove(timer);
+    return timer;
+}
+
+static void timer_statik_release(mr_object_t *obj) {
+    /* Release timer */
+    timer_obj_release(obj);
 }
 
 static void timer_dynamic_release(mr_object_t *obj) {
+    mr_timer_t *timer;
+
     /* Release timer */
-    timer_statik_release(obj);
+    timer = timer_obj_release(obj);
 
     /* Free timer */
-    mr_free(obj);
+    mr_free(timer);
 }
 
 static mr_tick_t timer_timeout_check(void) {

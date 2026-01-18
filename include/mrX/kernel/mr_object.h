@@ -119,6 +119,13 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
     extern const mr_clazzes_t MR_CAT(__mr_clazzes_, _name)
 
 /**
+ * @brief This macro function imports clazzes.
+ *
+ * @param _name The clazz name.
+ */
+#define MR_CLAZZES_IMPORT(_name)        MR_CLAZZES_EXPORT(_name)
+
+/**
  * @brief This macro function finds clazzes.
  *
  * @param _name The clazz name.

@@ -130,13 +130,13 @@ mr_err_t mr_driver_setup(mr_driver_t *drv) {
         return ret;
     }
 
-    /* Check if driver is set up */
+    /* Check if driver is setup */
     if (mr_atomic_load(&drv->flags) & MR_DRIVER_FLAG_SETUP) {
         ret = 0;
         goto _exit;
     }
 
-    /* Check if driver is need init */
+    /* Check if driver need init */
     if ((!drv->clazz) || (!drv->clazz->init)) {
         goto _set;
     }
@@ -170,13 +170,13 @@ mr_err_t mr_driver_shutdown(mr_driver_t *drv) {
         return ret;
     }
 
-    /* Check if driver is set up */
+    /* Check if driver is setup */
     if (!(mr_atomic_load(&drv->flags) & MR_DRIVER_FLAG_SETUP)) {
         ret = 0;
         goto _exit;
     }
 
-    /* Check if driver is need deinit */
+    /* Check if driver need deinit */
     if ((!drv->clazz) || (!drv->clazz->deinit)) {
         goto _unset;
     }
@@ -219,7 +219,7 @@ mr_driver_t *mr_driver_find(const char *name) {
 }
 
 static void driver_del(mr_driver_t *drv) {
-    /* Check if driver is need deinit */
+    /* Check if driver need deinit */
     if ((!drv->clazz) || (!drv->clazz->deinit)) {
         return;
     }

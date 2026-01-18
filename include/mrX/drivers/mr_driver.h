@@ -170,6 +170,13 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
     extern const mr_driver_clazzes_t MR_CAT(__mr_driver_clazzes_, _name)
 
 /**
+ * @brief This macro function imports driver clazzes.
+ *
+ * @param _name The driver clazz name.
+ */
+#define MR_DRIVER_CLAZZES_IMPORT(_name) MR_DRIVER_CLAZZES_EXPORT(_name)
+
+/**
  * @brief This macro function finds driver clazzes.
  *
  * @param _name The driver clazz name.
@@ -221,6 +228,13 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
     extern mr_driver_t MR_CAT(__mr_driver_, _name)
 
 /**
+ * @brief This macro function imports a driver.
+ *
+ * @param _name The driver name.
+ */
+#define MR_DRIVER_IMPORT(_name)         MR_DRIVER_EXPORT(_name)
+
+/**
  * @brief This macro function finds a driver.
  *
  * @param _name The driver name.
@@ -244,17 +258,6 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
     MR_USED const mr_driver_entry_t MR_CAT(__mr_driver_entry_, _name)          \
         MR_SECTION_ALIGN("mr_driver." _level)                                  \
         = {.name = MR_STR(_name), .driver = MR_DRIVER_FIND(_name)}
-
-/**
- * @brief This macro function imports a driver.
- *
- * @param _name The driver name.
- *
- * @note Why is there a separate import interface? You don't want to deal with
- * complex underlying inclusion relationships either, do you.
- */
-#define MR_DRIVER_IMPORT(_name)                                                \
-    extern mr_driver_t MR_CAT(__mr_driver_, _name)
 
 /**
  * @brief This function initializes a driver.

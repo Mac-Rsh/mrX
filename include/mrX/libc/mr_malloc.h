@@ -43,6 +43,7 @@ typedef struct mr_heap_block {
     struct mr_heap_block *next;
     mr_size_t size;
 } mr_heap_block_t;
+#endif /* defined(MR_USE_MALLOC) */
 
 /* Heap region type */
 typedef struct mr_heap_region {
@@ -62,7 +63,6 @@ typedef struct mr_heap_info {
     mr_size_t disp_kb_ratio;
     mr_size_t frag_ratio;
 } mr_heap_info_t;
-#endif /* defined(MR_USE_MALLOC) */
 
 /**
  * @brief This function allocates memory.
