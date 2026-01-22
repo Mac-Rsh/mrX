@@ -10,8 +10,6 @@
 #define __MR_LIST_H__
 
 #include <mrX/kernel/mr_service.h>
-#include <mrX/libc/mr_compiler.h>
-#include <mrX/libc/mr_types.h>
 
 #ifdef __cplusplus
 extern "C" {

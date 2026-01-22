@@ -9,9 +9,7 @@
 #include <mrX/libc/mr_string.h>
 #if defined(MR_USE_STRING)
 #include <mrX/libc/mr_errno.h>
-#endif /* defined(MR_USE_STRING) */
 
-#if defined(MR_USE_STRING)
 void *mr_memccpy(void *dst, const void *src, int c, mr_size_t size) {
     const char *s;
     char *d;

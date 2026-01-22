@@ -50,14 +50,14 @@ typedef enum mr_driver_type {
     MR_DRIVER_TYPE_MASK = 0xff00,
 } mr_driver_type_t;
 
-/* Driver operation type */
-typedef mr_err_t(mr_driver_operation_t)(const struct mr_driver *drv);
+/* Driver method type */
+typedef mr_err_t(mr_driver_method_t)(const struct mr_driver *drv);
 
 /* Driver clazz type */
 typedef struct mr_driver_clazz {
     const char *name;
-    mr_driver_operation_t *init;
-    mr_driver_operation_t *deinit;
+    mr_driver_method_t *init;
+    mr_driver_method_t *deinit;
 } mr_driver_clazz_t;
 
 /* Driver clazzes type */
@@ -104,8 +104,8 @@ typedef struct mr_driver_entry {
  * @param deinit The deinit function.
  */
 MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
-                                    mr_driver_operation_t *init,
-                                    mr_driver_operation_t *deinit) {
+                                    mr_driver_method_t *init,
+                                    mr_driver_method_t *deinit) {
     /* Check parameter */
     if (!dclazz) {
         return;

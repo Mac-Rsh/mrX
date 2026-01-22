@@ -13,7 +13,6 @@
 #if defined(MR_USE_MALLOC_STD)
 #include <stdlib.h>
 #else
-#include <mrX/libc/mr_compiler.h>
 #include <mrX/libc/mr_types.h>
 #endif /* defined(MR_USE_MALLOC_STD) */
 
