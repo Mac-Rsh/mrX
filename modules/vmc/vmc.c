@@ -21,14 +21,13 @@ static mr_err_t vmc_init(mr_vmc_t *vmc, const mr_clazz_t *clazz,
     /* Init VMC */
     vmc->state = MR_VMC_STATE_INIT;
     mr_atomic_init(&vmc->flags, 0);
-    vmc->env.memory = memory;
-    vmc->env.memory_size = memory_size;
-    vmc->env.image = MR_NULL;
-    vmc->env.image_size = 0;
-    vmc->env.storage_addr = 0x0;
-    vmc->env.entry_addr = 0x0;
+    vmc->prop.memory = memory;
+    vmc->prop.memory_size = memory_size;
+    vmc->prop.image = MR_NULL;
+    vmc->prop.image_size = 0;
+    vmc->prop.storage_addr = 0x0;
+    vmc->prop.entry_addr = 0x0;
     vmc->clazz = vclazz;
-    vmc->error = 0;
 
     /* Init object */
     return mr_object_init((mr_object_t *)vmc, clazz);
@@ -132,17 +131,17 @@ mr_err_t mr_vmc_load(mr_vmc_t *vmc, const void *image, mr_uint32_t image_size,
     }
 
     /* Load VMC program image */
-    vmc->env.image = image;
-    vmc->env.image_size = image_size;
-    vmc->env.storage_addr = storage_addr;
-    vmc->env.entry_addr = entry_addr;
-    ret = vmc->clazz->load(vmc, &vmc->env);
+    vmc->prop.image = image;
+    vmc->prop.image_size = image_size;
+    vmc->prop.storage_addr = storage_addr;
+    vmc->prop.entry_addr = entry_addr;
+    ret = vmc->clazz->load(vmc, &vmc->prop);
     if (ret != 0) {
         goto _exit;
     }
 
     /* Set VMC state */
-    vmc->state = MR_VMC_STATE_RUNNING;
+    vmc->state = MR_VMC_STATE_PAUSED;
     ret = 0;
 _exit:
     /* Unlock VMC */
@@ -152,9 +151,7 @@ _exit:
 
 mr_vmc_return_t mr_vmc_execute(mr_vmc_t *vmc, mr_vmc_event_t *event,
                                mr_uint32_t instr_step) {
-    const mr_atomic_t flags_clear = MR_ATOMIC_INIT(~MR_VMC_FLAG_REQ_PAUSE);
     mr_vmc_return_t vret;
-    mr_uint32_t flags;
     mr_err_t ret;
 
     /* Check parameter */
@@ -163,7 +160,7 @@ mr_vmc_return_t mr_vmc_execute(mr_vmc_t *vmc, mr_vmc_event_t *event,
     MR_ASSERT(event != MR_NULL);
 
     /* Reduce unnecessary lock operations */
-    if (vmc->state != MR_VMC_STATE_RUNNING) {
+    if (vmc->state != MR_VMC_STATE_PAUSED) {
         return MR_VMC_NONE;
     }
 
@@ -179,25 +176,23 @@ mr_vmc_return_t mr_vmc_execute(mr_vmc_t *vmc, mr_vmc_event_t *event,
         return MR_VMC_NONE;
     }
 
-    /* Check if VMC is running */
-    if (vmc->state != MR_VMC_STATE_RUNNING) {
+    /* Check if VMC is ready */
+    if ((mr_atomic_load(&vmc->flags) & MR_VMC_FLAG_PAUSED)
+        || (vmc->state != MR_VMC_STATE_PAUSED)) {
         vret = MR_VMC_NONE;
         goto _exit;
     }
 
+    /* Set VMC state */
+    vmc->state = MR_VMC_STATE_RUNNING;
+
     /* Execute VMC */
-    vret = vmc->clazz->exec(vmc, &vmc->env, event, instr_step);
-    if (vret == MR_VMC_NONE) {
-        /* Check if VMC has any requests */
-        flags = (mr_uint32_t)mr_atomic_fetch_and(&vmc->flags, flags_clear);
-        if (flags & MR_VMC_FLAG_REQ_PAUSE) {
-            vmc->state = MR_VMC_STATE_PAUSED;
-        }
-    } else if (vret == MR_VMC_SYSCALL) {
+    vret = vmc->clazz->exec(vmc, &vmc->prop, event, instr_step);
+    if ((vret == MR_VMC_NONE) || (vret == MR_VMC_SYSCALL)) {
         vmc->state = MR_VMC_STATE_PAUSED;
     } else if (vret == MR_VMC_EXCEPT) {
         vmc->state = MR_VMC_STATE_ERROR;
-    } else if (vret == MR_VMC_END) {
+    } else {
         vmc->state = MR_VMC_STATE_ENDED;
     }
 _exit:
@@ -207,37 +202,25 @@ _exit:
 }
 
 mr_err_t mr_vmc_pause(mr_vmc_t *vmc) {
-    mr_err_t ret;
+    mr_atomic_t flags, lock;
 
     /* Check parameter */
     MR_ASSERT((vmc != MR_NULL) && MR_OBJECT_IS_INITED(vmc));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(vmc, vmc));
 
-    /* Lock VMC */
-    ret = vmc_lock(vmc);
-    if (ret != 0) {
-        /* Check if VMC is locked */
-        if (ret == (-MR_EBUSY)) {
-            /* Request VMC to pause */
-            mr_atomic_fetch_or(&vmc->flags, MR_VMC_FLAG_REQ_PAUSE);
-            return 0;
+    /* Get current flags */
+    flags = mr_atomic_load(&vmc->flags);
+
+    do {
+        /* Check if VMC is dying */
+        if (flags & MR_VMC_FLAG_DYING) {
+            return -MR_ENOENT;
         }
-        return ret;
-    }
 
-    /* Check if VMC can be paused */
-    if (vmc->state != MR_VMC_STATE_RUNNING) {
-        ret = -MR_EPERM;
-        goto _exit;
-    }
-
-    /* Set VMC state */
-    vmc->state = MR_VMC_STATE_PAUSED;
-    ret = 0;
-_exit:
-    /* Unlock VMC */
-    vmc_unlock(vmc);
-    return ret;
+        /* Try to mark VMC as paused */
+        lock = flags | MR_VMC_FLAG_PAUSED;
+    } while (!mr_atomic_compare_exchange(&vmc->flags, &flags, lock));
+    return 0;
 }
 
 mr_err_t mr_vmc_resume(mr_vmc_t *vmc) {
@@ -254,14 +237,17 @@ mr_err_t mr_vmc_resume(mr_vmc_t *vmc) {
     }
 
     /* Check if VMC can be resumed */
-    if ((vmc->state != MR_VMC_STATE_PAUSED)
-        && (vmc->state != MR_VMC_STATE_ERROR)) {
+    if ((vmc->state == MR_VMC_STATE_INIT)
+        || (vmc->state == MR_VMC_STATE_ENDED)) {
         ret = -MR_EPERM;
         goto _exit;
     }
 
     /* Set VMC state */
-    vmc->state = MR_VMC_STATE_RUNNING;
+    mr_atomic_fetch_and(&vmc->flags, ~MR_VMC_FLAG_PAUSED);
+    if (vmc->state == MR_VMC_STATE_ERROR) {
+        vmc->state = MR_VMC_STATE_PAUSED;
+    }
     ret = 0;
 _exit:
     /* Unlock VMC */
@@ -269,9 +255,8 @@ _exit:
     return ret;
 }
 
-mr_err_t mr_vmc_debug(mr_vmc_t *vmc, mr_uint32_t **reg_addr,
-                      mr_uint32_t *reg_size, mr_uint32_t **memory_addr,
-                      mr_uint32_t *memory_size) {
+mr_err_t mr_vmc_trace(mr_vmc_t *vmc, void **reg_addr, mr_uint32_t *reg_size,
+                      void **memory_addr, mr_uint32_t *memory_size) {
     mr_err_t ret;
 
     /* Check parameter */
@@ -286,8 +271,8 @@ mr_err_t mr_vmc_debug(mr_vmc_t *vmc, mr_uint32_t **reg_addr,
         return ret;
     }
 
-    /* Get VMC debug information */
-    ret = vmc->clazz->debug(vmc, &vmc->env, reg_addr, reg_size, memory_addr,
+    /* Get VMC trace information */
+    ret = vmc->clazz->trace(vmc, &vmc->prop, reg_addr, reg_size, memory_addr,
                             memory_size);
 
     /* Unlock VMC */
