@@ -15,11 +15,7 @@ static mr_err_t riscv32_vmc_load(mr_vmc_t *vmc, mr_vmc_prop_t *prop);
 static mr_vmc_return_t riscv32_vmc_exec(mr_vmc_t *vmc, mr_vmc_prop_t *prop,
                                         mr_vmc_event_t *event,
                                         mr_uint32_t instr_step);
-static mr_err_t riscv32_vmc_trace(struct mr_vmc *vmc, mr_vmc_prop_t *prop,
-                                  void **reg_addr, mr_uint32_t *reg_size,
-                                  void **memory_addr, mr_uint32_t *memory_size);
-MR_VMC_CLAZZ_DEFINE(riscv32, riscv32_vmc_load, riscv32_vmc_exec,
-                    riscv32_vmc_trace);
+MR_VMC_CLAZZ_DEFINE(riscv32, riscv32_vmc_load, riscv32_vmc_exec);
 
 /* RISCV32 decode definition */
 #define RISCV32_DECODE_MAP(_case, _val)                                        \
@@ -110,6 +106,12 @@ static mr_err_t riscv32_vmc_load(mr_vmc_t *vmc, mr_vmc_prop_t *prop) {
     core->image_size = prop->image_size;
     core->entry_addr = prop->entry_addr;
     core->image = prop->image;
+
+    /* Update VMC register and memory property */
+    prop->vm_regs = (mr_uint8_t *)&core->regs;
+    prop->vm_regs_size = sizeof(mr_riscv32_regs_t);
+    prop->vm_memory = core->memory;
+    prop->vm_memory_size = core->memory_size;
     return 0;
 }
 
@@ -460,7 +462,7 @@ MR_INLINE int riscv32_instr_exec(mr_riscv32_core_t *core, mr_uint32_t bcode,
                 RISCV32_CORE_REGX(core, instr.I_type.rd)
                     = (mr_uint32_t)*RISCV32_CORE_MEMi1(core, tmp1u4);
             } else {
-                RISCV32_EXEC_EXIT(-MR_VMC_EXCEPT_NR_ACCESS);
+                RISCV32_EXEC_EXIT(-MR_VMC_EXCEPT_NR_OVERFLOW);
             }
             RISCV32_CORE_PC(core) += 4;
             RISCV32_EXEC_EXIT(0);
@@ -480,7 +482,7 @@ MR_INLINE int riscv32_instr_exec(mr_riscv32_core_t *core, mr_uint32_t bcode,
                 RISCV32_CORE_REGX(core, instr.I_type.rd)
                     = (mr_uint32_t)*RISCV32_CORE_MEMi2(core, tmp1u4);
             } else {
-                RISCV32_EXEC_EXIT(-MR_VMC_EXCEPT_NR_ACCESS);
+                RISCV32_EXEC_EXIT(-MR_VMC_EXCEPT_NR_OVERFLOW);
             }
             RISCV32_CORE_PC(core) += 4;
             RISCV32_EXEC_EXIT(0);
@@ -500,7 +502,7 @@ MR_INLINE int riscv32_instr_exec(mr_riscv32_core_t *core, mr_uint32_t bcode,
                 RISCV32_CORE_REGX(core, instr.I_type.rd)
                     = (mr_uint32_t)*RISCV32_CORE_MEMi4(core, tmp1u4);
             } else {
-                RISCV32_EXEC_EXIT(-MR_VMC_EXCEPT_NR_ACCESS);
+                RISCV32_EXEC_EXIT(-MR_VMC_EXCEPT_NR_OVERFLOW);
             }
             RISCV32_CORE_PC(core) += 4;
             RISCV32_EXEC_EXIT(0);
@@ -520,7 +522,7 @@ MR_INLINE int riscv32_instr_exec(mr_riscv32_core_t *core, mr_uint32_t bcode,
                 RISCV32_CORE_REGX(core, instr.I_type.rd)
                     = (mr_uint32_t)*RISCV32_CORE_MEMu1(core, tmp1u4);
             } else {
-                RISCV32_EXEC_EXIT(-MR_VMC_EXCEPT_NR_ACCESS);
+                RISCV32_EXEC_EXIT(-MR_VMC_EXCEPT_NR_OVERFLOW);
             }
             RISCV32_CORE_PC(core) += 4;
             RISCV32_EXEC_EXIT(0);
@@ -540,7 +542,7 @@ MR_INLINE int riscv32_instr_exec(mr_riscv32_core_t *core, mr_uint32_t bcode,
                 RISCV32_CORE_REGX(core, instr.I_type.rd)
                     = (mr_uint32_t)*RISCV32_CORE_MEMu2(core, tmp1u4);
             } else {
-                RISCV32_EXEC_EXIT(-MR_VMC_EXCEPT_NR_ACCESS);
+                RISCV32_EXEC_EXIT(-MR_VMC_EXCEPT_NR_OVERFLOW);
             }
             RISCV32_CORE_PC(core) += 4;
             RISCV32_EXEC_EXIT(0);
@@ -846,6 +848,26 @@ MR_INLINE int riscv32_bcode_exec(mr_riscv32_core_t *core, mr_uint32_t bcode,
     return trap;
 }
 
+static mr_vmc_return_t riscv32_syscall_handle(mr_riscv32_core_t *core,
+                                              mr_vmc_event_t *event) {
+    mr_uint32_t i;
+
+    /* A0 = syscall number */
+    event->syscall.nr = RISCV32_CORE_REGX(core, 10);
+    if (event->syscall.nr == 0) {
+        return MR_VMC_END;
+    }
+
+    /* A1 = ret */
+    event->syscall.ret = &RISCV32_CORE_REGX(core, 11);
+
+    /* A2~A5 = param[0]~param[3] */
+    for (i = 0; i < MR_ARRAY_SIZE(event->syscall.param); i++) {
+        event->syscall.param[i] = &RISCV32_CORE_REGX(core, 12 + i);
+    }
+    return MR_VMC_SYSCALL;
+}
+
 static mr_vmc_return_t riscv32_vmc_exec(mr_vmc_t *vmc, mr_vmc_prop_t *prop,
                                         mr_vmc_event_t *event,
                                         mr_uint32_t instr_step) {
@@ -867,7 +889,7 @@ static mr_vmc_return_t riscv32_vmc_exec(mr_vmc_t *vmc, mr_vmc_prop_t *prop,
             instr.raw = *RISCV32_CORE_IMGu4(core, off);
         } else {
             /* Exception */
-            event->except.nr = MR_VMC_EXCEPT_NR_ACCESS;
+            event->except.nr = MR_VMC_EXCEPT_NR_OVERFLOW;
             return MR_VMC_EXCEPT;
         }
 
@@ -880,38 +902,18 @@ static mr_vmc_return_t riscv32_vmc_exec(mr_vmc_t *vmc, mr_vmc_prop_t *prop,
             continue;
         }
 
-        /* Trap */
-        if (trap > 0) {
-            event->syscall.nr = (mr_uint32_t)trap;
-            return MR_VMC_SYSCALL;
-        } else {
-            /* Exception */
+        /* Exception */
+        if (trap < 0) {
             event->except.nr = (mr_uint32_t)(-trap);
             return MR_VMC_EXCEPT;
         }
+
+        /* Syscall */
+        return riscv32_syscall_handle(core, event);
     }
 
     /* Record the number of steps executed */
     event->none.exec_step = i;
     return MR_VMC_NONE;
-}
-
-static mr_err_t riscv32_vmc_trace(struct mr_vmc *vmc, mr_vmc_prop_t *prop,
-                                  void **reg_addr, mr_uint32_t *reg_size,
-                                  void **memory_addr,
-                                  mr_uint32_t *memory_size) {
-    mr_riscv32_core_t *core;
-
-    MR_IGNORE(vmc);
-
-    /* Get RISCV32 core */
-    core = (mr_riscv32_core_t *)prop->memory;
-
-    /* Get register and memory information */
-    *reg_size = sizeof(mr_riscv32_regs_t);
-    *reg_addr = &core->regs;
-    *memory_addr = core->memory;
-    *memory_size = core->memory_size;
-    return 0;
 }
 #endif /* defined(MR_USE_VMC_RISCV32) */

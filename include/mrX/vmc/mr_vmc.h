@@ -29,7 +29,6 @@ struct mr_vmc;
 /* VMC flag definition */
 #define MR_VMC_FLAG_LOCK                (1U << 1)
 #define MR_VMC_FLAG_DYING               (1U << 2)
-#define MR_VMC_FLAG_PAUSED              (1U << 3)
 
 /* VMC status definition */
 typedef enum mr_vmc_status {
@@ -42,12 +41,16 @@ typedef enum mr_vmc_status {
 
 /* VMC property type */
 typedef struct mr_vmc_prop {
-    void *memory;
+    mr_uint8_t *memory;
     mr_uint32_t memory_size;
-    const void *image;
+    const mr_uint8_t *image;
     mr_uint32_t image_size;
     mr_uint32_t storage_addr;
     mr_uint32_t entry_addr;
+    mr_uint8_t *vm_regs;
+    mr_uint32_t vm_regs_size;
+    mr_uint8_t *vm_memory;
+    mr_uint32_t vm_memory_size;
 } mr_vmc_prop_t;
 
 /* VMC return type definition */
@@ -66,6 +69,8 @@ typedef struct mr_vmc_none {
 /* VMC syscall type */
 typedef struct mr_vmc_syscall {
     mr_uint32_t nr;
+    mr_uint32_t *param[4];
+    mr_uint32_t *ret;
 } mr_vmc_syscall_t;
 
 /* VMC exception number definition */
@@ -95,16 +100,12 @@ typedef mr_err_t(mr_vmc_load_t)(struct mr_vmc *vmc, mr_vmc_prop_t *prop);
 typedef mr_vmc_return_t(mr_vmc_exec_t)(struct mr_vmc *vmc, mr_vmc_prop_t *prop,
                                        mr_vmc_event_t *event,
                                        mr_uint32_t instr_step);
-typedef mr_err_t(mr_vmc_trace_t)(struct mr_vmc *vmc, mr_vmc_prop_t *prop,
-                                 void **reg_addr, mr_uint32_t *reg_size,
-                                 void **memory_addr, mr_uint32_t *memory_size);
 
 /* VMC clazz type */
 typedef struct mr_vmc_clazz {
     const char *name;
     mr_vmc_load_t *load;
     mr_vmc_exec_t *exec;
-    mr_vmc_trace_t *trace;
 } mr_vmc_clazz_t;
 
 /* VMC type */
@@ -114,7 +115,7 @@ typedef struct mr_vmc {
     const mr_vmc_clazz_t *clazz;
     mr_vmc_prop_t prop;
     mr_atomic_t flags;
-    mr_uint32_t state;
+    mr_atomic_t state;
 } mr_vmc_t;
 
 /**
@@ -123,10 +124,9 @@ typedef struct mr_vmc {
  * @param _name The VMC clazz name.
  * @param _load The load function.
  * @param _exec The execute function.
- * @param _trace The trace function.
  */
-#define MR_VMC_CLAZZ_INIT(_name, _load, _exec, _trace)                         \
-    {.name = (_name), .load = (_load), .exec = (_exec), .trace = (_trace)}
+#define MR_VMC_CLAZZ_INIT(_name, _load, _exec)                                 \
+    {.name = (_name), .load = (_load), .exec = (_exec)}
 
 /**
  * @brief This function initializes VMC clazz.
@@ -135,11 +135,9 @@ typedef struct mr_vmc {
  * @param name The VMC clazz name.
  * @param load The load function.
  * @param exec The execute function.
- * @param trace The trace function.
  */
 MR_INLINE void mr_vmc_clazz_init(mr_vmc_clazz_t *vclazz, const char *name,
-                                 mr_vmc_load_t *load, mr_vmc_exec_t *exec,
-                                 mr_vmc_trace_t *trace) {
+                                 mr_vmc_load_t *load, mr_vmc_exec_t *exec) {
     /* Check parameter */
     if (!vclazz) {
         return;
@@ -149,7 +147,6 @@ MR_INLINE void mr_vmc_clazz_init(mr_vmc_clazz_t *vclazz, const char *name,
     vclazz->name = name;
     vclazz->load = load;
     vclazz->exec = exec;
-    vclazz->trace = trace;
 }
 
 /**
@@ -158,11 +155,10 @@ MR_INLINE void mr_vmc_clazz_init(mr_vmc_clazz_t *vclazz, const char *name,
  * @param _name The VMC clazz name.
  * @param _load The load function.
  * @param _exec The execute function.
- * @param _trace The trace function.
  */
-#define MR_VMC_CLAZZ_DEFINE(_name, _load, _exec, _trace)                       \
+#define MR_VMC_CLAZZ_DEFINE(_name, _load, _exec)                               \
     const mr_vmc_clazz_t MR_CAT(__mr_vmc_clazz_, _name)                        \
-        = MR_VMC_CLAZZ_INIT(MR_STR(_name), (_load), (_exec), (_trace))
+        = MR_VMC_CLAZZ_INIT(MR_STR(_name), (_load), (_exec))
 
 /**
  * @brief This macro function exports VMC clazz.
@@ -245,11 +241,19 @@ mr_vmc_return_t mr_vmc_execute(mr_vmc_t *vmc, mr_vmc_event_t *event,
  *
  * @param vmc The VMC.
  * @return 0 on success, a negative error code on failure.
- *
- * @note Request only, actual pause happens after execute completes, May be
- * overridden by subsequent state changes.
  */
-mr_err_t mr_vmc_pause(mr_vmc_t *vmc);
+MR_INLINE mr_err_t mr_vmc_pause(mr_vmc_t *vmc) {
+    mr_atomic_t state;
+
+    /* Check parameter */
+    MR_ASSERT((vmc != MR_NULL) && MR_OBJECT_IS_INITED(vmc));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(vmc, vmc));
+
+    /* Pause VMC */
+    mr_atomic_init(&state, MR_VMC_STATE_RUNNING);
+    mr_atomic_compare_exchange(&vmc->state, &state, MR_VMC_STATE_PAUSED);
+    return 0;
+}
 
 /**
  * @brief This function resumes a VMC.
@@ -259,7 +263,25 @@ mr_err_t mr_vmc_pause(mr_vmc_t *vmc);
  *
  * @note Can resume from PAUSED or ERROR state (clears error).
  */
-mr_err_t mr_vmc_resume(mr_vmc_t *vmc);
+MR_INLINE mr_err_t mr_vmc_resume(mr_vmc_t *vmc) {
+    mr_atomic_t state;
+
+    /* Check parameter */
+    MR_ASSERT((vmc != MR_NULL) && MR_OBJECT_IS_INITED(vmc));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(vmc, vmc));
+
+    /* Get current state */
+    state = mr_atomic_load(&vmc->state);
+
+    /* Check if VMC is in PAUSED or ERROR state */
+    if ((state != MR_VMC_STATE_PAUSED) && (state != MR_VMC_STATE_ERROR)) {
+        return -MR_EPERM;
+    }
+
+    /* Resume VMC */
+    mr_atomic_compare_exchange(&vmc->state, &state, MR_VMC_STATE_RUNNING);
+    return 0;
+}
 
 /**
  * @brief This function gets a VMC state.
@@ -273,21 +295,45 @@ MR_INLINE mr_vmc_state_t mr_vmc_state(mr_vmc_t *vmc) {
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(vmc, vmc));
 
     /* Get VMC state */
-    return vmc->state;
+    return (mr_vmc_state_t)mr_atomic_load(&vmc->state);
 }
 
 /**
- * @brief This function traces a VMC.
+ * @brief This function copies memory from VMC to host.
  *
  * @param vmc The VMC.
- * @param reg_addr The register address.
- * @param reg_size The register size.
- * @param memory_addr The memory address.
- * @param memory_size The memory size.
- * @return 0 on success, a negative error code on failure.
+ * @param vaddr The source address.
+ * @param memory The destination buffer.
+ * @param size The size to copy.
+ * @return The size of copied memory.
  */
-mr_err_t mr_vmc_trace(mr_vmc_t *vmc, void **reg_addr, mr_uint32_t *reg_size,
-                      void **memory_addr, mr_uint32_t *memory_size);
+mr_uint32_t mr_vmc_memcpy_from(mr_vmc_t *vmc, mr_uint32_t vaddr, void *memory,
+                               mr_uint32_t size);
+
+/**
+ * @brief This function copies memory from host to VMC.
+ *
+ * @param vmc The VMC.
+ * @param vaddr The destination address.
+ * @param memory The source buffer.
+ * @param size The size to copy.
+ * @return The size of copied memory.
+ */
+mr_uint32_t mr_vmc_memcpy_to(mr_vmc_t *vmc, mr_uint32_t vaddr,
+                             const void *memory, mr_uint32_t size);
+
+/**
+ * @brief This function maps memory from VMC to host.
+ *
+ * @param vmc The VMC.
+ * @param vaddr The VMC address.
+ * @param memory The host memory.
+ * @return The size of mapped memory.
+ *
+ * @note The mapped pointer must not be exposed to untrusted code.
+ */
+mr_uint32_t mr_vmc_memmap(mr_vmc_t *vmc, mr_uint32_t vaddr,
+                          mr_uint32_t **memory);
 
 /**
  * @brief This function get a VMC.
