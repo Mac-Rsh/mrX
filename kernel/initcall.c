@@ -8,7 +8,6 @@
 
 #include <mrX/kernel/mr_initcall.h>
 #include <mrX/libc/mr_assert.h>
-#include <mrX/libc/mr_types.h>
 
 /* Kernel and user init status(atomics may be soft-implemented and not yet
  * initialize) */

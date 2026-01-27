@@ -457,7 +457,7 @@ mr_work_t *mr_work_create(mr_work_entry_t *entry, void *param) {
 
     /* Init work */
     ret = work_init(work, clazz, entry, param);
-    if (ret) {
+    if (ret != 0) {
         mr_free(work);
         return MR_NULL;
     }

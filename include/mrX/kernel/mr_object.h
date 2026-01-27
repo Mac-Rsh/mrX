@@ -63,9 +63,7 @@ typedef struct mr_object {
 MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
                              mr_object_release_t *release) {
     /* Check parameter */
-    if (!clazz) {
-        return;
-    }
+    MR_ASSERT(clazz != MR_NULL);
 
     /* Init clazz */
     clazz->name = name;

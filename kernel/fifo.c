@@ -7,8 +7,8 @@
  */
 
 #include <mrX/kernel/mr_fifo.h>
-#include <mrX/libc/mr_string.h>
 #include <mrX/libc/mr_malloc.h>
+#include <mrX/libc/mr_string.h>
 
 /* Fifo align macro function */
 #define FIFO_ALIGN_POW2_DOWN(_size)     (1U << (mr_fls32(_size) - 1))

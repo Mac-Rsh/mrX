@@ -201,8 +201,8 @@ static void timer_dynamic_release(mr_object_t *obj) {
 }
 
 static mr_tick_t timer_timeout_check(void) {
-    mr_tick_t tless, tick;
     mr_timer_entry_t *entry;
+    mr_tick_t tless, tick;
     mr_timer_t *timer;
     mr_list_t oplist;
     void *param;

@@ -9,11 +9,14 @@
 #include <mrX/kernel/mr_slab.h>
 #include <mrX/libc/mr_string.h>
 
+/* Slab map definition */
+#define SLAB_MAP_NUM(_num)              (((_num) + 31) >> 5)
+
 void *mr_slab_alloc(mr_slab_t *slab) {
     mr_uint32_t i, bit, mask, off;
     mr_atomic_t last;
 
-    for (i = 0; i < MR_SLAB_MAP_SIZE(slab->num); i++) {
+    for (i = 0; i < SLAB_MAP_NUM(slab->num); i++) {
         /* Get current bitmap */
         last = mr_atomic_load(&slab->map[i]);
 

@@ -10,7 +10,6 @@
 #define __MR_INITCALL_H__
 
 #include <mrX/kernel/mr_service.h>
-#include <mrX/libc/mr_compiler.h>
 
 #ifdef __cplusplus
 extern "C" {

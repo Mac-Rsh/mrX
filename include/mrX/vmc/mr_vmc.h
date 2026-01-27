@@ -139,9 +139,7 @@ typedef struct mr_vmc {
 MR_INLINE void mr_vmc_clazz_init(mr_vmc_clazz_t *vclazz, const char *name,
                                  mr_vmc_load_t *load, mr_vmc_exec_t *exec) {
     /* Check parameter */
-    if (!vclazz) {
-        return;
-    }
+    MR_ASSERT(vclazz != MR_NULL);
 
     /* Init vmc clazz */
     vclazz->name = name;

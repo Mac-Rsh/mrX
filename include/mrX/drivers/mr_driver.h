@@ -107,9 +107,7 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
                                     mr_driver_method_t *init,
                                     mr_driver_method_t *deinit) {
     /* Check parameter */
-    if (!dclazz) {
-        return;
-    }
+    MR_ASSERT(dclazz != MR_NULL);
 
     /* Init clazz */
     dclazz->name = name;

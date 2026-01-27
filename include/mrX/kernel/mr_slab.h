@@ -21,7 +21,7 @@ extern "C" {
  */
 
 /* Slab bitmap size */
-#define MR_SLAB_MAP_SIZE(_num)          (((_num) + 31) >> 5)
+#define MR_SLAB_MAP_SIZE(_num)          ((((_num) + 31) >> 5) << 2)
 
 /* Slab type */
 typedef struct mr_slab {
@@ -34,15 +34,42 @@ typedef struct mr_slab {
 /**
  * @brief This macro function initializes a slab.
  *
+ * @param _map The bitmap(satisfy the 'MR_SLAB_MAP_SIZE').
  * @param _buf The buffer.
  * @param _size The memory size.
  * @param _num The memory number.
  */
-#define MR_SLAB_INIT(_buf, _size, _num)                                        \
-    {.map = ((mr_atomic_t[MR_SLAB_MAP_SIZE(_num)]){}),                         \
+#define MR_SLAB_INIT(_map, _buf, _size, _num)                                  \
+    {.map = (mr_atomic_t *)(_map),                                             \
      .buf = (mr_uint8_t *)(_buf),                                              \
      .size = (_size),                                                          \
      .num = (_num)}
+
+/**
+ * @brief This function initializes a slab.
+ *
+ * @param slab The slab.
+ * @param map The bitmap.
+ * @param map_size The bitmap size.
+ * @param buf The buffer.
+ * @param size The memory size.
+ * @param num The memory number.
+ * @return The memory number.
+ */
+MR_INLINE mr_uint32_t mr_slab_init(mr_slab_t *slab, void *map,
+                                   mr_uint32_t map_size, void *buf,
+                                   mr_uint32_t size, mr_uint32_t num) {
+    /* Limit num */
+    map_size = MR_MIN(map_size, MR_SLAB_MAP_SIZE(num));
+    num = MR_MIN(num, map_size * 32);
+
+    /* Init slab */
+    slab->map = (mr_atomic_t *)map;
+    slab->buf = (mr_uint8_t *)buf;
+    slab->size = size;
+    slab->num = num;
+    return num;
+}
 
 /**
  * @brief This function allocates a memory from slab.

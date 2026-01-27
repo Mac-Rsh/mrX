@@ -6,7 +6,7 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mrX/vmc/riscv32/riscv32.h>
+#include <mrX/vmc/riscv32/mr_riscv32.h>
 #if defined(MR_USE_VMC_RISCV32)
 #include <mrX/libc/mr_string.h>
 
