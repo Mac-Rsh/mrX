@@ -9,4 +9,4 @@ mrX module management
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from .module import MrModule, MrLogger
+from .module import MrModule

@@ -9,8 +9,8 @@ mrX script management tool
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from modules import MrModule, MrLogger
-from typing import Dict, Type, List
+from typing import Dict, Type, List, Optional
+from modules import MrModule
 import argparse
 
 
@@ -22,28 +22,32 @@ class MrXtools:
 
     def __init__(self):
         """Initialize mrXtools."""
-        self.logger = MrLogger("mrXtools", MrLogger.LEVEL_ERR)
         self.modules: Dict[str, Type[MrModule]] = MrModule.get_modules()
         self.parser = self._build_parser()
 
-    def _build_parser(self) -> argparse.ArgumentParser:
+    @staticmethod
+    def _build_parser() -> argparse.ArgumentParser:
         """Build the main argument parser.
 
         Returns:
             Configured ArgumentParser instance.
         """
-        module_list = ", ".join(sorted(self.modules.keys()))
-
         # Build main parser
         parser = argparse.ArgumentParser(
             prog="mrXtools",
             description="mrX build and configuration tools",
-            epilog=f"Available modules: {module_list}"
         )
         # Add module name argument
         parser.add_argument(
             "module",
+            nargs="?",
             help="Module name to run"
+        )
+        # Add list argument
+        parser.add_argument(
+            "-l", "--list",
+            action="store_true",
+            help="List available modules"
         )
         # Add module arguments placeholder
         parser.add_argument(
@@ -53,7 +57,7 @@ class MrXtools:
         )
         return parser
 
-    def run(self, argv: List[str] = None) -> None:
+    def run(self, argv: List[str] = None) -> int:
         """Run a module.
 
         Args:
@@ -63,66 +67,72 @@ class MrXtools:
             Exit code (0 for success, non-zero for error).
         """
         # Parse main arguments
-        self._parse_arguments(argv)
+        args = self.parser.parse_args(argv)
 
-        # Build module instance
-        self._parse_module()
+        # List command
+        if args.list:
+            self._list_modules()
+            return 0
+
+        # Check if module name is provided
+        if not args.module:
+            self.parser.print_help()
+            return 0
+
+        # Find module
+        module = self._find_module(args.module)
+        if not module:
+            return 1
 
         # Parse module arguments
-        self._parse_module_arguments()
+        module_args = self._parse_module_arguments(module, args.module_args)
 
         # Run module
-        self._run_module()
+        try:
+            print("-" * 50)
+            print(f"{module.description}\n")
+            print(f"Version: {module.version}")
+            print(f"Author: {module.author}")
+            print("-" * 50)
+            print(f"{module.name}:")
+            module.run(module_args)
+        except Exception as e:
+            print(f"Error running module '{module.name}': {e}")
+            return 1
+        return 0
 
-    def _parse_arguments(self, argv: List[str]) -> None:
-        """Parse command line arguments.
+    def _list_modules(self) -> None:
+        """List all available modules."""
+        print("Available modules:")
+        for name in sorted(self.modules.keys()):
+            module_cls = self.modules[name]
+            print(f"  {name:<15} - {module_cls.description}")
 
-        Args:
-            argv: Command line arguments.
-        """
-        self.args = self.parser.parse_args(argv)
-
-    def _parse_module(self) -> None:
+    def _find_module(self, module: str) -> Optional[MrModule]:
         """Build module instance from parsed module name.
 
         Raises:
             KeyError: If module name is not found.
         """
         # Validate module name
-        module = self.args.module
         if module not in self.modules:
-            self.logger.err(f"Module '{module}' not found")
-            raise KeyError(f"Module '{module}' not found")
-
+            print(f"Module '{module}' not found")
+            return None
         # Instantiate module
-        self.module = self.modules[module]()
+        return self.modules[module]()
 
-    def _parse_module_arguments(self) -> None:
+    @staticmethod
+    def _parse_module_arguments(module: MrModule, args: List[str]) -> argparse.Namespace:
         """Parse module-specific arguments."""
         # Build module argument parser
-        module = self.module
         parser = argparse.ArgumentParser(
             prog=module.name,
             description=module.description,
             epilog=module.note
         )
         module.add_arguments(parser)
-
         # Parse module arguments
-        args = self.args.module_args
-        self.module_args = parser.parse_args(args)
-
-    def _run_module(self) -> None:
-        """Execute the module with parsed arguments.
-
-        Raises:
-            Exception: If module execution fails.
-        """
-        try:
-            self.module.run(self.module_args)
-        except Exception as e:
-            self.logger.err(f"Error running module '{self.args.module}': {e}")
-            raise
+        return parser.parse_args(args)
 
 
 def main() -> None:
@@ -133,10 +143,7 @@ def main() -> None:
     tool = MrXtools()
 
     # Run tool
-    tool.run()
-
-    # Exit
-    exit(0)
+    exit(tool.run())
 
 
 if __name__ == "__main__":
