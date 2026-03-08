@@ -51,7 +51,11 @@ typedef struct mr_object {
  * @param _name The clazz name.
  * @param _release The release function.
  */
-#define MR_CLAZZ_INIT(_name, _release)  {.name = (_name), .release = (_release)}
+#define MR_CLAZZ_INIT(_name, _release)                                         \
+    {                                                                          \
+        .name = (_name),                                                       \
+        .release = (_release),                                                 \
+    }
 
 /**
  * @brief This function initializes clazz.
@@ -78,8 +82,10 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _dynamic_release The dynamic release function.
  */
 #define MR_CLAZZES_INIT(_name, _statik_release, _dynamic_release)              \
-    {.statik = MR_CLAZZ_INIT((_name), (_statik_release)),                      \
-     .dynamic = MR_CLAZZ_INIT((_name), (_dynamic_release))}
+    {                                                                          \
+        .statik = MR_CLAZZ_INIT((_name), (_statik_release)),                   \
+        .dynamic = MR_CLAZZ_INIT((_name), (_dynamic_release)),                 \
+    }
 
 /**
  * @brief This macro function defines clazzes.
@@ -137,7 +143,10 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _clazz The clazz clazz.
  */
 #define MR_OBJECT_INIT(_clazz)                                                 \
-    {.magic_ref = MR_REF_INIT(), .clazz = (_clazz)}
+    {                                                                          \
+        .magic_ref = MR_REF_INIT(),                                            \
+        .clazz = (_clazz),                                                     \
+    }
 
 /**
  * @brief This function initializes an object.

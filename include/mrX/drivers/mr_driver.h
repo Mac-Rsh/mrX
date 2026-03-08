@@ -40,13 +40,16 @@ struct mr_driver;
 #define MR_DRIVER_LEVEL_LAST            "4"
 #define MR_DRIVER_LEVEL_DEFER           "9"
 
-/* Driver type definition */
+/* Driver major type definition */
 typedef enum mr_driver_type {
     MR_DRIVER_TYPE_NONE = 0,
     MR_DRIVER_TYPE_RAM = 0x0100,
     MR_DRIVER_TYPE_GPIO = 0x0200,
     MR_DRIVER_TYPE_UART = 0x0300,
     MR_DRIVER_TYPE_I2C = 0x0400,
+    MR_DRIVER_TYPE_ADC = 0x0500,
+    MR_DRIVER_TYPE_DAC = 0x0600,
+    MR_DRIVER_TYPE_DMA = 0x0700,
     MR_DRIVER_TYPE_MASK = 0xff00,
 } mr_driver_type_t;
 
@@ -93,7 +96,11 @@ typedef struct mr_driver_entry {
  * @param _deinit The deinit function.
  */
 #define MR_DRIVER_CLAZZ_INIT(_name, _init, _deinit)                            \
-    {.name = (_name), .init = (_init), .deinit = (_deinit)}
+    {                                                                          \
+        .name = (_name),                                                       \
+        .init = (_init),                                                       \
+        .deinit = (_deinit),                                                   \
+    }
 
 /**
  * @brief This function initializes driver clazz.
@@ -124,8 +131,10 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
  * @param _dynamic_deinit The dynamic deinit function.
  */
 #define MR_DRIVER_CLAZZES_INIT(_name, _init, _statik_deinit, _dynamic_deinit)  \
-    {.statik = MR_DRIVER_CLAZZ_INIT((_name), (_init), (_statik_deinit)),       \
-     .dynamic = MR_DRIVER_CLAZZ_INIT((_name), (_init), (_dynamic_deinit))}
+    {                                                                          \
+        .statik = MR_DRIVER_CLAZZ_INIT((_name), (_init), (_statik_deinit)),    \
+        .dynamic = MR_DRIVER_CLAZZ_INIT((_name), (_init), (_dynamic_deinit)),  \
+    }
 
 /**
  * @brief This macro function initializes driver clazzes.
@@ -193,14 +202,16 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
  * @param _ops The private operations.
  */
 #define MR_DRIVER_INIT(_drv, _dclazz, _type, _data, _priv, _ops)               \
-    {.parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(driver))),     \
-     .clazz = (_dclazz),                                                       \
-     .flags = MR_ATOMIC_INIT(0),                                               \
-     .type = (_type),                                                          \
-     .state = 0,                                                               \
-     .data = (mr_ptr_t)(_data),                                                \
-     .priv = (mr_ptr_t)(_priv),                                                \
-     .ops = (mr_ptr_t)(_ops)}
+    {                                                                          \
+        .parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(driver))),  \
+        .clazz = (_dclazz),                                                    \
+        .flags = MR_ATOMIC_INIT(0),                                            \
+        .type = (_type),                                                       \
+        .state = 0,                                                            \
+        .data = (mr_ptr_t)(_data),                                             \
+        .priv = (mr_ptr_t)(_priv),                                             \
+        .ops = (mr_ptr_t)(_ops),                                               \
+    }
 
 /**
  * @brief This macro function defines a driver.
@@ -290,8 +301,7 @@ mr_driver_t *mr_driver_create(const mr_driver_clazz_t *dclazz, mr_uint16_t type,
  * @param _drv The driver.
  * @return The driver type.
  */
-#define MR_DRIVER_TYPE(_drv)                                                   \
-    (((mr_driver_t *)(_drv))->type & MR_DRIVER_TYPE_MASK)
+#define MR_DRIVER_TYPE(_drv)            (((mr_driver_t *)(_drv))->type)
 
 /**
  * @brief This macro function checks if a driver is of a type.
@@ -300,8 +310,7 @@ mr_driver_t *mr_driver_create(const mr_driver_clazz_t *dclazz, mr_uint16_t type,
  * @param _type The driver type.
  * @return MR_TRUE if the driver is of the type, MR_FALSE otherwise.
  */
-#define MR_DRIVER_IS_TYPE(_drv, _type)                                         \
-    (MR_DRIVER_TYPE(_drv) == ((_type) & MR_DRIVER_TYPE_MASK))
+#define MR_DRIVER_IS_TYPE(_drv, _type)  (MR_DRIVER_TYPE(_drv) == (_type))
 
 /**
  * @brief This macro function gets the private data.
@@ -355,13 +364,21 @@ mr_err_t mr_driver_setup(mr_driver_t *drv);
  * @brief This macro function checks a driver.
  *
  * @param _drv The driver.
- * @param _type The driver type.
+ * @param _type The driver major type.
  */
 #define MR_DRIVER_ASSERT(_drv, _type)                                          \
     MR_ASSERT(((_drv) != MR_NULL) && MR_OBJECT_IS_INITED(_drv));               \
     MR_ASSERT(MR_OBJECT_IS_CLAZZES((_drv), driver));                           \
     MR_ASSERT(MR_DRIVER_IS_SETUP(_drv));                                       \
-    MR_ASSERT(MR_DRIVER_IS_TYPE((_drv), (_type)))
+    MR_ASSERT((MR_DRIVER_TYPE(_drv) & MR_DRIVER_TYPE_MASK) == (_type))
+
+/**
+ * @brief This function checks if a driver is ready.
+ *
+ * @param drv The driver.
+ * @return MR_TRUE if the driver is ready, MR_FALSE otherwise.
+ */
+mr_bool_t mr_driver_is_ready(mr_driver_t *drv);
 
 /**
  * @brief This function shuts down a driver.

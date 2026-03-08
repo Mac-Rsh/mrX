@@ -1,4 +1,4 @@
-menu "GPIO options"
+menu "GPIO: General Purpose Input/Output"
 
 # ==================================
 # GPIO
@@ -7,5 +7,25 @@ config MR_USE_DRIVER_GPIO
     select MR_USE_DRIVER
     bool "Use GPIO"
     default n
+    help
+        Enable GPIO driver for general purpose digital I/O pins.
+        Features:
+            - Configurable input/output modes
+            - Pull-up/pull-down resistor control
+            - Triggered interrupt support (rising/falling/both/high/low)
+            - Port-based batch operations for efficiency
+        Fundamental for controlling LEDs, buttons, switches, and chip selects.
+
+# ==================================
+# EXTI
+# ==================================
+config MR_USE_DRIVER_GPIO_EXTI
+    depends on MR_USE_DRIVER_GPIO
+    bool "Use GPIO EXTI"
+    default y
+    help
+        Enable external interrupt support for GPIO pins.
+        Allows GPIO pins to trigger interrupts on edge or level changes.
+        Required for button press detection and signal edge monitoring.
 
 endmenu

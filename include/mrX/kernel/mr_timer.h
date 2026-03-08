@@ -52,11 +52,13 @@ typedef void(mr_timer_entry_t)(mr_timer_t *timer, void *param);
  * @param _tick The timing tick(period: 'tick | MR_TIMER_PERIODIC').
  */
 #define MR_TIMER_INIT(_timer, _entry, _param, _tick)                           \
-    {.parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(timer))),      \
-     .itick = (_tick),                                                         \
-     .list = MR_LIST_INIT(&(_timer)->list),                                    \
-     .entry = (_entry),                                                        \
-     .param = (_param)}
+    {                                                                          \
+        .parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(timer))),   \
+        .itick = (_tick),                                                      \
+        .list = MR_LIST_INIT(&(_timer)->list),                                 \
+        .entry = (_entry),                                                     \
+        .param = (_param),                                                     \
+    }
 
 /**
  * @brief This function initializes a timer.

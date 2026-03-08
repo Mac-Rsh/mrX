@@ -79,8 +79,8 @@ class MrXtools:
             self.parser.print_help()
             return 0
 
-        # Find module
-        module = self._find_module(args.module)
+        # Build module instance
+        module = self._build_module(args.module)
         if not module:
             return 1
 
@@ -108,12 +108,8 @@ class MrXtools:
             module_cls = self.modules[name]
             print(f"  {name:<15} - {module_cls.description}")
 
-    def _find_module(self, module: str) -> Optional[MrModule]:
-        """Build module instance from parsed module name.
-
-        Raises:
-            KeyError: If module name is not found.
-        """
+    def _build_module(self, module: str) -> Optional[MrModule]:
+        """Build module instance from parsed module name."""
         # Validate module name
         if module not in self.modules:
             print(f"Module '{module}' not found")

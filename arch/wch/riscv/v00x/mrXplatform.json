@@ -1,0 +1,7 @@
+{
+  "platform": "wch,riscv",
+  "compatible": "ch32v00x",
+  "version": "1.0.0",
+  "authors": ["MacRsh"],
+  "license": "Apache-2.0"
+}

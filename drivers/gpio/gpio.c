@@ -11,14 +11,11 @@
 #include <mrX/libc/mr_malloc.h>
 
 /* GPIO driver clazzes(static & dynamic) */
-static mr_err_t gpio_init(const mr_driver_t *drv);
-static mr_err_t gpio_statik_deinit(const mr_driver_t *drv);
 static mr_err_t gpio_dynamic_deinit(const mr_driver_t *drv);
-MR_DRIVER_CLAZZES_DEFINE(gpio, gpio_init, gpio_statik_deinit,
-                         gpio_dynamic_deinit);
+MR_DRIVER_CLAZZES_DEFINE(gpio, MR_NULL, MR_NULL, gpio_dynamic_deinit);
 
-mr_err_t mr_gpio_pin_configure(mr_driver_t *drv, mr_uint32_t pin,
-                               mr_gpio_config_t *config) {
+mr_err_t mr_gpio_configure(mr_driver_t *drv, mr_uint32_t pin,
+                           mr_gpio_config_t *config) {
     const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
     mr_uint8_t value;
@@ -54,8 +51,8 @@ mr_err_t mr_gpio_pin_configure(mr_driver_t *drv, mr_uint32_t pin,
     return 0;
 }
 
-mr_err_t mr_gpio_pin_configuration(mr_driver_t *drv, mr_uint32_t pin,
-                                   mr_gpio_config_t *config) {
+mr_err_t mr_gpio_configuration(mr_driver_t *drv, mr_uint32_t pin,
+                               mr_gpio_config_t *config) {
     const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
 
@@ -79,47 +76,7 @@ mr_err_t mr_gpio_pin_configuration(mr_driver_t *drv, mr_uint32_t pin,
     return gp_ops->pin_configuration(drv, pin, config);
 }
 
-static mr_err_t gpio_init(const mr_driver_t *drv) {
-    mr_gpio_data_t *gp_data;
-    mr_err_t ret;
-
-    /* Check parameter */
-    MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
-
-    /* Get GPIO data */
-    gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
-
-    /* Init GPIO irq */
-    ret = mr_waitable_init(&gp_data->irq, MR_NULL, MR_NULL);
-    if (ret != 0) {
-        return ret;
-    }
-    return 0;
-}
-
-static mr_err_t gpio_statik_deinit(const mr_driver_t *drv) {
-    mr_gpio_data_t *gp_data;
-
-    /* Check parameter */
-    MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
-
-    /* Get GPIO data */
-    gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
-
-    /* Deinit GPIO irq */
-    mr_waitable_del(&gp_data->irq);
-    return 0;
-}
-
 static mr_err_t gpio_dynamic_deinit(const mr_driver_t *drv) {
-    mr_err_t ret;
-
-    /* Deinit GPIO */
-    ret = gpio_statik_deinit(drv);
-    if (ret != 0) {
-        return ret;
-    }
-
     /* Free GPIO data */
     mr_free(MR_DRIVER_DATA(drv));
     return 0;

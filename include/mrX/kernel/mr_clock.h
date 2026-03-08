@@ -64,6 +64,24 @@ typedef mr_uint64_t                     mr_uptime_t;
 typedef mr_tick_t(mr_clock_hook_t)(void);
 
 /**
+ * @brief This macro converts milliseconds to clock ticks.
+ *
+ * @param _ms The milliseconds.
+ * @return The clock ticks.
+ */
+#define MR_TICK_MSEC(_ms)                                                      \
+    ((_ms) * 1000UL / MR_CFG_TICK_PER_SECOND)
+
+/**
+ * @brief This macro converts microseconds to clock ticks.
+ *
+ * @param _us The microseconds.
+ * @return The clock ticks.
+ */
+#define MR_TICK_USEC(_us)                                                      \
+    ((_us) * 1000000UL / MR_CFG_TICK_PER_SECOND)
+
+/**
  * @brief This function increases the clock tick.
  *
  * @param tick The increased tick.

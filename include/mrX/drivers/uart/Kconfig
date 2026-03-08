@@ -1,4 +1,4 @@
-menu "UART options"
+menu "UART: Universal Asynchronous RX/TX"
 
 # ==================================
 # UART
@@ -7,5 +7,29 @@ config MR_USE_DRIVER_UART
     select MR_USE_DRIVER
     bool "Use UART"
     default n
+    help
+        Enable UART driver for asynchronous serial communication.
+        Features:
+            - Configurable baud rate (e.g., 9600, 115200)
+            - Data bits, parity, and stop bits configuration
+            - TX/RX FIFO management
+            - Non-blocking I/O with callbacks
+        Common for console debug output, GPS modules, and wireless modules.
+
+# ==================================
+# ASYNC
+# ==================================
+config MR_USE_DRIVER_UART_ASYNC
+    depends on MR_USE_DRIVER_UART
+    bool "Use UART ASYNC"
+    default y
+    help
+        Enable asynchronous (non-blocking) UART operations.
+        Features:
+            - DMA-based transfers for high throughput
+            - Interrupt-driven transfers without DMA
+            - Callback-based completion notification
+            - Circular buffer mode for continuous reception
+        Required for high-speed communication and non-blocking I/O.
 
 endmenu

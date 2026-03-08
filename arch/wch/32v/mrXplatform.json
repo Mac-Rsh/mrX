@@ -1,7 +1,0 @@
-{
-  "platform": "wch,32v",
-  "compatible": "ch32v00x,ch32v10x,ch32v20x,ch32v30x",
-  "version": "1.0.0",
-  "authors": ["MacRsh"],
-  "license": "Apache-2.0"
-}

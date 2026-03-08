@@ -1,4 +1,4 @@
-menu "Test options"
+menu "Test: Unit testing framework"
 
 # ==================================
 # TEST
@@ -7,5 +7,16 @@ config MR_USE_TEST
     select MR_USE_PRINTF
     bool "Use test"
     default n
+    help
+        Enable unit testing framework for automated verification.
+        Features:
+            - EXPECT macros: Continue on failure, log all errors
+            - ASSERT macros: Stop immediately on failure
+            - Comparison operations: EQ/NE/LT/LE/GT/GE/NEAR
+            - Type support: int, uint, ptr, float, double
+            - Test suite and testcase organization
+            - Automatic test discovery and execution
+            - Per-testcase pass/fail reporting
+        Automatically enables printf for test result output.
 
 endmenu

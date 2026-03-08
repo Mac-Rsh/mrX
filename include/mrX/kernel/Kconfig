@@ -1,4 +1,4 @@
-menu "Kernel options"
+menu "Kernel: System services"
 
 # ==================================
 # ENTRY
@@ -6,6 +6,9 @@ menu "Kernel options"
 config MR_USE_ENTRY
     bool "Use entry"
     default n
+    help
+        Enable entry point support. Provides standardized initialization and
+        startup routines for the system.
 
 # ==================================
 # REF
@@ -13,6 +16,9 @@ config MR_USE_ENTRY
 config MR_USE_REF_LONG_COUNT
     bool "Use ref long count"
     default n
+    help
+        Enable 16-bit reference counting instead of 8-bit. Use this when
+        reference counts may exceed 16-bit range.
 
 # ==================================
 # CLOCK
@@ -21,21 +27,42 @@ config MR_CFG_CLOCK_HOOK_SIZE
     int "Clock hook size"
     default 2
     range 2 128
+    help
+        Maximum number of hook functions that can be registered to the clock
+        subsystem. Hook functions are called on each tick.
+        Increase if you need to register more clock callbacks.
 
 config MR_CFG_TICK_PER_SECOND
     int "Tick per-second"
     default 1000
     range 1 2147483647
+    help
+        System tick frequency (Hz). Higher values provide better timing resolution
+        but increase CPU overhead.
+        Common values:
+            - 100: Low overhead, 10ms resolution
+            - 1000: Balanced, 1ms resolution (default)
+            - 10000: High precision, 100us resolution
 
 config MR_USE_CLOCK_HIRES
     bool "Use clock high resolution"
     default y
+    help
+        Enable high-resolution clock support. Provides microsecond or nanosecond
+        timing precision for time-critical applications.
+        This adds a secondary high-frequency tick source.
 
 config MR_CFG_HIRES_TICK_PER_SECOND
     depends on MR_USE_CLOCK_HIRES
     int "High resolution tick per-second"
     default 1000000
     range MR_USE_CLOCK_HIRES 1000000
+    help
+        High-resolution tick frequency (Hz). This defines the precision of the
+        high-resolution clock.
+        Common values:
+            - 1000000: Microsecond resolution (1us tick)
+            - 1000000000: Nanosecond resolution (1ns tick, hardware-dependent)
 
 # ==================================
 # PRINTF
@@ -43,22 +70,40 @@ config MR_CFG_HIRES_TICK_PER_SECOND
 config MR_USE_PRINTF
     bool "Use printf"
     default y
+    help
+        Enable lightweight printf implementation. Provides formatted output
+        support without the full C library overhead.
+        Disable to minimize code size if not needed.
 
 config MR_CFG_PRINTF_BUF_SIZE
     depends on MR_USE_PRINTF
     int "Printf buffer size"
     default 64
     range 8 65535
+    help
+        Internal buffer size for printf formatting. Larger values support
+        longer output strings but consume more RAM.
+        Minimum recommended: 32 bytes
+        Default: 64 bytes (supports most format strings)
 
 config MR_USE_PRINTF_COLOR
     depends on MR_USE_PRINTF
     bool "Use printf color"
     default n
+    help
+        Enable ANSI color codes for printf output. Useful for terminal
+        debugging and logging with color-coded severity levels.
+        Requires terminal that supports ANSI escape codes.
 
 config MR_USE_PRINTF_SAFE
     depends on MR_USE_PRINTF
     bool "Use printf safe"
     default n
+    help
+        Enable thread-safe printf by using heap-allocated buffers instead of static buffers.
+        Static buffers are shared across all printf calls and can cause data races in
+        multi-threaded environments. Dynamic allocation ensures each call has its own buffer.
+        Trade-off: Thread safety and reduced stack usage at the cost of allocation overhead.
 
 # ==================================
 # LOG
@@ -67,12 +112,24 @@ config MR_USE_LOG
     select MR_USE_PRINTF
     bool "Use log"
     default y
+    help
+        Enable logging subsystem with configurable log levels and categories.
+        Provides structured logging for debugging and monitoring.
+        Automatically enables printf support.
 
 config MR_CFG_LOG_LEVEL
     depends on MR_USE_LOG
     int "Log level"
     default 4
     range 0 4
+    help
+        Maximum log level to output. Messages above this level are filtered out.
+        Levels:
+            0 - NONE: Disable all logging
+            1 - ERROR: Error conditions only
+            2 - WARN: Warning and error messages
+            3 - INFO: Informational messages (default)
+            4 - DEBUG: Detailed debugging messages
 
 config MR_CFG_LOG_TIME_ZONE
     depends on MR_USE_CLOCK_HIRES
@@ -80,6 +137,12 @@ config MR_CFG_LOG_TIME_ZONE
     int "Log time zone"
     default 8
     range -12 12
+    help
+        Time zone offset from UTC in hours. Used for timestamp generation in log messages.
+        Examples:
+            0 - UTC (GMT)
+            8 - UTC+8 (Beijing, Shanghai)
+            -5 - UTC-5 (New York, EST)
 
 # ==================================
 # TIMER
@@ -87,6 +150,10 @@ config MR_CFG_LOG_TIME_ZONE
 config MR_USE_TIMER
     bool "Use timer"
     default y
+    help
+        Enable high-priority software timers that execute in tick interrupt context.
+        Timer callbacks run at interrupt level with minimal latency.
+        Suitable for time-critical operations but callbacks must be fast and non-blocking.
 
 # ==================================
 # WORKQUEUE
@@ -95,11 +162,22 @@ config MR_USE_WORKQUEUE
     select MR_USE_TIMER
     bool "Use workqueue"
     default y
+    help
+        Enable low-priority deferred work execution in process context.
+        Work items can sleep, block, and perform lengthy operations.
+        Ideal for bottom-half processing from ISRs and concurrent task management.
+        Provides higher concurrency and flexibility compared to interrupt-level timers.
+        Automatically enables timer support for delayed work scheduling.
 
 config MR_USE_WORKQUEUE_HOOK
     depends on MR_USE_WORKQUEUE
     bool "Use workqueue hook"
     default n
+    help
+        Enable callbacks for workqueue lifecycle events.
+        wakeup: Called when workqueue transitions from idle to running.
+        suspend: Called when workqueue transitions from running to idle.
+        Useful for custom scheduling, power management, or runtime monitoring.
 
 # ==================================
 # IRQ
@@ -107,24 +185,39 @@ config MR_USE_WORKQUEUE_HOOK
 config MR_USE_IRQ
     bool "Use irq"
     default y
+    help
+        Enable interrupt management subsystem. Provides IRQ registration,
+        priority handling, and interrupt context tracking.
 
 config MR_CFG_IRQ_TABLE_SIZE
     depends on MR_USE_IRQ
     int "Irq table size"
     default 16
     range 2 1024
+    help
+        Maximum number of interrupt handlers that can be registered simultaneously.
+        Each hardware IRQ vector consumes one entry in the table.
+        Increase if your system uses many interrupt sources.
 
 config MR_USE_IRQ_DEFER
     depends on MR_USE_IRQ
     select MR_USE_WORKQUEUE
     bool "Use irq defer"
     default y
+    help
+        Enable deferred execution of IRQ handlers in process context via workqueue.
+        Automatically enables workqueue support for deferred processing.
 
 config MR_USE_IRQ_DEFER_HOOK
     depends on MR_USE_IRQ_DEFER
     select MR_USE_WORKQUEUE_HOOK
     bool "Use irq defer hook"
     default n
+    help
+        Enable lifecycle hooks for the IRQ defer workqueue.
+        Inherits wakeup/suspend callbacks from workqueue hooks for monitoring
+        when deferred IRQ handlers become active or idle.
+        Useful for tracking interrupt processing activity and system observability.
 
 # ==================================
 # WAIT
@@ -132,5 +225,8 @@ config MR_USE_IRQ_DEFER_HOOK
 config MR_USE_WAIT
     bool "Use wait"
     default y
+    help
+        Enable wait/synchronization primitives. Provides mechanisms for tasks
+        to wait for events, conditions, or resources with timeout support.
 
 endmenu

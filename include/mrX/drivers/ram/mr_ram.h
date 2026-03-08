@@ -54,7 +54,10 @@ typedef struct mr_ram_ops {
  * @param _regions_num The RAM regions number.
  */
 #define MR_RAM_DATA_INIT(_regions, _regions_num)                               \
-    {.regions = (void *)(_regions), .regions_num = (_regions_num)}
+    {                                                                          \
+        .regions = (void *)(_regions),                                         \
+        .regions_num = (_regions_num),                                         \
+    }
 
 /**
  * @brief This macro function defines a RAM driver.

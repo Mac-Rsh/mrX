@@ -31,7 +31,11 @@ typedef struct mr_list {
  *
  * @param _list The list to initialize.
  */
-#define MR_LIST_INIT(_list)             {.next = (_list), .prev = (_list)}
+#define MR_LIST_INIT(_list)                                                    \
+    {                                                                          \
+        .next = (_list),                                                       \
+        .prev = (_list),                                                       \
+    }
 
 /**
  * @brief This function initializes a list.

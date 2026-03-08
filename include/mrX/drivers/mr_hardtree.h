@@ -222,7 +222,7 @@ extern "C" {
  * @param _node The node.
  * @return MR_TRUE if the node has an address, MR_FALSE otherwise.
  */
-#define MR_HT_NODE_HAS_ADDR(_node)    MR_HT_HAS_NODE_PROP(_node, ADDR)
+#define MR_HT_NODE_HAS_ADDR(_node)      MR_HT_HAS_NODE_PROP(_node, ADDR)
 
 /**
  * @brief This macro function gets the node address.
@@ -230,7 +230,7 @@ extern "C" {
  * @param _node The node.
  * @return The node address.
  */
-#define MR_HT_NODE_ADDR(_node)        MR_HT_NODE_PROP(_node, ADDR)
+#define MR_HT_NODE_ADDR(_node)          MR_HT_NODE_PROP(_node, ADDR)
 
 /** @} */
 

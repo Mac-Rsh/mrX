@@ -1,4 +1,4 @@
-menu "RAM options"
+menu "RAM: Memory device driver"
 
 # ==================================
 # RAM
@@ -7,10 +7,22 @@ config MR_USE_DRIVER_RAM
     select MR_USE_DRIVER
     bool "Use RAM"
     default n
+    help
+        Enable RAM driver for memory device abstraction.
+        Provides unified interface for both internal and external memory:
+            - SRAM, PSRAM, SDRAM, and similar memory devices
+            - Memory-mapped access abstraction
+            - Block and byte-level operations
+            - Device-specific timing configuration
+        Useful for external memory expansion and unified memory management.
 
 config MR_USE_DRIVER_RAM_HEAPS
     depends on MR_USE_DRIVER_RAM
     bool "Use RAM-HEAPS"
     default y
+    help
+        Register RAM devices as system heaps for dynamic memory allocation.
+        Allows malloc/free to use external memory in addition to internal heap.
+        Automatically registered with the memory allocator system.
 
 endmenu

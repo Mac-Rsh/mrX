@@ -9,6 +9,7 @@
 #ifndef __MR_SLAB_H__
 #define __MR_SLAB_H__
 
+#include <mrX/kernel/mr_service.h>
 #include <mrX/libc/mr_atomic.h>
 
 #ifdef __cplusplus
@@ -40,10 +41,12 @@ typedef struct mr_slab {
  * @param _num The memory number.
  */
 #define MR_SLAB_INIT(_map, _buf, _size, _num)                                  \
-    {.map = (mr_atomic_t *)(_map),                                             \
-     .buf = (mr_uint8_t *)(_buf),                                              \
-     .size = (_size),                                                          \
-     .num = (_num)}
+    {                                                                          \
+        .map = (mr_atomic_t *)(_map),                                          \
+        .buf = (mr_uint8_t *)(_buf),                                           \
+        .size = (_size),                                                       \
+        .num = (_num),                                                         \
+    }
 
 /**
  * @brief This function initializes a slab.

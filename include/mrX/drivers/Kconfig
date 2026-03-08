@@ -1,4 +1,4 @@
-menu "Drivers options"
+menu "Drivers: Hardware abstraction"
 
 # ==================================
 # DRIVER
@@ -7,6 +7,10 @@ config MR_USE_DRIVER
     select MR_USE_WAIT
     bool "Use driver"
     default n
+    help
+        Enable unified driver framework providing device registration,
+        reference counting, and lifecycle management.
+        Required by all peripheral drivers.
 
 # ==================================
 # RSOURCE

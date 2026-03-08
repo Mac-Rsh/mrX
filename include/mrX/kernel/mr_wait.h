@@ -69,12 +69,15 @@ typedef void(mr_waiter_entry_t)(mr_waiter_t *waiter, void *param,
  * @param _param The check parameter.
  */
 #define MR_WAITABLE_INIT(_able, _check, _param)                                \
-    {.parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waitable))),   \
-     .last = 0,                                                                \
-     .gen = MR_ATOMIC_INIT(0),                                                 \
-     .list = MR_LIST_INIT(&(_able)->list),                                     \
-     .check = (_check),                                                        \
-     .param = (_param)}
+    {                                                                          \
+        .parent                                                                \
+        = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waitable))),        \
+        .last = 0,                                                             \
+        .gen = MR_ATOMIC_INIT(0),                                              \
+        .list = MR_LIST_INIT(&(_able)->list),                                  \
+        .check = (_check),                                                     \
+        .param = (_param),                                                     \
+    }
 
 /**
  * @brief This function initializes a waitable.
@@ -160,11 +163,13 @@ MR_INLINE mr_bool_t mr_waitable_put(mr_waitable_t *able) {
  * @param _event The wait event('IN||OUT||ERR').
  */
 #define MR_WAITER_INIT(_wait, _entry, _param, _event)                          \
-    {.parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waiter))),     \
-     .event = (_event),                                                        \
-     .list = MR_LIST_INIT(&(_wait)->list),                                     \
-     .entry = (_entry),                                                        \
-     .param = (_param)}
+    {                                                                          \
+        .parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waiter))),  \
+        .event = (_event),                                                     \
+        .list = MR_LIST_INIT(&(_wait)->list),                                  \
+        .entry = (_entry),                                                     \
+        .param = (_param),                                                     \
+    }
 
 /**
  * @brief This function initializes a waiter.

@@ -1,4 +1,4 @@
-menu "Libc options"
+menu "Libc: Standard library"
 
 # ==================================
 # ARCH
@@ -9,9 +9,15 @@ choice
 
     config MR_USE_ARCH_32B
         bool "32B"
+        help
+            Target 32-bit architecture. Pointers and size_t are 32 bits.
+            Suitable for most MCUs (Cortex-M, etc.).
 
     config MR_USE_ARCH_64B
         bool "64B"
+        help
+            Target 64-bit architecture. Pointers and size_t are 64 bits.
+            Suitable for application processors (Cortex-A, x86_64, etc.).
 endchoice
 
 # ==================================
@@ -23,15 +29,24 @@ choice
 
     config MR_USE_ASSERT_STD
         bool "STD"
+        help
+            Use standard library assert (assert.h). Aborts on failure.
 
     config MR_USE_ASSERT_3RD
         bool "3RD"
+        help
+            Use third-party assertion library. Provides custom panic handlers.
 
     config MR_USE_ASSERT
         bool "INT"
+        help
+            Use internal mrX assert implementation. Platform-specific panic handling.
 
     config MR_USE_ASSERT_NONE
         bool "NONE"
+        help
+            Disable all assertions. No runtime checks, smallest code size.
+            Use only for production builds after thorough testing.
 endchoice
 
 # ==================================
@@ -43,19 +58,29 @@ choice
 
     config MR_USE_MALLOC_STD
         bool "STD"
+        help
+            Use standard library malloc/free. Requires host OS support.
 
     config MR_USE_MALLOC_3RD
         bool "3RD"
+        help
+            Use third-party memory allocator (e.g., tlsf, jemalloc).
 
     config MR_USE_MALLOC
         bool "INT"
+        help
+            Use internal mrX heap implementation. Lightweight, embedded-friendly.
+            No fragmentation handling, suitable for constrained systems.
 endchoice
 
 config MR_CFG_HEAP_SIZE
     depends on !MR_USE_MALLOC_STD
-        int "Heap memory size"
-        default 4096
-        range 32 2147483647
+    int "Heap memory size"
+    default 4096
+    range 32 2147483647
+    help
+        Size of heap memory pool in bytes when using internal malloc.
+        Only applies to internal malloc implementation (not standard library).
 
 # ==================================
 # SPRINTF
@@ -66,12 +91,19 @@ choice
 
     config MR_USE_SPRINTF_STD
         bool "STD"
+        help
+            Use standard library sprintf/snprintf.
 
     config MR_USE_SPRINTF_3RD
         bool "3RD"
+        help
+            Use third-party formatted output library.
 
     config MR_USE_SPRINTF
         bool "INT"
+        help
+            Use internal mrX sprintf implementation. Lightweight, reduced feature set.
+            Supports basic format specifiers: %d, %u, %x, %s, %c, %p.
 endchoice
 
 # ==================================
@@ -83,12 +115,19 @@ choice
 
     config MR_USE_SSCANF_STD
         bool "STD"
+        help
+            Use standard library sscanf.
 
     config MR_USE_SSCANF_3RD
         bool "3RD"
+        help
+            Use third-party formatted input library.
 
     config MR_USE_SSCANF
         bool "INT"
+        help
+            Use internal mrX sscanf implementation. Lightweight parser.
+            Supports basic format specifiers: %d, %u, %x, %s, %c.
 endchoice
 
 # ==================================
@@ -100,18 +139,29 @@ choice
 
     config MR_USE_STRING_STD
         bool "STD"
+        help
+            Use standard library string functions (string.h).
 
     config MR_USE_STRING_3RD
         bool "3RD"
+        help
+            Use third-party string library.
 
     config MR_USE_STRING
         bool "INT"
+        help
+            Use internal mrX string implementation. Optimized for embedded systems.
+            Provides memcpy, memset, strcmp, strcpy, strlen, and bit operations.
 endchoice
 
 config MR_USE_STRING_SAFE
     depends on MR_USE_STRING
-        bool "Use string null-ptr safety"
-        default n
+    bool "Use string null-ptr safety"
+    default n
+    help
+        Enable NULL pointer checks in string functions (memcpy, memcmp, memset, etc.).
+        Functions return NULL or 0 instead of crashing on NULL pointers.
+        Adds small runtime overhead for safety in production environments.
 
 # ==================================
 # ATOMIC
@@ -122,9 +172,14 @@ choice
 
     config MR_USE_ATOMIC_3RD
         bool "3RD"
+        help
+            Use third-party atomic operations library (e.g., C11 stdatomic.h).
 
     config MR_USE_ATOMIC
         bool "INT"
+        help
+            Use internal mrX atomic implementation. Based on interrupt masking.
+            Suitable for single-core systems without hardware atomic instructions.
 endchoice
 
 # ==================================
@@ -136,9 +191,14 @@ choice
 
     config MR_USE_TYPES_STD
         bool "STD"
+        help
+            Use standard C types (stdint.h, stddef.h, stdbool.h).
 
     config MR_USE_TYPES
         bool "INT"
+        help
+            Use internal mrX type definitions. Provides consistent naming
+            (mr_int32_t, mr_size_t, etc.) across all platforms.
 endchoice
 
 # ==================================
@@ -150,12 +210,19 @@ choice
 
     config MR_USE_ERRNO_STD
         bool "STD"
+        help
+            Use standard library errno (errno.h).
 
     config MR_USE_ERRNO_3RD
         bool "3RD"
+        help
+            Use third-party error code system.
 
     config MR_USE_ERRNO
         bool "INT"
+        help
+            Use internal mrX error codes. POSIX-compatible definitions.
+            Provides MR_EPERM, MR_ENOENT, MR_EIO, MR_EAGAIN, MR_ENOMEM, etc.
 endchoice
 
 endmenu

@@ -1,0 +1,30 @@
+menu "ADC: Analog-to-Digital Converter"
+
+# ==================================
+# ADC
+# ==================================
+config MR_USE_DRIVER_ADC
+    select MR_USE_DRIVER
+    bool "Use ADC"
+    default n
+    help
+        Enable ADC driver for analog-to-digital conversion.
+        Features:
+            - Single-ended and differential input modes
+            - Programmable gain amplifier (1/6x to 128x)
+            - Configurable reference voltage (internal/external)
+            - Hardware oversampling support
+            - Raw to voltage conversion utilities (mV/uV/V)
+            - Multi-channel sequential sampling
+
+# ==================================
+# ASYNC
+# ==================================
+config MR_USE_DRIVER_ADC_ASYNC
+    depends on MR_USE_DRIVER_ADC
+    bool "Use ADC ASYNC"
+    default y
+    help
+
+
+endmenu

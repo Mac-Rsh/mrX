@@ -69,11 +69,14 @@ typedef void(mr_work_entry_t)(struct mr_work *work, void *param);
  * @param _queue The workqueue.
  */
 #define MR_WORKQUEUE_INIT(_queue)                                              \
-    {.parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(workqueue))),  \
-     .depth = MR_ATOMIC_INIT(0),                                               \
-     .dying = MR_ATOMIC_INIT(MR_FALSE),                                        \
-     .tlist = MR_LIST_INIT(&(_queue)->tlist),                                  \
-     .list = MR_LIST_INIT(&(_queue)->list)}
+    {                                                                          \
+        .parent                                                                \
+        = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(workqueue))),       \
+        .depth = MR_ATOMIC_INIT(0),                                            \
+        .dying = MR_ATOMIC_INIT(MR_FALSE),                                     \
+        .tlist = MR_LIST_INIT(&(_queue)->tlist),                               \
+        .list = MR_LIST_INIT(&(_queue)->list),                                 \
+    }
 
 /**
  * @brief This function initializes a workqueue.
@@ -179,12 +182,14 @@ MR_INLINE mr_bool_t mr_workqueue_put(mr_workqueue_t *queue) {
  * @param _param The entry parameter.
  */
 #define MR_WORK_INIT(_work, _entry, _param)                                    \
-    {.parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(work))),       \
-     .list = MR_LIST_INIT(&(_work)->list),                                     \
-     .queue = MR_NULL,                                                         \
-     .tick = 0,                                                                \
-     .entry = (_entry),                                                        \
-     .param = (_param)}
+    {                                                                          \
+        .parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(work))),    \
+        .list = MR_LIST_INIT(&(_work)->list),                                  \
+        .queue = MR_NULL,                                                      \
+        .tick = 0,                                                             \
+        .entry = (_entry),                                                     \
+        .param = (_param),                                                     \
+    }
 
 /**
  * @brief This function initializes a work.

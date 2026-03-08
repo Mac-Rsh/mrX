@@ -38,12 +38,6 @@ typedef enum mr_i2c_addr_bits {
     MR_I2C_ADDR_BITS_10,
 } mr_i2c_addr_bits_t;
 
-/* I2C operations mode definition */
-typedef enum mr_i2c_ops_mode {
-    MR_I2C_OPS_MODE_POLL,
-    MR_I2C_OPS_MODE_INT,
-} mr_i2c_ops_mode_t;
-
 /* I2C configuration type */
 typedef struct mr_i2c_config {
     mr_uint32_t baud_rate: 25;
@@ -56,6 +50,12 @@ typedef struct mr_i2c_msg {
     mr_uint32_t size;
     void *buf;
 } mr_i2c_msg_t;
+
+/* I2C operations mode definition */
+typedef enum mr_i2c_ops_mode {
+    MR_I2C_OPS_MODE_POLL,
+    MR_I2C_OPS_MODE_INT,
+} mr_i2c_ops_mode_t;
 
 /* I2C data type */
 MR_DRIVER_CLAZZES_EXPORT(i2c);
@@ -178,7 +178,6 @@ MR_INLINE int mr_i2c_xfer(mr_driver_t *drv, mr_i2c_msg_t *msgs,
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_I2C);
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
-    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT((msgs != MR_NULL) || (msgs_num == 0));
 
     /* Get I2C data */

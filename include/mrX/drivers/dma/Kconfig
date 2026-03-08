@@ -1,0 +1,42 @@
+menu "DMA: Direct Memory Access"
+
+# ==================================
+# DMA
+# ==================================
+config MR_USE_DRIVER_DMA
+    select MR_USE_DRIVER
+    bool "Use DMA"
+    default n
+    help
+        Enable DMA driver for direct memory access transfers.
+        Features:
+            - Memory-to-memory, memory-to-peripheral, peripheral-to-memory modes
+            - Configurable transfer width (8/16/32/64 bits)
+            - Circular buffer support
+            - Interrupt on transfer complete/half-complete
+            - Address increment/decrement/constant modes
+        Offloads data transfer from CPU, improving efficiency for
+        UART, SPI, I2C, ADC, and other peripherals.
+
+# ==================================
+# ADDR-WIDTH
+# ==================================
+choice
+    depends on MR_USE_DRIVER_DMA
+    prompt "Address width"
+    default MR_USE_DRIVER_DMA_WIDTH_32B
+
+    config MR_USE_DRIVER_DMA_WIDTH_32B
+        bool "32B"
+        help
+            DMA uses 32-bit addressing. Suitable for most MCUs.
+            Maximum addressable range: 4GB.
+
+    config MR_USE_DRIVER_DMA_WIDTH_64B
+        bool "64B"
+        help
+            DMA uses 64-bit addressing. Required for systems with
+            more than 4GB memory or 64-bit address spaces.
+endchoice
+
+endmenu

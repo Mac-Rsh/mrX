@@ -138,6 +138,7 @@ mr_err_t mr_driver_setup(mr_driver_t *drv) {
 
     /* Check if driver need init */
     if ((!drv->clazz) || (!drv->clazz->init)) {
+        ret = 0;
         goto _set;
     }
 
@@ -155,6 +156,24 @@ _exit:
     /* Unlock driver */
     driver_unlock(drv);
     return ret;
+}
+
+mr_bool_t mr_driver_is_ready(mr_driver_t *drv) {
+    /* Check parameter */
+    if ((!drv) || (!MR_OBJECT_IS_INITED(drv))) {
+        return MR_FALSE;
+    }
+    if (!MR_OBJECT_IS_CLAZZES(drv, driver)) {
+        return MR_FALSE;
+    }
+
+    /* Check if driver is setup */
+    if (!(mr_atomic_load(&drv->flags) & MR_DRIVER_FLAG_SETUP)) {
+        return MR_FALSE;
+    }
+
+    /* State is ready */
+    return drv->state == 0;
 }
 
 mr_err_t mr_driver_shutdown(mr_driver_t *drv) {
@@ -178,6 +197,7 @@ mr_err_t mr_driver_shutdown(mr_driver_t *drv) {
 
     /* Check if driver need deinit */
     if ((!drv->clazz) || (!drv->clazz->deinit)) {
+        ret = 0;
         goto _unset;
     }
 
