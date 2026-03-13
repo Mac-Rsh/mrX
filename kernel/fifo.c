@@ -17,10 +17,17 @@
 
 mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
                          mr_uint32_t elemsz) {
+    /* Check parameter */
+    if ((buf == MR_NULL) || (elemsz == 0) || (size < elemsz)) {
+        return 0;
+    }
+
     /* Align size(down to power of 2) */
-    elemsz = (elemsz != 0) ? elemsz : 1;
-    size = (size != 0) ? size : 1;
-    size = FIFO_ALIGN_POW2_DOWN(size / elemsz);
+    size /= elemsz;
+    if (size == 0) {
+        return 0;
+    }
+    size = FIFO_ALIGN_POW2_DOWN(size);
 
     /* Init fifo */
     mr_atomic_init(&fifo->ridx, 0);
@@ -35,6 +42,14 @@ mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t num,
                           mr_uint32_t elemsz) {
     mr_uint32_t size;
     void *buf;
+
+    /* Check parameter */
+    if ((fifo == MR_NULL) || (num == 0) || (elemsz == 0)) {
+        return 0;
+    }
+    if (num > (MR_UINT32_MAX / elemsz)) {
+        return 0;
+    }
 
     /* Align size(up to power of 2) */
     size = FIFO_ALIGN_POW2_UP(num * elemsz);

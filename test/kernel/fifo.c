@@ -62,6 +62,53 @@ static void test_fifo_alloc_free(void) {
 MR_TEST_EXPORT(fifo, alloc_free, test_fifo_alloc_free);
 
 /* -------------------------------------------------------------------------- */
+/* Test: Init / alloc boundary cases                                           */
+static void test_fifo_boundary_init_alloc(void) {
+    mr_uint8_t buf[8];
+    test_elem_t elem = {.id = 1};
+    test_elem_t out;
+    mr_uint32_t cap;
+    mr_fifo_t fifo;
+
+    cap = mr_fifo_init(&fifo, buf, 0, sizeof(test_elem_t));
+    MR_TEST_ASSERT_EQ_INT(cap, 0);
+    MR_TEST_ASSERT_EQ_INT(fifo.elemsz, 0);
+    MR_TEST_ASSERT_EQ_PTR(fifo.buf, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_fifo_push(&fifo, &elem), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_fifo_pop(&fifo, &out), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_fifo_write(&fifo, &elem, 1), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_fifo_peek(&fifo, &out, 1), 0);
+
+    cap = mr_fifo_init(&fifo, buf, 2, sizeof(test_elem_t));
+    MR_TEST_ASSERT_EQ_INT(cap, 0);
+    MR_TEST_ASSERT_EQ_INT(fifo.elemsz, 0);
+    MR_TEST_ASSERT_EQ_PTR(fifo.buf, MR_NULL);
+
+    cap = mr_fifo_init(&fifo, buf, sizeof(buf), 0);
+    MR_TEST_ASSERT_EQ_INT(cap, 0);
+    MR_TEST_ASSERT_EQ_INT(fifo.elemsz, 0);
+    MR_TEST_ASSERT_EQ_PTR(fifo.buf, MR_NULL);
+
+    cap = mr_fifo_init(&fifo, MR_NULL, sizeof(buf), sizeof(test_elem_t));
+    MR_TEST_ASSERT_EQ_INT(cap, 0);
+    MR_TEST_ASSERT_EQ_INT(fifo.elemsz, 0);
+    MR_TEST_ASSERT_EQ_PTR(fifo.buf, MR_NULL);
+
+    cap = mr_fifo_alloc(&fifo, 0, sizeof(test_elem_t));
+    MR_TEST_ASSERT_EQ_INT(cap, 0);
+
+    cap = mr_fifo_alloc(&fifo, 8, 0);
+    MR_TEST_ASSERT_EQ_INT(cap, 0);
+
+#if defined(MR_USE_MALLOC)
+    cap = mr_fifo_alloc(&fifo, (MR_UINT32_MAX / sizeof(test_elem_t)) + 1,
+                        sizeof(test_elem_t));
+    MR_TEST_ASSERT_EQ_INT(cap, 0);
+#endif /* defined(MR_USE_MALLOC) */
+}
+MR_TEST_EXPORT(fifo, boundary_init_alloc, test_fifo_boundary_init_alloc);
+
+/* -------------------------------------------------------------------------- */
 /* Test: Single push / pop                                                    */
 static void test_fifo_push_pop(void) {
     mr_uint8_t buf[128];

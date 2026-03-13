@@ -70,7 +70,7 @@ typedef mr_tick_t(mr_clock_hook_t)(void);
  * @return The clock ticks.
  */
 #define MR_TICK_MSEC(_ms)                                                      \
-    ((_ms) * 1000UL / MR_CFG_TICK_PER_SECOND)
+    ((mr_tick_t)(((mr_uint64_t)(_ms) * MR_CFG_TICK_PER_SECOND) / 1000ULL))
 
 /**
  * @brief This macro converts microseconds to clock ticks.
@@ -79,7 +79,7 @@ typedef mr_tick_t(mr_clock_hook_t)(void);
  * @return The clock ticks.
  */
 #define MR_TICK_USEC(_us)                                                      \
-    ((_us) * 1000000UL / MR_CFG_TICK_PER_SECOND)
+    ((mr_tick_t)(((mr_uint64_t)(_us) * MR_CFG_TICK_PER_SECOND) / 1000000ULL))
 
 /**
  * @brief This function increases the clock tick.

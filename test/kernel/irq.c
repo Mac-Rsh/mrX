@@ -358,12 +358,27 @@ static mr_irq_defer_hook_t mock_irq_hook
     = {.suspend = irq_hook_suspend, .wakeup = irq_hook_wakeup};
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 
+static int defer_handle_count = 0;
+
 /* -------------------------------------------------------------------------- */
 /* Test: IRQ defer request */
 static mr_irq_return_t test_defer_handler(mr_uint32_t irq, void *owner) {
     MR_IGNORE(irq);
     MR_IGNORE(owner);
     return MR_IRQ_DEFERRED;
+}
+
+static mr_irq_return_t test_defer_complete_handler(mr_uint32_t irq, void *owner) {
+    MR_IGNORE(irq);
+    MR_IGNORE(owner);
+    return MR_IRQ_DEFERRED;
+}
+
+static mr_irq_return_t test_defer_complete_entry(mr_uint32_t irq, void *owner) {
+    MR_IGNORE(irq);
+    MR_IGNORE(owner);
+    defer_handle_count++;
+    return MR_IRQ_HANDLED;
 }
 
 static void test_irq_defer_request(void) {
@@ -402,6 +417,75 @@ static void test_irq_defer_request(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
 MR_TEST_EXPORT(irq, defer_request, test_irq_defer_request);
+
+/* -------------------------------------------------------------------------- */
+/* Test: IRQ free before deferred execute                                     */
+static void test_irq_defer_free_before_execute(void) {
+    mr_irq_t irq;
+    mr_err_t ret;
+
+#if defined(MR_USE_IRQ_DEFER_HOOK)
+    mr_irq_defer_hook_set(&mock_irq_hook);
+    irq_hook_status = 0;
+#endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
+
+    defer_handle_count = 0;
+    ret = mr_irq_init(&irq, 0, 0, &mock_irq_ops, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    ret = mr_irq_defer_request(0, test_defer_complete_handler, &irq,
+                               MR_IRQ_EDGE_RISING,
+                               test_defer_complete_entry);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    MR_TEST_ASSERT_EQ_INT(mr_irq_handle(0), MR_IRQ_DEFERRED);
+    ret = mr_irq_free(0, &irq);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    mr_irq_defer_execute();
+    MR_TEST_ASSERT_EQ_INT(defer_handle_count, 0);
+#if defined(MR_USE_IRQ_DEFER_HOOK)
+    MR_TEST_ASSERT_EQ_INT(irq_hook_status, 0);
+#endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
+
+    ret = mr_irq_del(&irq);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+MR_TEST_EXPORT(irq, defer_free_before_execute,
+               test_irq_defer_free_before_execute);
+
+/* -------------------------------------------------------------------------- */
+/* Test: IRQ delete before deferred execute                                   */
+static void test_irq_defer_del_before_execute(void) {
+    mr_irq_t irq;
+    mr_err_t ret;
+
+#if defined(MR_USE_IRQ_DEFER_HOOK)
+    mr_irq_defer_hook_set(&mock_irq_hook);
+    irq_hook_status = 0;
+#endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
+
+    defer_handle_count = 0;
+    ret = mr_irq_init(&irq, 0, 0, &mock_irq_ops, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    ret = mr_irq_defer_request(0, test_defer_complete_handler, &irq,
+                               MR_IRQ_EDGE_RISING,
+                               test_defer_complete_entry);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    MR_TEST_ASSERT_EQ_INT(mr_irq_handle(0), MR_IRQ_DEFERRED);
+    ret = mr_irq_del(&irq);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    mr_irq_defer_execute();
+    MR_TEST_ASSERT_EQ_INT(defer_handle_count, 0);
+#if defined(MR_USE_IRQ_DEFER_HOOK)
+    MR_TEST_ASSERT_EQ_INT(irq_hook_status, 0);
+#endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
+}
+MR_TEST_EXPORT(irq, defer_del_before_execute,
+               test_irq_defer_del_before_execute);
 #endif /* defined(MR_USE_IRQ_DEFER) */
 #endif /* defined(MR_USE_IRQ) */
 #endif /* defined(MR_USE_TEST) */

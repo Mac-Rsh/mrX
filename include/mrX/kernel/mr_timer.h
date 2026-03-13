@@ -96,6 +96,8 @@ mr_err_t mr_timer_del(mr_timer_t *timer);
  *
  * @param timer The timer.
  * @return 0 on success, a negative error code on failure.
+ *
+ * @note If the timer is already running, it will be restarted.
  */
 mr_err_t mr_timer_start(mr_timer_t *timer);
 

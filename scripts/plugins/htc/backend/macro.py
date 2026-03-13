@@ -1,0 +1,347 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+HTC Backend Macro - Header macro lowering for Hardware Tree Compiler.
+
+Transforms semantic hardware tree data into static C preprocessor macro
+definitions used by embedded targets.
+
+@copyright (c) 2024-2026, MacRsh
+
+@license SPDX-License-Identifier: Apache-2.0
+"""
+
+from ..common import ArrayMode, ArrayValue, EmptyValue, FloatValue, \
+    IdentifierValue, NumberValue, ReferenceValue, StringValue, ValueExpr
+from ..semantic import HardwareTree, ResolvedNode
+
+
+class MacroBuilder:
+    """Lowers a semantic hardware tree into backend macro lines."""
+
+    PREFIX = "__MR_HT_"
+    DEFAULT_ARRAY_VALUE = "0"
+    DEFAULT_FLAG_VALUE = "1"
+    DEFAULT_INIT_LEVEL = "MR_DRIVER_LEVEL_NORMAL"
+    NODE_ALIASES = "aliases"
+    SECTION_LABEL = "LABEL"
+    SECTION_ALIAS = "ALIAS"
+    SECTION_INST = "INST"
+    SECTION_DRIVER = "DRIVER"
+    PROP_NAME = "NAME"
+    PROP_PATH = "PATH"
+    PROP_INIT_LEVEL = "INIT_LEVEL"
+    PROP_PARENT = "PARENT"
+    PROP_ADDR = "ADDR"
+    STATUS_EARLY = "early"
+    STATUS_OKAY = "okay"
+    STATUS_LAST = "last"
+    STATUS_DEFER = "defer"
+    STATUS_DISABLED = "disabled"
+    STATUS_PRIO_PREFIX = "prio("
+    STATUS_PRIO_SUFFIX = ")"
+    HEX_PREFIX = "0x"
+    SKIP_NODES = {NODE_ALIASES}
+    STATUS_TO_INIT_LEVEL = {
+        STATUS_EARLY: "MR_DRIVER_LEVEL_EARLY",
+        STATUS_OKAY: "MR_DRIVER_LEVEL_NORMAL",
+        STATUS_LAST: "MR_DRIVER_LEVEL_LAST",
+        STATUS_DEFER: "MR_DRIVER_LEVEL_DEFER",
+        STATUS_DISABLED: "MR_DRIVER_LEVEL_DEFER",
+    }
+
+    def build(self, tree: HardwareTree) -> list[str]:
+        """Build all backend macro lines for a resolved hardware tree."""
+        lines: list[str] = []
+
+        # Skip disabled nodes and synthetic helper nodes
+        enabled_nodes = self._iter_enabled_nodes(tree)
+        for node in enabled_nodes:
+            # Emit all node-local macros first
+            self._emit_node(lines, tree, node)
+
+        # Emit global symbol tables next
+        self._emit_symbols(lines, tree.labels, self.SECTION_LABEL)
+        self._emit_symbols(lines, tree.aliases, self.SECTION_ALIAS)
+
+        # Emit instance indexes after the full node set is known
+        self._emit_inst(lines, enabled_nodes)
+        return lines
+
+    def _emit_node(self, lines: list[str], tree: HardwareTree,
+                   node: ResolvedNode) -> None:
+        """Emit all macros associated with one resolved node."""
+        # Section header
+        node_macro = self._path_to_macro(node.path)
+        lines.append(self._section_header(node.path))
+
+        # EXIST
+        self._define_exist(lines, node_macro)
+
+        # NAME
+        self._define_property(lines, node_macro, self.PROP_NAME, node.name)
+
+        # PATH
+        self._define_property(lines, node_macro, self.PROP_PATH,
+                              f'"{node.path}"')
+
+        # INIT_LEVEL
+        self._define_property(lines, node_macro, self.PROP_INIT_LEVEL,
+                              self._map_status(node.effective_status))
+
+        # PARENT
+        if node.parent_path is not None:
+            self._define_property(lines, node_macro, self.PROP_PARENT,
+                                  self._path_to_macro(node.parent_path))
+
+        # ADDR
+        if node.address is not None:
+            self._define_property(lines, node_macro, self.PROP_ADDR,
+                                  self._format_address(node.address))
+
+        # Properties
+        for prop in node.properties:
+            self._emit_property(lines, tree, node_macro, prop.name, prop.value)
+        lines.append("")
+
+    def _emit_property(self, lines: list[str], tree: HardwareTree,
+                       node_macro: str, prop_name: str,
+                       value: ValueExpr) -> None:
+        """Emit macros for one resolved property value."""
+        base = f"{node_macro}_P_{self._normalize(prop_name)}"
+        self._define_exist(lines, base)
+
+        # Expanded arrays
+        if isinstance(value, ArrayValue) and value.mode == ArrayMode.EXPANDED:
+            self._emit_expanded_array(lines, tree, base, value)
+            return
+
+        # Simple values
+        self._define(lines, base, self._format_value(tree, value))
+
+    def _emit_expanded_array(self, lines: list[str], tree: HardwareTree,
+                             base: str,
+                             value: ArrayValue) -> None:
+        """Emit grouped array macros following HTC backend conventions."""
+        # Nested arrays become multiple E groups directly
+        if value.elements and all(
+                isinstance(element, ArrayValue) and
+                element.mode == ArrayMode.EXPANDED for element in
+                value.elements):
+            nested = [element for element in value.elements
+                      if isinstance(element, ArrayValue) and
+                      element.mode == ArrayMode.EXPANDED]
+            for outer_index, nested_array in enumerate(nested):
+                for inner_index, element in enumerate(nested_array.elements):
+                    self._emit_array_element(lines, tree, base, outer_index,
+                                             inner_index, element)
+            self._define(lines, f"{base}_E_NUM", str(len(nested)))
+            return
+
+        # Flat arrays are split into scalar groups and phandle-style groups
+        groups: list[list[ValueExpr]] = []
+        current_scalars: list[ValueExpr] = []
+        index = 0
+        while index < len(value.elements):
+            element = value.elements[index]
+
+            # References start a new grouped element sequence
+            if isinstance(element, ReferenceValue):
+                group: list[ValueExpr] = [element]
+                index += 1
+                while index < len(value.elements) and isinstance(
+                        value.elements[index], (NumberValue, FloatValue)):
+                    group.append(value.elements[index])
+                    index += 1
+                groups.append(group)
+                continue
+            current_scalars.append(element)
+            index += 1
+        if current_scalars:
+            groups.insert(0, current_scalars)
+        if not groups:
+            groups = [[]]
+        for outer_index, group in enumerate(groups):
+            for inner_index, element in enumerate(group):
+                self._emit_array_element(lines, tree, base, outer_index,
+                                         inner_index, element)
+        self._define(lines, f"{base}_E_NUM", str(len(groups)))
+
+    def _emit_array_element(
+            self,
+            lines: list[str],
+            tree: HardwareTree,
+            base: str,
+            outer_index: int,
+            inner_index: int,
+            value: ValueExpr,
+    ) -> None:
+        """Emit one concrete array element macro."""
+        element_macro = f"{base}_E_{outer_index}_I_{inner_index}"
+        self._define_exist(lines, element_macro)
+
+        # array-mode-rule: expanded arrays may embed inline arrays as values.
+        self._define(lines, element_macro,
+                     self._format_expanded_element(tree, value))
+
+    def _emit_symbols(self, lines: list[str], symbols: dict[str, str],
+                      section: str) -> None:
+        """Emit label or alias symbol tables as backend macros."""
+        if not symbols:
+            return
+        lines.append(self._section_header(f"/{section}"))
+        for name, target_path in sorted(symbols.items()):
+            macro = self._path_to_macro(f"/{section}/{name}")
+            self._define_exist(lines, macro)
+            self._define(lines, macro, self._path_to_macro(target_path))
+        lines.append("")
+
+    def _emit_inst(self, lines: list[str],
+                   enabled_nodes: list[ResolvedNode]) -> None:
+        """Emit driver instance index groups for enabled resolved nodes."""
+        self._emit_inst_group(lines,
+                              f"/{self.SECTION_INST}/{self.SECTION_DRIVER}",
+                              enabled_nodes)
+        groups: dict[str, list[ResolvedNode]] = {}
+        for node in enabled_nodes:
+            for compatible in node.compatible:
+                groups.setdefault(self._normalize(compatible), []).append(node)
+        for compatible, nodes in sorted(groups.items()):
+            self._emit_inst_group(lines, f"/{self.SECTION_INST}/{compatible}",
+                                  nodes)
+
+    def _emit_inst_group(self, lines: list[str], category: str,
+                         nodes: list[ResolvedNode]) -> None:
+        """Emit one instance group category and its indexed members."""
+        prefix = self._path_to_macro(category)
+        lines.append(self._section_header(category))
+        self._define_exist(lines, prefix)
+        self._define(lines, f"{prefix}_NUM", str(len(nodes)))
+        for index, node in enumerate(nodes):
+            self._define(lines, f"{prefix}_S_{index}",
+                         self._path_to_macro(node.path))
+        lines.append("")
+
+    def _format_value(self, tree: HardwareTree, value: ValueExpr) -> str:
+        """Format a semantic value expression as backend macro text."""
+        # Bare properties map to flag-style macros with value 1
+        if isinstance(value, EmptyValue):
+            return self.DEFAULT_FLAG_VALUE
+
+        # Strings preserve original quoting at render time
+        if isinstance(value, StringValue):
+            escaped = value.value.replace('"', '\\"')
+            return f'"{escaped}"'
+
+        # Numeric and identifier values are emitted as written
+        if isinstance(value, NumberValue):
+            return value.original
+        if isinstance(value, FloatValue):
+            return value.original
+        if isinstance(value, IdentifierValue):
+            return value.name
+
+        # References are already validated, so this is a direct rewrite
+        if isinstance(value, ReferenceValue):
+            if value.is_path:
+                return self._path_to_macro(value.reference)
+            target_path = tree.labels.get(value.reference,
+                                          f"/{value.reference}")
+            return self._path_to_macro(target_path)
+
+        # Inline arrays render as direct brace-enclosed values.
+        if isinstance(value, ArrayValue):
+            if value.mode == ArrayMode.INLINE:
+                return self._format_inline_array(tree, value)
+            return self.DEFAULT_ARRAY_VALUE
+        return str(value)
+
+    def _format_inline_array(self, tree: HardwareTree,
+                             value: ArrayValue) -> str:
+        """Render an inline array as a C brace-enclosed initializer."""
+        rendered = [self._format_inline_element(tree, element)
+                    for element in value.elements]
+        return "{" + ", ".join(rendered) + "}"
+
+    def _format_inline_element(self, tree: HardwareTree,
+                               value: ValueExpr) -> str:
+        """Render one inline-array element, recursing into nested arrays."""
+        if isinstance(value, ArrayValue):
+            # array-mode-rule: inline arrays only recurse into inline arrays.
+            if value.mode == ArrayMode.EXPANDED:
+                raise ValueError(
+                    "expanded arrays cannot appear inside inline arrays")
+            return self._format_inline_array(tree, value)
+        return self._format_value(tree, value)
+
+    def _format_expanded_element(self, tree: HardwareTree,
+                                 value: ValueExpr) -> str:
+        """Render one expanded-array element, allowing inline array literals."""
+        if isinstance(value, ArrayValue) and value.mode == ArrayMode.INLINE:
+            # array-mode-rule: expanded arrays may inline brace initializers.
+            return self._format_inline_array(tree, value)
+        return self._format_value(tree, value)
+
+    def _map_status(self, status: str) -> str:
+        """Map semantic status strings to backend init-level macros."""
+        if status.startswith(self.STATUS_PRIO_PREFIX) and status.endswith(
+                self.STATUS_PRIO_SUFFIX):
+            start = len(self.STATUS_PRIO_PREFIX)
+            end = -len(self.STATUS_PRIO_SUFFIX)
+            return f"MR_DRIVER_LEVEL_PRIO({status[start:end]})"
+        return self.STATUS_TO_INIT_LEVEL.get(status, self.DEFAULT_INIT_LEVEL)
+
+    def _iter_enabled_nodes(self, tree: HardwareTree) -> list[ResolvedNode]:
+        """Return nodes that should participate in backend emission."""
+        return [node for node in tree.nodes if self._should_emit_node(node)]
+
+    def _should_emit_node(self, node: ResolvedNode) -> bool:
+        """Return True when a resolved node should be emitted."""
+        return node.name not in self.SKIP_NODES and node.effective_status != self.STATUS_DISABLED
+
+    def _format_address(self, address: str) -> str:
+        """Normalize node address text into backend hex form."""
+        if address.startswith(self.HEX_PREFIX):
+            return address
+        return f"{self.HEX_PREFIX}{address}"
+
+    @staticmethod
+    def _define(lines: list[str], macro: str, value: str) -> None:
+        """Append one aligned `#define` line"""
+        spacing = max(1, 50 - len(macro))
+        lines.append(f"#define {macro}{' ' * spacing}{value}")
+
+    def _define_exist(self, lines: list[str], macro: str) -> None:
+        """Append the paired existence macro for a symbol."""
+        self._define(lines, f"{macro}_EXIST", "1")
+
+    def _define_property(self, lines: list[str], node_macro: str,
+                         prop_name: str, value: str) -> None:
+        """Emit a property existence macro and its value macro."""
+        prop_macro = f"{node_macro}_P_{prop_name}"
+        self._define_exist(lines, prop_macro)
+        self._define(lines, prop_macro, value)
+
+    @staticmethod
+    def _section_header(title: str) -> str:
+        """Build a banner comment for one logical output section."""
+        fixed = 32
+        adaptive = max(1, 80 - 9 - fixed - len(title))
+        return f"/* {'=' * fixed} {title} {'=' * adaptive} */"
+
+    def _path_to_macro(self, path: str) -> str:
+        """Convert a canonical node path into an HTC macro prefix."""
+        if path == "/":
+            return f"{self.PREFIX}N"
+        return f"{self.PREFIX}N{path.replace('/', '_S_').replace('-', '_')}"
+
+    @staticmethod
+    def _normalize(identifier: str) -> str:
+        """Normalize user-facing names into macro-safe fragments."""
+        return identifier.replace('-', '_').replace(',', '_')
+
+    @staticmethod
+    def render(lines: list[str]) -> str:
+        """Join rendered lines into a newline-terminated header string."""
+        return "\n".join(lines).rstrip() + "\n"

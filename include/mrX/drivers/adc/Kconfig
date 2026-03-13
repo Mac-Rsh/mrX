@@ -25,6 +25,12 @@ config MR_USE_DRIVER_ADC_ASYNC
     bool "Use ADC ASYNC"
     default y
     help
-
+        Enable asynchronous (non-blocking) ADC operations.
+        Features:
+            - DMA-based sampling for high-speed conversions
+            - Interrupt-driven sampling without DMA.
+            - Callback-based completion notification
+            - Circular buffer mode for continuous sampling
+        Required for high-speed sampling and non-blocking operation.
 
 endmenu

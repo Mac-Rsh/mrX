@@ -313,22 +313,19 @@ MR_INLINE mr_err_t mr_dma_status(mr_driver_t *drv, mr_uint32_t channel,
 MR_INLINE mr_err_t mr_dma_irq_attach(mr_driver_t *drv, mr_uint32_t channel,
                                      mr_waiter_t *entry) {
     const mr_dma_ops_t *dma_ops;
-    mr_dma_data_t *dma_data;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_DMA);
-    MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT(entry != MR_NULL);
     MR_ASSERT(channel < 32);
 
-    /* Get DMA data and operations */
-    dma_data = (mr_dma_data_t *)MR_DRIVER_DATA(drv);
+    /* Get DMA operations */
     dma_ops = (mr_dma_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if channel is existed */
-    if (!(dma_data->exist_mask & (1U << channel))) {
-        return -MR_EINVAL;
+    /* Check if attach is supported */
+    if (!dma_ops->attach) {
+        return -MR_ENOSYS;
     }
 
     /* Attach DMA channel irq */

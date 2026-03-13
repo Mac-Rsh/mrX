@@ -201,6 +201,14 @@ extern "C" {
 #define MR_HT_NODE_NAME(_node)          MR_HT_NODE_PROP(_node, NAME)
 
 /**
+ * @brief This macro function gets the node path.
+ *
+ * @param _node The node.
+ * @return The node path.
+ */
+#define MR_HT_NODE_PATH(_node)          MR_HT_NODE_PROP(_node, PATH)
+
+/**
  * @brief This macro function checks whether the node has a parent.
  *
  * @param _node The node.

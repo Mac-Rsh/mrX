@@ -283,8 +283,26 @@ mr_size_t mr_strnlen(const char *s, mr_size_t size) {
 }
 
 int mr_strncmp(const char *s1, const char *s2, mr_size_t size) {
+#if defined(MR_USE_STRING_SAFE)
+    /* Check parameter */
+    if ((!s1) || (!s2)) {
+        return 0;
+    }
+#endif /* defined(MR_USE_STRING_SAFE) */
+
     /* Compare bytes */
-    return mr_memcmp(s1, s2, size);
+    while (size > 0) {
+        if (*s1 != *s2) {
+            return *s1 - *s2;
+        }
+        if (*s1 == '\0') {
+            return 0;
+        }
+        s1++;
+        s2++;
+        size--;
+    }
+    return 0;
 }
 
 char *mr_strncpy(char *dst, const char *src, mr_size_t size) {

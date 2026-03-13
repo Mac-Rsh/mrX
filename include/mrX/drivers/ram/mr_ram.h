@@ -41,10 +41,10 @@ typedef struct mr_ram_data {
 typedef struct mr_ram_ops {
     mr_err_t (*mount)(const mr_driver_t *drv);
     mr_err_t (*unmount)(const mr_driver_t *drv);
-    int (*write)(const mr_driver_t *drv, mr_uint32_t offset,
-                 const mr_uint8_t *buf, mr_uint32_t size);
-    int (*read)(const mr_driver_t *drv, mr_uint32_t offset, mr_uint8_t *buf,
-                mr_uint32_t size);
+    mr_ssize_t (*write)(const mr_driver_t *drv, mr_ssize_t offset,
+                        const mr_uint8_t *buf, mr_size_t size);
+    mr_ssize_t (*read)(const mr_driver_t *drv, mr_ssize_t offset,
+                       mr_uint8_t *buf, mr_size_t size);
 } mr_ram_ops_t;
 
 /**
@@ -152,10 +152,10 @@ MR_INLINE mr_err_t mr_ram_del(mr_driver_t *drv) {
  * @param buf The buffer.
  * @param size The size.
  * @return The actual size of written data on success, a negative error code on
- *         failure.
+ * failure.
  */
-MR_INLINE int mr_ram_write(mr_driver_t *drv, mr_uint32_t offset,
-                           const void *buf, mr_uint32_t size) {
+MR_INLINE mr_ssize_t mr_ram_write(mr_driver_t *drv, mr_ssize_t offset,
+                                  const void *buf, mr_size_t size) {
     const mr_ram_ops_t *rm_ops;
 
     /* Check parameter */
@@ -165,7 +165,9 @@ MR_INLINE int mr_ram_write(mr_driver_t *drv, mr_uint32_t offset,
 
     /* Get RAM operations */
     rm_ops = (mr_ram_ops_t *)MR_DRIVER_OPS(drv);
-    if (rm_ops->write == MR_NULL) {
+
+    /* Check if operation is supported */
+    if (!rm_ops->write) {
         return -MR_ENOSYS;
     }
 
@@ -181,10 +183,10 @@ MR_INLINE int mr_ram_write(mr_driver_t *drv, mr_uint32_t offset,
  * @param buf The buffer.
  * @param size The size.
  * @return The actual size of read data on success, a negative error code on
- *         failure.
+ * failure.
  */
-MR_INLINE int mr_ram_read(mr_driver_t *drv, mr_uint32_t offset, void *buf,
-                          mr_uint32_t size) {
+MR_INLINE mr_ssize_t mr_ram_read(mr_driver_t *drv, mr_ssize_t offset, void *buf,
+                                 mr_size_t size) {
     const mr_ram_ops_t *rm_ops;
 
     /* Check parameter */
@@ -194,7 +196,9 @@ MR_INLINE int mr_ram_read(mr_driver_t *drv, mr_uint32_t offset, void *buf,
 
     /* Get RAM operations */
     rm_ops = (mr_ram_ops_t *)MR_DRIVER_OPS(drv);
-    if (rm_ops->read == MR_NULL) {
+
+    /* Check if operation is supported */
+    if (!rm_ops->read) {
         return -MR_ENOSYS;
     }
 
@@ -235,7 +239,7 @@ MR_INLINE mr_bool_t mr_ram_put(mr_driver_t *drv) {
  */
 #define MR_HT_INST_RAM_INSTALL(_id, _priv, _ops)                               \
     static mr_ram_region_t __mr_ram_region_##_id[]                             \
-        = {MR_HT_NODE_PROP_ELEM_FOREACH(MR_HT_INST_DRIVER(_id), reg,           \
+        = {MR_HT_NODE_PROP_ELEM_FOREACH(MR_HT_INST_DRIVER(_id), region,        \
                                         __MR_HT_RAM_REGION_IMPL)};             \
     static mr_ram_data_t __mr_ram_data_##_id = MR_RAM_DATA_INIT(               \
         __mr_ram_region_##_id, MR_ARRAY_SIZE(__mr_ram_region_##_id));          \

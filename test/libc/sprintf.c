@@ -103,4 +103,66 @@ static void test_sprintf_edge_cases(void) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "42   "), 0);
 }
 MR_TEST_EXPORT(sprintf, edge_cases, test_sprintf_edge_cases);
+
+/* -------------------------------------------------------------------------- */
+/* Test: sprintf char width formatting                                        */
+static void test_sprintf_char_width(void) {
+    char buf[16];
+    int ret;
+
+    ret = mr_sprintf(buf, "%c", 'A');
+    MR_TEST_ASSERT_EQ_INT(ret, 1);
+    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "A"), 0);
+
+    ret = mr_sprintf(buf, "%3c", 'A');
+    MR_TEST_ASSERT_EQ_INT(ret, 3);
+    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "  A"), 0);
+
+    ret = mr_sprintf(buf, "%-3c", 'A');
+    MR_TEST_ASSERT_EQ_INT(ret, 3);
+    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "A  "), 0);
+}
+MR_TEST_EXPORT(sprintf, char_width, test_sprintf_char_width);
+
+/* -------------------------------------------------------------------------- */
+/* Test: sprintf hh length modifier                                           */
+static void test_sprintf_hh_modifier(void) {
+    char buf[32];
+    int ret;
+
+    ret = mr_sprintf(buf, "%hhd", (signed char)-128);
+    MR_TEST_ASSERT_EQ_INT(ret, 4);
+    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "-128"), 0);
+
+    ret = mr_sprintf(buf, "%hhu", (unsigned char)255);
+    MR_TEST_ASSERT_EQ_INT(ret, 3);
+    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "255"), 0);
+}
+MR_TEST_EXPORT(sprintf, hh_modifier, test_sprintf_hh_modifier);
+
+/* -------------------------------------------------------------------------- */
+/* Test: sprintf signed minimum values                                        */
+static void test_sprintf_signed_min(void) {
+    char buf[32];
+    int ret;
+
+    ret = mr_sprintf(buf, "%d", MR_INT32_MIN);
+    MR_TEST_ASSERT_EQ_INT(ret, 11);
+    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "-2147483648"), 0);
+
+    ret = mr_sprintf(buf, "%lld", MR_INT64_MIN);
+    MR_TEST_ASSERT_EQ_INT(ret, 20);
+    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "-9223372036854775808"), 0);
+}
+MR_TEST_EXPORT(sprintf, signed_min, test_sprintf_signed_min);
+
+/* -------------------------------------------------------------------------- */
+/* Test: snprintf NULL buffer with zero size                                  */
+static void test_snprintf_null_zero(void) {
+    int ret;
+
+    ret = mr_snprintf(MR_NULL, 0, "%d-%s", 123, "abc");
+    MR_TEST_ASSERT_EQ_INT(ret, 7);
+}
+MR_TEST_EXPORT(sprintf, snprintf_null_zero, test_snprintf_null_zero);
 #endif /* defined(MR_USE_TEST) */

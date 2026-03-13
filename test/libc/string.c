@@ -187,10 +187,13 @@ MR_TEST_EXPORT(string, strncpy_trunc, test_strncpy_trunc);
 static void test_strcmp_strncmp(void) {
     const char a[] = "abc";
     const char b[] = "abd";
+    const char c[] = {'a', '\0', 'x', '\0'};
+    const char d[] = {'a', '\0', 'y', '\0'};
 
     MR_TEST_ASSERT_LT_INT(mr_strcmp(a, b), 0);
     MR_TEST_ASSERT_EQ_INT(mr_strncmp(a, b, 2), 0);
     MR_TEST_ASSERT_LT_INT(mr_strncmp(a, b, 3), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_strncmp(c, d, 3), 0);
 }
 MR_TEST_EXPORT(string, strcmp_strncmp, test_strcmp_strncmp);
 

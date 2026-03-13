@@ -369,6 +369,11 @@ MR_INLINE mr_err_t mr_gpio_irq_attach(mr_driver_t *drv, mr_uint32_t pin,
     /* Get GPIO operations */
     gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
 
+    /* Check if attach is supported */
+    if (!gp_ops->attach) {
+        return -MR_ENOSYS;
+    }
+
     /* Attach GPIO pin irq */
     return gp_ops->attach(drv, pin, entry);
 }

@@ -1,7 +1,0 @@
-{
-  "platform": "x86,win",
-  "compatible": "all",
-  "version": "1.0.0",
-  "authors": ["MacRsh"],
-  "license": "Apache-2.0"
-}

@@ -194,7 +194,7 @@ MR_INLINE mr_err_t mr_uart_init(mr_driver_t *drv, mr_uart_data_t *data,
 MR_INLINE mr_driver_t *mr_uart_create(mr_uart_data_t *data, void *priv,
                                       mr_uart_ops_t *ops) {
     const mr_driver_clazzes_t *dclazzes = MR_DRIVER_CLAZZES_FIND(uart);
-    const mr_driver_clazz_t *dclazz = MR_DRIVER_CLAZZES_STATIK(dclazzes);
+    const mr_driver_clazz_t *dclazz = MR_DRIVER_CLAZZES_DYNAMIC(dclazzes);
 
     /* Check parameter */
     MR_ASSERT(data != MR_NULL);

@@ -101,10 +101,10 @@ mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
         = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     const mr_uint8_t day_of_month_leap[]
         = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    mr_int64_t zone_offset, tick_zone;
     mr_hires_timestamp_t timestamp;
     const mr_uint8_t *day_of_month;
     mr_uint16_t day_of_year;
-    mr_uint64_t tick_zone;
     mr_bool_t is_leap;
 
     /* Limit time zone */
@@ -115,7 +115,11 @@ mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
     tick *= tick_correct;
 
     /* Time zone(UTC + n) */
-    tick_zone = (mr_uint64_t)tick + ((mr_uint64_t)time_zone * 3600000000ULL);
+    zone_offset = (mr_int64_t)time_zone * 3600000000LL;
+    tick_zone = (mr_int64_t)tick + zone_offset;
+    if (tick_zone < 0) {
+        tick_zone = 0;
+    }
 
     /* Microsecond ~ hour */
     timestamp.microsecond = (mr_uint16_t)(tick_zone % 1000);
@@ -146,9 +150,9 @@ mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
     /* Month */
     day_of_month = is_leap ? day_of_month_leap : day_of_month_comm;
     for (timestamp.month = 1;
-         tick_zone >= (mr_uint64_t)day_of_month[timestamp.month - 1];
+         tick_zone >= (mr_int64_t)day_of_month[timestamp.month - 1];
          timestamp.month++) {
-        tick_zone -= (mr_uint64_t)day_of_month[timestamp.month - 1];
+        tick_zone -= (mr_int64_t)day_of_month[timestamp.month - 1];
     }
 
     /* Day */

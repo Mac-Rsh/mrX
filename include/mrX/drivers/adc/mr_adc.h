@@ -25,8 +25,8 @@ extern "C" {
 
 #if defined(MR_USE_DRIVER_ADC)
 /* ADC wait event type definition */
-#define MR_ADC_WAIT_COLLECT             (MR_WAIT_IN)
-#define MR_ADC_WAIT_COLLECT_COMPLETE    (MR_WAIT_IN | (1ULL << 0))
+#define MR_ADC_WAIT_CONV                (MR_WAIT_IN)
+#define MR_ADC_WAIT_CONV_COMPLETE       (MR_WAIT_IN | (1ULL << 0))
 
 /* ADC differential mode definition */
 typedef enum mr_adc_diff {
@@ -97,12 +97,12 @@ typedef struct mr_adc_ops {
     mr_err_t (*channel_configuration)(const mr_driver_t *drv,
                                       mr_uint32_t channel,
                                       mr_adc_config_t *config);
-    mr_ssize_t (*collect)(const mr_driver_t *drv, mr_adc_seq_t *seq);
+    mr_ssize_t (*conv)(const mr_driver_t *drv, mr_adc_seq_t *seq);
 #if defined(MR_USE_DRIVER_ADC_ASYNC)
-    mr_err_t (*collect_async_control)(const mr_driver_t *drv, mr_bool_t enable,
-                                      mr_bool_t circular, mr_adc_seq_t *seq);
-    mr_err_t (*collect_async_is_busy)(const mr_driver_t *drv, mr_bool_t *busy);
-    mr_err_t (*collect_async_offset)(const mr_driver_t *drv, mr_size_t *offset);
+    mr_err_t (*conv_async_control)(const mr_driver_t *drv, mr_bool_t enable,
+                                   mr_bool_t circular, mr_adc_seq_t *seq);
+    mr_err_t (*conv_async_is_busy)(const mr_driver_t *drv, mr_bool_t *busy);
+    mr_err_t (*conv_async_offset)(const mr_driver_t *drv, mr_size_t *offset);
 #endif /* defined(MR_USE_DRIVER_ADC_ASYNC) */
 } mr_adc_ops_t;
 
@@ -226,14 +226,14 @@ mr_err_t mr_adc_configuration(mr_driver_t *drv, mr_uint32_t channel,
                               mr_adc_config_t *config);
 
 /**
- * @brief This function collects an ADC sequence.
+ * @brief This function converts an ADC sequence.
  *
  * @param drv The ADC driver.
  * @param seq The ADC sequence.
- * @return The actual size of collected data on success, a negative error code
+ * @return The actual size of converted data on success, a negative error code
  * on failure.
  */
-MR_INLINE mr_ssize_t mr_adc_collect(mr_driver_t *drv, mr_adc_seq_t *seq) {
+MR_INLINE mr_ssize_t mr_adc_conv(mr_driver_t *drv, mr_adc_seq_t *seq) {
     const mr_adc_ops_t *ad_ops;
 
     /* Check parameter */
@@ -244,8 +244,8 @@ MR_INLINE mr_ssize_t mr_adc_collect(mr_driver_t *drv, mr_adc_seq_t *seq) {
     /* Get ADC operations */
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Collect ADC sequence */
-    return ad_ops->collect(drv, seq);
+    /* Convert ADC sequence */
+    return ad_ops->conv(drv, seq);
 }
 
 /**
@@ -256,7 +256,7 @@ MR_INLINE mr_ssize_t mr_adc_collect(mr_driver_t *drv, mr_adc_seq_t *seq) {
  * @param resolution The ADC resolution in bits.
  * @param buf The ADC buffer.
  * @param size The ADC buffer size.
- * @return The actual size of collected data on success, a negative error code
+ * @return The actual size of converted data on success, a negative error code
  * on failure.
  */
 MR_INLINE mr_ssize_t mr_adc_read(mr_driver_t *drv, mr_uint32_t channel,
@@ -268,28 +268,28 @@ MR_INLINE mr_ssize_t mr_adc_read(mr_driver_t *drv, mr_uint32_t channel,
     MR_ASSERT((resolution > 0) && (resolution < 32));
     MR_ASSERT(channel < 32);
 
-    /* Collect ADC sequence as a single channel */
+    /* Convert ADC sequence as a single channel */
     seq.channels = 1U << channel;
     seq.resolution = resolution;
     seq.oversample = 0;
     seq.size = size;
     seq.buf = buf;
 
-    /* Collect ADC sequence */
-    return mr_adc_collect(drv, &seq);
+    /* Convert ADC sequence */
+    return mr_adc_conv(drv, &seq);
 }
 
 #if defined(MR_USE_DRIVER_ADC_ASYNC)
 /**
- * @brief This function collects an ADC sequence asynchronously.
+ * @brief This function converts an ADC sequence asynchronously.
  *
  * @param drv The ADC driver.
  * @param seq The ADC sequence.
  * @param circular The circular mode.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_adc_collect_async(mr_driver_t *drv, mr_adc_seq_t *seq,
-                                        mr_bool_t circular) {
+MR_INLINE mr_err_t mr_adc_conv_async(mr_driver_t *drv, mr_adc_seq_t *seq,
+                                     mr_bool_t circular) {
     const mr_adc_ops_t *ad_ops;
     mr_bool_t busy;
     mr_err_t ret;
@@ -302,9 +302,9 @@ MR_INLINE mr_err_t mr_adc_collect_async(mr_driver_t *drv, mr_adc_seq_t *seq,
     /* Get ADC operations */
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if ADC collect async is busy */
-    if (ad_ops->collect_async_is_busy) {
-        ret = ad_ops->collect_async_is_busy(drv, &busy);
+    /* Check if ADC conv async is busy */
+    if (ad_ops->conv_async_is_busy) {
+        ret = ad_ops->conv_async_is_busy(drv, &busy);
         if (ret != 0) {
             return ret;
         }
@@ -316,17 +316,17 @@ MR_INLINE mr_err_t mr_adc_collect_async(mr_driver_t *drv, mr_adc_seq_t *seq,
         return -MR_ENOSYS;
     }
 
-    /* Start ADC async collection */
-    return ad_ops->collect_async_control(drv, MR_TRUE, circular, seq);
+    /* Start ADC async conversion */
+    return ad_ops->conv_async_control(drv, MR_TRUE, circular, seq);
 }
 
 /**
- * @brief This function checks if an ADC collection is busy.
+ * @brief This function checks if an ADC conversion is busy.
  *
  * @param drv The ADC driver.
- * @return MR_TRUE if the collect is busy, MR_FALSE otherwise.
+ * @return MR_TRUE if the conversion is busy, MR_FALSE otherwise.
  */
-MR_INLINE mr_bool_t mr_adc_collect_is_busy(mr_driver_t *drv) {
+MR_INLINE mr_bool_t mr_adc_conv_is_busy(mr_driver_t *drv) {
     const mr_adc_ops_t *ad_ops;
     mr_bool_t busy;
     mr_err_t ret;
@@ -339,12 +339,12 @@ MR_INLINE mr_bool_t mr_adc_collect_is_busy(mr_driver_t *drv) {
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Check if operation is supported */
-    if (!ad_ops->collect_async_is_busy) {
+    if (!ad_ops->conv_async_is_busy) {
         return MR_FALSE;
     }
 
-    /* Get collect busy status */
-    ret = ad_ops->collect_async_is_busy(drv, &busy);
+    /* Get conv busy status */
+    ret = ad_ops->conv_async_is_busy(drv, &busy);
     if (ret != 0) {
         return MR_FALSE;
     }
@@ -352,12 +352,12 @@ MR_INLINE mr_bool_t mr_adc_collect_is_busy(mr_driver_t *drv) {
 }
 
 /**
- * @brief This function aborts an ADC collection.
+ * @brief This function aborts an ADC conversion.
  *
  * @param drv The ADC driver.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_adc_collect_abort(mr_driver_t *drv) {
+MR_INLINE mr_err_t mr_adc_conv_abort(mr_driver_t *drv) {
     const mr_adc_ops_t *ad_ops;
 
     /* Check parameter */
@@ -368,22 +368,22 @@ MR_INLINE mr_err_t mr_adc_collect_abort(mr_driver_t *drv) {
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Check if operation is supported */
-    if (!ad_ops->collect_async_control) {
+    if (!ad_ops->conv_async_control) {
         return -MR_ENOSYS;
     }
 
-    /* Abort ADC async collection */
-    return ad_ops->collect_async_control(drv, MR_FALSE, MR_FALSE, MR_NULL);
+    /* Abort ADC async conversion */
+    return ad_ops->conv_async_control(drv, MR_FALSE, MR_FALSE, MR_NULL);
 }
 
 /**
- * @brief This function gets the ADC collection offset.
+ * @brief This function gets the ADC conversion offset.
  *
  * @param drv The ADC driver.
- * @param offset The ADC collect async offset.
+ * @param offset The ADC conv async offset.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_adc_collect_offset(mr_driver_t *drv, mr_size_t *offset) {
+MR_INLINE mr_err_t mr_adc_conv_offset(mr_driver_t *drv, mr_size_t *offset) {
     const mr_adc_ops_t *ad_ops;
 
     /* Check parameter */
@@ -395,12 +395,12 @@ MR_INLINE mr_err_t mr_adc_collect_offset(mr_driver_t *drv, mr_size_t *offset) {
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Check if operation is supported */
-    if (!ad_ops->collect_async_offset) {
+    if (!ad_ops->conv_async_offset) {
         return -MR_ENOSYS;
     }
 
-    /* Get ADC collection async offset */
-    return ad_ops->collect_async_offset(drv, offset);
+    /* Get ADC conv async offset */
+    return ad_ops->conv_async_offset(drv, offset);
 }
 #endif /* defined(MR_USE_DRIVER_ADC_ASYNC) */
 
@@ -418,7 +418,6 @@ MR_INLINE mr_err_t mr_adc_irq_attach(mr_waiter_t *waiter, mr_driver_t *drv) {
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_ADC);
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
     MR_ASSERT(waiter != MR_NULL);
-
     /* Get ADC data */
     ad_data = (mr_adc_data_t *)MR_DRIVER_DATA(drv);
 
@@ -439,7 +438,6 @@ MR_INLINE mr_err_t mr_adc_irq_handle(mr_driver_t *drv, mr_uint64_t events) {
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_ADC);
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
-
     /* Get ADC data */
     ad_data = (mr_adc_data_t *)MR_DRIVER_DATA(drv);
 
@@ -610,20 +608,19 @@ MR_INLINE mr_err_t mr_ht_adc_configure(mr_ht_adc_spec_t *spec) {
 }
 
 /**
- * @brief This function collects a ADC specification sequence.
+ * @brief This function converts an ADC specification sequence.
  *
  * @param spec The ADC specification.
  * @param seq The ADC sequence.
- * @return The actual size of collected data on success, a negative error code
+ * @return The actual size of converted data on success, a negative error code
  * on failure.
  */
-MR_INLINE mr_ssize_t mr_ht_adc_collect(mr_ht_adc_spec_t *spec,
-                                       mr_adc_seq_t *seq) {
+MR_INLINE mr_ssize_t mr_ht_adc_conv(mr_ht_adc_spec_t *spec, mr_adc_seq_t *seq) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
-    /* Collect ADC sequence */
-    return mr_adc_collect(spec->drv, seq);
+    /* Convert ADC sequence */
+    return mr_adc_conv(spec->drv, seq);
 }
 
 /**
@@ -632,7 +629,7 @@ MR_INLINE mr_ssize_t mr_ht_adc_collect(mr_ht_adc_spec_t *spec,
  * @param spec The ADC specification.
  * @param buf The ADC buffer.
  * @param size The ADC buffer size.
- * @return The actual size of collected data on success, a negative error code
+ * @return The actual size of converted data on success, a negative error code
  * on failure.
  */
 MR_INLINE mr_ssize_t mr_ht_adc_read(mr_ht_adc_spec_t *spec, void *buf,
@@ -646,65 +643,64 @@ MR_INLINE mr_ssize_t mr_ht_adc_read(mr_ht_adc_spec_t *spec, void *buf,
 
 #if defined(MR_USE_DRIVER_ADC_ASYNC)
 /**
- * @brief This function collects an ADC specification sequence asynchronously.
+ * @brief This function converts an ADC specification sequence asynchronously.
  *
  * @param spec The ADC specification.
  * @param seq The ADC sequence.
  * @param circular The circular mode.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_ht_adc_collect_async(mr_ht_adc_spec_t *spec,
-                                           mr_adc_seq_t *seq,
-                                           mr_bool_t circular) {
+MR_INLINE mr_err_t mr_ht_adc_conv_async(mr_ht_adc_spec_t *spec,
+                                        mr_adc_seq_t *seq, mr_bool_t circular) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
     /* Start ADC async sequence */
-    return mr_adc_collect_async(spec->drv, seq, circular);
+    return mr_adc_conv_async(spec->drv, seq, circular);
 }
 
 /**
- * @brief This function checks if an ADC specification collection is busy.
+ * @brief This function checks if an ADC specification conversion is busy.
  *
  * @param spec The ADC specification.
- * @return MR_TRUE if the collect is busy, MR_FALSE otherwise.
+ * @return MR_TRUE if the conversion is busy, MR_FALSE otherwise.
  */
-MR_INLINE mr_bool_t mr_ht_adc_collect_is_busy(mr_ht_adc_spec_t *spec) {
+MR_INLINE mr_bool_t mr_ht_adc_conv_is_busy(mr_ht_adc_spec_t *spec) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
-    /* Check collect busy status */
-    return mr_adc_collect_is_busy(spec->drv);
+    /* Check conv busy status */
+    return mr_adc_conv_is_busy(spec->drv);
 }
 
 /**
- * @brief This function aborts an ADC specification collection.
+ * @brief This function aborts an ADC specification conversion.
  *
  * @param spec The ADC specification.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_ht_adc_collect_abort(mr_ht_adc_spec_t *spec) {
+MR_INLINE mr_err_t mr_ht_adc_conv_abort(mr_ht_adc_spec_t *spec) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
-    /* Abort ADC collect */
-    return mr_adc_collect_abort(spec->drv);
+    /* Abort ADC conv */
+    return mr_adc_conv_abort(spec->drv);
 }
 
 /**
- * @brief This function gets the ADC specification collection offset.
+ * @brief This function gets the ADC specification conversion offset.
  *
  * @param spec The ADC specification.
- * @param offset The ADC collect async offset.
+ * @param offset The ADC conv async offset.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_ht_adc_collect_offset(mr_ht_adc_spec_t *spec,
-                                            mr_size_t *offset) {
+MR_INLINE mr_err_t mr_ht_adc_conv_offset(mr_ht_adc_spec_t *spec,
+                                         mr_size_t *offset) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
-    /* Get ADC collect async offset */
-    return mr_adc_collect_offset(spec->drv, offset);
+    /* Get ADC conv async offset */
+    return mr_adc_conv_offset(spec->drv, offset);
 }
 #endif /* defined(MR_USE_DRIVER_ADC_ASYNC) */
 
@@ -766,7 +762,8 @@ MR_INLINE mr_f32_t mr_ht_adc_raw2volt(mr_ht_adc_spec_t *spec, mr_int64_t raw) {
  * @param _prop The property name.
  * @return The initialized mr_ht_adc_spec_t structure.
  *
- * @note Property cells: [phandle, channel, diff, ref, gain, resolution, oversample, ref_mv].
+ * @note Property cells: [phandle, channel, diff, ref, gain, resolution,
+ * oversample, ref_mv].
  */
 #define MR_HT_ADC_SPEC(_node, _prop)    __MR_HT_ADC_SPEC_IMPL(0, _node, _prop)
 #define __MR_HT_ADC_SPEC_IMPL(_elem, _node, _prop)                             \
@@ -793,7 +790,8 @@ MR_INLINE mr_f32_t mr_ht_adc_raw2volt(mr_ht_adc_spec_t *spec, mr_int64_t raw) {
  * @param _node The node.
  * @param _prop The property name.
  *
- * @note Property cells: [phandle, channel, diff, ref, gain, resolution, oversample, ref_mv].
+ * @note Property cells: [phandle, channel, diff, ref, gain, resolution,
+ * oversample, ref_mv].
  */
 #define MR_HT_ADC_SPEC_FOREACH(_node, _prop)                                   \
     MR_HT_NODE_PROP_ELEM_FOREACH(_node, _prop, __MR_HT_ADC_SPEC_IMPL)

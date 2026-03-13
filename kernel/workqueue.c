@@ -376,13 +376,13 @@ static void queue_del(mr_workqueue_t *queue) {
 
     /* Remove work from workqueue timing list */
     while (!mr_list_is_empty(&queue->tlist)) {
-        work = MR_LIST_ENTRY(&queue->tlist.next, mr_work_t, list);
+        work = MR_LIST_ENTRY(queue->tlist.next, mr_work_t, list);
         mr_list_del(&work->list);
     }
 
     /* Remove work from workqueue running list */
     while (!mr_list_is_empty(&queue->list)) {
-        work = MR_LIST_ENTRY(&queue->list.next, mr_work_t, list);
+        work = MR_LIST_ENTRY(queue->list.next, mr_work_t, list);
         mr_list_del(&work->list);
     }
 

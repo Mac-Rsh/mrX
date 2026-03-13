@@ -55,17 +55,6 @@
 /** @} */
 
 /**
- * @addtogroup Port
- * @{
- */
-
-#include <mrX/port/mr_port_assert.h>
-#include <mrX/port/mr_port_irq.h>
-#include <mrX/port/mr_port_output.h>
-
-/** @} */
-
-/**
  * @addtogroup Drivers
  * @{
  */
@@ -81,15 +70,12 @@
 #if defined(MR_USE_DRIVER_UART)
 #include <mrX/drivers/uart/mr_uart.h>
 #endif /* defined(MR_USE_DRIVER_UART) */
-#if defined(MR_USE_DRIVER_I2C)
-#include <mrX/drivers/i2c/mr_i2c.h>
-#endif /* defined(MR_USE_DRIVER_I2C) */
 #if defined(MR_USE_DRIVER_ADC)
 #include <mrX/drivers/adc/mr_adc.h>
 #endif /* defined(MR_USE_DRIVER_ADC) */
-#if defined(MR_USE_DRIVER_DAC)
-#include <mrX/drivers/dac/mr_dac.h>
-#endif /* defined(MR_USE_DRIVER_DAC) */
+#if defined(MR_USE_DRIVER_DMA)
+#include <mrX/drivers/dma/mr_dma.h>
+#endif /* defined(MR_USE_DRIVER_DMA) */
 #endif /* defined(MR_USE_DRIVER) */
 
 /** @} */

@@ -254,6 +254,47 @@ static void test_work_is_running(void) {
 }
 MR_TEST_EXPORT(workqueue, work_is_running, test_work_is_running);
 
+/* -------------------------------------------------------------------------- */
+/* Test: Workqueue delete with pending work                                   */
+static void test_workqueue_del_pending_work(void) {
+    mr_workqueue_t queue;
+    mr_work_t work_now, work_delay;
+    mr_err_t ret;
+
+    ret = mr_workqueue_init(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    ret = mr_work_init(&work_now, test_work_entry, (void *)0x1111);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_init(&work_delay, test_work_entry, (void *)0x2222);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    ret = mr_work_bind(&work_now, &queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_bind(&work_delay, &queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    ret = mr_work_schedule(&work_now);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_delayed_schedule(&work_delay, 10);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    MR_TEST_ASSERT_EQ_INT(MR_WORK_IS_RUNNING(&work_now), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(MR_WORK_IS_RUNNING(&work_delay), MR_TRUE);
+
+    ret = mr_workqueue_del(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(&queue), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(MR_WORK_IS_RUNNING(&work_now), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(MR_WORK_IS_RUNNING(&work_delay), MR_FALSE);
+
+    ret = mr_work_del(&work_now);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_del(&work_delay);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+MR_TEST_EXPORT(workqueue, del_pending_work, test_workqueue_del_pending_work);
+
 #if defined(MR_USE_WORKQUEUE_HOOK)
 static int hook_suspend_called = 0;
 static int hook_wakeup_called = 0;

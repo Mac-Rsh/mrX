@@ -18,6 +18,51 @@
 #define MOD_SPECIAL                     (1U << 5)
 #define MOD_LARGE                       (1U << 6)
 
+static mr_uint64_t format_signed_abs(char eff, mr_uint64_t num, char *sign) {
+    switch (eff) {
+        case 'l': {
+            mr_int32_t sval = (mr_int32_t)(mr_uint32_t)num;
+            if (sval < 0) {
+                *sign = '-';
+                return (mr_uint64_t)(0U - (mr_uint32_t)sval);
+            }
+            return (mr_uint32_t)sval;
+        }
+        case 'L': {
+            mr_int64_t sval = (mr_int64_t)num;
+            if (sval < 0) {
+                *sign = '-';
+                return 0ULL - (mr_uint64_t)sval;
+            }
+            return (mr_uint64_t)sval;
+        }
+        case 'h': {
+            mr_int16_t sval = (mr_int16_t)(mr_uint16_t)num;
+            if (sval < 0) {
+                *sign = '-';
+                return (mr_uint64_t)(mr_uint16_t)(0U - (mr_uint16_t)sval);
+            }
+            return (mr_uint16_t)sval;
+        }
+        case 'H': {
+            mr_int8_t sval = (mr_int8_t)(mr_uint8_t)num;
+            if (sval < 0) {
+                *sign = '-';
+                return (mr_uint64_t)(mr_uint8_t)(0U - (mr_uint8_t)sval);
+            }
+            return (mr_uint8_t)sval;
+        }
+        default: {
+            mr_int32_t sval = (mr_int32_t)(mr_uint32_t)num;
+            if (sval < 0) {
+                *sign = '-';
+                return (mr_uint64_t)(0U - (mr_uint32_t)sval);
+            }
+            return (mr_uint32_t)sval;
+        }
+    }
+}
+
 static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
                            int prec, char eff, int base, mr_uint64_t num) {
     const char sdigits[] = "0123456789abcdef";
@@ -29,43 +74,7 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
     /* Sign */
     sign = 0;
     if (mod & MOD_SIGN) {
-        switch (eff) {
-            case 'l': {
-                if ((mr_int32_t)num < 0) {
-                    sign = '-';
-                    num = (mr_uint32_t)-num;
-                }
-                break;
-            }
-            case 'L': {
-                if ((mr_int64_t)num < 0) {
-                    sign = '-';
-                    num = -num;
-                }
-                break;
-            }
-            case 'h': {
-                if ((mr_int16_t)num < 0) {
-                    sign = '-';
-                    num = (mr_uint16_t)-num;
-                }
-                break;
-            }
-            case 'H': {
-                if ((mr_int8_t)num < 0) {
-                    sign = '-';
-                    num = (mr_uint8_t)-num;
-                }
-                break;
-            }
-            default: {
-                if ((mr_int32_t)num < 0) {
-                    sign = '-';
-                    num = (mr_uint32_t)-num;
-                }
-                break;
-            }
-        }
+        num = format_signed_abs(eff, num, &sign);
         if (sign != '-') {
             if (mod & MOD_PLUS) {
                 sign = '+';
@@ -208,13 +217,14 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
     char *str, *end, *s;
     mr_uint32_t mod;
     mr_uint64_t num;
-    char eff;
+    char eff, dummy;
 
     /* Check parameter */
     if (!fmt) {
         return 0;
     }
     if (!buf) {
+        buf = &dummy;
         size = 0;
     }
 
@@ -285,6 +295,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
                 eff = 'L';
                 fmt++;
             } else if ((*fmt == 'h') && (eff == 'h')) {
+                eff = 'H';
                 fmt++;
             }
         }
@@ -293,9 +304,13 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
         switch (*fmt) {
             /* Character */
             case 'c': {
+                if (width < 1) {
+                    width = 1;
+                }
+
                 /* Flush right */
                 if (!(mod & MOD_LEFT)) {
-                    while ((width--) > 0) {
+                    while ((width--) > 1) {
                         if (str < end) {
                             *str = ' ';
                         }
@@ -310,7 +325,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
                 str++;
 
                 /* Flush left */
-                while ((width--) > 0) {
+                while ((width--) > 1) {
                     if (str < end) {
                         *str = ' ';
                     }
@@ -449,11 +464,17 @@ _default:
                 }
                 break;
             }
-            case 'h':
-            case 'H': {
+            case 'h': {
                 num = (mr_uint16_t)mr_va_arg(args, mr_int32_t);
                 if (mod & MOD_SIGN) {
                     num = (mr_uint64_t)((mr_int16_t)num);
+                }
+                break;
+            }
+            case 'H': {
+                num = (mr_uint8_t)mr_va_arg(args, mr_int32_t);
+                if (mod & MOD_SIGN) {
+                    num = (mr_uint64_t)((mr_int8_t)num);
                 }
                 break;
             }

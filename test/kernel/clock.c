@@ -48,6 +48,20 @@ static void test_clock_tickless(void) {
 }
 MR_TEST_EXPORT(clock, tickless, test_clock_tickless);
 
+/* -------------------------------------------------------------------------- */
+/* Test: Tick conversion macros                                               */
+static void test_clock_tick_convert(void) {
+    MR_TEST_ASSERT_EQ_INT(MR_TICK_MSEC(1),
+                          (mr_tick_t)(((mr_uint64_t)1 * MR_CFG_TICK_PER_SECOND)
+                                      / 1000ULL));
+    MR_TEST_ASSERT_EQ_INT(MR_TICK_MSEC(1000), MR_CFG_TICK_PER_SECOND);
+    MR_TEST_ASSERT_EQ_INT(MR_TICK_USEC(1),
+                          (mr_tick_t)(((mr_uint64_t)1 * MR_CFG_TICK_PER_SECOND)
+                                      / 1000000ULL));
+    MR_TEST_ASSERT_EQ_INT(MR_TICK_USEC(1000000), MR_CFG_TICK_PER_SECOND);
+}
+MR_TEST_EXPORT(clock, tick_convert, test_clock_tick_convert);
+
 #if defined(MR_USE_CLOCK_HIRES)
 /* Test: High resolution tick */
 static void test_clock_hires_tick(void) {
@@ -75,5 +89,22 @@ static void test_clock_hires_tick2timestamp(void) {
     MR_TEST_ASSERT_EQ_INT(timestamp.second, 0);
 }
 MR_TEST_EXPORT(clock, hires_tick2timestamp, test_clock_hires_tick2timestamp);
+
+/* -------------------------------------------------------------------------- */
+/* Test: High resolution tick to timestamp conversion with negative timezone */
+static void test_clock_hires_tick2timestamp_negative_timezone(void) {
+    const mr_hires_tick_t test_tick = 1725580800000000ULL;
+    mr_hires_timestamp_t timestamp;
+
+    timestamp = mr_hires_tick2timestamp(test_tick, -5);
+    MR_TEST_ASSERT_EQ_INT(timestamp.year, 2024);
+    MR_TEST_ASSERT_EQ_INT(timestamp.month, 9);
+    MR_TEST_ASSERT_EQ_INT(timestamp.day, 5);
+    MR_TEST_ASSERT_EQ_INT(timestamp.hour, 19);
+    MR_TEST_ASSERT_EQ_INT(timestamp.minute, 0);
+    MR_TEST_ASSERT_EQ_INT(timestamp.second, 0);
+}
+MR_TEST_EXPORT(clock, hires_tick2timestamp_negative_timezone,
+               test_clock_hires_tick2timestamp_negative_timezone);
 #endif /* defined(MR_USE_CLOCK_HIRES) */
 #endif /* defined(MR_USE_TEST) */
