@@ -17,13 +17,6 @@ from .source import SourceSpan
 from enum import Enum
 
 
-class ArrayMode(Enum):
-    """Controls how an array value is interpreted by later stages."""
-
-    EXPANDED = "expanded"
-    INLINE = "inline"
-
-
 class ValueExpr:
     """Base protocol-like type for all parsed value expressions."""
 
@@ -78,6 +71,13 @@ class ReferenceValue(ValueExpr):
     reference: str
     is_path: bool = False
     span: SourceSpan | None = None
+
+
+class ArrayMode(Enum):
+    """Controls how an array value is interpreted by later stages."""
+
+    EXPANDED = "expanded"
+    INLINE = "inline"
 
 
 @dataclass(frozen=True)

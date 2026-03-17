@@ -19,8 +19,8 @@ from collections import OrderedDict
 
 
 @dataclass(frozen=True)
-class ResolvedProperty:
-    """Semantic property record copied from syntax into the resolved tree."""
+class NodeProperty:
+    """Semantic property record copied from syntax into one hardware node."""
 
     name: str
     value: ValueExpr
@@ -28,8 +28,8 @@ class ResolvedProperty:
 
 
 @dataclass
-class ResolvedNode:
-    """A node after path resolution and effective status calculation."""
+class HardNode:
+    """A hardware node after path resolution and effective status calculation."""
 
     path: str
     name: str
@@ -40,26 +40,26 @@ class ResolvedNode:
     span: SourceSpan | None
     parent_path: str | None = None
     compatible: list[str] = field(default_factory=list)
-    properties: list[ResolvedProperty] = field(default_factory=list)
+    properties: list[NodeProperty] = field(default_factory=list)
     children: list[str] = field(default_factory=list)
 
 
 @dataclass
-class HardwareTree:
+class HardTree:
     """Semantic IR consumed by validation and backend stages."""
 
-    nodes_by_path: "OrderedDict[str, ResolvedNode]" = field(
+    nodes_by_path: "OrderedDict[str, HardNode]" = field(
         default_factory=OrderedDict)
     labels: dict[str, str] = field(default_factory=dict)
     aliases: dict[str, str] = field(default_factory=dict)
 
     @property
-    def nodes(self) -> list[ResolvedNode]:
+    def nodes(self) -> list[HardNode]:
         return list(self.nodes_by_path.values())
 
 
 class SemanticBuilder:
-    """Builds the resolved semantic hardware tree from parsed roots."""
+    """Builds the semantic hardware tree from parsed roots."""
 
     PROP_COMPATIBLE = "compatible"
     PROP_STATUS = "status"
@@ -82,38 +82,27 @@ class SemanticBuilder:
         """Initialize the semantic builder with a shared diagnostic sink."""
         self.diagnostics = diagnostics
 
-    def build(self, roots: list[RootNode]) -> HardwareTree:
+    def build(self, roots: list[RootNode]) -> HardTree:
         """Merge parsed roots into one semantic hardware tree."""
         # The semantic stage merges multiple parsed roots into one logical tree
-        tree = HardwareTree()
+        tree = HardTree()
         for root in roots:
             for child in root.children:
-                self._register_node(child, tree, parent_path=None,
-                                    parent_status=self.STATUS_OKAY)
+                self._add_node(child, tree, parent_path=None,
+                               parent_status=self.STATUS_OKAY)
 
         return tree
 
-    def _register_node(
+    def _add_node(
             self,
             node: NodeDecl,
-            tree: HardwareTree,
+            tree: HardTree,
             parent_path: str | None,
             parent_status: str,
     ) -> None:
-        """Register one syntax node and all descendants into the semantic tree."""
+        """Add one syntax node and all descendants into the semantic tree."""
         # Paths are canonical identifiers in the semantic IR
         path = f"/{node.name}" if parent_path is None else f"{parent_path}/{node.name}"
-
-        # Effective status is inherited from the parent when disabled
-        declared_status = self._read_status(node)
-        effective_status = self._resolve_effective_status(parent_status,
-                                                          declared_status)
-        if self._inherits_disabled_status(parent_status, declared_status):
-            self._warn_at(
-                ErrorCode.CHILD_OF_DISABLED_NODE,
-                f"node '{path}' inherits disabled status from its parent",
-                node.span,
-            )
 
         # Duplicate nodes are detected by canonical path
         if path in tree.nodes_by_path:
@@ -121,8 +110,21 @@ class SemanticBuilder:
                            f"duplicate node path: {path}", node.span)
             return
 
-        # Register the resolved node record
-        resolved = ResolvedNode(
+        # Effective status is inherited from the parent when disabled
+        declared_status = self._get_status(node)
+        if parent_status == self.STATUS_DISABLED:
+            if declared_status != self.STATUS_DISABLED:
+                self._warn_at(
+                    ErrorCode.CHILD_OF_DISABLED_NODE,
+                    f"node '{path}' inherits disabled status from its parent",
+                    node.span,
+                )
+            effective_status = self.STATUS_DISABLED
+        else:
+            effective_status = declared_status
+
+        # Add the semantic hardware node record
+        hard_node = HardNode(
             path=path,
             name=node.name,
             label=node.label,
@@ -132,10 +134,10 @@ class SemanticBuilder:
             span=node.span,
             parent_path=parent_path,
             compatible=self._extract_compatible(path, node),
-            properties=[ResolvedProperty(prop.name, prop.value, prop.span) for
+            properties=[NodeProperty(prop.name, prop.value, prop.span) for
                         prop in node.properties],
         )
-        tree.nodes_by_path[path] = resolved
+        tree.nodes_by_path[path] = hard_node
 
         # Link the node back into its parent list when applicable
         if parent_path is not None and parent_path in tree.nodes_by_path:
@@ -150,64 +152,13 @@ class SemanticBuilder:
             else:
                 tree.labels[node.label] = path
 
-        # Register children after the parent is visible in the tree
+        # Add children after the parent is visible in the tree
         for child in node.children:
-            self._register_node(child, tree, parent_path=path,
-                                parent_status=effective_status)
+            self._add_node(child, tree, parent_path=hard_node.path,
+                           parent_status=hard_node.effective_status)
 
-    def _resolve_effective_status(self, parent_status: str,
-                                  declared_status: str) -> str:
-        """Resolve the effective status for one node from parent and local state."""
-        if parent_status == self.STATUS_DISABLED:
-            return self.STATUS_DISABLED
-        return declared_status
-
-    def _inherits_disabled_status(self, parent_status: str,
-                                  declared_status: str) -> bool:
-        """Return True when a node becomes disabled because its parent is disabled."""
-        return parent_status == self.STATUS_DISABLED and declared_status != self.STATUS_DISABLED
-
-    def _extract_compatible(self, path: str, node: NodeDecl) -> list[str]:
-        """Extract normalized compatible strings from a node property."""
-        prop = node.get_property(self.PROP_COMPATIBLE)
-        if prop is None:
-            return []
-        value = prop.value
-
-        # Single-string compatible values are normalized into a list
-        if isinstance(value, StringValue):
-            return [value.value]
-
-        # Array compatible values must contain only strings
-        if isinstance(value, ArrayValue):
-            # compatible-rule: inline arrays are reserved for brace initializers.
-            if value.mode != ArrayMode.EXPANDED:
-                self._warn_at(
-                    ErrorCode.INVALID_COMPATIBLE_VALUE,
-                    f"node '{path}': compatible must use string literals or expanded string lists",
-                    prop.span,
-                )
-                return []
-            compatibles: list[str] = []
-            for element in value.elements:
-                if not isinstance(element, StringValue):
-                    self._warn_at(
-                        ErrorCode.INVALID_COMPATIBLE_VALUE,
-                        f"node '{path}': compatible entries must be strings",
-                        prop.span,
-                    )
-                    return []
-                compatibles.append(element.value)
-            return compatibles
-        self._warn_at(
-            ErrorCode.INVALID_COMPATIBLE_VALUE,
-            f"node '{path}': compatible must be a string or string list",
-            prop.span,
-        )
-        return []
-
-    def _read_status(self, node: NodeDecl) -> str:
-        """Read and validate the effective status string for a node."""
+    def _get_status(self, node: NodeDecl) -> str:
+        """Get and validate the effective status string for a node."""
         prop = node.get_property(self.PROP_STATUS)
         if prop is None:
             return self.STATUS_OKAY
@@ -240,9 +191,54 @@ class SemanticBuilder:
                                prop.span)
                 return self.STATUS_OKAY
             return value
+
+        # Unknown status
         self._error_at(ErrorCode.INVALID_STATUS, f"invalid status: '{value}'",
                        prop.span)
-        return self.STATUS_OKAY
+        return self.STATUS_DISABLED
+
+    def _extract_compatible(self, path: str, node: NodeDecl) -> list[str]:
+        """Extract normalized compatible strings from a node property."""
+        prop = node.get_property(self.PROP_COMPATIBLE)
+        if prop is None:
+            return []
+        value = prop.value
+
+        # Single-string compatible values are normalized into a list
+        if isinstance(value, StringValue):
+            return [value.value]
+
+        # Array compatible values must contain only strings
+        if isinstance(value, ArrayValue):
+            # Only extended arrays are supported
+            if value.mode != ArrayMode.EXPANDED:
+                self._warn_at(
+                    ErrorCode.INVALID_COMPATIBLE_VALUE,
+                    f"node '{path}': compatible must use string literals or expanded string lists",
+                    prop.span,
+                )
+                return []
+
+            # String lists are normalized into a list
+            compatibles: list[str] = []
+            for element in value.elements:
+                if not isinstance(element, StringValue):
+                    self._warn_at(
+                        ErrorCode.INVALID_COMPATIBLE_VALUE,
+                        f"node '{path}': compatible entries must be strings",
+                        prop.span,
+                    )
+                    return []
+                compatibles.append(element.value)
+            return compatibles
+
+        # Unknown compatible value
+        self._warn_at(
+            ErrorCode.INVALID_COMPATIBLE_VALUE,
+            f"node '{path}': compatible must be a string or string list",
+            prop.span,
+        )
+        return []
 
     def _error_at(self, code: ErrorCode, message: str,
                   span: SourceSpan | None) -> None:

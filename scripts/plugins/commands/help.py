@@ -61,7 +61,8 @@ class HelpCommand:
         command = plugins.get(command_name)
         if command is None:
             print(f"Unknown command: {command_name}")
-            print("Use `python ./scripts/cli.py list` to see available commands.")
+            print(
+                "Use `python ./scripts/cli.py list` to see available commands.")
             return 1
 
         # Print command help

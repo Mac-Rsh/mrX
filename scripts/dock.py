@@ -125,7 +125,8 @@ class Dock:
             try:
                 package = importlib.import_module(module_info.name)
             except Exception as exc:
-                print(f"Failed to import plugin package: {module_info.name} ({exc})")
+                print(
+                    f"Failed to import plugin package: {module_info.name} ({exc})")
                 continue
             package_path = getattr(package, "__path__", None)
             if package_path is None:
