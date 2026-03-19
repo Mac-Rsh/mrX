@@ -24,7 +24,7 @@ extern "C" {
 /* The implementation mechanism of HT is based on 'zephyr' */
 
 /**
- * @brief This macro function checks whether the path exists.
+ * @brief This macro function checks if the path exists.
  *
  * @param ... The node path.
  * @return MR_TRUE if the path exists, MR_FALSE otherwise.
@@ -42,7 +42,7 @@ extern "C" {
     MR_CAT(__MR_HT_N, MR_CAT_SEP(_S_, ##__VA_ARGS__))
 
 /**
- * @brief This macro function checks whether the label exists.
+ * @brief This macro function checks if the label exists.
  *
  * @param _name The label name.
  * @return MR_TRUE if the label exists, MR_FALSE otherwise.
@@ -59,7 +59,7 @@ extern "C" {
 #define MR_HT_LABEL(_name)              MR_HT_PATH(LABEL, _name)
 
 /**
- * @brief This macro function checks whether the alias exists.
+ * @brief This macro function checks if the alias exists.
  *
  * @param _name The alias name.
  * @return MR_TRUE if the alias exists, MR_FALSE otherwise.
@@ -76,7 +76,7 @@ extern "C" {
 #define MR_HT_ALIAS(_name)              MR_HT_PATH(ALIAS, _name)
 
 /**
- * @brief This macro function checks whether the instances exist.
+ * @brief This macro function checks if the instances exist.
  *
  * @param _compat The compatible name.
  * @return MR_TRUE if the instance exists, MR_FALSE otherwise.
@@ -108,7 +108,7 @@ extern "C" {
                 ())
 
 /**
- * @brief This macro function checks whether the property exists.
+ * @brief This macro function checks if the property exists.
  *
  * @param _node The node.
  * @param _prop The property name.
@@ -140,7 +140,7 @@ extern "C" {
                 (MR_HT_NODE_PROP(_node, _prop)), (_default))
 
 /**
- * @brief This macro function checks whether an indexed element of a property
+ * @brief This macro function checks if an indexed element of a property
  *        array exists.
  *
  * @param _node The node.
@@ -209,7 +209,7 @@ extern "C" {
 #define MR_HT_NODE_PATH(_node)          MR_HT_NODE_PROP(_node, PATH)
 
 /**
- * @brief This macro function checks whether the node has a parent.
+ * @brief This macro function checks if the node has a parent.
  *
  * @param _node The node.
  * @return MR_TRUE if the node has a parent, MR_FALSE otherwise.
@@ -225,7 +225,7 @@ extern "C" {
 #define MR_HT_NODE_PARENT(_node)        MR_HT_NODE_PROP(_node, PARENT)
 
 /**
- * @brief This macro function checks whether the node has an address.
+ * @brief This macro function checks if the node has an address.
  *
  * @param _node The node.
  * @return MR_TRUE if the node has an address, MR_FALSE otherwise.

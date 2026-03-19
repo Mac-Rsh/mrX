@@ -68,15 +68,15 @@ class KconfigCommand:
         if options is None:
             return 1
 
+        # Show menuconfig UI before loading configuration when requested
+        if not options.no_ui:
+            self._show_ui()
+
         # Parse and validate input paths
         paths = self._parse_paths(options)
         if paths is None:
             return 1
         kconfig_path, config_path, output_path = paths
-
-        # Show menuconfig UI before loading configuration when requested
-        if not options.no_ui:
-            self._show_ui()
 
         # Load and export Kconfig data
         if self._parse_kconfig(kconfig_path, config_path, output_path) is None:

@@ -102,7 +102,7 @@ mr_err_t mr_timer_del(mr_timer_t *timer);
 mr_err_t mr_timer_start(mr_timer_t *timer);
 
 /**
- * @brief This function checks whether a timer is timing.
+ * @brief This macro function checks if a timer is timing.
  *
  * @param timer The timer.
  * @return MR_TRUE on timing, MR_FALSE otherwise.

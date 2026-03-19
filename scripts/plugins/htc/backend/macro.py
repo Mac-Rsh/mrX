@@ -228,7 +228,7 @@ class MacroBuilder:
         self._define_exist(lines, prefix)
         self._define(lines, f"{prefix}_NUM", str(len(nodes)))
         for index, node in enumerate(nodes):
-            self._define(lines, f"{prefix}{"_S_"}{index}",
+            self._define(lines, f"{prefix}_S_{index}",
                          self._path_to_macro(node.path))
         lines.append("")
 
@@ -319,7 +319,7 @@ class MacroBuilder:
         """Convert a canonical node path into an HTC macro prefix."""
         if path == "/":
             return f"{self.PREFIX_TAG}N"
-        return f"{self.PREFIX_TAG}N{path.replace('/', "_S_").replace('-', '_')}"
+        return f"{self.PREFIX_TAG}N{path.replace('/', '_S_').replace('-', '_')}"
 
     @staticmethod
     def _normalize(identifier: str) -> str:

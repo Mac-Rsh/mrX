@@ -1,0 +1,9 @@
+menu "Platform: Platform abstraction"
+
+# ==================================
+# PLATFORM
+# ==================================
+config MR_USE_PLATFORM
+    def_bool y
+
+endmenu

@@ -469,7 +469,7 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
 /* ================================ HardTree ================================ */
 
 /**
- * @brief This macro function checks whether the driver instance exist.
+ * @brief This macro function checks if the driver instance exist.
  *
  * @return MR_TRUE if the driver instance exist, MR_FALSE otherwise.
  */

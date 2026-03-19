@@ -27,7 +27,7 @@ static mr_err_t ram_init(const mr_driver_t *drv) {
     rm_ops = (mr_ram_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Mount RAM if mount operation is provided */
-    if (rm_ops->mount != MR_NULL) {
+    if (rm_ops->mount) {
         ret = rm_ops->mount(drv);
         if (ret != 0) {
             return ret;
@@ -47,7 +47,7 @@ static mr_err_t ram_statik_deinit(const mr_driver_t *drv) {
     rm_ops = (mr_ram_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Unmount RAM if unmount operation is provided */
-    if (rm_ops->unmount != MR_NULL) {
+    if (rm_ops->unmount) {
         ret = rm_ops->unmount(drv);
         if (ret != 0) {
             return ret;

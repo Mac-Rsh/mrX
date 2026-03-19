@@ -279,12 +279,24 @@ class Parser:
             return ReferenceValue(reference="".join(parts), is_path=True,
                                   span=amp.span)
 
-        # Label reference, like: `&uart0`
+        # Label or shorthand path reference, like: `&uart0`
         identifier = self._expect(TokenType.IDENTIFIER,
                                   ErrorCode.EXPECTED_IDENTIFIER,
                                   "expected identifier after '&'")
         if identifier is None:
             return None
+
+        # Like: `&uart/uart0`
+        parts = [identifier.value]
+        while self._match(TokenType.SLASH):
+            identifier = self._expect(
+                TokenType.IDENTIFIER,
+                ErrorCode.EXPECTED_IDENTIFIER,
+                "expected identifier after '/' in reference",
+            )
+            if identifier is None:
+                return None
+            parts.append(identifier.value)
         return ReferenceValue(reference=identifier.value, is_path=False,
                               span=amp.span)
 

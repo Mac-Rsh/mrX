@@ -1,0 +1,23 @@
+[[section]]
+name = "initcall"
+input = "mr_initcall.*"
+output = ".text"
+keep = true
+sort = true
+comment = "Initcall"
+
+[[section]]
+name = "testcase"
+input = "mr_testcase.*"
+output = ".text"
+keep = true
+sort = true
+comment = "Testcase"
+
+[[section]]
+name = "driver"
+input = "mr_driver.*"
+output = ".text"
+keep = true
+sort = true
+comment = "Driver"

@@ -1,0 +1,14 @@
+[platform]
+name = "win"
+
+[dir]
+src = "."
+dst = "./../.."
+
+[[platform.add]]
+src = "include/platform"
+dst = "include/mrX/platform"
+
+[[platform.add]]
+src = "platform"
+dst = "platform"
