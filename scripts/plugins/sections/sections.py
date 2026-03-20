@@ -458,15 +458,16 @@ class SectionsCommand:
     def _append_managed_block(cls, body: str, managed_block: str) -> str:
         """Append one managed block to an existing output section body."""
         trailing = cls._trailing_whitespace(body)
+        trailing_suffix = trailing if trailing else "\n"
         trimmed_body = body[:len(body) - len(trailing)] if trailing else body
         trimmed_body = trimmed_body.rstrip()
 
         # Start on a fresh line when the output section body was empty
         if not trimmed_body:
-            return f"\n{managed_block}{trailing or '\n'}"
+            return f"\n{managed_block}{trailing_suffix}"
 
         # Keep one blank line between user content and generated content
-        return f"{trimmed_body}\n\n{managed_block}{trailing or '\n'}"
+        return f"{trimmed_body}\n\n{managed_block}{trailing_suffix}"
 
     @staticmethod
     def _build_output_insertion(prefix: str, block: str) -> str:
