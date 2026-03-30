@@ -18,6 +18,7 @@
 
 #include <mrX/kernel/mr_clock.h>
 #include <mrX/kernel/mr_fifo.h>
+#include <mrX/kernel/mr_finder.h>
 #include <mrX/kernel/mr_hook.h>
 #include <mrX/kernel/mr_initcall.h>
 #include <mrX/kernel/mr_irq.h>

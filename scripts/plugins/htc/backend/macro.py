@@ -130,52 +130,24 @@ class MacroBuilder:
         self._define(lines, base, self._format_value(tree, value))
 
     def _emit_expanded_array(self, lines: list[str], tree: HardTree,
-                             base: str,
-                             value: ArrayValue) -> None:
+                             base: str, value: ArrayValue) -> None:
         """Emit grouped array macros following HTC backend conventions."""
-        # Nested arrays become multiple E groups directly
+        # Nested expanded arrays: each sub-array forms one E group
+        # e.g. <<a b c> <d e f>> → E_0={a,b,c}, E_1={d,e,f}, E_NUM=2
         if value.elements and all(
-                isinstance(element, ArrayValue) and
-                element.mode == ArrayMode.EXPANDED for element in
-                value.elements):
-            nested = [element for element in value.elements
-                      if isinstance(element, ArrayValue) and
-                      element.mode == ArrayMode.EXPANDED]
-            for outer_index, nested_array in enumerate(nested):
-                for inner_index, element in enumerate(nested_array.elements):
-                    self._emit_array_element(lines, tree, base, outer_index,
-                                             inner_index, element)
-            self._define(lines, f"{base}_E_NUM", str(len(nested)))
+                isinstance(e, ArrayValue) and e.mode == ArrayMode.EXPANDED
+                for e in value.elements):
+            for outer_index, sub in enumerate(value.elements):
+                for inner_index, element in enumerate(sub.elements):
+                    self._emit_array_element(lines, tree, base,
+                                             outer_index, inner_index, element)
+            self._define(lines, f"{base}_E_NUM", str(len(value.elements)))
             return
-
-        # Flat arrays are split into scalar groups and phandle-style groups
-        groups: list[list[ValueExpr]] = []
-        current_scalars: list[ValueExpr] = []
-        index = 0
-        while index < len(value.elements):
-            element = value.elements[index]
-
-            # References start a new grouped element sequence
-            if isinstance(element, ReferenceValue):
-                group: list[ValueExpr] = [element]
-                index += 1
-                while index < len(value.elements) and isinstance(
-                        value.elements[index], (NumberValue, FloatValue)):
-                    group.append(value.elements[index])
-                    index += 1
-                groups.append(group)
-                continue
-            current_scalars.append(element)
-            index += 1
-        if current_scalars:
-            groups.insert(0, current_scalars)
-        if not groups:
-            groups = [[]]
-        for outer_index, group in enumerate(groups):
-            for inner_index, element in enumerate(group):
-                self._emit_array_element(lines, tree, base, outer_index,
-                                         inner_index, element)
-        self._define(lines, f"{base}_E_NUM", str(len(groups)))
+        # Flat expanded array: all elements form a single E_0 group
+        # e.g. <&gpio0 0> → E_0_I_0=&gpio0, E_0_I_1=0, E_NUM=1
+        for inner_index, element in enumerate(value.elements):
+            self._emit_array_element(lines, tree, base, 0, inner_index, element)
+        self._define(lines, f"{base}_E_NUM", "1")
 
     def _emit_array_element(
             self,

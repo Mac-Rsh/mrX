@@ -557,23 +557,23 @@ MR_INLINE mr_err_t mr_uart_rx_offset(mr_driver_t *drv, mr_size_t *offset) {
 /**
  * @brief This function attaches a UART interrupt.
  *
- * @param waiter The UART waiter.
  * @param drv The UART driver.
+ * @param entry The uart interrupt entry.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_uart_irq_attach(mr_waiter_t *waiter, mr_driver_t *drv) {
+MR_INLINE mr_err_t mr_uart_irq_attach(mr_driver_t *drv, mr_waiter_t *entry) {
     mr_uart_data_t *ur_data;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_UART);
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
-    MR_ASSERT(waiter != MR_NULL);
+    MR_ASSERT(entry != MR_NULL);
 
     /* Get UART data */
     ur_data = (mr_uart_data_t *)MR_DRIVER_DATA(drv);
 
     /* Attach UART irq */
-    return mr_waiter_wait(waiter, &ur_data->irq);
+    return mr_waiter_wait(entry, &ur_data->irq);
 }
 
 /**
@@ -647,7 +647,7 @@ MR_INLINE mr_bool_t mr_uart_put(mr_driver_t *drv) {
  * @param _ops The UART operations.
  */
 #define MR_HT_INST_UART_INSTALL(_id, _priv, _ops)                              \
-    static mr_uart_data_t __mr_uart_data_##_id = MR_UART_DATA_INIT(            \
+    static mr_uart_data_t MR_CAT(__mr_uart_data_, _id) = MR_UART_DATA_INIT(    \
         MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), baud_rate, 115200),         \
         MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), data_bits,                  \
                            MR_UART_DATA_BITS_8),                               \
@@ -662,7 +662,7 @@ MR_INLINE mr_bool_t mr_uart_put(mr_driver_t *drv) {
                            MR_UART_FLOW_CTRL_NONE));                           \
     MR_HT_INST_DRIVER_INSTALL(                                                 \
         _id, MR_DRIVER_CLAZZES_STATIK(MR_DRIVER_CLAZZES_FIND(uart)),           \
-        MR_DRIVER_TYPE_UART, &__mr_uart_data_##_id, _priv, _ops)
+        MR_DRIVER_TYPE_UART, &MR_CAT(__mr_uart_data_, _id), _priv, _ops)
 #endif /* defined(MR_USE_DRIVER_UART) */
 
 /** @} */

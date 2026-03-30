@@ -238,14 +238,15 @@ MR_INLINE mr_bool_t mr_ram_put(mr_driver_t *drv) {
  * @param _ops The RAM operations.
  */
 #define MR_HT_INST_RAM_INSTALL(_id, _priv, _ops)                               \
-    static mr_ram_region_t __mr_ram_region_##_id[]                             \
+    static mr_ram_region_t MR_CAT(__mr_ram_region_, _id)[]                     \
         = {MR_HT_NODE_PROP_ELEM_FOREACH(MR_HT_INST_DRIVER(_id), region,        \
                                         __MR_HT_RAM_REGION_IMPL)};             \
-    static mr_ram_data_t __mr_ram_data_##_id = MR_RAM_DATA_INIT(               \
-        __mr_ram_region_##_id, MR_ARRAY_SIZE(__mr_ram_region_##_id));          \
+    static mr_ram_data_t MR_CAT(__mr_ram_data_, _id)                           \
+        = MR_RAM_DATA_INIT(MR_CAT(__mr_ram_region_, _id),                      \
+                           MR_ARRAY_SIZE(MR_CAT(__mr_ram_region_, _id)));      \
     MR_HT_INST_DRIVER_INSTALL(                                                 \
         _id, MR_DRIVER_CLAZZES_STATIK(MR_DRIVER_CLAZZES_FIND(ram)),            \
-        MR_DRIVER_TYPE_RAM, &__mr_ram_data_##_id, _priv, _ops);
+        MR_DRIVER_TYPE_RAM, &MR_CAT(__mr_ram_data_, _id), _priv, _ops);
 #define __MR_HT_RAM_REGION_IMPL(_elem, _node, _prop)                           \
     {                                                                          \
         .address = (void *)MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0),       \

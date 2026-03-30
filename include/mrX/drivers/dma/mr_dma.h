@@ -364,11 +364,11 @@ MR_INLINE mr_bool_t mr_dma_put(mr_driver_t *drv) {
  * @param _ops The DMA operations.
  */
 #define MR_HT_INST_DMA_INSTALL(_id, _priv, _ops)                               \
-    static mr_dma_data_t __mr_dma_data_##_id = MR_DMA_DATA_INIT(               \
+    static mr_dma_data_t MR_CAT(__mr_dma_data_, _id) = MR_DMA_DATA_INIT(       \
         MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), exist_mask, 0xffffffffU));  \
     MR_HT_INST_DRIVER_INSTALL(                                                 \
         _id, MR_DRIVER_CLAZZES_STATIK(MR_DRIVER_CLAZZES_FIND(dma)),            \
-        MR_DRIVER_TYPE_DMA, &__mr_dma_data_##_id, _priv, _ops)
+        MR_DRIVER_TYPE_DMA, &MR_CAT(__mr_dma_data_, _id), _priv, _ops)
 
 /* DMA hardtree specification type */
 typedef struct mr_ht_dma_spec {

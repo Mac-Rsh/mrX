@@ -523,12 +523,12 @@ MR_INLINE mr_bool_t mr_gpio_put(mr_driver_t *drv) {
  * @param _ops The GPIO operations.
  */
 #define MR_HT_INST_GPIO_INSTALL(_id, _priv, _ops)                              \
-    static mr_gpio_data_t __mr_gpio_data_##_id = MR_GPIO_DATA_INIT(            \
+    static mr_gpio_data_t MR_CAT(__mr_gpio_data_, _id) = MR_GPIO_DATA_INIT(    \
         MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), exist_mask, 0xffffffffU),   \
         MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), invert_mask, 0x0U));        \
     MR_HT_INST_DRIVER_INSTALL(                                                 \
         _id, MR_DRIVER_CLAZZES_STATIK(MR_DRIVER_CLAZZES_FIND(gpio)),           \
-        MR_DRIVER_TYPE_GPIO, &__mr_gpio_data_##_id, _priv, _ops)
+        MR_DRIVER_TYPE_GPIO, &MR_CAT(__mr_gpio_data_, _id), _priv, _ops)
 
 /* GPIO hardtree specification type */
 typedef struct mr_ht_gpio_spec {

@@ -407,22 +407,23 @@ MR_INLINE mr_err_t mr_adc_conv_offset(mr_driver_t *drv, mr_size_t *offset) {
 /**
  * @brief This function attaches an ADC interrupt.
  *
- * @param waiter The ADC waiter.
  * @param drv The ADC driver.
+ * @param entry The ADC interrupt entry.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_adc_irq_attach(mr_waiter_t *waiter, mr_driver_t *drv) {
+MR_INLINE mr_err_t mr_adc_irq_attach(mr_driver_t *drv, mr_waiter_t *entry) {
     mr_adc_data_t *ad_data;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_ADC);
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
-    MR_ASSERT(waiter != MR_NULL);
+    MR_ASSERT(entry != MR_NULL);
+
     /* Get ADC data */
     ad_data = (mr_adc_data_t *)MR_DRIVER_DATA(drv);
 
     /* Attach ADC irq */
-    return mr_waiter_wait(waiter, &ad_data->irq);
+    return mr_waiter_wait(entry, &ad_data->irq);
 }
 
 /**
@@ -576,12 +577,12 @@ MR_INLINE mr_bool_t mr_adc_put(mr_driver_t *drv) {
  * @param _ops The ADC operations.
  */
 #define MR_HT_INST_ADC_INSTALL(_id, _priv, _ops)                               \
-    static mr_adc_data_t __mr_adc_data_##_id = MR_ADC_DATA_INIT(               \
+    static mr_adc_data_t MR_CAT(__mr_adc_data_, _id) = MR_ADC_DATA_INIT(       \
         MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), ref_internal, 3300),        \
         MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), exist_mask, 0xffffffff));   \
     MR_HT_INST_DRIVER_INSTALL(                                                 \
         _id, MR_DRIVER_CLAZZES_STATIK(MR_DRIVER_CLAZZES_FIND(adc)),            \
-        MR_DRIVER_TYPE_ADC, &__mr_adc_data_##_id, _priv, _ops)
+        MR_DRIVER_TYPE_ADC, &MR_CAT(__mr_adc_data_, _id), _priv, _ops)
 
 /* ADC hardtree specification type */
 typedef struct mr_ht_adc_spec {

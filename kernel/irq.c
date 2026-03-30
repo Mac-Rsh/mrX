@@ -10,9 +10,6 @@
 #if defined(MR_USE_IRQ)
 #include <mrX/kernel/mr_spinlock.h>
 #include <mrX/libc/mr_malloc.h>
-#if !defined(MR_CFG_IRQ_TABLE_SIZE)
-#include <mrX/kernel/mr_slab.h>
-#endif /* !defined(MR_CFG_IRQ_TABLE_SIZE) */
 
 /* Irq clazzes(static & dynamic) */
 static void irq_dynamic_release(mr_object_t *obj);
