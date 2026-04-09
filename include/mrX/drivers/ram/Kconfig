@@ -18,6 +18,7 @@ config MR_USE_DRIVER_RAM
 
 config MR_USE_DRIVER_RAM_HEAPS
     depends on MR_USE_DRIVER_RAM
+    depends on MR_USE_MALLOC
     bool "Use RAM-HEAPS"
     default y
     help

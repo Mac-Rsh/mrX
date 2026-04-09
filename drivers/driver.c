@@ -15,7 +15,8 @@
 /* Driver clazzes(static & dynamic) */
 static void driver_dynamic_release(mr_object_t *obj);
 static void driver_statik_release(mr_object_t *obj);
-MR_CLAZZES_DEFINE(driver, driver_statik_release, driver_dynamic_release);
+MR_CLAZZES_DEFINE(driver, driver_statik_release, driver_dynamic_release,
+                  MR_NULL);
 
 /* Driver start/defer/end sections */
 MR_DRIVER_INSTALL(start, MR_NULL, 0, MR_NULL, MR_NULL, MR_NULL, "0.end");
@@ -239,6 +240,11 @@ mr_driver_t *mr_driver_find(const char *name) {
 }
 
 static void driver_del(mr_driver_t *drv) {
+    /* Check if driver is setup */
+    if (!(mr_atomic_load(&drv->flags) & MR_DRIVER_FLAG_SETUP)) {
+        return;
+    }
+
     /* Check if driver need deinit */
     if ((!drv->clazz) || (!drv->clazz->deinit)) {
         return;

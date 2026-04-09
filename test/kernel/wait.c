@@ -14,6 +14,12 @@
 static mr_uint64_t last_event = 0;
 static void *last_param = MR_NULL;
 static int trig_status = 0;
+static const mr_clazz_t test_waitable_clazz =
+    MR_CLAZZ_INIT("test_waitable", MR_NULL,
+                  MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waitable)));
+static const mr_clazz_t test_waiter_clazz =
+    MR_CLAZZ_INIT("test_waiter", MR_NULL,
+                  MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waiter)));
 
 static void test_waiter_cb(mr_waiter_t *waiter, void *param,
                            mr_uint64_t event) {
@@ -23,6 +29,28 @@ static void test_waiter_cb(mr_waiter_t *waiter, void *param,
     last_event = event;
     last_param = param;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Test: Waitable derive init                                                 */
+static void test_waitable_derive_init(void) {
+    static mr_waitable_t waitable =
+        MR_WAITABLE_DERIVE_INIT(&waitable, &test_waitable_clazz,
+                                (mr_waitable_check_t *)1, MR_NULL);
+
+    MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&waitable), &test_waitable_clazz);
+}
+MR_TEST_EXPORT(wait, waitable_derive_init, test_waitable_derive_init);
+
+/* -------------------------------------------------------------------------- */
+/* Test: Waiter derive init                                                   */
+static void test_waiter_derive_init(void) {
+    static mr_waiter_t waiter =
+        MR_WAITER_DERIVE_INIT(&waiter, &test_waiter_clazz,
+                              test_waiter_cb, MR_NULL, MR_WAIT_IN);
+
+    MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&waiter), &test_waiter_clazz);
+}
+MR_TEST_EXPORT(wait, waiter_derive_init, test_waiter_derive_init);
 
 /* -------------------------------------------------------------------------- */
 /* Test: Waitable init / del                                                  */

@@ -89,7 +89,8 @@ class MacroBuilder:
         self._define_exist(lines, node_macro)
 
         # NAME
-        self._define_property(lines, node_macro, self.PROPERTY_NAME, node.name)
+        self._define_property(lines, node_macro, self.PROPERTY_NAME,
+                              self._normalize(node.name))
 
         # PATH
         self._define_property(lines, node_macro, self.PROPERTY_PATH,
@@ -223,13 +224,11 @@ class MacroBuilder:
         if isinstance(value, IdentifierValue):
             return value.name
 
-        # References are already validated, so this is a direct rewrite
+        # References are already validated, resolve through label, path, then name
         if isinstance(value, ReferenceValue):
-            if value.is_path:
-                return self._path_to_macro(value.reference)
-            target_path = tree.labels.get(value.reference,
-                                          f"/{value.reference}")
-            return self._path_to_macro(target_path)
+            target = self._lookup_reference(tree, value.reference,
+                                            value.is_path)
+            return self._path_to_macro(target or f"/{value.reference}")
 
         # Inline arrays render as direct brace-enclosed values
         if isinstance(value, ArrayValue):
@@ -272,6 +271,23 @@ class MacroBuilder:
             end = -len(self.STATUS_PRIO_SUFFIX)
             return f"{self.STATUS_PRIO}({status[start:end]})"
         return self.STATUS_TO_INIT_LEVEL.get(status, self.DEFAULT_INIT_LEVEL)
+
+    @staticmethod
+    def _lookup_reference(tree: HardTree, reference: str,
+                          is_path: bool) -> str | None:
+        """Resolve a reference through label, short-path, then node name."""
+        if is_path:
+            return reference if reference in tree.nodes_by_path else None
+        target = tree.labels.get(reference)
+        if target is not None:
+            return target
+        short = f"/{reference}"
+        if short in tree.nodes_by_path:
+            return short
+        for node in tree.nodes:
+            if node.name == reference:
+                return node.path
+        return None
 
     @staticmethod
     def _format_address(address: str) -> str:

@@ -13,11 +13,23 @@
 
 static mr_timer_t *last_timer = MR_NULL;
 static void *last_param = MR_NULL;
+static const mr_clazz_t test_timer_clazz =
+    MR_CLAZZ_INIT("test_timer", MR_NULL, MR_CLAZZES_STATIK(MR_CLAZZES_FIND(timer)));
 
 static void test_timer_entry(mr_timer_t *timer, void *param) {
     last_timer = timer;
     last_param = param;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Test: Timer derive init */
+static void test_timer_derive_init(void) {
+    static mr_timer_t timer = MR_TIMER_DERIVE_INIT(&timer, &test_timer_clazz,
+                                                   test_timer_entry, MR_NULL, 1);
+
+    MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&timer), &test_timer_clazz);
+}
+MR_TEST_EXPORT(timer, derive_init, test_timer_derive_init);
 
 /* -------------------------------------------------------------------------- */
 /* Test: Timer init / del */

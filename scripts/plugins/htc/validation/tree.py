@@ -110,7 +110,15 @@ class TreeValidator:
 
         # Shorthand `&uart0` resolves to `/uart0` when it exists
         path = f"/{reference.reference}"
-        return path if path in tree.nodes_by_path else None
+        if path in tree.nodes_by_path:
+            return path
+
+        # Fallback: search by node name for deeper nodes
+        for node in tree.nodes:
+            if node.name == reference.reference:
+                return node.path
+
+        return None
 
     def _iter_references(self, value: ValueExpr):
         """Yield nested reference values from a value expression tree."""

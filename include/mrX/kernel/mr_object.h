@@ -31,6 +31,7 @@ typedef void(mr_object_release_t)(struct mr_object *obj);
 typedef struct mr_clazz {
     const char *name;
     mr_object_release_t *release;
+    const struct mr_clazz *super;
 } mr_clazz_t;
 
 /* Clazzes type */
@@ -50,11 +51,15 @@ typedef struct mr_object {
  *
  * @param _name The clazz name.
  * @param _release The release function.
+ * @param _super The super clazz(set to MR_NULL if no super).
+ *
+ * @note The super clazz is used to build the inheritance and release chain.
  */
-#define MR_CLAZZ_INIT(_name, _release)                                         \
+#define MR_CLAZZ_INIT(_name, _release, _super)                                 \
     {                                                                          \
         .name = (_name),                                                       \
         .release = (_release),                                                 \
+        .super = (_super),                                                     \
     }
 
 /**
@@ -63,15 +68,18 @@ typedef struct mr_object {
  * @param clazz The clazz.
  * @param name The clazz name.
  * @param release The release function.
+ * @param super The super clazz(set to MR_NULL if no super).
  */
 MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
-                             mr_object_release_t *release) {
+                             mr_object_release_t *release,
+                             const mr_clazz_t *super) {
     /* Check parameter */
     MR_ASSERT(clazz != MR_NULL);
 
     /* Init clazz */
     clazz->name = name;
     clazz->release = release;
+    clazz->super = super;
 }
 
 /**
@@ -80,11 +88,12 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _name The clazz name.
  * @param _statik_release The static release function.
  * @param _dynamic_release The dynamic release function.
+ * @param _super The super clazz (set to MR_NULL if no super).
  */
-#define MR_CLAZZES_INIT(_name, _statik_release, _dynamic_release)              \
+#define MR_CLAZZES_INIT(_name, _statik_release, _dynamic_release, _super)      \
     {                                                                          \
-        .statik = MR_CLAZZ_INIT((_name), (_statik_release)),                   \
-        .dynamic = MR_CLAZZ_INIT((_name), (_dynamic_release)),                 \
+        .statik = MR_CLAZZ_INIT((_name), (_statik_release), (_super)),         \
+        .dynamic = MR_CLAZZ_INIT((_name), (_dynamic_release), (_super)),       \
     }
 
 /**
@@ -93,10 +102,11 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _name The clazz name.
  * @param _statik_release The static release function.
  * @param _dynamic_release The dynamic release function.
+ * @param _super The super clazz (set to MR_NULL if no super).
  */
-#define MR_CLAZZES_DEFINE(_name, _statik_release, _dynamic_release)            \
-    const mr_clazzes_t MR_CAT(__mr_clazzes_, _name)                            \
-        = MR_CLAZZES_INIT(MR_STR(_name), (_statik_release), (_dynamic_release))
+#define MR_CLAZZES_DEFINE(_name, _statik_release, _dynamic_release, _super)    \
+    const mr_clazzes_t MR_CAT(__mr_clazzes_, _name) = MR_CLAZZES_INIT(         \
+        MR_STR(_name), (_statik_release), (_dynamic_release), (_super))
 
 /**
  * @brief This macro function gets the static clazz of clazzes.
@@ -158,6 +168,15 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
 mr_err_t mr_object_init(mr_object_t *obj, const mr_clazz_t *clazz);
 
 /**
+ * @brief This function derives an object to a sub clazz.
+ *
+ * @param obj The object.
+ * @param clazz The sub clazz.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_object_derive(mr_object_t *obj, const mr_clazz_t *clazz);
+
+/**
  * @brief This macro function checks if an object is initialized.
  *
  * @param _obj The object.
@@ -175,15 +194,35 @@ mr_err_t mr_object_init(mr_object_t *obj, const mr_clazz_t *clazz);
 #define MR_OBJECT_CLAZZ(_obj)           (((mr_object_t *)(_obj))->clazz)
 
 /**
+ * @brief This function checks if a clazz is kind of a target clazz.
+ *
+ * @param clazz The clazz to check.
+ * @param target The target clazz.
+ * @return MR_TRUE if clazz is kind of target, MR_FALSE otherwise.
+ */
+MR_INLINE mr_bool_t mr_clazz_is_kind_of(const mr_clazz_t *clazz,
+                                        const mr_clazz_t *target) {
+    while (clazz != MR_NULL) {
+        if (clazz == target) {
+            return MR_TRUE;
+        }
+        clazz = clazz->super;
+    }
+    return MR_FALSE;
+}
+
+/**
  * @brief This macro function checks if an object is of clazzes.
  *
  * @param _obj The object.
  * @param _name The clazzes name.
- * @return MR_TRUE on success, MR_FALSE otherwise.
+ * @return MR_TRUE if the object is kind of the clazzes, MR_FALSE otherwise.
  */
 #define MR_OBJECT_IS_CLAZZES(_obj, _name)                                      \
-    ((MR_OBJECT_CLAZZ(_obj) == MR_CLAZZES_STATIK(MR_CLAZZES_FIND(_name)))      \
-     || (MR_OBJECT_CLAZZ(_obj) == MR_CLAZZES_DYNAMIC(MR_CLAZZES_FIND(_name))))
+    (mr_clazz_is_kind_of(MR_OBJECT_CLAZZ(_obj),                                \
+                         MR_CLAZZES_STATIK(MR_CLAZZES_FIND(_name)))            \
+     || mr_clazz_is_kind_of(MR_OBJECT_CLAZZ(_obj),                             \
+                            MR_CLAZZES_DYNAMIC(MR_CLAZZES_FIND(_name))))
 
 /**
  * @brief This function deletes an object.

@@ -43,7 +43,6 @@ typedef struct mr_finder {
     mr_finder_name_t name;
     struct mr_finder *upper;
     mr_list_t sibling, lower;
-    mr_object_t *target;
 } mr_finder_t;
 
 /**
@@ -96,23 +95,6 @@ mr_finder_t *mr_finder_create(const char *fmt, ...);
 mr_err_t mr_finder_del(mr_finder_t *finder);
 
 /**
- * @brief This function binds an object to a finder.
- *
- * @param finder The finder.
- * @param target The target object.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_finder_bind(mr_finder_t *finder, mr_object_t *target);
-
-/**
- * @brief This macro function gets a finder target.
- *
- * @param finder The finder.
- * @return The finder target.
- */
-#define MR_FINDER_TARGET(_finder)       ((_finder)->target)
-
-/**
  * @brief This function adds a finder to an upper finder.
  *
  * @param finder The finder.
@@ -120,6 +102,14 @@ mr_err_t mr_finder_bind(mr_finder_t *finder, mr_object_t *target);
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_finder_add(mr_finder_t *finder, mr_finder_t *upper);
+
+/**
+ * @brief This function removes a finder from its upper finder.
+ *
+ * @param finder The finder.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_finder_remove(mr_finder_t *finder);
 
 /**
  * @brief This macro function checks if a finder is added.

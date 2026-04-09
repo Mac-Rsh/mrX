@@ -457,24 +457,26 @@ class SectionsCommand:
     @classmethod
     def _append_managed_block(cls, body: str, managed_block: str) -> str:
         """Append one managed block to an existing output section body."""
+        nl = "\n"
         trailing = cls._trailing_whitespace(body)
-        trailing_suffix = trailing if trailing else "\n"
+        trailing_suffix = trailing if trailing else nl
         trimmed_body = body[:len(body) - len(trailing)] if trailing else body
         trimmed_body = trimmed_body.rstrip()
 
         # Start on a fresh line when the output section body was empty
         if not trimmed_body:
-            return f"\n{managed_block}{trailing_suffix}"
+            return f"{nl}{managed_block}{trailing_suffix}"
 
         # Keep one blank line between user content and generated content
-        return f"{trimmed_body}\n\n{managed_block}{trailing_suffix}"
+        return f"{trimmed_body}{nl}{nl}{managed_block}{trailing_suffix}"
 
     @staticmethod
     def _build_output_insertion(prefix: str, block: str) -> str:
         """Build the text inserted before the closing `SECTIONS` brace."""
+        nl = "\n"
         if prefix.rstrip().endswith("{"):
-            return f"\n{block}\n"
-        return f"\n\n{block}\n"
+            return f"{nl}{block}{nl}"
+        return f"{nl}{nl}{block}{nl}"
 
     @staticmethod
     def _trailing_whitespace(text: str) -> str:
@@ -646,7 +648,8 @@ class SectionsCommand:
     def _find_sections_block(cls, linker_text: str) -> BlockSpan | None:
         """Find the top-level `SECTIONS { ... }` block."""
         # Search the top-level `SECTIONS` keyword first
-        match = re.search(rf"\b{cls.SECTIONS_NAME}\b", linker_text)
+        word_boundary = r"\b"
+        match = re.search(f"{word_boundary}{cls.SECTIONS_NAME}{word_boundary}", linker_text)
         if match is None:
             return None
 
@@ -666,7 +669,9 @@ class SectionsCommand:
         """Find one output section block inside `SECTIONS`."""
         search_start = sections_span.open_brace + 1
         search_end = sections_span.close_brace
-        pattern = re.compile(rf"(?m)^[ \t]*{re.escape(output)}(?=[ \t:(])")
+        pat_prefix = r"(?m)^[ \t]*"
+        pat_suffix = r"(?=[ \t:(])"
+        pattern = re.compile(f"{pat_prefix}{re.escape(output)}{pat_suffix}")
 
         # Scan every matching output section header candidate in order
         for match in pattern.finditer(linker_text, search_start, search_end):

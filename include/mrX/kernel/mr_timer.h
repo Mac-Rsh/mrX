@@ -44,6 +44,24 @@ typedef struct mr_timer {
 typedef void(mr_timer_entry_t)(mr_timer_t *timer, void *param);
 
 /**
+ * @brief This macro function initializes a derived timer.
+ *
+ * @param _timer The timer.
+ * @param _clazz The timer clazz.
+ * @param _entry The timer entry.
+ * @param _param The entry parameter.
+ * @param _tick The timing tick(period: 'tick | MR_TIMER_PERIODIC').
+ */
+#define MR_TIMER_DERIVE_INIT(_timer, _clazz, _entry, _param, _tick)            \
+    {                                                                          \
+        .parent = MR_OBJECT_INIT(_clazz),                                      \
+        .itick = (_tick),                                                      \
+        .list = MR_LIST_INIT(&(_timer)->list),                                 \
+        .entry = (_entry),                                                     \
+        .param = (_param),                                                     \
+    }
+
+/**
  * @brief This macro function initializes a timer.
  *
  * @param _timer The timer.
@@ -52,13 +70,8 @@ typedef void(mr_timer_entry_t)(mr_timer_t *timer, void *param);
  * @param _tick The timing tick(period: 'tick | MR_TIMER_PERIODIC').
  */
 #define MR_TIMER_INIT(_timer, _entry, _param, _tick)                           \
-    {                                                                          \
-        .parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(timer))),   \
-        .itick = (_tick),                                                      \
-        .list = MR_LIST_INIT(&(_timer)->list),                                 \
-        .entry = (_entry),                                                     \
-        .param = (_param),                                                     \
-    }
+    MR_TIMER_DERIVE_INIT((_timer), MR_CLAZZES_STATIK(MR_CLAZZES_FIND(timer)),  \
+                         (_entry), (_param), (_tick))
 
 /**
  * @brief This function initializes a timer.

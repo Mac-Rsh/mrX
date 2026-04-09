@@ -14,7 +14,7 @@
 /* Irq clazzes(static & dynamic) */
 static void irq_dynamic_release(mr_object_t *obj);
 static void irq_statik_release(mr_object_t *obj);
-MR_CLAZZES_DEFINE(irq, irq_statik_release, irq_dynamic_release);
+MR_CLAZZES_DEFINE(irq, irq_statik_release, irq_dynamic_release, MR_NULL);
 
 #if defined(MR_USE_IRQ_DEFER_HOOK)
 static const mr_irq_defer_hook_t *__irq_hook = MR_NULL;

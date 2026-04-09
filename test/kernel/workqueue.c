@@ -13,12 +13,38 @@
 
 static void *last_param = MR_NULL;
 static int work_run_count = 0;
+static const mr_clazz_t test_workqueue_clazz =
+    MR_CLAZZ_INIT("test_workqueue", MR_NULL,
+                  MR_CLAZZES_STATIK(MR_CLAZZES_FIND(workqueue)));
+static const mr_clazz_t test_work_clazz =
+    MR_CLAZZ_INIT("test_work", MR_NULL,
+                  MR_CLAZZES_STATIK(MR_CLAZZES_FIND(work)));
 
 static void test_work_entry(struct mr_work *work, void *param) {
     MR_IGNORE(work);
     work_run_count++;
     last_param = param;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Test: Workqueue derive init */
+static void test_workqueue_derive_init(void) {
+    static mr_workqueue_t queue = MR_WORKQUEUE_DERIVE_INIT(&queue,
+                                                           &test_workqueue_clazz);
+
+    MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&queue), &test_workqueue_clazz);
+}
+MR_TEST_EXPORT(workqueue, derive_init, test_workqueue_derive_init);
+
+/* -------------------------------------------------------------------------- */
+/* Test: Work derive init */
+static void test_work_derive_init(void) {
+    static mr_work_t work = MR_WORK_DERIVE_INIT(&work, &test_work_clazz,
+                                                test_work_entry, MR_NULL);
+
+    MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&work), &test_work_clazz);
+}
+MR_TEST_EXPORT(workqueue, work_derive_init, test_work_derive_init);
 
 /* -------------------------------------------------------------------------- */
 /* Test: Workqueue init / del */

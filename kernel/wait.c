@@ -14,12 +14,12 @@
 /* Waitable clazzes(static & dynamic) */
 static void able_statik_release(mr_object_t *obj);
 static void able_dynamic_release(mr_object_t *obj);
-MR_CLAZZES_DEFINE(waitable, able_statik_release, able_dynamic_release);
+MR_CLAZZES_DEFINE(waitable, able_statik_release, able_dynamic_release, MR_NULL);
 
 /* Waiter clazzes(static & dynamic) */
 static void wait_dynamic_release(mr_object_t *obj);
 static void wait_statik_release(mr_object_t *obj);
-MR_CLAZZES_DEFINE(waiter, wait_statik_release, wait_dynamic_release);
+MR_CLAZZES_DEFINE(waiter, wait_statik_release, wait_dynamic_release, MR_NULL);
 
 /* Wait lock */
 static mr_spinlock_t __wait_lock = MR_SPINLOCK_INIT();
@@ -240,22 +240,30 @@ mr_err_t mr_waitable_cancel_all(mr_waitable_t *able) {
     return 0;
 }
 
-static void able_statik_release(mr_object_t *obj) {
-    mr_waitable_t *waitable;
+static mr_waitable_t *able_obj_release(mr_object_t *obj) {
+    mr_waitable_t *able;
 
     /* Get waitable */
-    waitable = MR_CONTAINER_OF(obj, mr_waitable_t, parent);
+    able = MR_CONTAINER_OF(obj, mr_waitable_t, parent);
 
     /* Remove waitable */
-    waitable_cancel_all(waitable);
+    waitable_cancel_all(able);
+    return able;
+}
+
+static void able_statik_release(mr_object_t *obj) {
+    /* Release waitable */
+    able_obj_release(obj);
 }
 
 static void able_dynamic_release(mr_object_t *obj) {
+    mr_waitable_t *able;
+
     /* Release waitable */
-    able_statik_release(obj);
+    able = able_obj_release(obj);
 
     /* Free waitable */
-    mr_free(obj);
+    mr_free(able);
 }
 
 static mr_err_t waiter_init(mr_waiter_t *wait, const mr_clazz_t *clazz,
@@ -427,7 +435,7 @@ mr_err_t mr_waiter_event_set(mr_waiter_t *wait, mr_uint64_t event) {
     return 0;
 }
 
-static void wait_statik_release(mr_object_t *obj) {
+static mr_waiter_t *wait_obj_release(mr_object_t *obj) {
     mr_waiter_t *waiter;
 
     /* Get waiter */
@@ -435,13 +443,21 @@ static void wait_statik_release(mr_object_t *obj) {
 
     /* Remove waiter */
     waiter_remove(waiter);
+    return waiter;
+}
+
+static void wait_statik_release(mr_object_t *obj) {
+    /* Release waiter */
+    wait_obj_release(obj);
 }
 
 static void wait_dynamic_release(mr_object_t *obj) {
+    mr_waiter_t *waiter;
+
     /* Release waiter */
-    wait_statik_release(obj);
+    waiter = wait_obj_release(obj);
 
     /* Free waiter */
-    mr_free(obj);
+    mr_free(waiter);
 }
 #endif /* defined(MR_USE_WAIT) */

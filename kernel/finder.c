@@ -16,7 +16,8 @@
 /* Finder clazzes(static & dynamic) */
 static void finder_statik_release(mr_object_t *obj);
 static void finder_dynamic_release(mr_object_t *obj);
-MR_CLAZZES_DEFINE(finder, finder_statik_release, finder_dynamic_release);
+MR_CLAZZES_DEFINE(finder, finder_statik_release, finder_dynamic_release,
+                  MR_NULL);
 
 /* Finder lock */
 static mr_spinlock_t __finder_lock = MR_SPINLOCK_INIT();
@@ -147,7 +148,6 @@ static mr_err_t finder_init(mr_finder_t *finder, const mr_clazz_t *clazz,
     }
     mr_list_init(&finder->sibling);
     mr_list_init(&finder->lower);
-    finder->target = MR_NULL;
     finder->upper = MR_NULL;
 
     /* Init object */
@@ -222,7 +222,6 @@ mr_finder_t *mr_finder_create(const char *fmt, ...) {
 }
 
 static void finder_remove(mr_finder_t *finder) {
-    mr_object_t *target;
     mr_finder_t *upper;
     int mask;
 
@@ -231,21 +230,26 @@ static void finder_remove(mr_finder_t *finder) {
 
     /* Remove finder from sibling list */
     mr_list_del(&finder->sibling);
-    target = finder->target;
     upper = finder->upper;
-    finder->target = MR_NULL;
     finder->upper = MR_NULL;
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__finder_lock, mask);
 
-    /* Put target and upper */
-    if (target != MR_NULL) {
-        mr_object_put(target);
-    }
+    /* Put upper */
     if (upper != MR_NULL) {
         mr_finder_put(upper);
     }
+}
+
+mr_err_t mr_finder_remove(mr_finder_t *finder) {
+    /* Check parameter */
+    MR_ASSERT((finder != MR_NULL) && MR_OBJECT_IS_INITED(finder));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(finder, finder));
+
+    /* Remove finder */
+    finder_remove(finder);
+    return 0;
 }
 
 mr_err_t mr_finder_del(mr_finder_t *finder) {
@@ -257,38 +261,6 @@ mr_err_t mr_finder_del(mr_finder_t *finder) {
 
     /* Delete object */
     mr_object_del((mr_object_t *)finder);
-    return 0;
-}
-
-mr_err_t mr_finder_bind(mr_finder_t *finder, mr_object_t *target) {
-    mr_object_t *last;
-    int mask;
-
-    /* Check parameter */
-    MR_ASSERT((finder != MR_NULL) && MR_OBJECT_IS_INITED(finder));
-    MR_ASSERT(MR_OBJECT_IS_CLAZZES(finder, finder));
-    MR_ASSERT((target != MR_NULL) && MR_OBJECT_IS_INITED(target));
-
-    /* Get target */
-    target = mr_object_get(target);
-    if (target == MR_NULL) {
-        return -MR_EINVAL;
-    }
-
-    /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__finder_lock);
-
-    /* Bind target */
-    last = finder->target;
-    finder->target = target;
-
-    /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__finder_lock, mask);
-
-    /* Put last target */
-    if (last != MR_NULL) {
-        mr_object_put(last);
-    }
     return 0;
 }
 

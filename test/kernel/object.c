@@ -29,7 +29,8 @@ static void test_object_dynamic_release(struct mr_object *obj)
 }
 
 /* Define test clazzes */
-MR_CLAZZES_DEFINE(test_object, test_object_statik_release, test_object_dynamic_release);
+MR_CLAZZES_DEFINE(test_object, test_object_statik_release,
+                  test_object_dynamic_release, MR_NULL);
 
 /* -------------------------------------------------------------------------- */
 /* Test: Normal object initialization */

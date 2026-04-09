@@ -62,6 +62,24 @@ typedef void(mr_waiter_entry_t)(mr_waiter_t *waiter, void *param,
                                 mr_uint64_t event);
 
 /**
+ * @brief This macro function initializes a derived waitable.
+ *
+ * @param _able The waitable.
+ * @param _clazz The waitable clazz.
+ * @param _check The waitable check.
+ * @param _param The check parameter.
+ */
+#define MR_WAITABLE_DERIVE_INIT(_able, _clazz, _check, _param)                 \
+    {                                                                          \
+        .parent = MR_OBJECT_INIT(_clazz),                                      \
+        .last = 0,                                                             \
+        .gen = MR_ATOMIC_INIT(0),                                              \
+        .list = MR_LIST_INIT(&(_able)->list),                                  \
+        .check = (_check),                                                     \
+        .param = (_param),                                                     \
+    }
+
+/**
  * @brief This macro function initializes a waitable.
  *
  * @param _able The waitable.
@@ -69,15 +87,9 @@ typedef void(mr_waiter_entry_t)(mr_waiter_t *waiter, void *param,
  * @param _param The check parameter.
  */
 #define MR_WAITABLE_INIT(_able, _check, _param)                                \
-    {                                                                          \
-        .parent                                                                \
-        = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waitable))),        \
-        .last = 0,                                                             \
-        .gen = MR_ATOMIC_INIT(0),                                              \
-        .list = MR_LIST_INIT(&(_able)->list),                                  \
-        .check = (_check),                                                     \
-        .param = (_param),                                                     \
-    }
+    MR_WAITABLE_DERIVE_INIT((_able),                                           \
+                            MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waitable)),      \
+                            (_check), (_param))
 
 /**
  * @brief This function initializes a waitable.
@@ -155,6 +167,24 @@ MR_INLINE mr_bool_t mr_waitable_put(mr_waitable_t *able) {
 }
 
 /**
+ * @brief This macro function initializes a derived waiter.
+ *
+ * @param _wait The waiter.
+ * @param _clazz The waiter clazz.
+ * @param _entry The wait entry.
+ * @param _param The entry parameter.
+ * @param _event The wait event('IN||OUT||ERR').
+ */
+#define MR_WAITER_DERIVE_INIT(_wait, _clazz, _entry, _param, _event)           \
+    {                                                                          \
+        .parent = MR_OBJECT_INIT(_clazz),                                      \
+        .event = (_event),                                                     \
+        .list = MR_LIST_INIT(&(_wait)->list),                                  \
+        .entry = (_entry),                                                     \
+        .param = (_param),                                                     \
+    }
+
+/**
  * @brief This macro function initializes a waiter.
  *
  * @param _wait The waiter.
@@ -163,13 +193,8 @@ MR_INLINE mr_bool_t mr_waitable_put(mr_waitable_t *able) {
  * @param _event The wait event('IN||OUT||ERR').
  */
 #define MR_WAITER_INIT(_wait, _entry, _param, _event)                          \
-    {                                                                          \
-        .parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waiter))),  \
-        .event = (_event),                                                     \
-        .list = MR_LIST_INIT(&(_wait)->list),                                  \
-        .entry = (_entry),                                                     \
-        .param = (_param),                                                     \
-    }
+    MR_WAITER_DERIVE_INIT((_wait), MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waiter)), \
+                          (_entry), (_param), (_event))
 
 /**
  * @brief This function initializes a waiter.

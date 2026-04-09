@@ -14,7 +14,7 @@
 /* Timer clazzes(static & dynamic) */
 static void timer_statik_release(mr_object_t *obj);
 static void timer_dynamic_release(mr_object_t *obj);
-MR_CLAZZES_DEFINE(timer, timer_statik_release, timer_dynamic_release);
+MR_CLAZZES_DEFINE(timer, timer_statik_release, timer_dynamic_release, MR_NULL);
 
 /* Timer timing list */
 static mr_list_t __timer_list = MR_LIST_INIT(&__timer_list);

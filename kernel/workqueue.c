@@ -14,12 +14,13 @@
 /* Workqueue clazzes(static & dynamic) */
 static void queue_dynamic_release(mr_object_t *obj);
 static void queue_statik_release(mr_object_t *obj);
-MR_CLAZZES_DEFINE(workqueue, queue_statik_release, queue_dynamic_release);
+MR_CLAZZES_DEFINE(workqueue, queue_statik_release, queue_dynamic_release,
+                  MR_NULL);
 
 /* Work clazzes(static & dynamic) */
 static void work_dynamic_release(mr_object_t *obj);
 static void work_statik_release(mr_object_t *obj);
-MR_CLAZZES_DEFINE(work, work_statik_release, work_dynamic_release);
+MR_CLAZZES_DEFINE(work, work_statik_release, work_dynamic_release, MR_NULL);
 
 /* Workqueue lock */
 static mr_spinlock_t __work_lock = MR_SPINLOCK_INIT();

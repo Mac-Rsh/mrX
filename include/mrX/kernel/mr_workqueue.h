@@ -64,19 +64,28 @@ typedef struct mr_work {
 typedef void(mr_work_entry_t)(struct mr_work *work, void *param);
 
 /**
- * @brief This macro function initializes a workqueue.
+ * @brief This macro function initializes a derived workqueue.
  *
  * @param _queue The workqueue.
+ * @param _clazz The workqueue clazz.
  */
-#define MR_WORKQUEUE_INIT(_queue)                                              \
+#define MR_WORKQUEUE_DERIVE_INIT(_queue, _clazz)                               \
     {                                                                          \
-        .parent                                                                \
-        = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(workqueue))),       \
+        .parent = MR_OBJECT_INIT(_clazz),                                      \
         .depth = MR_ATOMIC_INIT(0),                                            \
         .dying = MR_ATOMIC_INIT(MR_FALSE),                                     \
         .tlist = MR_LIST_INIT(&(_queue)->tlist),                               \
         .list = MR_LIST_INIT(&(_queue)->list),                                 \
     }
+
+/**
+ * @brief This macro function initializes a workqueue.
+ *
+ * @param _queue The workqueue.
+ */
+#define MR_WORKQUEUE_INIT(_queue)                                              \
+    MR_WORKQUEUE_DERIVE_INIT((_queue),                                         \
+                             MR_CLAZZES_STATIK(MR_CLAZZES_FIND(workqueue)))
 
 /**
  * @brief This function initializes a workqueue.
@@ -175,6 +184,24 @@ MR_INLINE mr_bool_t mr_workqueue_put(mr_workqueue_t *queue) {
 }
 
 /**
+ * @brief This macro function initializes a derived work.
+ *
+ * @param _work The work.
+ * @param _clazz The work clazz.
+ * @param _entry The work entry.
+ * @param _param The entry parameter.
+ */
+#define MR_WORK_DERIVE_INIT(_work, _clazz, _entry, _param)                     \
+    {                                                                          \
+        .parent = MR_OBJECT_INIT(_clazz),                                      \
+        .list = MR_LIST_INIT(&(_work)->list),                                  \
+        .queue = MR_NULL,                                                      \
+        .tick = 0,                                                             \
+        .entry = (_entry),                                                     \
+        .param = (_param),                                                     \
+    }
+
+/**
  * @brief This macro function initializes a work.
  *
  * @param _work The work.
@@ -182,14 +209,8 @@ MR_INLINE mr_bool_t mr_workqueue_put(mr_workqueue_t *queue) {
  * @param _param The entry parameter.
  */
 #define MR_WORK_INIT(_work, _entry, _param)                                    \
-    {                                                                          \
-        .parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(work))),    \
-        .list = MR_LIST_INIT(&(_work)->list),                                  \
-        .queue = MR_NULL,                                                      \
-        .tick = 0,                                                             \
-        .entry = (_entry),                                                     \
-        .param = (_param),                                                     \
-    }
+    MR_WORK_DERIVE_INIT((_work), MR_CLAZZES_STATIK(MR_CLAZZES_FIND(work)),     \
+                        (_entry), (_param))
 
 /**
  * @brief This function initializes a work.

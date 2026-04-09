@@ -4,16 +4,16 @@
 
 ### 1.1 功能介绍
 
-object 模块是一个在 C 语言中实现的轻量级面向对象基础设施。它提供了一套完整的对象生命周期管理机制，包括对象的创建、初始化、引用计数管理和自动释放。
+object 模块是一个在 C 语言中实现的轻量级对象基础设施。它提供对象初始化、派生、引用计数管理以及基于 clazz 的释放分发机制。
 
 在 C 语言中实现面向对象编程是一个挑战，因为 C 语言没有内置的类、继承、多态等特性。object 模块通过巧妙的设计，在 C
 语言中实现了以下面向对象的核心特性：
 
 - **封装**：通过结构体将数据和方法组织在一起
 - **继承**：通过结构体嵌套实现类型继承
-- **多态**：通过函数指针实现虚函数机制
+- **多态**：通过 release 函数指针实现生命周期多态
 - **RTTI（运行时类型识别）**：通过 clazz 指针实现类型信息查询
-- **自动内存管理**：基于引用计数自动管理对象生命周期
+- **生命周期管理**：基于引用计数管理对象生命周期
 
 object 模块的设计理念是"最小化但完整"：它只提供最核心的对象管理功能，保持轻量和高效，同时为上层模块构建更复杂的面向对象系统打下坚实基础。
 
@@ -22,7 +22,7 @@ object 模块的设计理念是"最小化但完整"：它只提供最核心的�
 - **C 语言实现的面向对象**：不依赖 C++ 编译器，纯 C 语言实现
 - **基于引用计数的生命周期管理**：自动管理对象生命周期，防止内存泄漏
 - **类型安全**：通过 clazz 机制实现类型检查和 RTTI
-- **支持静态和动态分配**：同一类型可以支持栈上分配和堆上分配两种方式
+- **支持静态和动态内存模型**：同一逻辑类型可区分是否负责最终释放内存
 - **继承支持**：通过结构体嵌套实现类型继承
 - **跨编译单元类型检查**：通过编译期宏实现类型的公开和导入
 - **零开销抽象**：虚函数调用和类型检查的开销极小
@@ -87,6 +87,7 @@ mr_object_del(&dev.parent);
 typedef struct mr_clazz {
     const char *name;                     /* 类型名称 */
     mr_object_release_t *release;         /* 释放函数 */
+    const struct mr_clazz *super;         /* 父类 */
 } mr_clazz_t;
 ```
 
@@ -96,6 +97,7 @@ typedef struct mr_clazz {
 
 - `name`：类型的名称，用于调试和日志
 - `release`：对象的释放函数，当引用计数归零时被调用
+- `super`：父类 clazz，用于构造继承链和 release 链
 
 #### mr_clazzes_t
 
@@ -113,6 +115,13 @@ typedef struct mr_clazzes {
 - **statik**：用于栈上或静态分配的对象，释放时只执行清理操作，不释放内存
 - **dynamic**：用于堆上分配（malloc）的对象，释放时会调用 free() 释放内存
 
+这里的 `statik/dynamic` 不是简单的“初始化方式”区分，而是对象最终生命周期责任的区分：
+
+- `statik` 表示该 clazz 只负责资源清理，不负责释放对象本身的内存
+- `dynamic` 表示该 clazz 在资源清理完成后，还负责释放对象本身的内存
+- 在继承体系中，父类通常只参与 `init` 路径，因此父类 release 只做父类资源清理
+- 是否最终 `free`，由最末级对象所使用的最终 clazz 决定
+
 ### 2.2 主要接口说明
 
 #### 类型定义接口
@@ -120,7 +129,7 @@ typedef struct mr_clazzes {
 ##### MR_CLAZZES_DEFINE()
 
 ```c
-#define MR_CLAZZES_DEFINE(_name, _statik_release, _dynamic_release)
+#define MR_CLAZZES_DEFINE(_name, _statik_release, _dynamic_release, _super)
 ```
 
 **功能**：定义一个对象的类型信息对
@@ -130,6 +139,7 @@ typedef struct mr_clazzes {
 - `_name`：类型名称（标识符）
 - `_statik_release`：静态对象的释放函数
 - `_dynamic_release`：动态对象的释放函数
+- `_super`：父类 clazz，无父类时传 `MR_NULL`
 
 **示例**：
 
@@ -147,7 +157,8 @@ static void my_object_dynamic_release(mr_object_t *obj) {
     free(my_obj);
 }
 
-MR_CLAZZES_DEFINE(my_object, my_object_statik_release, my_object_dynamic_release);
+MR_CLAZZES_DEFINE(my_object, my_object_statik_release,
+                  my_object_dynamic_release, MR_NULL);
 ```
 
 **说明**：
@@ -191,8 +202,10 @@ MR_CLAZZES_DEFINE(my_object, my_object_statik_release, my_object_dynamic_release
 
 ```c
 #define MR_OBJECT_IS_CLAZZES(_obj, _name) \
-    ((MR_OBJECT_CLAZZ(_obj) == MR_CLAZZES_STATIK(MR_CLAZZES_FIND(_name))) \
-     || (MR_OBJECT_CLAZZ(_obj) == MR_CLAZZES_DYNAMIC(MR_CLAZZES_FIND(_name))))
+    (mr_clazz_is_kind_of(MR_OBJECT_CLAZZ(_obj), \
+                         MR_CLAZZES_STATIK(MR_CLAZZES_FIND(_name))) \
+     || mr_clazz_is_kind_of(MR_OBJECT_CLAZZ(_obj), \
+                            MR_CLAZZES_DYNAMIC(MR_CLAZZES_FIND(_name))))
 ```
 
 **功能**：检查对象是否为指定类型
@@ -206,6 +219,11 @@ MR_CLAZZES_DEFINE(my_object, my_object_statik_release, my_object_dynamic_release
 
 - `MR_TRUE`：对象是该类型
 - `MR_FALSE`：对象不是该类型
+
+**补充说明**：
+
+- 这里判断的是“是否属于该 clazzes 体系”，不是简单的指针相等判断
+- 如果对象被派生为某个子类，只要其 `super` 链上属于该 clazzes，也会返回 `MR_TRUE`
 
 **使用场景**：
 
@@ -260,6 +278,31 @@ mr_err_t mr_object_init(mr_object_t *obj, const mr_clazz_t *clazz);
 - 不能重复初始化同一个对象
 - 初始化前对象必须是未初始化状态
 
+##### mr_object_derive()
+
+```c
+mr_err_t mr_object_derive(mr_object_t *obj, const mr_clazz_t *clazz);
+```
+
+**功能**：将一个已初始化对象派生为其子类 clazz
+
+**参数**：
+
+- `obj`：对象指针
+- `clazz`：目标子类 clazz
+
+**返回值**：
+
+- `0`：成功
+- `-MR_EINVAL`：参数错误（对象未初始化或 clazz 无效）
+- `-MR_EPERM`：目标 clazz 不是当前 clazz 的子类
+
+**使用规则**：
+
+- `mr_object_derive` 只修改对象当前使用的 `clazz`
+- 目标 `clazz` 必须位于当前 `clazz` 的子类链上
+- 它不负责补做父类初始化；父类状态应先通过各层 `init` 路径准备完成
+
 #### 对象生命周期管理接口
 
 ##### mr_object_get()
@@ -304,7 +347,7 @@ mr_bool_t mr_object_put(mr_object_t *obj);
 **注意事项**：
 
 - 必须与之前的 `mr_object_get` 配对使用
-- 引用计数归零时，会自动调用对象的 release 函数
+- 引用计数归零时，会自动调用对象的 release 链
 - release 函数中不应执行耗时操作或可能阻塞的调用
 
 ##### mr_object_del()
@@ -392,7 +435,8 @@ static void my_device_dynamic_release(mr_object_t *obj) {
 }
 
 /* 定义类型信息 */
-MR_CLAZZES_DEFINE(my_device, my_device_statik_release, my_device_dynamic_release);
+MR_CLAZZES_DEFINE(my_device, my_device_statik_release,
+                  my_device_dynamic_release, MR_NULL);
 
 /* 使用静态对象 */
 void example_static_object(void) {
@@ -461,7 +505,8 @@ static void shared_resource_statik_release(mr_object_t *obj) {
     printf("Resource released, data=%d\n", res->data);
 }
 
-MR_CLAZZES_DEFINE(shared_resource, shared_resource_statik_release, NULL);
+MR_CLAZZES_DEFINE(shared_resource, shared_resource_statik_release,
+                  MR_NULL, MR_NULL);
 
 void example_shared_resource(void) {
     shared_resource_t resource;
@@ -537,8 +582,8 @@ static void device_b_statik_release(mr_object_t *obj) {
     printf("Device B released\n");
 }
 
-MR_CLAZZES_DEFINE(device_a, device_a_statik_release, NULL);
-MR_CLAZZES_DEFINE(device_b, device_b_statik_release, NULL);
+MR_CLAZZES_DEFINE(device_a, device_a_statik_release, MR_NULL, MR_NULL);
+MR_CLAZZES_DEFINE(device_b, device_b_statik_release, MR_NULL, MR_NULL);
 
 /* 通用设备处理函数 */
 void process_device(mr_object_t *obj) {
@@ -623,7 +668,8 @@ static void module_a_object_dynamic_release(mr_object_t *obj) {
 /* 定义类型信息 */
 MR_CLAZZES_DEFINE(module_a_object,
                   module_a_object_statik_release,
-                  module_a_object_dynamic_release);
+                  module_a_object_dynamic_release,
+                  MR_NULL);
 
 mr_object_t *module_a_create_object(void) {
     module_a_object_t *obj = malloc(sizeof(module_a_object_t));
@@ -679,7 +725,7 @@ object 模块的设计目标包括：
 1. **在 C 语言中实现面向对象**：不依赖 C++ 编译器，保持 C 语言的简洁性和可移植性
 2. **轻量级**：最小化运行时开销，适合资源受限的嵌入式系统
 3. **类型安全**：提供类型检查机制，防止类型混淆和误用
-4. **自动内存管理**：通过引用计数自动管理对象生命周期
+4. **生命周期管理**：通过引用计数自动管理对象生命周期
 5. **支持多种分配方式**：同时支持栈分配、静态分配和堆分配
 6. **跨编译单元类型检查**：通过编译期宏实现类型的公开和导入
 
@@ -712,19 +758,20 @@ mr_object_t *parent = (mr_object_t *)&derived;  /* 向上转型 */
 derived_object_t *derived = (derived_object_t *)parent;  /* 向下转型 */
 ```
 
-##### 2. 通过函数指针实现多态
+##### 2. 通过函数指针实现生命周期多态
 
 ```c
 typedef struct mr_clazz {
     const char *name;
     mr_object_release_t *release;  /* 虚函数 */
+    const struct mr_clazz *super;  /* 父类 */
 } mr_clazz_t;
 ```
 
 **原理**：
 
 - 每个类型都有自己的 `release` 函数
-- 通过 `clazz->release(obj)` 实现动态调用
+- 当前 clazz 可以通过 `super` 组织 release 链
 - 不同类型的对象会调用不同的 `release` 函数
 
 **优势**：
@@ -790,13 +837,26 @@ mr_object_init((mr_object_t *)dev, MR_CLAZZES_DYNAMIC(MR_CLAZZES_FIND(my_device)
 mr_object_del((mr_object_t *)dev);  /* 调用 release 函数，然后 free(dev) */
 ```
 
+#### 继承下的内存模型
+
+当对象支持继承时，`statik/dynamic` 的含义需要和继承链一起理解。
+
+**核心规则**：
+
+1. 派生对象内部调用的是父类 `init`，而不是父类 `create`
+2. 因此父类 release 只负责父类部分的资源清理，不负责 `free`
+3. 是否释放对象本身的内存，由最末级对象最终使用的 clazz 决定
+4. 一个对象如果最终使用的是 `dynamic` clazz，那么最末级 dynamic release 才应该执行 `free`
+
+这套规则使得 object 模块既能支持继承，又能在 `statik/dynamic` 两种内存模型下保持一致的生命周期语义。
+
 #### 跨编译单元类型检查
 
 object 模块提供了一套完整的类型导出和导入机制：
 
 ```c
 /* 定义类型（在 .c 文件中） */
-MR_CLAZZES_DEFINE(my_type, statik_release, dynamic_release);
+MR_CLAZZES_DEFINE(my_type, statik_release, dynamic_release, MR_NULL);
 
 /* 导出类型（在 .h 文件中） */
 MR_CLAZZES_EXPORT(my_type);
@@ -844,32 +904,42 @@ mr_err_t mr_object_init(mr_object_t *obj, const mr_clazz_t *clazz) {
 #### release 函数的调用机制
 
 ```c
+static void object_clazz_release(mr_object_t *obj, const mr_clazz_t *clazz) {
+    if (!clazz) {
+        return;
+    }
+
+    object_clazz_release(obj, clazz->super);
+
+    if (clazz->release) {
+        clazz->release(obj);
+    }
+}
+
 static void object_ref_release(mr_ref_t *ref) {
-    const mr_clazz_t *clazz;
     mr_object_t *obj;
 
     /* 通过 ref 指针找到对象 */
     obj = MR_CONTAINER_OF(ref, mr_object_t, magic_ref);
-    clazz = obj->clazz;
 
-    /* 调用类型的 release 函数 */
-    if (clazz && clazz->release) {
-        clazz->release(obj);
-    }
+    /* 沿 super 链调用 release */
+    object_clazz_release(obj, obj->clazz);
 }
 ```
 
 **设计要点**：
 
 1. **通过 `MR_CONTAINER_OF` 找到对象**：从 `mr_ref_t *` 反向获取 `mr_object_t *`
-2. **通过 clazz 调用正确的 release 函数**：实现多态
-3. **空指针检查**：确保安全
+2. **沿 `clazz->super` 构造 release 链**：支持继承
+3. **按 `super -> sub` 顺序调用 release**：先清理父类部分，再清理子类部分
+4. **空指针检查**：确保安全
 
 **使用注意事项**：
 
 - release 函数在引用计数归零时**同步调用**
 - release 函数中不应执行耗时操作或可能阻塞的调用
 - 如果需要异步释放，可以结合工作队列使用
+- 父类 release 不应释放对象本身内存，最终是否 `free` 由最末级 clazz 决定
 
 #### 引用计数的继承
 
@@ -903,7 +973,7 @@ object 模块提供了 RTTI 功能，但不是完整的类型系统：
 **提供的功能**：
 
 - 类型信息查询（`MR_OBJECT_CLAZZ`）
-- 类型相等性检查（`MR_OBJECT_IS_CLAZZES`）
+- 类型归属检查（`MR_OBJECT_IS_CLAZZES`，支持沿 `super` 链匹配）
 - 类型继承（通过结构体嵌套）
 
 **未提供的功能**：
