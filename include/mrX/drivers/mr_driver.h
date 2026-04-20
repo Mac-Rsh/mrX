@@ -85,7 +85,7 @@ typedef struct mr_driver {
 /* Driver entry type */
 typedef struct mr_driver_entry {
     const char *name;
-    mr_driver_t *driver;
+    mr_driver_t *drv;
 } mr_driver_entry_t;
 
 /**
@@ -266,7 +266,7 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
     MR_DRIVER_DEFINE(_name, _dclazz, _type, _data, _priv, _ops);               \
     MR_USED const mr_driver_entry_t MR_CAT(__mr_driver_entry_, _name)          \
         MR_SECTION_ALIGN("mr_driver." _level)                                  \
-        = {.name = MR_STR(_name), .driver = MR_DRIVER_FIND(_name)}
+        = {.name = MR_STR(_name), .drv = MR_DRIVER_FIND(_name)}
 
 /**
  * @brief This function initializes a driver.
@@ -482,6 +482,13 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
  * @return The driver instance.
  */
 #define MR_HT_INST_DRIVER(_id)          MR_HT_INST(MR_HT_COMPAT, _id)
+
+/**
+ * @brief This macro function gets the number of driver instances.
+ *
+ * @return The number of driver instances.
+ */
+#define MR_HT_INST_DRIVER_NUM()         MR_HT_INST_NUM(MR_HT_COMPAT)
 
 /**
  * @brief This macro function installs a driver instance through hardtree.

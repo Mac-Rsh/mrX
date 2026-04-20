@@ -94,6 +94,15 @@ extern "C" {
 #define MR_HT_INST(_compat, _id)        MR_HT_PATH(INST, _compat, _id)
 
 /**
+ * @brief This macro function gets the number of instances for the compatible
+ * name.
+ *
+ * @param _compat The compatible name.
+ * @return The number of instances.
+ */
+#define MR_HT_INST_NUM(_compat)         MR_CAT(MR_HT_PATH(INST, _compat), _NUM)
+
+/**
  * @brief This macro function iterates over all instances of the compatible
  * name.
  *
@@ -102,10 +111,9 @@ extern "C" {
  * @param ... The arguments to be passed to the function.
  */
 #define MR_HT_INST_FOREACH(_compat, _fn, ...)                                  \
-    MR_MACRO_IF(MR_HT_HAS_INST(_compat),                                       \
-                (MR_LISTIFY(MR_CAT(MR_HT_PATH(INST, _compat), _NUM), (;)       \
-                 , _fn, ##__VA_ARGS__)),                                       \
-                ())
+    MR_MACRO_IF(                                                               \
+        MR_HT_HAS_INST(_compat),                                               \
+        (MR_LISTIFY(MR_HT_INST_NUM(_compat), (;), _fn, ##__VA_ARGS__)), ())
 
 /**
  * @brief This macro function checks if the property exists.

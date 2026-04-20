@@ -88,6 +88,11 @@ class Preprocessor:
                                       resolved_path.name, included_from):
             return
 
+        # Reuse the include graph to mark files already scanned once
+        if normalized_path in unit.include_graph:
+            return
+        unit.include_graph.setdefault(normalized_path, [])
+
         # Read source text before scanning physical lines
         raw_text = self._read_source_text(resolved_path, included_from)
         if raw_text is None:
@@ -249,7 +254,6 @@ class Preprocessor:
                 line_number,
             )
             return
-        unit.add_edge(file_path, str(child_path))
         self._scan(
             str(child_path),
             unit,
@@ -257,6 +261,7 @@ class Preprocessor:
             macros=macros,
             included_from=IncludeSite(file_path=file_path, line=line_number),
         )
+        unit.add_edge(file_path, str(child_path))
 
     def _report_unterminated_conditionals(
             self,

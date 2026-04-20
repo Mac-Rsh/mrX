@@ -232,7 +232,7 @@ mr_driver_t *mr_driver_find(const char *name) {
         }
 
         /* Found */
-        return entry->driver;
+        return entry->drv;
     }
 
     /* Not found */
@@ -286,10 +286,10 @@ static void mr_drivers_init(void) {
     const mr_driver_entry_t *entry;
 
     for (entry = start + 1; entry < end; entry++) {
-        MR_ASSERT(entry->driver != MR_NULL);
+        MR_ASSERT(entry->drv != MR_NULL);
 
         /* Setup driver */
-        mr_driver_setup(entry->driver);
+        mr_driver_setup(entry->drv);
     }
 }
 MR_INIT_EXPORT(mr_drivers_init, MR_INIT_LEVEL_DRIVER);

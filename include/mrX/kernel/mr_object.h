@@ -88,7 +88,7 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _name The clazz name.
  * @param _statik_release The static release function.
  * @param _dynamic_release The dynamic release function.
- * @param _super The super clazz (set to MR_NULL if no super).
+ * @param _super The super clazz(set to MR_NULL if no super).
  */
 #define MR_CLAZZES_INIT(_name, _statik_release, _dynamic_release, _super)      \
     {                                                                          \
@@ -102,7 +102,7 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @param _name The clazz name.
  * @param _statik_release The static release function.
  * @param _dynamic_release The dynamic release function.
- * @param _super The super clazz (set to MR_NULL if no super).
+ * @param _super The super clazz(set to MR_NULL if no super).
  */
 #define MR_CLAZZES_DEFINE(_name, _statik_release, _dynamic_release, _super)    \
     const mr_clazzes_t MR_CAT(__mr_clazzes_, _name) = MR_CLAZZES_INIT(         \
