@@ -27,6 +27,7 @@ extern "C" {
 /* DMA wait event type definition */
 #define MR_DMA_WAIT_HALF_COMPLETE       (1ULL << 0)
 #define MR_DMA_WAIT_COMPLETE            (1ULL << 1)
+#define MR_DMA_WAIT_ABORT               (1ULL << 2)
 
 /* DMA data size definition */
 typedef enum mr_dma_data_size {
@@ -118,8 +119,8 @@ typedef struct mr_dma_data {
 
 /* DMA operations type */
 typedef struct mr_dma_ops {
-    mr_err_t (*channel_config)(const mr_driver_t *drv, mr_uint32_t channel,
-                               const mr_dma_config_t *config);
+    mr_err_t (*channel_configure)(const mr_driver_t *drv, mr_uint32_t channel,
+                                  const mr_dma_config_t *config);
     mr_err_t (*start)(const mr_driver_t *drv, mr_uint32_t channel);
     mr_err_t (*stop)(const mr_driver_t *drv, mr_uint32_t channel);
     mr_err_t (*get_status)(const mr_driver_t *drv, mr_uint32_t channel,

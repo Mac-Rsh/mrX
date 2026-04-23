@@ -26,14 +26,15 @@ static mr_err_t drv_port_write(const mr_driver_t *drv, mr_uint32_t mask);
 static mr_err_t drv_port_read(const mr_driver_t *drv, mr_uint32_t *mask);
 static mr_err_t drv_irq_attach(const mr_driver_t *drv, mr_uint32_t pin,
                                mr_waiter_t *entry);
-MR_UNUSED static const mr_gpio_ops_t __drv_gpio_ops
-    = {.pin_configure = drv_pin_configure,
-       .pin_configuration = drv_pin_configuration,
-       .pin_write = drv_pin_write,
-       .pin_read = drv_pin_read,
-       .port_write = drv_port_write,
-       .port_read = drv_port_read,
-       .attach = drv_irq_attach};
+MR_UNUSED static const mr_gpio_ops_t __drv_gpio_ops = {
+    .pin_configure = drv_pin_configure,
+    .pin_configuration = drv_pin_configuration,
+    .pin_write = drv_pin_write,
+    .pin_read = drv_pin_read,
+    .port_write = drv_port_write,
+    .port_read = drv_port_read,
+    .attach = drv_irq_attach,
+};
 
 /* Driver GPIO private data type */
 typedef struct drv_gpio_priv {

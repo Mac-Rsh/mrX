@@ -36,7 +36,7 @@ mr_err_t mr_dma_configure(mr_driver_t *drv, mr_uint32_t channel,
     }
 
     /* Configure channel */
-    return dma_ops->channel_config(drv, channel, config);
+    return dma_ops->channel_configure(drv, channel, config);
 }
 
 static mr_err_t dma_dynamic_deinit(const mr_driver_t *drv) {
