@@ -29,7 +29,7 @@ void *mr_slab_alloc(mr_slab_t *slab) {
             }
 
             /* Try to mark a bit as allocated */
-            mask = (mr_uint32_t)last | (1U << (bit - 1));
+            mask = (mr_uint32_t)last | (1U << (bit - 1U));
         } while (!mr_atomic_compare_exchange(&slab->map[i], &last, mask));
 
         /* Check if memory is allocated */
@@ -38,7 +38,7 @@ void *mr_slab_alloc(mr_slab_t *slab) {
         }
 
         /* Get bit index */
-        off = (i << 5) + (bit - 1);
+        off = (i << 5) + (bit - 1U);
         if (off >= slab->num) {
             /* Out of range */
             return MR_NULL;

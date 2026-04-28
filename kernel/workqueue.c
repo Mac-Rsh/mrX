@@ -126,8 +126,7 @@ static mr_err_t workqueue_init(mr_workqueue_t *queue, const mr_clazz_t *clazz) {
 }
 
 mr_err_t mr_workqueue_init(mr_workqueue_t *queue) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(workqueue);
-    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(workqueue);
 
     /* Check parameter */
     MR_ASSERT((queue != MR_NULL) && (!MR_OBJECT_IS_INITED(queue)));
@@ -137,8 +136,7 @@ mr_err_t mr_workqueue_init(mr_workqueue_t *queue) {
 }
 
 mr_workqueue_t *mr_workqueue_create(void) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(workqueue);
-    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(workqueue);
     mr_workqueue_t *queue;
     mr_err_t ret;
 
@@ -430,8 +428,7 @@ static mr_err_t work_init(mr_work_t *work, const mr_clazz_t *clazz,
 }
 
 mr_err_t mr_work_init(mr_work_t *work, mr_work_entry_t *entry, void *param) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(work);
-    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(work);
 
     /* Check parameter */
     MR_ASSERT((work != MR_NULL) && (!MR_OBJECT_IS_INITED(work)));
@@ -442,8 +439,7 @@ mr_err_t mr_work_init(mr_work_t *work, mr_work_entry_t *entry, void *param) {
 }
 
 mr_work_t *mr_work_create(mr_work_entry_t *entry, void *param) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(work);
-    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(work);
     mr_work_t *work;
     mr_err_t ret;
 

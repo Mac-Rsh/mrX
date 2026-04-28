@@ -84,8 +84,7 @@ typedef void(mr_work_entry_t)(struct mr_work *work, void *param);
  * @param _queue The workqueue.
  */
 #define MR_WORKQUEUE_INIT(_queue)                                              \
-    MR_WORKQUEUE_DERIVE_INIT((_queue),                                         \
-                             MR_CLAZZES_STATIK(MR_CLAZZES_FIND(workqueue)))
+    MR_WORKQUEUE_DERIVE_INIT((_queue), MR_CLAZZES_STATIK(workqueue))
 
 /**
  * @brief This function initializes a workqueue.
@@ -209,8 +208,7 @@ MR_INLINE mr_bool_t mr_workqueue_put(mr_workqueue_t *queue) {
  * @param _param The entry parameter.
  */
 #define MR_WORK_INIT(_work, _entry, _param)                                    \
-    MR_WORK_DERIVE_INIT((_work), MR_CLAZZES_STATIK(MR_CLAZZES_FIND(work)),     \
-                        (_entry), (_param))
+    MR_WORK_DERIVE_INIT((_work), MR_CLAZZES_STATIK(work), (_entry), (_param))
 
 /**
  * @brief This function initializes a work.

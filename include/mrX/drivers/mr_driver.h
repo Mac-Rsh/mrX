@@ -151,24 +151,6 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
                                  (_dynamic_deinit))
 
 /**
- * @brief This macro function gets the static clazz of driver clazzes.
- *
- * @param _clazzes The driver clazzes.
- * @return The static driver clazz.
- */
-#define MR_DRIVER_CLAZZES_STATIK(_clazzes)                                     \
-    (&(_clazzes)->statik)
-
-/**
- * @brief This macro function gets the dynamic clazz of driver clazzes.
- *
- * @param _clazzes The driver clazzes.
- * @return The dynamic driver clazz.
- */
-#define MR_DRIVER_CLAZZES_DYNAMIC(_clazzes)                                    \
-    (&(_clazzes)->dynamic)
-
-/**
  * @brief This macro function exports driver clazzes.
  *
  * @param _name The driver clazz name.
@@ -190,6 +172,25 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
  * @return The driver clazzes.
  */
 #define MR_DRIVER_CLAZZES_FIND(_name)   (&MR_CAT(__mr_driver_clazzes_, _name))
+
+/**
+ * @brief This macro function gets the static clazz from driver clazzes by name.
+ *
+ * @param _name The driver clazzes name.
+ * @return The static driver clazz.
+ */
+#define MR_DRIVER_CLAZZES_STATIK(_name)                                        \
+    (&MR_DRIVER_CLAZZES_FIND(_name)->statik)
+
+/**
+ * @brief This macro function gets the dynamic clazz from driver clazzes by
+ * name.
+ *
+ * @param _name The driver clazzes name.
+ * @return The dynamic driver clazz.
+ */
+#define MR_DRIVER_CLAZZES_DYNAMIC(_name)                                       \
+    (&MR_DRIVER_CLAZZES_FIND(_name)->dynamic)
 
 /**
  * @brief This macro function initializes a driver.
@@ -473,7 +474,14 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
  *
  * @return MR_TRUE if the driver instance exist, MR_FALSE otherwise.
  */
-#define MR_HT_HAS_INST_DRIVER()         MR_HT_HAS_INST(MR_HT_COMPAT)
+#define MR_HT_HAS_DRIVER()              MR_HT_HAS_INST(MR_HT_COMPAT)
+
+/**
+ * @brief This macro function gets the number of driver instances.
+ *
+ * @return The number of driver instances.
+ */
+#define MR_HT_DRIVER_NUM()              MR_HT_INST_NUM(MR_HT_COMPAT)
 
 /**
  * @brief This macro function gets the driver instance.
@@ -481,14 +489,147 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
  * @param _id The instance id.
  * @return The driver instance.
  */
-#define MR_HT_INST_DRIVER(_id)          MR_HT_INST(MR_HT_COMPAT, _id)
+#define MR_HT_DRIVER(_id)               MR_HT_INST(MR_HT_COMPAT, _id)
 
 /**
- * @brief This macro function gets the number of driver instances.
+ * @brief This macro function iterates over all driver instances.
  *
- * @return The number of driver instances.
+ * @param _fn The function to be called, like: fn(i, ...), where i is the index.
  */
-#define MR_HT_INST_DRIVER_NUM()         MR_HT_INST_NUM(MR_HT_COMPAT)
+#define MR_HT_DRIVER_FOREACH(_fn, ...)                                         \
+    MR_HT_INST_FOREACH(MR_HT_COMPAT, _fn, ##__VA_ARGS__)
+
+/**
+ * @brief This macro function checks if the driver property exists.
+ *
+ * @param _id The instance id.
+ * @param _prop The property name.
+ * @return MR_TRUE if the property exists, MR_FALSE otherwise.
+ */
+#define MR_HT_DRIVER_HAS_PROP(_id, _prop)                                      \
+    MR_HT_NODE_HAS_PROP(MR_HT_DRIVER(_id), _prop)
+
+/**
+ * @brief This macro function gets the property from the driver instance.
+ *
+ * @param _id The instance id.
+ * @param _prop The property name.
+ * @return The property value.
+ */
+#define MR_HT_DRIVER_PROP(_id, _prop)                                          \
+    MR_HT_NODE_PROP(MR_HT_DRIVER(_id), _prop)
+
+/**
+ * @brief This macro function gets the property from the driver instance or
+ * returns a default value.
+ *
+ * @param _id The instance id.
+ * @param _prop The property name.
+ * @param _default The default value.
+ * @return The property value or the default value.
+ */
+#define MR_HT_DRIVER_PROP_OR(_id, _prop, _default)                             \
+    MR_HT_NODE_PROP_OR(MR_HT_DRIVER(_id), _prop, _default)
+
+/**
+ * @brief This macro function checks if an indexed element of a driver property
+ * array exists.
+ *
+ * @param _id The instance id.
+ * @param _prop The property name.
+ * @param _elem The element name.
+ * @param _idx The index into the property array.
+ * @return MR_TRUE if the indexed element exists, MR_FALSE otherwise.
+ */
+#define MR_HT_DRIVER_HAS_PROP_ELEM(_id, _prop, _elem, _idx)                    \
+    MR_HT_NODE_HAS_PROP_ELEM(MR_HT_DRIVER(_id), _prop, _elem, _idx)
+
+/**
+ * @brief This macro function gets an indexed element from a driver property
+ * array.
+ *
+ * @param _id The instance id.
+ * @param _prop The property name.
+ * @param _elem The element name.
+ * @param _idx The index into the property array.
+ * @return The indexed property value.
+ */
+#define MR_HT_DRIVER_PROP_ELEM(_id, _prop, _elem, _idx)                        \
+    MR_HT_NODE_PROP_ELEM(MR_HT_DRIVER(_id), _prop, _elem, _idx)
+
+/**
+ * @brief This macro function gets an indexed element from a driver property
+ * array or returns a default value.
+ *
+ * @param _id The instance id.
+ * @param _prop The property name.
+ * @param _elem The element name.
+ * @param _idx The index into the property array.
+ * @param _default The default value.
+ * @return The indexed property value or the default value.
+ */
+#define MR_HT_DRIVER_PROP_ELEM_OR(_id, _prop, _elem, _idx, _default)           \
+    MR_HT_NODE_PROP_ELEM_OR(MR_HT_DRIVER(_id), _prop, _elem, _idx, _default)
+
+/**
+ * @brief This macro function iterates over all indexed elements of a driver
+ * property array.
+ *
+ * @param _id The instance id.
+ * @param _prop The property name.
+ * @param _fn The function to be called, like: fn(i, ...), where i is the index.
+ * @param ... The arguments to be passed to the function.
+ */
+#define MR_HT_DRIVER_PROP_ELEM_FOREACH(_id, _prop, _fn, ...)                   \
+    MR_HT_NODE_PROP_ELEM_FOREACH(MR_HT_DRIVER(_id), _prop, _fn, ##__VA_ARGS__)
+
+/**
+ * @brief This macro function gets the driver instance name.
+ *
+ * @param _id The instance id.
+ * @return The driver instance name.
+ */
+#define MR_HT_DRIVER_NAME(_id)          MR_HT_NODE_NAME(MR_HT_DRIVER(_id))
+
+/**
+ * @brief This macro function gets the driver instance path.
+ *
+ * @param _id The instance id.
+ * @return The driver instance path.
+ */
+#define MR_HT_DRIVER_PATH(_id)          MR_HT_NODE_PATH(MR_HT_DRIVER(_id))
+
+/**
+ * @brief This macro function checks if the driver instance has a parent.
+ *
+ * @param _id The instance id.
+ * @return MR_TRUE if the driver instance has a parent, MR_FALSE otherwise.
+ */
+#define MR_HT_DRIVER_HAS_PARENT(_id)    MR_HT_NODE_HAS_PARENT(MR_HT_DRIVER(_id))
+
+/**
+ * @brief This macro function gets the driver instance parent.
+ *
+ * @param _id The instance id.
+ * @return The driver instance parent.
+ */
+#define MR_HT_DRIVER_PARENT(_id)        MR_HT_NODE_PARENT(MR_HT_DRIVER(_id))
+
+/**
+ * @brief This macro function checks if the driver instance has an address.
+ *
+ * @param _id The instance id.
+ * @return MR_TRUE if the driver instance has an address, MR_FALSE otherwise.
+ */
+#define MR_HT_DRIVER_HAS_ADDR(_id)      MR_HT_NODE_HAS_ADDR(MR_HT_DRIVER(_id))
+
+/**
+ * @brief This macro function gets the driver instance address.
+ *
+ * @param _id The instance id.
+ * @return The driver instance address.
+ */
+#define MR_HT_DRIVER_ADDR(_id)          MR_HT_NODE_ADDR(MR_HT_DRIVER(_id))
 
 /**
  * @brief This macro function installs a driver instance through hardtree.
@@ -500,19 +641,10 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
  * @param _priv The private data.
  * @param _ops The private operations.
  */
-#define MR_HT_INST_DRIVER_INSTALL(_id, _dclazz, _type, _data, _priv, _ops)     \
-    MR_DRIVER_INSTALL(MR_HT_NODE_NAME(MR_HT_INST_DRIVER(_id)), _dclazz, _type, \
-                      _data, _priv, _ops,                                      \
-                      MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), INIT_LEVEL,   \
-                                         MR_DRIVER_LEVEL_DEFER))
-
-/**
- * @brief This macro function iterates over all driver instances.
- *
- * @param _fn The function to be called, like: fn(i, ...), where i is the index.
- */
-#define MR_HT_INST_DRIVER_FOREACH(_fn, ...)                                    \
-    MR_HT_INST_FOREACH(MR_HT_COMPAT, _fn, ##__VA_ARGS__)
+#define MR_HT_DRIVER_INSTALL(_id, _dclazz, _type, _data, _priv, _ops)          \
+    MR_DRIVER_INSTALL(                                                         \
+        MR_HT_DRIVER_NAME(_id), _dclazz, _type, _data, _priv, _ops,            \
+        MR_HT_DRIVER_PROP_OR(_id, INIT_LEVEL, MR_DRIVER_LEVEL_DEFER))
 
 /**
  * @brief This macro function finds a driver through hardtree.
@@ -524,9 +656,9 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
 
 /* All driver instances defined through hardtree are exported here, and
  * accessing these drivers no longer requires import or export */
-#define __MR_HT_INST_DRIVER_EXPORT(_id)                                        \
+#define __MR_HT_DRIVER_EXPORT(_id)                                             \
     MR_DRIVER_EXPORT(MR_HT_NODE_NAME(MR_HT_INST(DRIVER, _id)))
-MR_HT_INST_FOREACH(DRIVER, __MR_HT_INST_DRIVER_EXPORT);
+MR_HT_INST_FOREACH(DRIVER, __MR_HT_DRIVER_EXPORT);
 #endif /* defined(MR_USE_DRIVER) */
 
 /** @} */

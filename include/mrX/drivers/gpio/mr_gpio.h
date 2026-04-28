@@ -24,10 +24,8 @@ extern "C" {
  */
 
 #if defined(MR_USE_DRIVER_GPIO)
-#if defined(MR_USE_DRIVER_GPIO_EXTI)
 /* GPIO wait event definition */
 #define MR_GPIO_WAIT_EXTI               (MR_WAIT_IN | (1ULL << 0))
-#endif /* defined(MR_USE_DRIVER_GPIO_EXTI) */
 
 /* GPIO mode definition */
 typedef enum mr_gpio_mode {
@@ -94,6 +92,7 @@ typedef struct mr_gpio_ops {
                          mr_uint8_t *value);
     mr_err_t (*port_write)(const mr_driver_t *drv, mr_uint32_t mask);
     mr_err_t (*port_read)(const mr_driver_t *drv, mr_uint32_t *mask);
+    /* Optional */
     mr_err_t (*attach)(const mr_driver_t *drv, mr_uint32_t pin,
                        mr_waiter_t *entry);
 } mr_gpio_ops_t;
@@ -119,8 +118,7 @@ typedef struct mr_gpio_ops {
  * @param _ops The GPIO operations.
  */
 #define MR_GPIO_DEFINE(_name, _data, _priv, _ops)                              \
-    MR_DRIVER_DEFINE(_name,                                                    \
-                     MR_DRIVER_CLAZZES_STATIK(MR_DRIVER_CLAZZES_FIND(gpio)),   \
+    MR_DRIVER_DEFINE(_name, MR_DRIVER_CLAZZES_STATIK(gpio),                    \
                      MR_DRIVER_TYPE_GPIO, _data, _priv, _ops)
 
 /**
@@ -133,8 +131,7 @@ typedef struct mr_gpio_ops {
  * @param _level The init level.
  */
 #define MR_GPIO_INSTALL(_name, _data, _priv, _ops, _level)                     \
-    MR_DRIVER_INSTALL(_name,                                                   \
-                      MR_DRIVER_CLAZZES_STATIK(MR_DRIVER_CLAZZES_FIND(gpio)),  \
+    MR_DRIVER_INSTALL(_name, MR_DRIVER_CLAZZES_STATIK(gpio),                   \
                       MR_DRIVER_TYPE_GPIO, _data, _priv, _ops, _level)
 
 /**
@@ -148,8 +145,7 @@ typedef struct mr_gpio_ops {
  */
 MR_INLINE mr_err_t mr_gpio_init(mr_driver_t *drv, mr_gpio_data_t *data,
                                 void *priv, mr_gpio_ops_t *ops) {
-    const mr_driver_clazzes_t *dclazzes = MR_DRIVER_CLAZZES_FIND(gpio);
-    const mr_driver_clazz_t *dclazz = MR_DRIVER_CLAZZES_STATIK(dclazzes);
+    const mr_driver_clazz_t *dclazz = MR_DRIVER_CLAZZES_STATIK(gpio);
 
     /* Check parameter */
     MR_ASSERT(drv != MR_NULL);
@@ -170,8 +166,7 @@ MR_INLINE mr_err_t mr_gpio_init(mr_driver_t *drv, mr_gpio_data_t *data,
  */
 MR_INLINE mr_driver_t *mr_gpio_create(mr_gpio_data_t *data, void *priv,
                                       mr_gpio_ops_t *ops) {
-    const mr_driver_clazzes_t *dclazzes = MR_DRIVER_CLAZZES_FIND(gpio);
-    const mr_driver_clazz_t *dclazz = MR_DRIVER_CLAZZES_DYNAMIC(dclazzes);
+    const mr_driver_clazz_t *dclazz = MR_DRIVER_CLAZZES_DYNAMIC(gpio);
 
     /* Check parameter */
     MR_ASSERT(data != MR_NULL);
@@ -236,7 +231,7 @@ MR_INLINE mr_ssize_t mr_gpio_write(mr_driver_t *drv, mr_uint32_t pin,
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
-    MR_ASSERT(pin < 32);
+    MR_ASSERT(pin < 32U);
 
     /* Get GPIO data and operations */
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
@@ -270,7 +265,8 @@ MR_INLINE mr_ssize_t mr_gpio_read(mr_driver_t *drv, mr_uint32_t pin,
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
-    MR_ASSERT(pin < 32);
+    MR_ASSERT(value != MR_NULL);
+    MR_ASSERT(pin < 32U);
 
     /* Get GPIO data and operations */
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
@@ -309,6 +305,7 @@ MR_INLINE mr_ssize_t mr_gpio_port_write(mr_driver_t *drv, mr_uint32_t mask) {
 
     /* Write port value mask */
     mask = mask ^ gp_data->invert_mask;
+    mask = mask & gp_data->exist_mask;
     ret = gp_ops->port_write(drv, mask);
     if (ret != 0) {
         return (mr_ssize_t)ret;
@@ -345,6 +342,7 @@ MR_INLINE mr_ssize_t mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask) {
         return (mr_ssize_t)ret;
     }
     *mask = *mask ^ gp_data->invert_mask;
+    *mask = *mask & gp_data->exist_mask;
     return sizeof(*mask);
 }
 
@@ -359,15 +357,22 @@ MR_INLINE mr_ssize_t mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask) {
 MR_INLINE mr_err_t mr_gpio_irq_attach(mr_driver_t *drv, mr_uint32_t pin,
                                       mr_waiter_t *entry) {
     const mr_gpio_ops_t *gp_ops;
+    mr_gpio_data_t *gp_data;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
+    MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT(entry != MR_NULL);
-    MR_ASSERT(pin < 32);
 
-    /* Get GPIO operations */
+    /* Get GPIO data and operations */
+    gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
     gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Check if pin is existed */
+    if ((pin >= 32U) || (!(gp_data->exist_mask & (1U << pin)))) {
+        return -MR_EINVAL;
+    }
 
     /* Check if attach is supported */
     if (!gp_ops->attach) {
@@ -438,7 +443,7 @@ MR_INLINE mr_err_t mr_gpio_toggle(mr_driver_t *drv, mr_uint32_t pin) {
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
-    MR_ASSERT(pin < 32);
+    MR_ASSERT(pin < 32U);
 
     /* Get GPIO operations */
     gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
@@ -522,33 +527,34 @@ MR_INLINE mr_bool_t mr_gpio_put(mr_driver_t *drv) {
  * @param _priv The GPIO private data.
  * @param _ops The GPIO operations.
  */
-#define MR_HT_INST_GPIO_INSTALL(_id, _priv, _ops)                              \
+#define MR_HT_GPIO_INSTALL(_id, _priv, _ops)                                   \
     static mr_gpio_data_t MR_CAT(__mr_gpio_data_, _id) = MR_GPIO_DATA_INIT(    \
-        MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), exist_mask, 0xffffffffU),   \
-        MR_HT_NODE_PROP_OR(MR_HT_INST_DRIVER(_id), invert_mask, 0x0U));        \
-    MR_HT_INST_DRIVER_INSTALL(                                                 \
-        _id, MR_DRIVER_CLAZZES_STATIK(MR_DRIVER_CLAZZES_FIND(gpio)),           \
-        MR_DRIVER_TYPE_GPIO, &MR_CAT(__mr_gpio_data_, _id), _priv, _ops)
+        MR_HT_DRIVER_PROP_OR(_id, exist_mask, 0xffffffffU),                    \
+        MR_HT_DRIVER_PROP_OR(_id, invert_mask, 0x00000000U));                  \
+    MR_HT_DRIVER_INSTALL(_id, MR_DRIVER_CLAZZES_STATIK(gpio),                  \
+                         MR_DRIVER_TYPE_GPIO, &MR_CAT(__mr_gpio_data_, _id),   \
+                         _priv, _ops)
 
 /* GPIO hardtree specification type */
 typedef struct mr_ht_gpio_spec {
     mr_driver_t *drv;
     mr_uint8_t pin;
-    mr_gpio_config_t config;
 } mr_ht_gpio_spec_t;
 
 /**
  * @brief This function configures a GPIO specification.
  *
  * @param spec The GPIO specification.
+ * @param config The GPIO pin configuration.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_ht_gpio_configure(mr_ht_gpio_spec_t *spec) {
+MR_INLINE mr_err_t mr_ht_gpio_configure(mr_ht_gpio_spec_t *spec,
+                                        mr_gpio_config_t *config) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
     /* Configure GPIO pin */
-    return mr_gpio_configure(spec->drv, spec->pin, &spec->config);
+    return mr_gpio_configure(spec->drv, spec->pin, config);
 }
 
 /**
@@ -650,44 +656,58 @@ MR_INLINE mr_err_t mr_ht_gpio_attach(mr_ht_gpio_spec_t *spec,
 
 /**
  * @brief This macro function creates a GPIO specification structure from
- *        hardtree properties.
+ * hardtree properties.
  *
  * @param _node The node.
  * @param _prop The property name.
  * @return The initialized mr_ht_gpio_spec_t structure.
  *
- * @note Property cells: [phandle, pin, mode, alt, pull, otype, level].
+ * @note Property cells: [phandle, pin].
  */
-#define MR_HT_GPIO_SPEC(_node, _prop)   __MR_HT_GPIO_SPEC_IMPL(0, _node, _prop)
-#define __MR_HT_GPIO_SPEC_IMPL(_elem, _node, _prop)                            \
+#define MR_HT_NODE_GPIO_SPEC(_node, _prop)                                     \
+    __MR_HT_NODE_GPIO_SPEC_IMPL(0, _node, _prop)
+#define __MR_HT_NODE_GPIO_SPEC_IMPL(_elem, _node, _prop)                       \
     {                                                                          \
-        .drv                                                                   \
-            = MR_HT_DRIVER_FIND(MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0)), \
-            .pin = (mr_uint8_t)MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 1),   \
-            .config                                                            \
-            = {.mode = MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, 2,         \
-                                               MR_GPIO_MODE_ANALOG),           \
-               .alt                                                            \
-               = MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, 3, MR_FALSE),    \
-               .pull = MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, 4,         \
-                                               MR_GPIO_PULL_NONE),             \
-               .otype = MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, 5,        \
-                                                MR_GPIO_OTYPE_PP),             \
-               .level = MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, 6,        \
-                                                MR_GPIO_LEVEL_LOW),},          \
+        .drv = MR_HT_DRIVER_FIND(MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0)),\
+        .pin = (mr_uint8_t)MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 1),       \
     }
 
 /**
- * @brief This macro function iterates over all GPIO specification elements
- *        in a property array and creates corresponding structures.
+ * @brief This macro function iterates over all GPIO specification elements in a
+ * property array and creates corresponding structures.
  *
  * @param _node The node.
  * @param _prop The property name.
  *
- * @note Property cells: [phandle, pin, mode, alt, pull, otype, level].
+ * @note Property cells: [phandle, pin].
  */
-#define MR_HT_GPIO_SPEC_FOREACH(_node, _prop)                                  \
-    MR_HT_NODE_PROP_ELEM_FOREACH(_node, _prop, __MR_HT_GPIO_SPEC_IMPL)
+#define MR_HT_NODE_GPIO_SPEC_FOREACH(_node, _prop)                             \
+    MR_HT_NODE_PROP_ELEM_FOREACH(_node, _prop, __MR_HT_NODE_GPIO_SPEC_IMPL)
+
+/**
+ * @brief This macro function creates a GPIO specification structure from
+ * hardtree driver properties.
+ *
+ * @param _id The driver instance id.
+ * @param _prop The property name.
+ * @return The initialized mr_ht_gpio_spec_t structure.
+ *
+ * @note Property cells: [phandle, pin].
+ */
+#define MR_HT_GPIO_SPEC(_id, _prop)                                            \
+    MR_HT_NODE_GPIO_SPEC(MR_HT_DRIVER(_id), _prop)
+
+/**
+ * @brief This macro function iterates over all GPIO specification elements in a
+ * hardtree driver property array and creates corresponding structures.
+ *
+ * @param _id The driver instance id.
+ * @param _prop The property name.
+ *
+ * @note Property cells: [phandle, pin].
+ */
+#define MR_HT_GPIO_SPEC_FOREACH(_id, _prop)                                    \
+    MR_HT_NODE_GPIO_SPEC_FOREACH(MR_HT_DRIVER(_id), _prop)
 #endif /* defined(MR_USE_DRIVER_GPIO) */
 
 /** @} */

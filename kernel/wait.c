@@ -43,8 +43,7 @@ static mr_err_t waitable_init(mr_waitable_t *able, const mr_clazz_t *clazz,
 
 mr_err_t mr_waitable_init(mr_waitable_t *able, mr_waitable_check_t *check,
                           void *param) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(waitable);
-    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(waitable);
 
     /* Check parameter */
     MR_ASSERT((able != MR_NULL) && (!MR_OBJECT_IS_INITED(able)));
@@ -54,8 +53,7 @@ mr_err_t mr_waitable_init(mr_waitable_t *able, mr_waitable_check_t *check,
 }
 
 mr_waitable_t *mr_waitable_create(mr_waitable_check_t *check, void *param) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(waitable);
-    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(waitable);
     mr_waitable_t *able;
     mr_err_t ret;
 
@@ -280,8 +278,7 @@ static mr_err_t waiter_init(mr_waiter_t *wait, const mr_clazz_t *clazz,
 
 mr_err_t mr_waiter_init(mr_waiter_t *wait, mr_waiter_entry_t *entry,
                         void *param, mr_uint64_t event) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(waiter);
-    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(waiter);
 
     /* Check parameter */
     MR_ASSERT((wait != MR_NULL) && (!MR_OBJECT_IS_INITED(wait)));
@@ -293,8 +290,7 @@ mr_err_t mr_waiter_init(mr_waiter_t *wait, mr_waiter_entry_t *entry,
 
 mr_waiter_t *mr_waiter_create(mr_waiter_entry_t *entry, void *param,
                               mr_uint64_t event) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(waiter);
-    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(waiter);
     mr_waiter_t *wait;
     mr_err_t ret;
 

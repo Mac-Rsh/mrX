@@ -109,22 +109,6 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
         MR_STR(_name), (_statik_release), (_dynamic_release), (_super))
 
 /**
- * @brief This macro function gets the static clazz of clazzes.
- *
- * @param _clazzes The clazzes.
- * @return The static clazz.
- */
-#define MR_CLAZZES_STATIK(_clazzes)     (&(_clazzes)->statik)
-
-/**
- * @brief This macro function gets the dynamic clazz of clazzes.
- *
- * @param _clazzes The clazzes.
- * @return The dynamic clazz.
- */
-#define MR_CLAZZES_DYNAMIC(_clazzes)    (&(_clazzes)->dynamic)
-
-/**
  * @brief This macro function exports clazzes.
  *
  * @param _name The clazz name.
@@ -146,6 +130,22 @@ MR_INLINE void mr_clazz_init(mr_clazz_t *clazz, const char *name,
  * @return The clazzes.
  */
 #define MR_CLAZZES_FIND(_name)          (&MR_CAT(__mr_clazzes_, _name))
+
+/**
+ * @brief This macro function gets the static clazz from clazzes by name.
+ *
+ * @param _name The clazzes name.
+ * @return The static clazz.
+ */
+#define MR_CLAZZES_STATIK(_name)        (&MR_CLAZZES_FIND(_name)->statik)
+
+/**
+ * @brief This macro function gets the dynamic clazz from clazzes by name.
+ *
+ * @param _name The clazzes name.
+ * @return The dynamic clazz.
+ */
+#define MR_CLAZZES_DYNAMIC(_name)       (&MR_CLAZZES_FIND(_name)->dynamic)
 
 /**
  * @brief This macro function initializes an object.
@@ -219,10 +219,8 @@ MR_INLINE mr_bool_t mr_clazz_is_kind_of(const mr_clazz_t *clazz,
  * @return MR_TRUE if the object is kind of the clazzes, MR_FALSE otherwise.
  */
 #define MR_OBJECT_IS_CLAZZES(_obj, _name)                                      \
-    (mr_clazz_is_kind_of(MR_OBJECT_CLAZZ(_obj),                                \
-                         MR_CLAZZES_STATIK(MR_CLAZZES_FIND(_name)))            \
-     || mr_clazz_is_kind_of(MR_OBJECT_CLAZZ(_obj),                             \
-                            MR_CLAZZES_DYNAMIC(MR_CLAZZES_FIND(_name))))
+    (mr_clazz_is_kind_of(MR_OBJECT_CLAZZ(_obj), MR_CLAZZES_STATIK(_name))      \
+     || mr_clazz_is_kind_of(MR_OBJECT_CLAZZ(_obj), MR_CLAZZES_DYNAMIC(_name)))
 
 /**
  * @brief This function deletes an object.

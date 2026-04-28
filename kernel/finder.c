@@ -164,8 +164,7 @@ _exit:
 
 mr_err_t mr_finder_vinit(mr_finder_t *finder, const char *fmt,
                          mr_va_list args) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(finder);
-    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(finder);
 
     /* Check parameter */
     MR_ASSERT((finder != MR_NULL) && (!MR_OBJECT_IS_INITED(finder)));
@@ -176,8 +175,7 @@ mr_err_t mr_finder_vinit(mr_finder_t *finder, const char *fmt,
 }
 
 mr_finder_t *mr_finder_vcreate(const char *fmt, mr_va_list args) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(finder);
-    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(finder);
     mr_finder_t *finder;
     mr_err_t ret;
 

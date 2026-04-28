@@ -35,8 +35,7 @@ static mr_err_t timer_init(mr_timer_t *timer, const mr_clazz_t *clazz,
 
 mr_err_t mr_timer_init(mr_timer_t *timer, mr_timer_entry_t *entry, void *param,
                        mr_tick_t tick) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(timer);
-    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(timer);
 
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && (!MR_OBJECT_IS_INITED(timer)));
@@ -48,8 +47,7 @@ mr_err_t mr_timer_init(mr_timer_t *timer, mr_timer_entry_t *entry, void *param,
 
 mr_timer_t *mr_timer_create(mr_timer_entry_t *entry, void *param,
                             mr_tick_t tick) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(timer);
-    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(timer);
     mr_timer_t *timer;
     mr_err_t ret;
 

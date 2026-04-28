@@ -22,7 +22,7 @@ extern "C" {
  */
 
 /* Slab bitmap size */
-#define MR_SLAB_MAP_SIZE(_num)          ((((_num) + 31) >> 5) << 2)
+#define MR_SLAB_MAP_SIZE(_num)          ((((_num) + 31U) >> 5) << 2)
 
 /* Slab type */
 typedef struct mr_slab {
@@ -64,7 +64,7 @@ MR_INLINE mr_uint32_t mr_slab_init(mr_slab_t *slab, void *map,
                                    mr_uint32_t size, mr_uint32_t num) {
     /* Limit num */
     map_size = MR_MIN(map_size, MR_SLAB_MAP_SIZE(num));
-    num = MR_MIN(num, map_size * 8);
+    num = MR_MIN(num, map_size * 8U);
 
     /* Init slab */
     slab->map = (mr_atomic_t *)map;

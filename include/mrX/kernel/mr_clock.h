@@ -35,7 +35,7 @@ typedef mr_uint32_t                     mr_tick_t;
 /* Clock high resolution tick per-second definition */
 #define MR_CFG_HIRES_TICK_PER_SECOND    (1000000ULL)
 #endif /* !defined(MR_CFG_HIRES_TICK_PER_SECOND) */
-#if (MR_CFG_HIRES_TICK_PER_SECOND > 1000000)
+#if (MR_CFG_HIRES_TICK_PER_SECOND > 1000000ULL)
 #error "MR_CFG_HIRES_TICK_PER_SECOND must <= 1000000"
 #endif /* (MR_CFG_HIRES_TICK_PER_SECOND > 1000000) */
 

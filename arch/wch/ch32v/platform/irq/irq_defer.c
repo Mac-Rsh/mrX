@@ -33,7 +33,7 @@ static void irq_defer_hook_wakeup(void *priv) {
 }
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 
-void ch32_platform_irq_defer_init(void) {
+void mr_ch32v_platform_irq_defer_init(void) {
 #if defined(MR_USE_IRQ_DEFER_HOOK)
     static const mr_irq_defer_hook_t __hook
         = {.suspend = irq_defer_hook_suspend, .wakeup = irq_defer_hook_wakeup};

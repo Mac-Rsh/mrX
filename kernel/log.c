@@ -55,7 +55,7 @@ void mr_log(mr_uint32_t level, const char *fmt, ...) {
     mr_va_list args;
 
     /* Check parameter */
-    if ((level >= 32) || (!fmt) || (fmt[0] == '\0')) {
+    if ((level >= 32U) || (!fmt) || (fmt[0] == '\0')) {
         return;
     }
 

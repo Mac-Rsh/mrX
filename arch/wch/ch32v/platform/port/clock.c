@@ -32,7 +32,7 @@ void SysTick_Handler(void) {
     mr_clock_increase(1);
 }
 
-void ch32_platform_clock_init(mr_uint32_t per_second) {
+void mr_ch32v_platform_clock_init(mr_uint32_t per_second) {
     /* Init systick */
     SysTick->CTLR = 0;
     SysTick->CMP = (SystemCoreClock / per_second) - 1;

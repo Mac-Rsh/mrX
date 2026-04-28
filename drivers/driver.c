@@ -41,8 +41,7 @@ static mr_err_t driver_init(mr_driver_t *drv, const mr_clazz_t *clazz,
 
 mr_err_t mr_driver_init(mr_driver_t *drv, const mr_driver_clazz_t *dclazz,
                         mr_uint16_t type, void *data, void *priv, void *ops) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(driver);
-    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(driver);
 
     /* Check parameter */
     MR_ASSERT((drv != MR_NULL) && (!MR_OBJECT_IS_INITED(drv)));
@@ -54,8 +53,7 @@ mr_err_t mr_driver_init(mr_driver_t *drv, const mr_driver_clazz_t *dclazz,
 
 mr_driver_t *mr_driver_create(const mr_driver_clazz_t *dclazz, mr_uint16_t type,
                               void *data, void *priv, void *ops) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(driver);
-    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(driver);
     mr_driver_t *drv;
     mr_err_t ret;
 

@@ -11,9 +11,9 @@
 #include <mrX/libc/mr_string.h>
 
 /* Fifo align macro function */
-#define FIFO_ALIGN_POW2_DOWN(_size)     (1U << (mr_fls32(_size) - 1))
+#define FIFO_ALIGN_POW2_DOWN(_size)     (1U << (mr_fls32(_size) - 1U))
 #define FIFO_ALIGN_POW2_UP(_size)                                              \
-    (((_size) & ((_size) - 1)) ? (1U << mr_fls32(_size)) : (_size))
+    (((_size) & ((_size) - 1U)) ? (1U << mr_fls32(_size)) : (_size))
 
 mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
                          mr_uint32_t elemsz) {
@@ -91,7 +91,7 @@ mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data) {
 
     /* Get write index */
     index = (mr_uint32_t)mr_atomic_load(&fifo->widx) & fifo->mask;
-    if (fifo->elemsz != 1) {
+    if (fifo->elemsz != 1U) {
         index *= fifo->elemsz;
     }
 
@@ -116,7 +116,7 @@ mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data) {
 
     /* Get read index */
     index = (mr_uint32_t)mr_atomic_load(&fifo->ridx) & fifo->mask;
-    if (fifo->elemsz != 1) {
+    if (fifo->elemsz != 1U) {
         index *= fifo->elemsz;
     }
 
@@ -147,7 +147,7 @@ mr_uint32_t mr_fifo_write(mr_fifo_t *fifo, const void *buf, mr_uint32_t num) {
     /* Get write index */
     index = (mr_uint32_t)mr_atomic_load(&fifo->widx) & fifo->mask;
     size = fifo->mask + 1;
-    if (fifo->elemsz != 1) {
+    if (fifo->elemsz != 1U) {
         index *= fifo->elemsz;
         size *= fifo->elemsz;
         num *= fifo->elemsz;
@@ -208,7 +208,7 @@ mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
     /* Get read index */
     index = (mr_uint32_t)mr_atomic_load(&fifo->ridx) & fifo->mask;
     size = fifo->mask + 1;
-    if (fifo->elemsz != 1) {
+    if (fifo->elemsz != 1U) {
         index *= fifo->elemsz;
         size *= fifo->elemsz;
         num *= fifo->elemsz;
@@ -242,7 +242,7 @@ mr_uint32_t mr_fifo_write_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
     /* Get write index */
     index = (mr_uint32_t)mr_atomic_load(&fifo->widx) & fifo->mask;
     size = fifo->mask + 1;
-    if (fifo->elemsz != 1) {
+    if (fifo->elemsz != 1U) {
         index *= fifo->elemsz;
         size *= fifo->elemsz;
         want *= fifo->elemsz;
@@ -250,7 +250,7 @@ mr_uint32_t mr_fifo_write_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
     }
 
     /* Adjust index with offset and handle wrap-around */
-    index = (index + off) & (size - 1);
+    index = (index + off) & (size - 1U);
 
     /* Claim buffer */
     *buf = (mr_uint8_t *)fifo->buf + index;
@@ -279,7 +279,7 @@ mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
     /* Get write index */
     index = (mr_uint32_t)mr_atomic_load(&fifo->widx) & fifo->mask;
     size = fifo->mask + 1;
-    if (fifo->elemsz != 1) {
+    if (fifo->elemsz != 1U) {
         index *= fifo->elemsz;
         size *= fifo->elemsz;
         want *= fifo->elemsz;
@@ -287,7 +287,7 @@ mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
     }
 
     /* Adjust index with offset and handle wrap-around */
-    index = (index + off) & (size - 1);
+    index = (index + off) & (size - 1U);
 
     /* Claim buffer */
     *buf = (mr_uint8_t *)fifo->buf + index;
@@ -316,7 +316,7 @@ mr_uint32_t mr_fifo_read_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
     /* Get read index */
     index = (mr_uint32_t)mr_atomic_load(&fifo->ridx) & fifo->mask;
     size = fifo->mask + 1;
-    if (fifo->elemsz != 1) {
+    if (fifo->elemsz != 1U) {
         index *= fifo->elemsz;
         size *= fifo->elemsz;
         want *= fifo->elemsz;
@@ -324,7 +324,7 @@ mr_uint32_t mr_fifo_read_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
     }
 
     /* Adjust index with offset and handle wrap-around */
-    index = (index + off) & (size - 1);
+    index = (index + off) & (size - 1U);
 
     /* Claim buffer */
     *buf = (mr_uint8_t *)fifo->buf + index;

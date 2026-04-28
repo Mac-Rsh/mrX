@@ -304,10 +304,10 @@ MR_HT_INST_FOREACH(uart, SETUP_UART);
 
 #### 单个属性访问
 
-##### MR_HT_HAS_NODE_PROP()
+##### MR_HT_NODE_HAS_PROP()
 
 ```c
-#define MR_HT_HAS_NODE_PROP(_node, _prop) ...
+#define MR_HT_NODE_HAS_PROP(_node, _prop) ...
 ```
 
 **功能**：检查节点是否有指定属性
@@ -325,7 +325,7 @@ MR_HT_INST_FOREACH(uart, SETUP_UART);
 ```c
 #define UART0_NODE MR_HT_INST(uart, 0)
 
-#if MR_HT_HAS_NODE_PROP(UART0_NODE, BAUDRATE)
+#if MR_HT_NODE_HAS_PROP(UART0_NODE, BAUDRATE)
     #define UART0_BAUDRATE MR_HT_NODE_PROP(UART0_NODE, BAUDRATE)
 #endif
 ```
@@ -347,10 +347,10 @@ MR_HT_INST_FOREACH(uart, SETUP_UART);
 
 #### 数组属性访问
 
-##### MR_HT_HAS_NODE_PROP_ELEM()
+##### MR_HT_NODE_HAS_PROP_ELEM()
 
 ```c
-#define MR_HT_HAS_NODE_PROP_ELEM(_node, _prop, _elem, _idx) ...
+#define MR_HT_NODE_HAS_PROP_ELEM(_node, _prop, _elem, _idx) ...
 ```
 
 **功能**：检查数组属性中指定索引的元素是否存在
@@ -420,7 +420,7 @@ MR_HT_NODE_PROP_ELEM_FOREACH(NODE, GPIOS, INIT_GPIO);
 ##### MR_HT_NODE_HAS_PARENT()
 
 ```c
-#define MR_HT_NODE_HAS_PARENT(_node) MR_HT_HAS_NODE_PROP(_node, PARENT)
+#define MR_HT_NODE_HAS_PARENT(_node) MR_HT_NODE_HAS_PROP(_node, PARENT)
 ```
 
 **功能**：检查节点是否有父节点
@@ -438,7 +438,7 @@ MR_HT_NODE_PROP_ELEM_FOREACH(NODE, GPIOS, INIT_GPIO);
 ##### MR_HT_NODE_HAS_ADDR()
 
 ```c
-#define MR_HT_NODE_HAS_ADDR(_node) MR_HT_HAS_NODE_PROP(_node, ADDR)
+#define MR_HT_NODE_HAS_ADDR(_node) MR_HT_NODE_HAS_PROP(_node, ADDR)
 ```
 
 **功能**：检查节点是否有地址属性
@@ -851,7 +851,7 @@ xilinx_zynq_xdma   /* Xilinx Zynq 系列 XDMA */
 
 ```c
 #define MR_HT_NODE_PROP_OR(_node, _prop, _default) \
-    MR_MACRO_IF(MR_HT_HAS_NODE_PROP(_node, _prop), \
+    MR_MACRO_IF(MR_HT_NODE_HAS_PROP(_node, _prop), \
                 (MR_HT_NODE_PROP(_node, _prop)), (_default))
 ```
 

@@ -4,7 +4,7 @@ menu "RAM: Memory device driver"
 # RAM
 # ==================================
 config MR_USE_DRIVER_RAM
-    select MR_USE_DRIVER
+    depends on MR_USE_DRIVER
     bool "Use RAM"
     default n
     help

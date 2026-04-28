@@ -85,15 +85,6 @@ extern "C" {
     MR_MACRO_IS_USED(MR_CAT(MR_HT_PATH(INST, _compat), _EXIST))
 
 /**
- * @brief This macro function gets the node from the compatible name.
- *
- * @param _compat The compatible name.
- * @param _id The instance id.
- * @return The node.
- */
-#define MR_HT_INST(_compat, _id)        MR_HT_PATH(INST, _compat, _id)
-
-/**
  * @brief This macro function gets the number of instances for the compatible
  * name.
  *
@@ -101,6 +92,15 @@ extern "C" {
  * @return The number of instances.
  */
 #define MR_HT_INST_NUM(_compat)         MR_CAT(MR_HT_PATH(INST, _compat), _NUM)
+
+/**
+ * @brief This macro function gets the node from the compatible name.
+ *
+ * @param _compat The compatible name.
+ * @param _id The instance id.
+ * @return The node.
+ */
+#define MR_HT_INST(_compat, _id)        MR_HT_PATH(INST, _compat, _id)
 
 /**
  * @brief This macro function iterates over all instances of the compatible
@@ -122,7 +122,7 @@ extern "C" {
  * @param _prop The property name.
  * @return MR_TRUE if the property exists, MR_FALSE otherwise.
  */
-#define MR_HT_HAS_NODE_PROP(_node, _prop)                                      \
+#define MR_HT_NODE_HAS_PROP(_node, _prop)                                      \
     MR_MACRO_IS_USED(MR_CAT(_node, MR_CAT_SEP(_P_, _prop), _EXIST))
 
 /**
@@ -144,12 +144,12 @@ extern "C" {
  * @return The property value or the default value.
  */
 #define MR_HT_NODE_PROP_OR(_node, _prop, _default)                             \
-    MR_MACRO_IF(MR_HT_HAS_NODE_PROP(_node, _prop),                             \
+    MR_MACRO_IF(MR_HT_NODE_HAS_PROP(_node, _prop),                             \
                 (MR_HT_NODE_PROP(_node, _prop)), (_default))
 
 /**
  * @brief This macro function checks if an indexed element of a property
- *        array exists.
+ * array exists.
  *
  * @param _node The node.
  * @param _prop The property name.
@@ -157,8 +157,8 @@ extern "C" {
  * @param _idx The index into the property array.
  * @return MR_TRUE if the indexed element exists, MR_FALSE otherwise.
  */
-#define MR_HT_HAS_NODE_PROP_ELEM(_node, _prop, _elem, _idx)                    \
-    MR_HT_HAS_NODE_PROP(_node, MR_CAT(_prop, _E_, _elem, _I_, _idx))
+#define MR_HT_NODE_HAS_PROP_ELEM(_node, _prop, _elem, _idx)                    \
+    MR_HT_NODE_HAS_PROP(_node, MR_CAT(_prop, _E_, _elem, _I_, _idx))
 
 /**
  * @brief This macro function gets an indexed element from a property array.
@@ -174,7 +174,7 @@ extern "C" {
 
 /**
  * @brief This macro function gets an indexed element from a property array or
- *        returns a default value.
+ * returns a default value.
  *
  * @param _node The node.
  * @param _prop The property name.
@@ -184,12 +184,12 @@ extern "C" {
  * @return The indexed property value or the default value.
  */
 #define MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, _idx, _default)           \
-    MR_MACRO_IF(MR_HT_HAS_NODE_PROP_ELEM(_node, _prop, _elem, _idx),           \
+    MR_MACRO_IF(MR_HT_NODE_HAS_PROP_ELEM(_node, _prop, _elem, _idx),           \
                 (MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, _idx)), (_default))
 
 /**
  * @brief This macro function iterates over all indexed elements of a property
- *        array.
+ * array.
  *
  * @param _node The node.
  * @param _prop The property name.
@@ -222,7 +222,7 @@ extern "C" {
  * @param _node The node.
  * @return MR_TRUE if the node has a parent, MR_FALSE otherwise.
  */
-#define MR_HT_NODE_HAS_PARENT(_node)    MR_HT_HAS_NODE_PROP(_node, PARENT)
+#define MR_HT_NODE_HAS_PARENT(_node)    MR_HT_NODE_HAS_PROP(_node, PARENT)
 
 /**
  * @brief This macro function gets the node parent.
@@ -238,7 +238,7 @@ extern "C" {
  * @param _node The node.
  * @return MR_TRUE if the node has an address, MR_FALSE otherwise.
  */
-#define MR_HT_NODE_HAS_ADDR(_node)      MR_HT_HAS_NODE_PROP(_node, ADDR)
+#define MR_HT_NODE_HAS_ADDR(_node)      MR_HT_NODE_HAS_PROP(_node, ADDR)
 
 /**
  * @brief This macro function gets the node address.

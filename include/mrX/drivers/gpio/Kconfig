@@ -4,7 +4,7 @@ menu "GPIO: General Purpose Input/Output"
 # GPIO
 # ==================================
 config MR_USE_DRIVER_GPIO
-    select MR_USE_DRIVER
+    depends on MR_USE_DRIVER
     bool "Use GPIO"
     default n
     help
@@ -17,15 +17,29 @@ config MR_USE_DRIVER_GPIO
         Fundamental for controlling LEDs, buttons, switches, and chip selects.
 
 # ==================================
-# EXTI
+# HC595
 # ==================================
-config MR_USE_DRIVER_GPIO_EXTI
+config MR_USE_DRIVER_GPIO_HC595
     depends on MR_USE_DRIVER_GPIO
-    bool "Use GPIO EXTI"
-    default y
+    bool "Use GPIO HC595"
+    default n
     help
-        Enable external interrupt support for GPIO pins.
-        Allows GPIO pins to trigger interrupts on edge or level changes.
-        Required for button press detection and signal edge monitoring.
+        Enable a GPIO adapter built on top of independent 74HC595 style
+        serial-in/parallel-out shift registers.
+        The adapter exposes cascaded HC595 outputs as a new GPIO driver and
+        uses existing GPIO drivers to bit-bang the control lines.
+
+# ==================================
+# HC165
+# ==================================
+config MR_USE_DRIVER_GPIO_HC165
+    depends on MR_USE_DRIVER_GPIO
+    bool "Use GPIO HC165"
+    default n
+    help
+        Enable a GPIO adapter built on top of independent 74HC165 style
+        parallel-in/serial-out shift registers.
+        The adapter exposes cascaded HC165 inputs as a new GPIO driver and
+        uses existing GPIO drivers to bit-bang the control lines.
 
 endmenu

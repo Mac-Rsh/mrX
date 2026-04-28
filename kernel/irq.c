@@ -143,8 +143,7 @@ _exit:
 
 mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
                      const mr_irq_ops_t *ops, void *priv) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(irq);
-    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_STATIK(irq);
 
     /* Check parameter */
     MR_ASSERT((irq != MR_NULL) && (!MR_OBJECT_IS_INITED(irq)));
@@ -159,8 +158,7 @@ mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
 
 mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
                         const mr_irq_ops_t *ops, void *priv) {
-    const mr_clazzes_t *clazzes = MR_CLAZZES_FIND(irq);
-    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(clazzes);
+    const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(irq);
     mr_irq_t *irq;
     mr_err_t ret;
 
@@ -258,7 +256,7 @@ static mr_irq_action_t *irq_action_alloc(mr_uint32_t irq, mr_irq_entry_t *entry,
 #endif /* MR_USE_IRQ_DEFER */
 
     /* Init irq action */
-    action->irq = irq & ((1U << 31) - 1);
+    action->irq = irq & ((1U << 31) - 1U);
     action->pending = MR_FALSE;
     action->next = MR_NULL;
     action->entry = entry;
