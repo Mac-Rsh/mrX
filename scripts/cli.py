@@ -12,24 +12,25 @@ remaining arguments to the selected command implementation.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from dock import Dock
 import sys
 
+from dock import Dock
 
-def main() -> int:
-    """Run the package command line entry point.
+
+def _dispatch(args: list[str]) -> int:
+    """Run one dock command.
+
+    Args:
+        args: Command line arguments with the command name first.
 
     Returns:
         Exit code (0 for success, non-zero for error).
     """
-    # Parse command line arguments
-    args = sys.argv[1:]
     if not args:
         print("Usage: python ./scripts/cli.py <command> [args...]")
         return 1
     command = args[0]
 
-    # Discover all plugins
     try:
         plugins = Dock.discover_plugins()
     except Exception as exc:
@@ -49,6 +50,15 @@ def main() -> int:
     except Exception as exc:
         print(f"Failed to run command: {command} ({exc})")
         return 1
+
+
+def main() -> int:
+    """Run the package command line entry point.
+
+    Returns:
+        Exit code (0 for success, non-zero for error).
+    """
+    return _dispatch(sys.argv[1:])
 
 
 if __name__ == "__main__":

@@ -13,6 +13,8 @@ Shows short usage guidance for the dock and basic hints for a specific command.
 
 from dock import Dock, Plugin, PluginSpec, export_plugin
 
+_DIRECT_PREFIX = "python ./scripts/cli.py"
+
 
 @export_plugin
 class HelpCommand:
@@ -31,12 +33,12 @@ class HelpCommand:
             Human-readable help text for the command.
         """
         return "\n".join([
-            "Usage: python ./scripts/cli.py help [command]",
+            f"Usage: {self._format_command('help [command]')}",
             "Description: Show dock help or the help text of a specific command.",
             "Aliases: h, -h, --help",
             "Examples:",
-            "- python ./scripts/cli.py help",
-            "- python ./scripts/cli.py help list",
+            f"- {self._format_command('help')}",
+            f"- {self._format_command('help list')}",
         ])
 
     def run(self, args: list[str]) -> int:
@@ -48,41 +50,33 @@ class HelpCommand:
         Returns:
             Exit code (0 for success, non-zero for error).
         """
-        # Discover plugins
-        plugins = Dock.discover_plugins()
-
         # Print general help
         if not args:
-            self._print_general_help(plugins)
+            self._print_general_help()
             return 0
 
-        # Get specific plugin
+        # Discover plugins only when a specific command is requested
+        plugins = Dock.discover_plugins()
+
         command_name = args[0]
         command = plugins.get(command_name)
         if command is None:
             print(f"Unknown command: {command_name}")
             print(
-                "Use `python ./scripts/cli.py list` to see available commands.")
+                f"Use `{self._format_command('list')}` to see available commands.")
             return 1
 
         # Print command help
         self._print_command_help(command_name, command)
         return 0
 
-    @staticmethod
-    def _print_general_help(registry: dict[str, Plugin]) -> None:
-        """Print basic CLI usage information.
-
-        Args:
-            registry: Dock registry containing command names and aliases.
-        """
-        # Print examples
+    def _print_general_help(self) -> None:
+        """Print basic CLI usage information."""
         print("Examples:")
-        print("- python ./scripts/cli.py list")
-        print("- python ./scripts/cli.py help list")
+        print(f"- {self._format_command('list')}")
+        print(f"- {self._format_command('help list')}")
 
-    @staticmethod
-    def _print_command_help(name: str, plugin: Plugin) -> None:
+    def _print_command_help(self, name: str, plugin: Plugin) -> None:
         """Print simple help for a single command.
 
         Args:
@@ -100,7 +94,7 @@ class HelpCommand:
             return
 
         # Print command usage
-        print(f"Usage: python ./scripts/cli.py {spec.name} [args...]")
+        print(f"Usage: {self._format_command(f'{spec.name} [args...]')}")
         print(f"Description: {spec.description}")
         print(
             f"Aliases: {', '.join(spec.aliases) if spec.aliases else '(none)'}")
@@ -108,3 +102,8 @@ class HelpCommand:
         # Show resolved alias
         if name != spec.name:
             print(f"Resolved from alias: {name}")
+
+    @staticmethod
+    def _format_command(args: str) -> str:
+        """Format a command for direct CLI usage."""
+        return f"{_DIRECT_PREFIX} {args}"

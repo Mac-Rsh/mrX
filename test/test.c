@@ -30,7 +30,7 @@ static mr_bool_t testcase_run(const mr_testcase_t *cs) {
     MR_ASSERT(cs->entry != MR_NULL);
 
     /* Test case begin */
-    mr_printf("[ RUN      ] %s.%s\n", cs->suite, cs->name);
+    mr_printf("[ RUN      ] %s.%s\r\n", cs->suite, cs->name);
 
     /* Reset test status */
     __mr_test_status = __MR_TEST_MAGIC_PASS;
@@ -40,11 +40,11 @@ static mr_bool_t testcase_run(const mr_testcase_t *cs) {
 
     /* Test case end */
     if (__mr_test_status == __MR_TEST_MAGIC_PASS) {
-        mr_printf("[       " MR_COLOR(MR_COLOR_GREEN, "OK") " ] %s.%s\n",
+        mr_printf("[       " MR_COLOR(MR_COLOR_GREEN, "OK") " ] %s.%s\r\n",
                   cs->suite, cs->name);
         return MR_TRUE;
     } else {
-        mr_printf("[  " MR_COLOR(MR_COLOR_RED, "FAILED") "  ] %s.%s\n",
+        mr_printf("[  " MR_COLOR(MR_COLOR_RED, "FAILED") "  ] %s.%s\r\n",
                   cs->suite, cs->name);
         return MR_FALSE;
     }
@@ -76,7 +76,7 @@ void mr_testsuite_run(const char *suite) {
     mr_bool_t ret;
 
     /* Test begin */
-    mr_printf("[==========] Running '%s' suite\n", suite);
+    mr_printf("[==========] Running '%s' suite\r\n", suite);
 
     /* Each test cases */
     for (pass = fail = 0, cs = start + 1; cs < end; cs++) {
@@ -95,9 +95,9 @@ void mr_testsuite_run(const char *suite) {
     }
 
     /* Test summary */
-    mr_printf("[==========]\n");
-    mr_printf("[  PASSED  ] %d tests\n", pass);
-    mr_printf("[  FAILED  ] %d tests\n", fail);
+    mr_printf("[==========]\r\n");
+    mr_printf("[  PASSED  ] %d tests\r\n", pass);
+    mr_printf("[  FAILED  ] %d tests\r\n", fail);
 }
 
 mr_bool_t mr_test_run(void) {
@@ -108,7 +108,7 @@ mr_bool_t mr_test_run(void) {
     mr_bool_t ret;
 
     /* Test begin */
-    mr_printf("[==========] Running 'all' tests\n");
+    mr_printf("[==========] Running 'all' tests\r\n");
 
     /* Each test cases */
     for (pass = fail = 0, cs = start + 1; cs < end; cs++) {
@@ -122,9 +122,9 @@ mr_bool_t mr_test_run(void) {
     }
 
     /* Test summary */
-    mr_printf("[==========]\n");
-    mr_printf("[  PASSED  ] %d tests\n", pass);
-    mr_printf("[  FAILED  ] %d tests\n", fail);
+    mr_printf("[==========]\r\n");
+    mr_printf("[  PASSED  ] %d tests\r\n", pass);
+    mr_printf("[  FAILED  ] %d tests\r\n", fail);
 
     /* Return result */
     return (fail == 0) ? MR_TRUE : MR_FALSE;

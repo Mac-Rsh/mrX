@@ -10,13 +10,11 @@
 #if defined(MR_USE_TEST)
 #include <mrX/kernel/mr_hook.h>
 
-/* -------------------------------------------------------------------------- */
-/* Utilities: hook function                                                   */
+/* Helpers */
 static void test_hook_entry(void) {
 }
 
-/* -------------------------------------------------------------------------- */
-/* Test: Hook static init                                                     */
+/* Tests */
 static void test_hook_static_init(void) {
     mr_ptr_t buf[4];
     mr_hook_t hook = MR_HOOK_INIT(buf, 4);
@@ -27,8 +25,6 @@ static void test_hook_static_init(void) {
 }
 MR_TEST_EXPORT(hook, static_init, test_hook_static_init);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Hook init                                                            */
 static void test_hook_init(void) {
     mr_ptr_t buf[4];
     mr_hook_t hook;
@@ -39,8 +35,6 @@ static void test_hook_init(void) {
 }
 MR_TEST_EXPORT(hook, init, test_hook_init);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Hook add                                                             */
 static void test_hook_add(void) {
     mr_ptr_t buf[4];
     mr_hook_t hook;
@@ -51,8 +45,6 @@ static void test_hook_add(void) {
 }
 MR_TEST_EXPORT(hook, add, test_hook_add);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Hook out of space                                                    */
 static void test_hook_out_of_space(void) {
     mr_ptr_t buf[2];
     mr_hook_t hook;

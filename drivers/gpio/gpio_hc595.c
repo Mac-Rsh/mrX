@@ -30,7 +30,7 @@ MR_UNUSED static const mr_gpio_ops_t __drv_gpio_hc595_ops = {
     .pin_read = drv_pin_read,
     .port_write = drv_port_write,
     .port_read = drv_port_read,
-    .attach = MR_NULL,
+    .event_attach = MR_NULL,
 };
 
 /* Driver GPIO private data type */
@@ -222,7 +222,7 @@ static mr_err_t drv_port_read(const mr_driver_t *drv, mr_uint32_t *mask) {
 }
 
 /* Instance install */
-#define GPIO_HC595_HT_INST_GPIO_INSTALL(_id, _ops)                             \
+#define GPIO_HC595_HT_GPIO_INSTALL(_id, _ops)                                  \
     static drv_gpio_hc595_priv_t MR_CAT(__drv_gpio_hc595_priv_, _id) = {       \
         MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, oe),                            \
                     (.oe = MR_HT_GPIO_SPEC(_id, oe)), (.oe = {0})),            \
@@ -234,5 +234,5 @@ static mr_err_t drv_port_read(const mr_driver_t *drv, mr_uint32_t *mask) {
         .cascade_num = MR_HT_DRIVER_PROP_OR(_id, cascade_num, 1),              \
     };                                                                         \
     MR_HT_GPIO_INSTALL(_id, &MR_CAT(__drv_gpio_hc595_priv_, _id), _ops)
-MR_HT_DRIVER_FOREACH(GPIO_HC595_HT_INST_GPIO_INSTALL, &__drv_gpio_hc595_ops);
+MR_HT_DRIVER_FOREACH(GPIO_HC595_HT_GPIO_INSTALL, &__drv_gpio_hc595_ops);
 #endif /* defined(MR_USE_DRIVER_GPIO_HC595) */

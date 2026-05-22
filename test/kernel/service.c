@@ -15,8 +15,7 @@ typedef struct {
     char b;
 } test_container_t;
 
-/* -------------------------------------------------------------------------- */
-/* Test: MR_CONTAINER_OF                                                      */
+/* Tests */
 static void test_service_container_of(void) {
     test_container_t *out;
     test_container_t obj;
@@ -32,8 +31,6 @@ static void test_service_container_of(void) {
 }
 MR_TEST_EXPORT(service, container_of, test_service_container_of);
 
-/* -------------------------------------------------------------------------- */
-/* Test: MR_ARRAY_SIZE                                                        */
 static void test_service_array_size(void) {
     int arr[10];
 
@@ -41,8 +38,6 @@ static void test_service_array_size(void) {
 }
 MR_TEST_EXPORT(service, array_size, test_service_array_size);
 
-/* -------------------------------------------------------------------------- */
-/* Test: MR_MAKE_LOCAL                                                        */
 static void test_service_make_local(void) {
     test_container_t *obj;
     int *p;
@@ -56,16 +51,12 @@ static void test_service_make_local(void) {
 }
 MR_TEST_EXPORT(service, make_local, test_service_make_local);
 
-/* -------------------------------------------------------------------------- */
-/* Test: MR_MIN / MR_MAX                                                      */
 static void test_service_min_max(void) {
     MR_TEST_ASSERT_EQ_INT(MR_MIN(3, 7), 3);
     MR_TEST_ASSERT_EQ_INT(MR_MAX(3, 7), 7);
 }
 MR_TEST_EXPORT(service, min_max, test_service_min_max);
 
-/* -------------------------------------------------------------------------- */
-/* Test: MR_ALIGN_UP / MR_ALIGN_DOWN                                          */
 static void test_service_align(void) {
     MR_TEST_ASSERT_EQ_INT(MR_ALIGN_UP(5, 8), 8);
     MR_TEST_ASSERT_EQ_INT(MR_ALIGN_UP(8, 8), 8);
@@ -74,8 +65,6 @@ static void test_service_align(void) {
 }
 MR_TEST_EXPORT(service, align, test_service_align);
 
-/* -------------------------------------------------------------------------- */
-/* Test: parity_even / parity_odd                                          */
 static void test_service_parity(void) {
     mr_uint16_t i, tmp;
     mr_uint8_t odd, j;

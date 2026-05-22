@@ -12,7 +12,6 @@ the parsing stage rather than the lexer.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from .tokens import Token, TokenType
 from ..common import (
     ArrayMode,
     ArrayValue,
@@ -30,6 +29,7 @@ from ..common import (
     StringValue,
     ValueExpr,
 )
+from .tokens import Token, TokenType
 
 
 class Parser:
@@ -108,10 +108,10 @@ class Parser:
         children: list[NodeDecl] = []
         while not self._check(TokenType.RBRACE, TokenType.EOF):
             if not self._check(TokenType.IDENTIFIER):
+                token = self._peek()
                 self._error(ErrorCode.INVALID_NODE_DECL,
                             f"expected property or child node in '{name_token.value}'",
-                            name_token.span)
-                token = self._peek()
+                            token.span if token else name_token.span)
                 if token is not None:
                     self._error(ErrorCode.EXPECTED_IDENTIFIER,
                                 f"unexpected token '{token.value}' ({token.type.value})",
@@ -266,12 +266,11 @@ class Parser:
                 if self._match(TokenType.SLASH):
                     parts.append("/")
                     continue
-                identifier = self._expect(TokenType.IDENTIFIER,
-                                          ErrorCode.EXPECTED_IDENTIFIER,
-                                          "expected identifier in path reference")
-                if identifier is None:
+                segment = self._parse_reference_segment(
+                    "expected identifier in path reference")
+                if segment is None:
                     return None
-                parts.append(identifier.value)
+                parts.append(segment)
 
             # Expect '}'
             self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
@@ -287,18 +286,38 @@ class Parser:
             return None
 
         # Like: `&uart/uart0`
-        parts = [identifier.value]
+        first_segment = self._finish_reference_segment(identifier)
+        parts = [first_segment]
         while self._match(TokenType.SLASH):
-            identifier = self._expect(
-                TokenType.IDENTIFIER,
-                ErrorCode.EXPECTED_IDENTIFIER,
-                "expected identifier after '/' in reference",
-            )
-            if identifier is None:
+            segment = self._parse_reference_segment(
+                "expected identifier after '/' in reference")
+            if segment is None:
                 return None
-            parts.append(identifier.value)
-        return ReferenceValue(reference=identifier.value, is_path=False,
+            parts.append(segment)
+
+        if len(parts) > 1 or "@" in first_segment:
+            return ReferenceValue(reference="/" + "/".join(parts),
+                                  is_path=True, span=amp.span)
+        return ReferenceValue(reference=first_segment, is_path=False,
                               span=amp.span)
+
+    def _parse_reference_segment(self, message: str) -> str | None:
+        """Parse one node-name segment in a reference path."""
+        identifier = self._expect(TokenType.IDENTIFIER,
+                                  ErrorCode.EXPECTED_IDENTIFIER, message)
+        if identifier is None:
+            return None
+        return self._finish_reference_segment(identifier)
+
+    def _finish_reference_segment(self, identifier: Token) -> str:
+        """Append an optional unit address to a parsed reference segment."""
+        if not self._match(TokenType.AT):
+            return identifier.value
+        address = self._expect(TokenType.NUMBER, ErrorCode.EXPECTED_NUMBER,
+                               "expected address after '@' in reference")
+        if address is None:
+            return identifier.value
+        return f"{identifier.value}@{address.value}"
 
     def _parse_number_value(self, token: Token) -> NumberValue | None:
         """Decode an integer literal token into a parsed number value."""

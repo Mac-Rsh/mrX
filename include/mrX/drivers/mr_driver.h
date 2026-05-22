@@ -204,7 +204,7 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
  */
 #define MR_DRIVER_INIT(_drv, _dclazz, _type, _data, _priv, _ops)               \
     {                                                                          \
-        .parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(MR_CLAZZES_FIND(driver))),  \
+        .parent = MR_OBJECT_INIT(MR_CLAZZES_STATIK(driver)),                   \
         .clazz = (_dclazz),                                                    \
         .flags = MR_ATOMIC_INIT(0),                                            \
         .type = (_type),                                                       \

@@ -14,7 +14,6 @@ simple macro expansion while preserving source line structure.
 
 from ..common import CompilationUnit, Diagnostics, ErrorCode, IncludeSite, \
     SourceFile
-from .conditions import ConditionEvaluator
 from .directives import (
     ConditionalDirective,
     DefineDirective,
@@ -23,6 +22,7 @@ from .directives import (
     UndefDirective,
     UnsupportedDirective,
 )
+from .conditions import ConditionEvaluator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,6 +34,9 @@ class ConditionalFrame:
     parent_active: bool
     current_active: bool
     branch_taken: bool
+    file_path: str
+    line: int
+    column: int
     saw_else: bool = False
 
 
@@ -88,9 +91,6 @@ class Preprocessor:
                                       resolved_path.name, included_from):
             return
 
-        # Reuse the include graph to mark files already scanned once
-        if normalized_path in unit.include_graph:
-            return
         unit.include_graph.setdefault(normalized_path, [])
 
         # Read source text before scanning physical lines
@@ -157,6 +157,7 @@ class Preprocessor:
                 conditional_stack,
                 file_path,
                 line_number,
+                line,
             )
             self._preserve_newline(filtered_lines, line)
             return
@@ -185,6 +186,7 @@ class Preprocessor:
                 f"unsupported preprocessor directive: #{directive.name}",
                 file_path,
                 line_number,
+                self._column_of(line, directive.name),
             )
             self._preserve_newline(filtered_lines, line)
             return
@@ -193,11 +195,13 @@ class Preprocessor:
         if isinstance(directive, IncludeDirective):
             self._preserve_newline(filtered_lines, line)
             self._scan_include(directive, file_path, line_number, current_dir,
-                               unit, active_stack, macros)
+                               unit, active_stack, macros, line)
             return
 
         # Ordinary source lines only participate in macro expansion
-        filtered_lines.append(self._expand_macros_in_line(line, macros))
+        filtered_lines.append(
+            self._expand_macros_in_line(line, macros, file_path=file_path,
+                                        line_number=line_number))
 
     def _require_file(self, file_path: str) -> Path | None:
         """Resolve and validate one source file path."""
@@ -241,8 +245,29 @@ class Preprocessor:
             unit: CompilationUnit,
             active_stack: list[str],
             macros: dict[str, str],
+            line: str,
     ) -> None:
         """Resolve and recursively scan one include directive."""
+        path_column = self._column_of(line, directive.path)
+        if directive.path.startswith("/"):
+            self._report_line_error(
+                ErrorCode.INCLUDE_ERROR,
+                f"absolute includes are not allowed: '{directive.path}'",
+                file_path,
+                line_number,
+                path_column,
+            )
+            return
+        if ".." in Path(directive.path).parts:
+            self._report_line_error(
+                ErrorCode.INCLUDE_ERROR,
+                f"path traversal detected in include: '{directive.path}'",
+                file_path,
+                line_number,
+                path_column,
+            )
+            return
+
         # Quote includes search the current directory first, then include dirs
         child_path = self._resolve_include(directive.path, current_dir,
                                            directive.kind)
@@ -252,6 +277,7 @@ class Preprocessor:
                 f"include file not found: '{directive.path}'",
                 file_path,
                 line_number,
+                path_column,
             )
             return
         self._scan(
@@ -259,31 +285,55 @@ class Preprocessor:
             unit,
             active_stack=active_stack,
             macros=macros,
-            included_from=IncludeSite(file_path=file_path, line=line_number),
+            included_from=IncludeSite(file_path=file_path, line=line_number,
+                                      column=path_column),
         )
         unit.add_edge(file_path, str(child_path))
 
     def _report_unterminated_conditionals(
             self,
-            file_path: str,
-            raw_text: str,
+            _file_path: str,
+            _raw_text: str,
             conditional_stack: list[ConditionalFrame],
     ) -> None:
         """Report an unterminated conditional block when nesting remains."""
         if not conditional_stack:
             return
+        frame = conditional_stack[-1]
         self._report_line_error(
             ErrorCode.INCLUDE_ERROR,
             "unterminated conditional directive block",
-            file_path,
-            len(raw_text.splitlines()) or 1,
+            frame.file_path,
+            frame.line,
+            frame.column,
         )
 
     def _report_line_error(self, code: ErrorCode, message: str,
-                           file_path: str, line_number: int) -> None:
+                           file_path: str, line_number: int,
+                           column: int = 1) -> None:
         """Emit one preprocessor error attached to a source line."""
         self.diagnostics.error(code, message).with_span(file_path, line_number,
-                                                        1)
+                                                        column)
+
+    @classmethod
+    def _directive_column(cls, line: str) -> int:
+        """Return the source column for a preprocessor directive marker."""
+        return cls._column_of(line, DirectiveParser.DIRECTIVE_PREFIX)
+
+    @staticmethod
+    def _column_of(line: str, text: str | None,
+                   fallback: int | None = None) -> int:
+        """Return a one-based column for text in line with a useful fallback."""
+        if text:
+            index = line.find(text)
+            if index >= 0:
+                return index + 1
+        if fallback is not None:
+            return fallback
+        stripped = line.lstrip(" \t")
+        if not stripped:
+            return 1
+        return len(line) - len(stripped) + 1
 
     @staticmethod
     def _resolve_file(path: Path) -> Path | None:
@@ -314,25 +364,33 @@ class Preprocessor:
             conditional_stack: list[ConditionalFrame],
             file_path: str,
             line_number: int,
+            line: str,
     ) -> None:
         """Update conditional compilation state for a directive line."""
         parent_active = all(frame.current_active for frame in conditional_stack)
         expression = directive.expression or self.condition_evaluator.DEFAULT_EXPR
+        directive_column = self._directive_column(line)
+        expression_column = self._column_of(line, expression, directive_column)
 
         # Opening directives push a new nesting frame
         if directive.kind == self.DIRECTIVE_IFDEF:
             self._push_conditional_frame(conditional_stack, parent_active,
-                                         directive.expression in macros)
+                                         directive.expression in macros,
+                                         file_path, line_number,
+                                         expression_column)
             return
         if directive.kind == self.DIRECTIVE_IFNDEF:
             self._push_conditional_frame(conditional_stack, parent_active,
-                                         directive.expression not in macros)
+                                         directive.expression not in macros,
+                                         file_path, line_number,
+                                         expression_column)
             return
         if directive.kind == self.DIRECTIVE_IF:
             matched = self._evaluate_condition(expression, macros, file_path,
-                                               line_number)
+                                               line_number, expression_column)
             self._push_conditional_frame(conditional_stack, parent_active,
-                                         matched)
+                                         matched, file_path, line_number,
+                                         expression_column)
             return
 
         # Mid-block directives mutate the current frame in place
@@ -342,6 +400,7 @@ class Preprocessor:
                     self.DIRECTIVE_ELIF,
                     file_path,
                     line_number,
+                    directive_column,
                 )
                 return
             frame = conditional_stack[-1]
@@ -351,10 +410,11 @@ class Preprocessor:
                     f"#{self.DIRECTIVE_ELIF} cannot appear after #{self.DIRECTIVE_ELSE}",
                     file_path,
                     line_number,
+                    directive_column,
                 )
                 return
             matched = self._evaluate_condition(expression, macros, file_path,
-                                               line_number)
+                                               line_number, expression_column)
             frame.current_active = frame.parent_active and (
                 not frame.branch_taken) and matched
             frame.branch_taken = frame.branch_taken or matched
@@ -365,6 +425,7 @@ class Preprocessor:
                     self.DIRECTIVE_ELSE,
                     file_path,
                     line_number,
+                    directive_column,
                 )
                 return
             frame = conditional_stack[-1]
@@ -374,6 +435,7 @@ class Preprocessor:
                     f"duplicate #{self.DIRECTIVE_ELSE} in conditional block",
                     file_path,
                     line_number,
+                    directive_column,
                 )
                 return
             frame.saw_else = True
@@ -390,17 +452,20 @@ class Preprocessor:
                 self.DIRECTIVE_ENDIF,
                 file_path,
                 line_number,
+                directive_column,
             )
 
     def _report_unexpected_conditional(self, directive_name: str,
                                        file_path: str,
-                                       line_number: int) -> None:
+                                       line_number: int,
+                                       column: int) -> None:
         """Report a conditional directive that appears without a matching block."""
         self._report_line_error(
             ErrorCode.INCLUDE_ERROR,
             f"unexpected #{directive_name} without matching conditional block",
             file_path,
             line_number,
+            column,
         )
 
     @staticmethod
@@ -408,6 +473,9 @@ class Preprocessor:
             conditional_stack: list[ConditionalFrame],
             parent_active: bool,
             matched: bool,
+            file_path: str,
+            line_number: int,
+            column: int,
     ) -> None:
         """Push a new conditional frame onto the nesting stack."""
         conditional_stack.append(
@@ -415,6 +483,9 @@ class Preprocessor:
                 parent_active=parent_active,
                 current_active=parent_active and matched,
                 branch_taken=matched,
+                file_path=file_path,
+                line=line_number,
+                column=column,
             )
         )
 
@@ -424,6 +495,7 @@ class Preprocessor:
             macros: dict[str, str],
             file_path: str,
             line_number: int,
+            column: int,
     ) -> bool:
         """Evaluate a `#if` or `#elif` expression against current macros."""
         try:
@@ -432,10 +504,18 @@ class Preprocessor:
             self.diagnostics.error(
                 ErrorCode.INCLUDE_ERROR,
                 f"invalid conditional expression: {expression}",
-            ).with_span(file_path, line_number, 1).add_note(str(exc))
+            ).with_span(file_path, line_number, column).add_note(str(exc))
             return False
 
-    def _expand_macros_in_line(self, line: str, macros: dict[str, str]) -> str:
+    def _expand_macros_in_line(
+            self,
+            line: str,
+            macros: dict[str, str],
+            file_path: str | None = None,
+            line_number: int | None = None,
+            column: int | None = None,
+            depth: int = 0,
+    ) -> str:
         """Expand simple object-like macros in a normal source line."""
         result: list[str] = []
         index = 0
@@ -450,6 +530,11 @@ class Preprocessor:
                 index += 1
                 continue
 
+            if in_string and char == "\\" and index + 1 < len(line):
+                result.append(line[index:index + 2])
+                index += 2
+                continue
+
             # Line comments terminate expansion for the remainder of the line
             if not in_string and line.startswith("//", index):
                 result.append(line[index:])
@@ -461,7 +546,10 @@ class Preprocessor:
                 while end < len(line) and self._is_identifier_char(line[end]):
                     end += 1
                 name = line[index:end]
-                result.append(self._expand_macro_name(name, macros, depth=0))
+                macro_column = column if column is not None else index + 1
+                result.append(
+                    self._expand_macro_name(name, macros, file_path,
+                                            line_number, macro_column, depth))
                 index = end
                 continue
             result.append(char)
@@ -469,15 +557,24 @@ class Preprocessor:
         return "".join(result)
 
     def _expand_macro_name(self, name: str, macros: dict[str, str],
-                           depth: int) -> str:
+                           file_path: str | None, line_number: int | None,
+                           column: int | None, depth: int) -> str:
         """Expand a single macro name with shallow recursion control."""
-        if name not in macros or depth >= self.MAX_MACRO_EXPANSION_DEPTH:
+        if name not in macros:
+            return name
+        if depth >= self.MAX_MACRO_EXPANSION_DEPTH:
+            diagnostic = self.diagnostics.error(
+                ErrorCode.INCLUDE_ERROR,
+                f"macro expansion depth exceeded near '{name}'",
+            )
+            if file_path is not None and line_number is not None:
+                diagnostic.with_span(file_path, line_number, column or 1)
             return name
         value = macros[name]
         if not value:
             return ""
-        return self._expand_macros_in_line(value,
-                                           macros) if depth == 0 else value
+        return self._expand_macros_in_line(value, macros, file_path,
+                                           line_number, column, depth + 1)
 
     @staticmethod
     def _is_identifier_start(char: str) -> bool:

@@ -83,11 +83,8 @@ mr_uint64_t mr_port_clock_hires_tick(void) {
 }
 
 void mr_port_clock_hires_tick_set(mr_uint64_t tick) {
-    mr_uint64_t now;
-
     /* Set hires offset */
-    now = mr_port_clock_hires_tick();
-    __hires_offset = (mr_int64_t)tick - (mr_int64_t)now;
+    __hires_offset = (mr_int64_t)tick;
 }
 #endif /* defined(MR_USE_CLOCK_HIRES) */
 

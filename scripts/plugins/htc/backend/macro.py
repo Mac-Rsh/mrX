@@ -62,9 +62,12 @@ class MacroBuilder:
             # Emit all node-local macros first
             self._emit_node(lines, tree, node)
 
-        # Emit global symbol tables next
-        self._emit_symbols(lines, tree.labels, self.SECTION_LABEL)
-        self._emit_symbols(lines, tree.aliases, self.SECTION_ALIAS)
+        # Emit global symbol tables next, but only for emitted targets.
+        emitted_paths = {node.path for node in enabled_nodes}
+        self._emit_symbols(lines, tree.labels, self.SECTION_LABEL,
+                           emitted_paths)
+        self._emit_symbols(lines, tree.aliases, self.SECTION_ALIAS,
+                           emitted_paths)
 
         # Emit instance indexes after the full node set is known
         self._emit_inst(lines, enabled_nodes)
@@ -168,8 +171,12 @@ class MacroBuilder:
                      self._format_expanded_element(tree, value))
 
     def _emit_symbols(self, lines: list[str], symbols: dict[str, str],
-                      section: str) -> None:
+                      section: str, emitted_paths: set[str]) -> None:
         """Emit label or alias symbol tables as backend macros."""
+        symbols = {
+            name: target_path for name, target_path in symbols.items()
+            if target_path in emitted_paths
+        }
         if not symbols:
             return
         lines.append(self._section_header(f"/{section}"))
@@ -213,8 +220,7 @@ class MacroBuilder:
 
         # Strings preserve original quoting at render time
         if isinstance(value, StringValue):
-            escaped = value.value.replace('"', '\\"')
-            return f'"{escaped}"'
+            return f'"{self._escape_c_string(value.value)}"'
 
         # Numeric and identifier values are emitted as written
         if isinstance(value, NumberValue):
@@ -269,7 +275,8 @@ class MacroBuilder:
                 self.STATUS_PRIO_SUFFIX):
             start = len(self.STATUS_PRIO_PREFIX)
             end = -len(self.STATUS_PRIO_SUFFIX)
-            return f"{self.STATUS_PRIO}({status[start:end]})"
+            macro = self.STATUS_TO_INIT_LEVEL[self.STATUS_PRIO]
+            return f"{macro}({status[start:end]})"
         return self.STATUS_TO_INIT_LEVEL.get(status, self.DEFAULT_INIT_LEVEL)
 
     @staticmethod
@@ -307,7 +314,24 @@ class MacroBuilder:
         """Convert a canonical node path into an HTC macro prefix."""
         if path == "/":
             return f"{self.PREFIX_TAG}N"
-        return f"{self.PREFIX_TAG}N{path.replace('/', '_S_').replace('-', '_')}"
+        return f"{self.PREFIX_TAG}N{self._normalize_path(path)}"
+
+    @classmethod
+    def _normalize_path(cls, path: str) -> str:
+        """Normalize a canonical path into macro-safe text."""
+        return path.replace("/", "_S_").replace("@", "_A_").replace("-", "_")
+
+    @staticmethod
+    def _escape_c_string(value: str) -> str:
+        """Escape a Python string value for a C string literal."""
+        escapes = {
+            "\\": "\\\\",
+            '"': '\\"',
+            "\n": "\\n",
+            "\r": "\\r",
+            "\t": "\\t",
+        }
+        return "".join(escapes.get(char, char) for char in value)
 
     @staticmethod
     def _normalize(identifier: str) -> str:

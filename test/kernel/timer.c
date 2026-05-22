@@ -13,26 +13,29 @@
 
 static mr_timer_t *last_timer = MR_NULL;
 static void *last_param = MR_NULL;
-static const mr_clazz_t test_timer_clazz =
-    MR_CLAZZ_INIT("test_timer", MR_NULL, MR_CLAZZES_STATIK(MR_CLAZZES_FIND(timer)));
+static const mr_clazz_t test_timer_clazz
+    = MR_CLAZZ_INIT("test_timer", MR_NULL, MR_CLAZZES_STATIK(timer));
+
+/* Helpers */
+static void test_timer_reset(void) {
+    last_timer = MR_NULL;
+    last_param = MR_NULL;
+}
 
 static void test_timer_entry(mr_timer_t *timer, void *param) {
     last_timer = timer;
     last_param = param;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Test: Timer derive init */
+/* Tests */
 static void test_timer_derive_init(void) {
-    static mr_timer_t timer = MR_TIMER_DERIVE_INIT(&timer, &test_timer_clazz,
-                                                   test_timer_entry, MR_NULL, 1);
+    static mr_timer_t timer = MR_TIMER_DERIVE_INIT(
+        &timer, &test_timer_clazz, test_timer_entry, MR_NULL, 1);
 
     MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&timer), &test_timer_clazz);
 }
 MR_TEST_EXPORT(timer, derive_init, test_timer_derive_init);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Timer init / del */
 static void test_timer_init_del(void) {
     mr_timer_t timer;
     mr_err_t ret;
@@ -48,8 +51,6 @@ static void test_timer_init_del(void) {
 }
 MR_TEST_EXPORT(timer, init_del, test_timer_init_del);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Timer create / del */
 static void test_timer_create_del(void) {
     mr_timer_t *timer;
     mr_err_t ret;
@@ -64,46 +65,70 @@ static void test_timer_create_del(void) {
 }
 MR_TEST_EXPORT(timer, create_del, test_timer_create_del);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Timer start / stop */
 static void test_timer_start_stop(void) {
-    mr_timer_t timer, timer1;
+    mr_timer_t timer;
+    mr_timer_t timer1;
     mr_err_t ret;
+    int timer_inited;
+    int timer1_inited;
+
+    test_timer_reset();
+    timer_inited = MR_FALSE;
+    timer1_inited = MR_FALSE;
 
     ret = mr_timer_init(&timer, test_timer_entry, MR_NULL, 2);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
+    timer_inited = MR_TRUE;
 
     ret = mr_timer_start(&timer);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    if (ret != 0) {
+        goto _exit;
+    }
 
     ret = mr_timer_init(&timer1, test_timer_entry, MR_NULL, 2);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    if (ret != 0) {
+        goto _exit;
+    }
+    timer1_inited = MR_TRUE;
     ret = mr_timer_start(&timer1);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
     ret = mr_timer_del(&timer1);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    timer1_inited = MR_FALSE;
 
     ret = mr_timer_init(&timer1, test_timer_entry, MR_NULL, 1);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    if (ret != 0) {
+        goto _exit;
+    }
+    timer1_inited = MR_TRUE;
     ret = mr_timer_start(&timer1);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
     ret = mr_timer_del(&timer1);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    timer1_inited = MR_FALSE;
 
-    last_timer = MR_NULL;
+    test_timer_reset();
     mr_clock_increase(2);
-    MR_TEST_ASSERT_EQ_PTR(last_timer, &timer);
+    MR_TEST_EXPECT_EQ_PTR(last_timer, &timer);
 
     ret = mr_timer_stop(&timer);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
 
-    ret = mr_timer_del(&timer);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+_exit:
+    if (timer1_inited == MR_TRUE) {
+        ret = mr_timer_del(&timer1);
+        MR_TEST_EXPECT_EQ_INT(ret, 0);
+    }
+    if (timer_inited == MR_TRUE) {
+        ret = mr_timer_del(&timer);
+        MR_TEST_EXPECT_EQ_INT(ret, 0);
+    }
 }
 MR_TEST_EXPORT(timer, start_stop, test_timer_start_stop);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Timer tick get / set */
 static void test_timer_tick_get_set(void) {
     mr_timer_t timer;
     mr_err_t ret;
@@ -126,33 +151,41 @@ static void test_timer_tick_get_set(void) {
 }
 MR_TEST_EXPORT(timer, tick_get_set, test_timer_tick_get_set);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Timer periodic mode */
 static void test_timer_periodic(void) {
     mr_timer_t timer;
     mr_err_t ret;
+    int timer_inited;
     int i;
+
+    test_timer_reset();
+    timer_inited = MR_FALSE;
 
     ret = mr_timer_init(&timer, test_timer_entry, (void *)0x1111,
                         1 | MR_TIMER_PERIODIC);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
+    timer_inited = MR_TRUE;
 
     ret = mr_timer_start(&timer);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    if (ret != 0) {
+        goto _exit;
+    }
 
     for (i = 0; i < 10; i++) {
-        last_timer = MR_NULL;
-        last_param = MR_NULL;
+        test_timer_reset();
         mr_clock_increase(1);
-        MR_TEST_ASSERT_EQ_PTR(last_timer, &timer);
-        MR_TEST_ASSERT_EQ_PTR(last_param, (void *)0x1111);
+        MR_TEST_EXPECT_EQ_PTR(last_timer, &timer);
+        MR_TEST_EXPECT_EQ_PTR(last_param, (void *)0x1111);
     }
 
     ret = mr_timer_stop(&timer);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
 
-    ret = mr_timer_del(&timer);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+_exit:
+    if (timer_inited == MR_TRUE) {
+        ret = mr_timer_del(&timer);
+        MR_TEST_EXPECT_EQ_INT(ret, 0);
+    }
 }
 MR_TEST_EXPORT(timer, periodic, test_timer_periodic);
 #endif /* defined(MR_USE_TIMER) */

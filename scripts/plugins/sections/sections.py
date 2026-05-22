@@ -649,7 +649,8 @@ class SectionsCommand:
         """Find the top-level `SECTIONS { ... }` block."""
         # Search the top-level `SECTIONS` keyword first
         word_boundary = r"\b"
-        match = re.search(f"{word_boundary}{cls.SECTIONS_NAME}{word_boundary}", linker_text)
+        match = re.search(f"{word_boundary}{cls.SECTIONS_NAME}{word_boundary}",
+                          linker_text)
         if match is None:
             return None
 

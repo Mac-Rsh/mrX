@@ -78,6 +78,9 @@
 #if defined(MR_USE_DRIVER_ADC)
 #include <mrX/drivers/adc/mr_adc.h>
 #endif /* defined(MR_USE_DRIVER_ADC) */
+#if defined(MR_USE_DRIVER_DAC)
+#include <mrX/drivers/dac/mr_dac.h>
+#endif /* defined(MR_USE_DRIVER_DAC) */
 #if defined(MR_USE_DRIVER_DMA)
 #include <mrX/drivers/dma/mr_dma.h>
 #endif /* defined(MR_USE_DRIVER_DMA) */

@@ -1,0 +1,34 @@
+menu "DAC: Digital-to-Analog Converter"
+
+# ==================================
+# DAC
+# ==================================
+config MR_USE_DRIVER_DAC
+    depends on MR_USE_DRIVER
+    bool "Use DAC"
+    default n
+    help
+        Enable DAC driver for digital-to-analog conversion.
+        Features:
+            - Single-value write per channel
+            - Configurable reference voltage (internal/external)
+            - Voltage to raw conversion utilities (mV/uV/V)
+            - Multi-channel output
+
+# ==================================
+# STREAM
+# ==================================
+config MR_USE_DRIVER_DAC_STREAM
+    depends on MR_USE_DRIVER_DAC
+    bool "Use DAC stream"
+    default y
+    help
+        Enable DAC stream output operations.
+        Features:
+            - DMA-based continuous output for waveform generation
+            - Interrupt-driven continuous output without DMA
+            - Half/full buffer completion wait events
+            - Circular buffer mode for ping-pong output
+        Required for continuous output and stream buffer events.
+
+endmenu

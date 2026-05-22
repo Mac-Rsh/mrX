@@ -505,6 +505,22 @@ class PlatformCommand:
         return path.as_posix()
 
     @staticmethod
+    def _format_display_path(path: Path) -> str:
+        """Return a concise path string for user-facing CLI output.
+
+        Args:
+            path: Resolved path to display.
+
+        Returns:
+            Path relative to the current working directory when possible.
+        """
+        try:
+            display_path = path.resolve().relative_to(Path.cwd().resolve())
+        except ValueError:
+            display_path = path
+        return display_path.as_posix()
+
+    @staticmethod
     def _print_plan(result: PlatformResult) -> None:
         """Print the resolved platform assembly plan.
 
@@ -513,10 +529,16 @@ class PlatformCommand:
         """
         # Print the working directories first
         print(f"Platform: {result.name}")
-        print(f"Source dir: {result.directory.source}")
-        print(f"Output dir: {result.directory.output}")
+        source_dir = PlatformCommand._format_display_path(
+            result.directory.source)
+        output_dir = PlatformCommand._format_display_path(
+            result.directory.output)
+        print(f"Source dir: {source_dir}")
+        print(f"Output dir: {output_dir}")
         for entry in result.entries:
-            print(f"Copy: {entry.source} -> {entry.target}")
+            source = PlatformCommand._format_display_path(entry.source)
+            target = PlatformCommand._format_display_path(entry.target)
+            print(f"Copy: {source} -> {target}")
 
     @staticmethod
     def _clean_output(output_root: Path, manifest_path: Path) -> None:
@@ -597,7 +619,9 @@ class PlatformCommand:
         # Create the parent directory before copying
         entry.target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(entry.source, entry.target)
-        print(f"Copy: {entry.source} -> {entry.target}")
+        source = PlatformCommand._format_display_path(entry.source)
+        target = PlatformCommand._format_display_path(entry.target)
+        print(f"Copy: {source} -> {target}")
         return str(entry.target)
 
     @staticmethod

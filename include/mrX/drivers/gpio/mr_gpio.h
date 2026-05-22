@@ -93,8 +93,8 @@ typedef struct mr_gpio_ops {
     mr_err_t (*port_write)(const mr_driver_t *drv, mr_uint32_t mask);
     mr_err_t (*port_read)(const mr_driver_t *drv, mr_uint32_t *mask);
     /* Optional */
-    mr_err_t (*attach)(const mr_driver_t *drv, mr_uint32_t pin,
-                       mr_waiter_t *entry);
+    mr_err_t (*event_attach)(const mr_driver_t *drv, mr_uint32_t pin,
+                             mr_waiter_t *entry);
 } mr_gpio_ops_t;
 
 /**
@@ -347,15 +347,15 @@ MR_INLINE mr_ssize_t mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask) {
 }
 
 /**
- * @brief This function attaches a GPIO pin interrupt.
+ * @brief This function attaches a GPIO pin event.
  *
  * @param drv The GPIO driver.
  * @param pin The GPIO pin.
- * @param entry The GPIO interrupt entry.
+ * @param entry The GPIO event entry.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_gpio_irq_attach(mr_driver_t *drv, mr_uint32_t pin,
-                                      mr_waiter_t *entry) {
+MR_INLINE mr_err_t mr_gpio_event_attach(mr_driver_t *drv, mr_uint32_t pin,
+                                        mr_waiter_t *entry) {
     const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
 
@@ -374,13 +374,13 @@ MR_INLINE mr_err_t mr_gpio_irq_attach(mr_driver_t *drv, mr_uint32_t pin,
         return -MR_EINVAL;
     }
 
-    /* Check if attach is supported */
-    if (!gp_ops->attach) {
+    /* Check if event attach is supported */
+    if (!gp_ops->event_attach) {
         return -MR_ENOSYS;
     }
 
-    /* Attach GPIO pin irq */
-    return gp_ops->attach(drv, pin, entry);
+    /* Attach GPIO pin event */
+    return gp_ops->event_attach(drv, pin, entry);
 }
 
 /**
@@ -639,19 +639,19 @@ MR_INLINE mr_err_t mr_ht_gpio_toggle(mr_ht_gpio_spec_t *spec) {
 }
 
 /**
- * @brief This function attaches a GPIO specification.
+ * @brief This function attaches a GPIO specification event.
  *
  * @param spec The GPIO specification.
- * @param entry The GPIO interrupt entry.
+ * @param entry The GPIO event entry.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_ht_gpio_attach(mr_ht_gpio_spec_t *spec,
-                                     mr_waiter_t *entry) {
+MR_INLINE mr_err_t mr_ht_gpio_event_attach(mr_ht_gpio_spec_t *spec,
+                                           mr_waiter_t *entry) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
-    /* Attach GPIO pin irq */
-    return mr_gpio_irq_attach(spec->drv, spec->pin, entry);
+    /* Attach GPIO pin event */
+    return mr_gpio_event_attach(spec->drv, spec->pin, entry);
 }
 
 /**

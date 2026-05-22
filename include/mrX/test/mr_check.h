@@ -34,13 +34,13 @@ extern volatile mr_uint32_t __mr_test_status;
 /* Test printf macro definition */
 #define __MR_TEST_PRINTF(_desc, _a_str, _a, _b_str, _b, _fmt)                  \
     do {                                                                       \
-        mr_printf("%s:%d\n", __FILE__, __LINE__);                              \
+        mr_printf("%s:%d\r\n", __FILE__, __LINE__);                            \
         mr_printf("Expectation failed: %s\n", _desc);                          \
         mr_printf("  %s = "_fmt                                                \
-                  "\n",                                                        \
+                  "\r\n",                                                      \
                   (_a_str), (_a));                                             \
         mr_printf("  %s = "_fmt                                                \
-                  "\n",                                                        \
+                  "\r\n",                                                      \
                   (_b_str), (_b));                                             \
     } while (0)
 

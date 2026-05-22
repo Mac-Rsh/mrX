@@ -11,7 +11,7 @@
 #include <mrX/libc/mr_string.h>
 
 /* Fifo align macro function */
-#define FIFO_ALIGN_POW2_DOWN(_size)     (1U << (mr_fls32(_size) - 1U))
+#define FIFO_ALIGN_POW2_DOWN(_size)     (1U << (mr_fls32(_size) - 1))
 #define FIFO_ALIGN_POW2_UP(_size)                                              \
     (((_size) & ((_size) - 1U)) ? (1U << mr_fls32(_size)) : (_size))
 

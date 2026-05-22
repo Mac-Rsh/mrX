@@ -102,7 +102,8 @@ class SemanticBuilder:
     ) -> None:
         """Add one syntax node and all descendants into the semantic tree."""
         # Paths are canonical identifiers in the semantic IR
-        path = f"/{node.name}" if parent_path is None else f"{parent_path}/{node.name}"
+        segment = self._path_segment(node)
+        path = f"/{segment}" if parent_path is None else f"{parent_path}/{segment}"
 
         # Duplicate nodes are detected by canonical path
         if path in tree.nodes_by_path:
@@ -111,6 +112,7 @@ class SemanticBuilder:
             return
 
         # Effective status is inherited from the parent when disabled
+        self._verify_unique_properties(node)
         declared_status = self._get_status(node)
         if parent_status == self.STATUS_DISABLED:
             if declared_status != self.STATUS_DISABLED:
@@ -157,6 +159,23 @@ class SemanticBuilder:
             self._add_node(child, tree, parent_path=hard_node.path,
                            parent_status=hard_node.effective_status)
 
+    @staticmethod
+    def _path_segment(node: NodeDecl) -> str:
+        """Return the canonical path segment for one syntax node."""
+        if node.address is None:
+            return node.name
+        return f"{node.name}@{node.address}"
+
+    def _verify_unique_properties(self, node: NodeDecl) -> None:
+        """Report duplicate properties before semantic lookups pick one."""
+        seen: set[str] = set()
+        for prop in node.properties:
+            if prop.name in seen:
+                self._error_at(ErrorCode.INVALID_PROPERTY,
+                               f"duplicate property: {prop.name}", prop.span)
+                continue
+            seen.add(prop.name)
+
     def _get_status(self, node: NodeDecl) -> str:
         """Get and validate the effective status string for a node."""
         prop = node.get_property(self.PROP_STATUS)
@@ -167,7 +186,7 @@ class SemanticBuilder:
         if not isinstance(prop.value, StringValue):
             self._error_at(ErrorCode.INVALID_STATUS,
                            f"{self.PROP_STATUS} must be a string literal",
-                           prop.span)
+                           prop.value.span or prop.span)
             return self.STATUS_OKAY
         value = prop.value.value
 
@@ -183,18 +202,19 @@ class SemanticBuilder:
                     self.STATUS_PRIO_SUFFIX)])
             except ValueError:
                 self._error_at(ErrorCode.INVALID_PRIO,
-                               f"invalid priority status: '{value}'", prop.span)
+                               f"invalid priority status: '{value}'",
+                               prop.value.span or prop.span)
                 return self.STATUS_OKAY
             if priority < 0 or priority > 9:
                 self._error_at(ErrorCode.INVALID_PRIO,
                                f"priority out of range in status: '{value}'",
-                               prop.span)
+                               prop.value.span or prop.span)
                 return self.STATUS_OKAY
             return value
 
         # Unknown status
         self._error_at(ErrorCode.INVALID_STATUS, f"invalid status: '{value}'",
-                       prop.span)
+                       prop.value.span or prop.span)
         return self.STATUS_DISABLED
 
     def _extract_compatible(self, path: str, node: NodeDecl) -> list[str]:
@@ -215,7 +235,7 @@ class SemanticBuilder:
                 self._warn_at(
                     ErrorCode.INVALID_COMPATIBLE_VALUE,
                     f"node '{path}': compatible must use string literals or expanded string lists",
-                    prop.span,
+                    value.span or prop.span,
                 )
                 return []
 
@@ -226,7 +246,7 @@ class SemanticBuilder:
                     self._warn_at(
                         ErrorCode.INVALID_COMPATIBLE_VALUE,
                         f"node '{path}': compatible entries must be strings",
-                        prop.span,
+                        element.span or prop.span,
                     )
                     return []
                 compatibles.append(element.value)
@@ -236,7 +256,7 @@ class SemanticBuilder:
         self._warn_at(
             ErrorCode.INVALID_COMPATIBLE_VALUE,
             f"node '{path}': compatible must be a string or string list",
-            prop.span,
+            value.span or prop.span,
         )
         return []
 

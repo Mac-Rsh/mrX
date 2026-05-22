@@ -46,7 +46,7 @@ class TreeValidator:
                 self._warn_at(
                     ErrorCode.INVALID_ALIAS_VALUE,
                     f"aliases property '{prop.name}' must be a reference",
-                    prop.span,
+                    prop.value.span or prop.span,
                 )
                 continue
 
@@ -55,7 +55,7 @@ class TreeValidator:
             if target_path is None:
                 self._error_at(ErrorCode.UNDEFINED_LABEL,
                                f"undefined reference: &{prop.value.reference}",
-                               prop.span)
+                               prop.value.span or prop.span)
                 continue
 
             # Alias names must be unique

@@ -10,7 +10,11 @@
 #if defined(MR_USE_TEST)
 #include <mrX/kernel/mr_hashmap.h>
 
-#define TEST_HASHMAP_BUCKET_NUM 4
+/* Constants */
+
+#define TEST_HASHMAP_BUCKET_NUM         4
+
+/* Helpers */
 
 typedef struct test_hashmap_item {
     mr_hashnode_t node;
@@ -22,11 +26,12 @@ static mr_hashmap_t test_hashmap;
 
 static void hashmap_reset(void) {
     /* Reset hashmap */
-    mr_hashmap_init(&test_hashmap, test_hashmap_buckets, TEST_HASHMAP_BUCKET_NUM);
+    mr_hashmap_init(&test_hashmap, test_hashmap_buckets,
+                    TEST_HASHMAP_BUCKET_NUM);
 }
 
-/* -------------------------------------------------------------------------- */
-/* Test: init                                                                  */
+/* Tests */
+
 static void test_hashmap_init(void) {
     mr_hashmap_t map;
     mr_list_t buckets[3];
@@ -37,8 +42,6 @@ static void test_hashmap_init(void) {
 }
 MR_TEST_EXPORT(hashmap, init, test_hashmap_init);
 
-/* -------------------------------------------------------------------------- */
-/* Test: add lookup del                                                        */
 static void test_hashmap_add_lookup_del(void) {
     test_hashmap_item_t item;
     mr_hashnode_t *node;
@@ -63,8 +66,6 @@ static void test_hashmap_add_lookup_del(void) {
 }
 MR_TEST_EXPORT(hashmap, add_lookup_del, test_hashmap_add_lookup_del);
 
-/* -------------------------------------------------------------------------- */
-/* Test: duplicate key                                                         */
 static void test_hashmap_duplicate_key(void) {
     test_hashmap_item_t item1;
     test_hashmap_item_t item2;
@@ -74,12 +75,11 @@ static void test_hashmap_duplicate_key(void) {
     mr_hashnode_init(&item2.node, 1, &item2.value);
 
     MR_TEST_ASSERT_EQ_INT(mr_hashmap_add(&test_hashmap, &item1.node), 0);
-    MR_TEST_ASSERT_EQ_INT(mr_hashmap_add(&test_hashmap, &item2.node), -MR_EEXIST);
+    MR_TEST_ASSERT_EQ_INT(mr_hashmap_add(&test_hashmap, &item2.node),
+                          -MR_EEXIST);
 }
 MR_TEST_EXPORT(hashmap, duplicate_key, test_hashmap_duplicate_key);
 
-/* -------------------------------------------------------------------------- */
-/* Test: duplicate node                                                        */
 static void test_hashmap_duplicate_node(void) {
     test_hashmap_item_t item;
 
@@ -91,8 +91,6 @@ static void test_hashmap_duplicate_node(void) {
 }
 MR_TEST_EXPORT(hashmap, duplicate_node, test_hashmap_duplicate_node);
 
-/* -------------------------------------------------------------------------- */
-/* Test: collision lookup                                                      */
 static void test_hashmap_collision_lookup(void) {
     test_hashmap_item_t items[8];
     mr_hashnode_t *node;
@@ -113,8 +111,6 @@ static void test_hashmap_collision_lookup(void) {
 }
 MR_TEST_EXPORT(hashmap, collision_lookup, test_hashmap_collision_lookup);
 
-/* -------------------------------------------------------------------------- */
-/* Test: readd after del                                                       */
 static void test_hashmap_readd_after_del(void) {
     test_hashmap_item_t item;
 
@@ -128,8 +124,6 @@ static void test_hashmap_readd_after_del(void) {
 }
 MR_TEST_EXPORT(hashmap, readd_after_del, test_hashmap_readd_after_del);
 
-/* -------------------------------------------------------------------------- */
-/* Test: invalid operation                                                     */
 static void test_hashmap_invalid_operation(void) {
     test_hashmap_item_t item1;
     mr_hashmap_t map1;

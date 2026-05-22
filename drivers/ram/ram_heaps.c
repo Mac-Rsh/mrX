@@ -42,7 +42,7 @@ static mr_err_t ram_heap_unmount(const mr_driver_t *drv) {
 }
 
 /* Instance install */
-#define RAM_HEAP_HT_INST_RAM_INSTALL(_id, _ops)                                \
+#define RAM_HEAP_HT_RAM_INSTALL(_id, _ops)                                     \
     MR_HT_RAM_INSTALL(_id, MR_NULL, _ops);
-MR_HT_DRIVER_FOREACH(RAM_HEAP_HT_INST_RAM_INSTALL, &__drv_ram_ops);
+MR_HT_DRIVER_FOREACH(RAM_HEAP_HT_RAM_INSTALL, &__drv_ram_ops);
 #endif /* defined(MR_USE_DRIVER_RAM_HEAPS) */

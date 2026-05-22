@@ -113,8 +113,14 @@ class Lexer:
                 self._advance()
                 return Token(TokenType.STRING, "".join(chars),
                              SourceSpan(start, self._location()))
+            if char == "\\":
+                escaped = self._read_escape(start)
+                if escaped is not None:
+                    chars.append(escaped)
+                continue
             if char == "\n":
-                chars.append(char)
+                self._error(ErrorCode.UNTERMINATED_STRING,
+                            "newline in string literal", SourceSpan(start))
                 self._newline()
                 continue
             chars.append(char)
@@ -124,6 +130,31 @@ class Lexer:
                     "unterminated string literal", SourceSpan(start))
         return Token(TokenType.STRING, "".join(chars),
                      SourceSpan(start, self._location()))
+
+    def _read_escape(self, start: SourceLocation) -> str | None:
+        """Read and decode one backslash escape in a string literal."""
+        escape_start = self._location()
+        self._advance()
+        if self.pos >= len(self.source):
+            self._error(ErrorCode.UNTERMINATED_STRING,
+                        "unterminated string literal", SourceSpan(start))
+            return None
+        char = self._peek()
+        escapes = {
+            '"': '"',
+            "\\": "\\",
+            "n": "\n",
+            "r": "\r",
+            "t": "\t",
+        }
+        if char not in escapes:
+            self._error(ErrorCode.INVALID_ESCAPE,
+                        f"invalid escape sequence: \\{char}",
+                        SourceSpan(escape_start))
+            self._advance()
+            return char
+        self._advance()
+        return escapes[char]
 
     def _read_number(self) -> Token | None:
         """Read a broad numeric token and defer semantic validation."""

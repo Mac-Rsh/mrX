@@ -64,7 +64,7 @@ mr_uint32_t mr_log_mask(void);
 
 /* Log format macro definition */
 #define __MR_LOG_FORMAT(_level, _fmt)                                          \
-    (" [" _level "/" MR_LOG_TAG "] " _fmt "\n")
+    (" [" _level "/" MR_LOG_TAG "] " _fmt "\r\n")
 
 /* Log macro definition */
 #if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_TRC)

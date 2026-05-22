@@ -1,0 +1,36 @@
+menu "ADC: Analog-to-Digital Converter"
+
+# ==================================
+# ADC
+# ==================================
+config MR_USE_DRIVER_ADC
+    depends on MR_USE_DRIVER
+    bool "Use ADC"
+    default n
+    help
+        Enable ADC driver for analog-to-digital conversion.
+        Features:
+            - Single-ended and differential input modes
+            - Programmable gain amplifier (1/6x to 128x)
+            - Configurable reference voltage (internal/external)
+            - Hardware oversampling support
+            - Raw to voltage conversion utilities (mV/uV/V)
+            - Multi-channel sequential sampling
+
+# ==================================
+# STREAM
+# ==================================
+config MR_USE_DRIVER_ADC_STREAM
+    depends on MR_USE_DRIVER_ADC
+    bool "Use ADC stream"
+    default y
+    help
+        Enable ADC stream sampling operations.
+        Features:
+            - DMA-based continuous sampling for high-speed data streams
+            - Interrupt-driven continuous sampling without DMA
+            - Half/full buffer completion wait events
+            - Circular buffer mode for ping-pong sampling
+        Required for continuous sampling and stream buffer events.
+
+endmenu

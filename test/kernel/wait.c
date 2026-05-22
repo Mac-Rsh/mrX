@@ -14,12 +14,11 @@
 static mr_uint64_t last_event = 0;
 static void *last_param = MR_NULL;
 static int trig_status = 0;
-static const mr_clazz_t test_waitable_clazz =
-    MR_CLAZZ_INIT("test_waitable", MR_NULL,
-                  MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waitable)));
-static const mr_clazz_t test_waiter_clazz =
-    MR_CLAZZ_INIT("test_waiter", MR_NULL,
-                  MR_CLAZZES_STATIK(MR_CLAZZES_FIND(waiter)));
+static mr_uint64_t test_wait_race_gen = 0;
+static const mr_clazz_t test_waitable_clazz
+    = MR_CLAZZ_INIT("test_waitable", MR_NULL, MR_CLAZZES_STATIK(waitable));
+static const mr_clazz_t test_waiter_clazz
+    = MR_CLAZZ_INIT("test_waiter", MR_NULL, MR_CLAZZES_STATIK(waiter));
 
 static void test_waiter_cb(mr_waiter_t *waiter, void *param,
                            mr_uint64_t event) {
@@ -30,31 +29,32 @@ static void test_waiter_cb(mr_waiter_t *waiter, void *param,
     last_param = param;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Test: Waitable derive init                                                 */
-static void test_waitable_derive_init(void) {
-    static mr_waitable_t waitable =
-        MR_WAITABLE_DERIVE_INIT(&waitable, &test_waitable_clazz,
-                                (mr_waitable_check_t *)1, MR_NULL);
+/* Helpers */
+static void test_wait_reset(void) {
+    last_event = 0;
+    last_param = MR_NULL;
+    trig_status = 0;
+    test_wait_race_gen = 0;
+}
+
+/* Tests */
+static void test_wait_waitable_derive_init(void) {
+    static mr_waitable_t waitable = MR_WAITABLE_DERIVE_INIT(
+        &waitable, &test_waitable_clazz, (mr_waitable_check_t *)1, MR_NULL);
 
     MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&waitable), &test_waitable_clazz);
 }
-MR_TEST_EXPORT(wait, waitable_derive_init, test_waitable_derive_init);
+MR_TEST_EXPORT(wait, waitable_derive_init, test_wait_waitable_derive_init);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Waiter derive init                                                   */
-static void test_waiter_derive_init(void) {
-    static mr_waiter_t waiter =
-        MR_WAITER_DERIVE_INIT(&waiter, &test_waiter_clazz,
-                              test_waiter_cb, MR_NULL, MR_WAIT_IN);
+static void test_wait_waiter_derive_init(void) {
+    static mr_waiter_t waiter = MR_WAITER_DERIVE_INIT(
+        &waiter, &test_waiter_clazz, test_waiter_cb, MR_NULL, MR_WAIT_IN);
 
     MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&waiter), &test_waiter_clazz);
 }
-MR_TEST_EXPORT(wait, waiter_derive_init, test_waiter_derive_init);
+MR_TEST_EXPORT(wait, waiter_derive_init, test_wait_waiter_derive_init);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Waitable init / del                                                  */
-static void test_waitable_init_del(void) {
+static void test_wait_waitable_init_del(void) {
     mr_waitable_t waitable;
     mr_err_t ret;
 
@@ -66,11 +66,9 @@ static void test_waitable_init_del(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(&waitable), MR_FALSE);
 }
-MR_TEST_EXPORT(wait, waitable_init_del, test_waitable_init_del);
+MR_TEST_EXPORT(wait, waitable_init_del, test_wait_waitable_init_del);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Waitable create / del                                                */
-static void test_waitable_create_del(void) {
+static void test_wait_waitable_create_del(void) {
     mr_waitable_t *waitable;
     mr_err_t ret;
 
@@ -82,11 +80,9 @@ static void test_waitable_create_del(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(waitable), MR_FALSE);
 }
-MR_TEST_EXPORT(wait, waitable_create_del, test_waitable_create_del);
+MR_TEST_EXPORT(wait, waitable_create_del, test_wait_waitable_create_del);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Waiter init / del                                                    */
-static void test_waiter_init_del(void) {
+static void test_wait_waiter_init_del(void) {
     mr_waiter_t waiter;
     mr_err_t ret;
 
@@ -98,11 +94,9 @@ static void test_waiter_init_del(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(&waiter), MR_FALSE);
 }
-MR_TEST_EXPORT(wait, waiter_init_del, test_waiter_init_del);
+MR_TEST_EXPORT(wait, waiter_init_del, test_wait_waiter_init_del);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Waiter create / del                                                  */
-static void test_waiter_create_del(void) {
+static void test_wait_waiter_create_del(void) {
     mr_waiter_t *waiter;
     mr_err_t ret;
 
@@ -113,7 +107,7 @@ static void test_waiter_create_del(void) {
     ret = mr_waiter_del(waiter);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(wait, waiter_create_del, test_waiter_create_del);
+MR_TEST_EXPORT(wait, waiter_create_del, test_wait_waiter_create_del);
 
 static mr_uint64_t test_check_basic(mr_waitable_t *w, void *p) {
     MR_IGNORE(w);
@@ -121,15 +115,17 @@ static mr_uint64_t test_check_basic(mr_waitable_t *w, void *p) {
     return MR_WAIT_IN;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Test: MR_WAITER_IS_WAITING                                                */
-static void test_waiter_is_waiting(void) {
+static void test_wait_waiter_is_waiting(void) {
     mr_waitable_t waitable;
     mr_waiter_t waiter;
     mr_err_t ret;
 
-    mr_waitable_init(&waitable, test_check_basic, MR_NULL);
-    mr_waiter_init(&waiter, test_waiter_cb, MR_NULL, MR_WAIT_IN);
+    test_wait_reset();
+
+    ret = mr_waitable_init(&waitable, test_check_basic, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_waiter_init(&waiter, test_waiter_cb, MR_NULL, MR_WAIT_IN);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(MR_WAITER_IS_WAITING(&waiter), MR_FALSE);
 
     ret = mr_waiter_wait(&waiter, &waitable);
@@ -145,19 +141,21 @@ static void test_waiter_is_waiting(void) {
     mr_waiter_del(&waiter);
     mr_waitable_del(&waitable);
 }
-MR_TEST_EXPORT(wait, waiter_is_waiting, test_waiter_is_waiting);
+MR_TEST_EXPORT(wait, waiter_is_waiting, test_wait_waiter_is_waiting);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Basic completion and callback                                        */
-static void test_waitable_complete_basic(void) {
+static void test_wait_complete_basic(void) {
     mr_waitable_t waitable;
     mr_waiter_t waiter;
     mr_err_t ret;
 
-    mr_waitable_init(&waitable, test_check_basic, MR_NULL);
-    mr_waiter_init(&waiter, test_waiter_cb, (void *)0x12345678, MR_WAIT_IN);
+    test_wait_reset();
 
-    trig_status = 0;
+    ret = mr_waitable_init(&waitable, test_check_basic, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_waiter_init(&waiter, test_waiter_cb, (void *)0x12345678,
+                         MR_WAIT_IN);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
     ret = mr_waiter_wait(&waiter, &waitable);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(trig_status, 1);
@@ -173,23 +171,28 @@ static void test_waitable_complete_basic(void) {
     mr_waiter_del(&waiter);
     mr_waitable_del(&waitable);
 }
-MR_TEST_EXPORT(wait, complete_basic, test_waitable_complete_basic);
+MR_TEST_EXPORT(wait, complete_basic, test_wait_complete_basic);
 
-static void test_waitable_edge_level(void) {
-    mr_waiter_t waiter_edge, waiter_level;
+static void test_wait_edge_level(void) {
+    mr_waiter_t waiter_edge;
+    mr_waiter_t waiter_level;
     mr_waitable_t waitable;
     mr_err_t ret;
 
-    mr_waitable_init(&waitable, test_check_basic, MR_NULL);
-    mr_waiter_init(&waiter_edge, test_waiter_cb, MR_NULL,
-                   MR_WAIT_IN | MR_WAIT_EDGE);
+    test_wait_reset();
 
-    trig_status = 0;
+    ret = mr_waitable_init(&waitable, test_check_basic, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_waiter_init(&waiter_edge, test_waiter_cb, MR_NULL,
+                         MR_WAIT_IN | MR_WAIT_EDGE);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
     ret = mr_waiter_wait(&waiter_edge, &waitable);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(trig_status, 0);
 
-    mr_waiter_init(&waiter_level, test_waiter_cb, MR_NULL, MR_WAIT_IN);
+    ret = mr_waiter_init(&waiter_level, test_waiter_cb, MR_NULL, MR_WAIT_IN);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
 
     trig_status = 0;
     ret = mr_waiter_wait(&waiter_level, &waitable);
@@ -210,22 +213,25 @@ static void test_waitable_edge_level(void) {
     mr_waiter_del(&waiter_edge);
     mr_waiter_del(&waiter_level);
 }
-MR_TEST_EXPORT(wait, edge_level, test_waitable_edge_level);
+MR_TEST_EXPORT(wait, edge_level, test_wait_edge_level);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Multiple waiters on same waitable                                    */
 static mr_uint64_t test_check_multi(mr_waitable_t *w, void *p) {
     MR_IGNORE(w);
     MR_IGNORE(p);
     return MR_WAIT_OUT;
 }
 
-static void test_multiple_waiters(void) {
+static void test_wait_multiple_waiters(void) {
     mr_waitable_t waitable;
-    mr_waiter_t w1, w2, w3;
+    mr_waiter_t w1;
+    mr_waiter_t w2;
+    mr_waiter_t w3;
     mr_err_t ret;
 
-    mr_waitable_init(&waitable, test_check_multi, MR_NULL);
+    test_wait_reset();
+
+    ret = mr_waitable_init(&waitable, test_check_multi, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
     mr_waitable_complete(&waitable);
 
     ret = mr_waiter_init(&w1, test_waiter_cb, (void *)1, MR_WAIT_OUT);
@@ -247,30 +253,28 @@ static void test_multiple_waiters(void) {
     mr_waiter_del(&w3);
     mr_waitable_del(&waitable);
 }
-MR_TEST_EXPORT(wait, multiple_waiters, test_multiple_waiters);
+MR_TEST_EXPORT(wait, multiple_waiters, test_wait_multiple_waiters);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Race / generation skip                                               */
 static mr_uint64_t test_check_race(mr_waitable_t *w, void *p) {
-    static mr_uint64_t gen = 0;
-
     MR_IGNORE(p);
-    if ((gen++) == 0)
-    {
+    if ((test_wait_race_gen++) == 0) {
         mr_waitable_complete(w);
     }
     return MR_WAIT_IN;
 }
 
-static void test_generation_skip(void) {
+static void test_wait_generation_skip(void) {
     mr_waitable_t waitable;
     mr_waiter_t waiter;
     mr_err_t ret;
 
-    mr_waitable_init(&waitable, test_check_race, MR_NULL);
-    mr_waiter_init(&waiter, test_waiter_cb, MR_NULL, MR_WAIT_IN);
+    test_wait_reset();
 
-    trig_status = 0;
+    ret = mr_waitable_init(&waitable, test_check_race, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_waiter_init(&waiter, test_waiter_cb, MR_NULL, MR_WAIT_IN);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
     ret = mr_waiter_wait(&waiter, &waitable);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(trig_status, 1);
@@ -281,19 +285,22 @@ static void test_generation_skip(void) {
     mr_waiter_del(&waiter);
     mr_waitable_del(&waitable);
 }
-MR_TEST_EXPORT(wait, generation_skip, test_generation_skip);
+MR_TEST_EXPORT(wait, generation_skip, test_wait_generation_skip);
 
-static void test_event_get_set(void) {
+static void test_wait_event_get_set(void) {
     mr_waitable_t waitable;
     mr_waiter_t waiter;
     mr_err_t ret;
 
-    mr_waitable_init(&waitable, test_check_race, MR_NULL);
-    mr_waiter_init(&waiter, test_waiter_cb, MR_NULL, MR_WAIT_IN);
+    test_wait_reset();
+
+    ret = mr_waitable_init(&waitable, test_check_race, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_waiter_init(&waiter, test_waiter_cb, MR_NULL, MR_WAIT_IN);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
 
     MR_TEST_ASSERT_EQ_UINT(mr_waiter_event(&waiter), MR_WAIT_IN);
 
-    trig_status = 0;
     ret = mr_waiter_wait(&waiter, &waitable);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(trig_status, 1);
@@ -305,6 +312,6 @@ static void test_event_get_set(void) {
     mr_waiter_del(&waiter);
     mr_waitable_del(&waitable);
 }
-MR_TEST_EXPORT(wait, event_get_set, test_event_get_set);
+MR_TEST_EXPORT(wait, event_get_set, test_wait_event_get_set);
 #endif /* defined(MR_USE_WAIT) */
 #endif /* defined(MR_USE_TEST) */

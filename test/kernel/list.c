@@ -10,13 +10,15 @@
 #if defined(MR_USE_TEST)
 #include <mrX/kernel/mr_list.h>
 
+/* Helpers */
+
 typedef struct test_node {
     mr_list_t link;
     int id;
 } test_node_t;
 
-/* -------------------------------------------------------------------------- */
-/* Test: static init                                                          */
+/* Tests */
+
 static void test_list_static_init(void) {
     static mr_list_t head = MR_LIST_INIT(&head);
 
@@ -26,8 +28,6 @@ static void test_list_static_init(void) {
 }
 MR_TEST_EXPORT(list, static_init, test_list_static_init);
 
-/* -------------------------------------------------------------------------- */
-/* Test: init/empty                                                           */
 static void test_list_init_empty(void) {
     mr_list_t head;
 
@@ -36,8 +36,6 @@ static void test_list_init_empty(void) {
 }
 MR_TEST_EXPORT(list, init_empty, test_list_init_empty);
 
-/* -------------------------------------------------------------------------- */
-/* Test: add elements                                                         */
 static void test_list_add(void) {
     test_node_t n1, n2, n3;
     int ids[3], idx;
@@ -64,8 +62,6 @@ static void test_list_add(void) {
 }
 MR_TEST_EXPORT(list, add, test_list_add);
 
-/* -------------------------------------------------------------------------- */
-/* Test: insert to head                                                       */
 static void test_list_insert(void) {
     test_node_t n1, n2;
     test_node_t *n;
@@ -87,8 +83,6 @@ static void test_list_insert(void) {
 }
 MR_TEST_EXPORT(list, insert, test_list_insert);
 
-/* -------------------------------------------------------------------------- */
-/* Test: remove element                                                       */
 static void test_list_del(void) {
     test_node_t n1, n2;
     test_node_t *n;
@@ -107,8 +101,6 @@ static void test_list_del(void) {
 }
 MR_TEST_EXPORT(list, del, test_list_del);
 
-/* -------------------------------------------------------------------------- */
-/* Test: replace element                                                      */
 static void test_list_replace(void) {
     test_node_t n1, n2, n3;
     test_node_t *n;
@@ -133,8 +125,6 @@ static void test_list_replace(void) {
 }
 MR_TEST_EXPORT(list, replace, test_list_replace);
 
-/* -------------------------------------------------------------------------- */
-/* Test: move element                                                         */
 static void test_list_move(void) {
     mr_list_t head1, head2;
     test_node_t n1;
@@ -153,10 +143,9 @@ static void test_list_move(void) {
 }
 MR_TEST_EXPORT(list, move, test_list_move);
 
-/* -------------------------------------------------------------------------- */
-/* Test: safe traversal and delete */
 static void test_list_safe_foreach_del(void) {
     test_node_t nodes[4];
+    test_node_t *node;
     mr_list_t *pos, *l;
     int i, ids[2], idx;
     mr_list_t head;
@@ -169,7 +158,7 @@ static void test_list_safe_foreach_del(void) {
     }
 
     MR_LIST_FOR_EACH_SAFE(pos, l, &head) {
-        test_node_t *node = MR_LIST_ENTRY(pos, test_node_t, link);
+        node = MR_LIST_ENTRY(pos, test_node_t, link);
         if ((node->id % 2) == 0) {
             mr_list_del(pos);
         }

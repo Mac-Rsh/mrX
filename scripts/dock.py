@@ -121,7 +121,6 @@ class Dock:
                 module_paths.append(module_info.name)
                 continue
 
-            # Try to import the package
             try:
                 package = importlib.import_module(module_info.name)
             except Exception as exc:
@@ -171,7 +170,6 @@ class Dock:
         """
         # Iterate over all members
         for _, member in inspect.getmembers(plugin_module):
-            # Check for export marker
             if not is_exported(member):
                 continue
 
@@ -180,7 +178,6 @@ class Dock:
             if plugin is None:
                 continue
 
-            # Register plugin
             Dock._register_plugin(plugin, plugins)
 
     @staticmethod
@@ -195,7 +192,6 @@ class Dock:
         """
         # Instantiate class members
         if inspect.isclass(member):
-            # Is a class
             plugin_class = cast(type[object], member)
             plugin = plugin_class()
         else:
@@ -212,15 +208,16 @@ class Dock:
         return plugin
 
     @staticmethod
-    def _register_plugin(plugin: Plugin,
-                         plugins: dict[str, Plugin]) -> None:
+    def _register_plugin(
+            plugin: Plugin,
+            plugins: dict[str, Plugin],
+    ) -> None:
         """Register a plugin and all of its aliases.
 
         Args:
             plugin: Validated plugin instance.
             plugins: Shared plugin registry.
         """
-        # Register plugin
         if plugin.spec.name not in plugins:
             plugins[plugin.spec.name] = plugin
         else:

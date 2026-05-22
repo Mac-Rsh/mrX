@@ -24,8 +24,8 @@ static mr_err_t drv_pin_read(const mr_driver_t *drv, mr_uint32_t pin,
                              mr_uint8_t *value);
 static mr_err_t drv_port_write(const mr_driver_t *drv, mr_uint32_t mask);
 static mr_err_t drv_port_read(const mr_driver_t *drv, mr_uint32_t *mask);
-static mr_err_t drv_irq_attach(const mr_driver_t *drv, mr_uint32_t pin,
-                               mr_waiter_t *entry);
+static mr_err_t drv_event_attach(const mr_driver_t *drv, mr_uint32_t pin,
+                                 mr_waiter_t *entry);
 MR_UNUSED static const mr_gpio_ops_t __drv_gpio_ops = {
     .pin_configure = drv_pin_configure,
     .pin_configuration = drv_pin_configuration,
@@ -33,7 +33,7 @@ MR_UNUSED static const mr_gpio_ops_t __drv_gpio_ops = {
     .pin_read = drv_pin_read,
     .port_write = drv_port_write,
     .port_read = drv_port_read,
-    .attach = drv_irq_attach,
+    .event_attach = drv_event_attach,
 };
 
 /* Driver GPIO private data type */
@@ -111,7 +111,9 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
     GPIO_InitTypeDef GPIO_InitStructure;
     EXTI_InitTypeDef EXTI_InitStructure;
     NVIC_InitTypeDef NVIC_InitStructure;
+    mr_bool_t exti_update = MR_FALSE;
     uint16_t PINx = (1U << pin);
+    uint8_t nvic_cmd = DISABLE;
 
     switch (config->mode) {
         case MR_GPIO_MODE_ANALOG: {
@@ -164,7 +166,6 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
         }
     }
 
-    /* Configure EXTI */
     if (config->mode >= MR_GPIO_MODE_IRQ_RISING) {
         /* Check if the pin is already used */
         if ((__drv_gpio_irq_map[pin].drv != MR_NULL)
@@ -184,10 +185,16 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
         GPIO_EXTILineConfig(GPIOx2GPIOSource(priv->GPIOx), pin);
         RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
         EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+        nvic_cmd = ENABLE;
+        exti_update = MR_TRUE;
     } else if (drv == __drv_gpio_irq_map[pin].drv) {
         /* Mark the irq as unused */
         __drv_gpio_irq_map[pin].drv = MR_NULL;
         __drv_gpio_irq_map[pin].mode = 0;
+
+        /* Disable current EXTI line */
+        EXTI_InitStructure.EXTI_LineCmd = DISABLE;
+        exti_update = MR_TRUE;
 
 #if defined(MR_USE_WCH_SERIES_V00X)
         if ((__drv_gpio_irq_map[0].drv == MR_NULL)
@@ -198,9 +205,9 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
             && (__drv_gpio_irq_map[5].drv == MR_NULL)
             && (__drv_gpio_irq_map[6].drv == MR_NULL)
             && (__drv_gpio_irq_map[7].drv == MR_NULL)) {
-            EXTI_InitStructure.EXTI_LineCmd = DISABLE;
+            nvic_cmd = DISABLE;
         } else {
-            EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+            nvic_cmd = ENABLE;
         }
 #else
         if ((pin >= 5) && (pin <= 9)) {
@@ -209,9 +216,9 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
                 && (__drv_gpio_irq_map[7].drv == MR_NULL)
                 && (__drv_gpio_irq_map[8].drv == MR_NULL)
                 && (__drv_gpio_irq_map[9].drv == MR_NULL)) {
-                EXTI_InitStructure.EXTI_LineCmd = DISABLE;
+                nvic_cmd = DISABLE;
             } else {
-                EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+                nvic_cmd = ENABLE;
             }
         } else if ((pin >= 10) && (pin <= 15)) {
             if ((__drv_gpio_irq_map[10].drv == MR_NULL)
@@ -220,25 +227,29 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
                 && (__drv_gpio_irq_map[13].drv == MR_NULL)
                 && (__drv_gpio_irq_map[14].drv == MR_NULL)
                 && (__drv_gpio_irq_map[15].drv == MR_NULL)) {
-                EXTI_InitStructure.EXTI_LineCmd = DISABLE;
+                nvic_cmd = DISABLE;
             } else {
-                EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+                nvic_cmd = ENABLE;
             }
         } else {
-            EXTI_InitStructure.EXTI_LineCmd = DISABLE;
+            nvic_cmd = DISABLE;
         }
 #endif /* MR_USE_WCH_SERIES_V00X */
     }
-    EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
-    EXTI_InitStructure.EXTI_Line = PINx;
-    EXTI_Init(&EXTI_InitStructure);
 
-    /* Configure NVIC */
-    NVIC_InitStructure.NVIC_IRQChannelCmd = EXTI_InitStructure.EXTI_LineCmd;
-    NVIC_InitStructure.NVIC_IRQChannel = __drv_gpio_irqn[pin];
-    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
-    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;
-    NVIC_Init(&NVIC_InitStructure);
+    if (exti_update) {
+        /* Configure EXTI */
+        EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStructure.EXTI_Line = PINx;
+        EXTI_Init(&EXTI_InitStructure);
+
+        /* Configure NVIC */
+        NVIC_InitStructure.NVIC_IRQChannelCmd = nvic_cmd;
+        NVIC_InitStructure.NVIC_IRQChannel = __drv_gpio_irqn[pin];
+        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;
+        NVIC_Init(&NVIC_InitStructure);
+    }
 
     /* Configure GPIO */
     RCC_APB2PeriphClockCmd(priv->RCCx, ENABLE);
@@ -343,8 +354,8 @@ static mr_err_t drv_port_read(const mr_driver_t *drv, mr_uint32_t *mask) {
     return 0;
 }
 
-static mr_err_t drv_irq_attach(const mr_driver_t *drv, mr_uint32_t pin,
-                               mr_waiter_t *entry) {
+static mr_err_t drv_event_attach(const mr_driver_t *drv, mr_uint32_t pin,
+                                 mr_waiter_t *entry) {
     MR_IGNORE(drv);
 
     /* Initialize the waitable */
@@ -352,7 +363,7 @@ static mr_err_t drv_irq_attach(const mr_driver_t *drv, mr_uint32_t pin,
         mr_waitable_init(&__drv_gpio_exti[pin], MR_NULL, MR_NULL);
     }
 
-    /* Attach GPIO EXTI irq */
+    /* Attach GPIO EXTI event */
     return mr_waiter_wait(entry, &__drv_gpio_exti[pin]);
 }
 
@@ -361,7 +372,7 @@ static void drv_gpio_irq_handle(mr_uint32_t pin) {
 
     /* Call IRQ handler */
     if (drv != MR_NULL) {
-        /* Raise GPIO EXTI irq event */
+        /* Raise GPIO EXTI event */
         mr_waitable_raise(&__drv_gpio_exti[pin], MR_GPIO_WAIT_EXTI);
     }
 }
@@ -492,10 +503,10 @@ void EXTI15_10_IRQHandler(void) {
 #endif /* defined(MR_USE_WCH_SERIES_V00X) */
 
 /* Instance install */
-#define WCH_HT_GPIO_INST_GPIO_INSTALL(_id, _ops)                               \
+#define WCH_HT_GPIO_INSTALL(_id, _ops)                                         \
     static drv_gpio_priv_t MR_CAT(__drv_gpio_priv_, _id)                       \
-        = {.GPIOx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), wch_gpiox),        \
-           .RCCx = MR_HT_NODE_PROP(MR_HT_INST_DRIVER(_id), wch_rccx)};         \
-    MR_HT_INST_GPIO_INSTALL(_id, &MR_CAT(__drv_gpio_priv_, _id), _ops)
-MR_HT_INST_DRIVER_FOREACH(WCH_HT_GPIO_INST_GPIO_INSTALL, &__drv_gpio_ops);
+        = {.GPIOx = MR_HT_DRIVER_PROP(_id, wch_gpiox),                         \
+           .RCCx = MR_HT_DRIVER_PROP(_id, wch_rccx)};                          \
+    MR_HT_GPIO_INSTALL(_id, &MR_CAT(__drv_gpio_priv_, _id), _ops)
+MR_HT_DRIVER_FOREACH(WCH_HT_GPIO_INSTALL, &__drv_gpio_ops);
 #endif /* defined (MR_USE_DRIVER_GPIO) */

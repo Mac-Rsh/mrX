@@ -11,14 +11,16 @@
 #include <mrX/kernel/mr_fifo.h>
 #include <mrX/libc/mr_string.h>
 
+/* Helpers */
+
 typedef struct {
     int id;
 } test_elem_t;
 
 static test_elem_t big_buf[1024];
 
-/* -------------------------------------------------------------------------- */
-/* Test: Init with external buffer                                            */
+/* Tests */
+
 static void test_fifo_init(void) {
     mr_uint8_t buf[128];
     mr_uint32_t cap;
@@ -32,43 +34,39 @@ static void test_fifo_init(void) {
 }
 MR_TEST_EXPORT(fifo, init, test_fifo_init);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Alloc / Free                                                         */
 static void test_fifo_alloc_free(void) {
     mr_uint32_t cap;
-    mr_fifo_t fifo;
+    mr_fifo_t fifo = {0};
 
     cap = mr_fifo_alloc(&fifo, 8, sizeof(test_elem_t));
-    MR_TEST_ASSERT_EQ_INT(cap, 8);
-    MR_TEST_ASSERT_EQ_INT(mr_fifo_len(&fifo), 0);
+    MR_TEST_EXPECT_EQ_UINT(cap, 8);
+    MR_TEST_EXPECT_EQ_UINT(mr_fifo_len(&fifo), 0);
 
     mr_fifo_free(&fifo);
-    MR_TEST_ASSERT_EQ_PTR(fifo.buf, MR_NULL);
+    MR_TEST_EXPECT_EQ_PTR(fifo.buf, MR_NULL);
 
     cap = mr_fifo_alloc(&fifo, 7, sizeof(test_elem_t));
-    MR_TEST_ASSERT_EQ_INT(cap, 8);
-    MR_TEST_ASSERT_EQ_INT(mr_fifo_len(&fifo), 0);
+    MR_TEST_EXPECT_EQ_UINT(cap, 8);
+    MR_TEST_EXPECT_EQ_UINT(mr_fifo_len(&fifo), 0);
 
     mr_fifo_free(&fifo);
-    MR_TEST_ASSERT_EQ_PTR(fifo.buf, MR_NULL);
+    MR_TEST_EXPECT_EQ_PTR(fifo.buf, MR_NULL);
 
 #if defined(MR_USE_MALLOC)
     cap = mr_fifo_alloc(&fifo, MR_UINT32_MAX >> 1, 1);
-    MR_TEST_ASSERT_EQ_INT(cap, 0);
+    MR_TEST_EXPECT_EQ_UINT(cap, 0);
 #endif /* defined(MR_USE_MALLOC) */
 
     mr_fifo_free(&fifo);
 }
 MR_TEST_EXPORT(fifo, alloc_free, test_fifo_alloc_free);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Init / alloc boundary cases                                           */
 static void test_fifo_boundary_init_alloc(void) {
     mr_uint8_t buf[8];
     test_elem_t elem = {.id = 1};
     test_elem_t out;
     mr_uint32_t cap;
-    mr_fifo_t fifo;
+    mr_fifo_t fifo = {0};
 
     cap = mr_fifo_init(&fifo, buf, 0, sizeof(test_elem_t));
     MR_TEST_ASSERT_EQ_INT(cap, 0);
@@ -108,8 +106,6 @@ static void test_fifo_boundary_init_alloc(void) {
 }
 MR_TEST_EXPORT(fifo, boundary_init_alloc, test_fifo_boundary_init_alloc);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Single push / pop                                                    */
 static void test_fifo_push_pop(void) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
@@ -131,8 +127,6 @@ static void test_fifo_push_pop(void) {
 }
 MR_TEST_EXPORT(fifo, push_pop, test_fifo_push_pop);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Fill and empty                                                       */
 static void test_fifo_fill_empty(void) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
@@ -160,8 +154,6 @@ static void test_fifo_fill_empty(void) {
 }
 MR_TEST_EXPORT(fifo, fill_empty, test_fifo_fill_empty);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Write / Read                                                         */
 static void test_fifo_write_read(void) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
@@ -192,8 +184,6 @@ static void test_fifo_write_read(void) {
 }
 MR_TEST_EXPORT(fifo, write_read, test_fifo_write_read);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Peek without consume                                                 */
 static void test_fifo_peek(void) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
@@ -220,8 +210,6 @@ static void test_fifo_peek(void) {
 }
 MR_TEST_EXPORT(fifo, peek, test_fifo_peek);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Skip elements                                                        */
 static void test_fifo_skip(void) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
@@ -246,21 +234,20 @@ static void test_fifo_skip(void) {
 }
 MR_TEST_EXPORT(fifo, skip, test_fifo_skip);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Overwrite                                                            */
 static void test_fifo_overwrite(void) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
     test_elem_t src[4];
     test_elem_t dst[2];
+    test_elem_t elem;
     mr_uint32_t cap;
     mr_uint32_t i;
 
     cap = mr_fifo_init(&fifo, buf, sizeof(buf), sizeof(test_elem_t));
 
     for (i = 0; i < cap; ++i) {
-        test_elem_t e = {.id = (int)i};
-        mr_fifo_push(&fifo, &e);
+        elem.id = (int)i;
+        mr_fifo_push(&fifo, &elem);
     }
     src[0].id = 100;
     src[1].id = 101;
@@ -276,8 +263,6 @@ static void test_fifo_overwrite(void) {
 }
 MR_TEST_EXPORT(fifo, overwrite, test_fifo_overwrite);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Reset                                                                */
 static void test_fifo_reset(void) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
@@ -293,8 +278,6 @@ static void test_fifo_reset(void) {
 }
 MR_TEST_EXPORT(fifo, reset, test_fifo_reset);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Empty / Full transitions                                             */
 static void test_fifo_empty_full(void) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
@@ -317,8 +300,6 @@ static void test_fifo_empty_full(void) {
 }
 MR_TEST_EXPORT(fifo, empty_full, test_fifo_empty_full);
 
-/* -------------------------------------------------------------------------- */
-/* Test: Available / length consistency                                       */
 static void test_fifo_avail_len(void) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
@@ -337,7 +318,7 @@ static void test_fifo_avail_len(void) {
 }
 MR_TEST_EXPORT(fifo, avail_len, test_fifo_avail_len);
 
-static void test_fifo_claim_finsh(void) {
+static void test_fifo_claim_finish(void) {
     mr_uint8_t buf[128];
     mr_uint32_t cap;
     mr_uint32_t ret;
@@ -375,5 +356,5 @@ static void test_fifo_claim_finsh(void) {
     ret = mr_fifo_overwrite_claim(&fifo, 0, (void **)&p, cap);
     MR_TEST_ASSERT_EQ_UINT(ret, cap / 2);
 }
-MR_TEST_EXPORT(fifo, claim_finish, test_fifo_claim_finsh);
+MR_TEST_EXPORT(fifo, claim_finish, test_fifo_claim_finish);
 #endif /* defined(MR_USE_TEST) */
