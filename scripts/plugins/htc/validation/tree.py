@@ -13,15 +13,16 @@ completed, including alias resolution and reference validation.
 """
 
 from ..common import ArrayMode, ArrayValue, Diagnostics, ErrorCode, \
-    ReferenceValue, SourceSpan, ValueExpr, NumberValue, FloatValue
-from ..semantic import HardTree
+    ReferenceValue, SourceSpan, STATUS_DISABLED, ValueExpr, NumberValue, \
+    FloatValue
+from ..semantic import HardTree, ReferenceResolver
 
 
 class TreeValidator:
     """Validates a hardware tree and fills derived symbol tables."""
 
     NODE_ALIASES_PATH = "/aliases"
-    STATUS_DISABLED = "disabled"
+    STATUS_DISABLED = STATUS_DISABLED
 
     def __init__(self, diagnostics: Diagnostics) -> None:
         """Initialize the validator with a shared diagnostic sink."""
@@ -99,26 +100,8 @@ class TreeValidator:
     def _lookup_reference(reference: ReferenceValue,
                           tree: HardTree) -> str | None:
         """Resolve a reference value to its canonical semantic path."""
-        # Path references are already canonical
-        if reference.is_path:
-            return reference.reference if reference.reference in tree.nodes_by_path else None
-
-        # Label references take priority over shorthand node-name lookup
-        label_target = tree.labels.get(reference.reference)
-        if label_target is not None:
-            return label_target
-
-        # Shorthand `&uart0` resolves to `/uart0` when it exists
-        path = f"/{reference.reference}"
-        if path in tree.nodes_by_path:
-            return path
-
-        # Fallback: search by node name for deeper nodes
-        for node in tree.nodes:
-            if node.name == reference.reference:
-                return node.path
-
-        return None
+        return ReferenceResolver.resolve(tree, reference.reference,
+                                         reference.is_path)
 
     def _iter_references(self, value: ValueExpr):
         """Yield nested reference values from a value expression tree."""

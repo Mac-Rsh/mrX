@@ -12,9 +12,21 @@ compiler pipeline.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from .diagnostics import Diagnostic, Diagnostics, ErrorCode, Level
 from .source import CompilationUnit, IncludeSite, SourceFile, SourceLocation, \
     SourceSpan
+from .diagnostics import Diagnostic, Diagnostics, ErrorCode, Level
+from .status import (
+    STATUS_DEFER,
+    STATUS_DISABLED,
+    STATUS_EARLY,
+    STATUS_LAST,
+    STATUS_OKAY,
+    STATUS_PRIO,
+    STATUS_PRIO_PREFIX,
+    STATUS_PRIO_SUFFIX,
+    VALID_STATUS_VALUES,
+    parse_priority_status,
+)
 from .syntax import (
     ArrayMode,
     ArrayValue,
@@ -50,6 +62,16 @@ __all__ = [
     "SourceFile",
     "SourceLocation",
     "SourceSpan",
+    "STATUS_DEFER",
+    "STATUS_DISABLED",
+    "STATUS_EARLY",
+    "STATUS_LAST",
+    "STATUS_OKAY",
+    "STATUS_PRIO",
+    "STATUS_PRIO_PREFIX",
+    "STATUS_PRIO_SUFFIX",
     "StringValue",
+    "VALID_STATUS_VALUES",
     "ValueExpr",
+    "parse_priority_status",
 ]

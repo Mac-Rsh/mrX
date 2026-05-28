@@ -11,8 +11,8 @@ Defines token categories and token records shared by the lexer and parser.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from dataclasses import dataclass
 from ..common import SourceSpan
+from dataclasses import dataclass
 from enum import Enum
 
 

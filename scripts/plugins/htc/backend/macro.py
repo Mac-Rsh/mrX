@@ -13,8 +13,10 @@ definitions used by embedded targets.
 """
 
 from ..common import ArrayMode, ArrayValue, EmptyValue, FloatValue, \
-    IdentifierValue, NumberValue, ReferenceValue, StringValue, ValueExpr
-from ..semantic import HardNode, HardTree
+    IdentifierValue, NumberValue, ReferenceValue, STATUS_DEFER, \
+    STATUS_DISABLED, STATUS_EARLY, STATUS_LAST, STATUS_OKAY, STATUS_PRIO, \
+    STATUS_PRIO_PREFIX, STATUS_PRIO_SUFFIX, StringValue, ValueExpr
+from ..semantic import HardNode, HardTree, ReferenceResolver
 
 
 class MacroBuilder:
@@ -32,14 +34,14 @@ class MacroBuilder:
     PROPERTY_INIT_LEVEL = "INIT_LEVEL"
     PROPERTY_PARENT = "PARENT"
     PROPERTY_ADDR = "ADDR"
-    STATUS_EARLY = "early"
-    STATUS_OKAY = "okay"
-    STATUS_LAST = "last"
-    STATUS_DEFER = "defer"
-    STATUS_DISABLED = "disabled"
-    STATUS_PRIO_PREFIX = "prio("
-    STATUS_PRIO_SUFFIX = ")"
-    STATUS_PRIO = "prio"
+    STATUS_EARLY = STATUS_EARLY
+    STATUS_OKAY = STATUS_OKAY
+    STATUS_LAST = STATUS_LAST
+    STATUS_DEFER = STATUS_DEFER
+    STATUS_DISABLED = STATUS_DISABLED
+    STATUS_PRIO_PREFIX = STATUS_PRIO_PREFIX
+    STATUS_PRIO_SUFFIX = STATUS_PRIO_SUFFIX
+    STATUS_PRIO = STATUS_PRIO
     STATUS_TO_INIT_LEVEL = {
         STATUS_EARLY: "MR_DRIVER_LEVEL_EARLY",
         STATUS_OKAY: "MR_DRIVER_LEVEL_NORMAL",
@@ -232,8 +234,8 @@ class MacroBuilder:
 
         # References are already validated, resolve through label, path, then name
         if isinstance(value, ReferenceValue):
-            target = self._lookup_reference(tree, value.reference,
-                                            value.is_path)
+            target = ReferenceResolver.resolve(tree, value.reference,
+                                               value.is_path)
             return self._path_to_macro(target or f"/{value.reference}")
 
         # Inline arrays render as direct brace-enclosed values
@@ -278,23 +280,6 @@ class MacroBuilder:
             macro = self.STATUS_TO_INIT_LEVEL[self.STATUS_PRIO]
             return f"{macro}({status[start:end]})"
         return self.STATUS_TO_INIT_LEVEL.get(status, self.DEFAULT_INIT_LEVEL)
-
-    @staticmethod
-    def _lookup_reference(tree: HardTree, reference: str,
-                          is_path: bool) -> str | None:
-        """Resolve a reference through label, short-path, then node name."""
-        if is_path:
-            return reference if reference in tree.nodes_by_path else None
-        target = tree.labels.get(reference)
-        if target is not None:
-            return target
-        short = f"/{reference}"
-        if short in tree.nodes_by_path:
-            return short
-        for node in tree.nodes:
-            if node.name == reference:
-                return node.path
-        return None
 
     @staticmethod
     def _format_address(address: str) -> str:

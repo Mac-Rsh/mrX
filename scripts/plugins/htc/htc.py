@@ -12,14 +12,10 @@ macro emission pipeline for one input source file.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from .common import CompilationUnit, Diagnostics, ErrorCode, RootNode
-from .frontend import Lexer, Parser, Preprocessor
+from .compiler import CompileOptions, HTCCompiler
 from argparse import ArgumentParser, Namespace
+from .common import Diagnostics, ErrorCode
 from dock import PluginSpec, export_plugin
-from .validation import TreeValidator
-from .semantic import SemanticBuilder
-from .backend import MacroBuilder
-from datetime import datetime
 from pathlib import Path
 
 
@@ -72,44 +68,17 @@ class HTCCommand:
             return 1
         input_path, output_path = paths
 
-        # Collect diagnostics across the whole compilation pipeline
-        diagnostics = Diagnostics()
-
-        # Preprocess the source file and all included files first
-        unit = self._preprocess(input_path, diagnostics)
-        if unit is None:
-            # Preprocessing already reported the exact failure details
-            self._print_diagnostics(diagnostics)
+        # Run the compiler pipeline separately from CLI and file output handling
+        result = HTCCompiler().compile(CompileOptions(input_path, output_path))
+        self._print_diagnostics(result.diagnostics)
+        if not result.ok or result.header_text is None:
             return 1
-
-        # Parse every preprocessed source file into syntax trees
-        roots = self._parse_roots(unit, diagnostics)
-        if roots is None:
-            # Parsing errors are accumulated in the shared diagnostics sink
-            self._print_diagnostics(diagnostics)
-            return 1
-
-        # Build the semantic tree from all parsed roots
-        tree = SemanticBuilder(diagnostics).build(roots)
-
-        # Validate references, aliases, and tree consistency rules
-        TreeValidator(diagnostics).validate(tree)
-
-        # Print diagnostics before deciding whether code generation can continue
-        self._print_diagnostics(diagnostics)
-        if diagnostics.has_errors():
-            return 1
-
-        # Render backend macros and wrap them as a complete header file
-        header_text = self._wrap_output(
-            output_path,
-            MacroBuilder.render(MacroBuilder().build(tree)),
-        )
 
         # Write the generated header to the final output location
-        if not self._write_output(output_path, header_text, diagnostics):
+        if not self._write_output(output_path, result.header_text,
+                                  result.diagnostics):
             # File system write errors are reported through diagnostics
-            self._print_diagnostics(diagnostics)
+            self._print_diagnostics(result.diagnostics)
             return 1
 
         # Report the generated output file path on success
@@ -196,128 +165,6 @@ class HTCCommand:
         # Only print when at least one diagnostic was collected
         if diagnostics.diagnostics:
             print(diagnostics.format_all())
-
-    @classmethod
-    def _wrap_output(cls, output_path: Path, header_text: str) -> str:
-        """Wrap rendered macros with a generated header file scaffold.
-
-        Args:
-            output_path: Resolved output header file path.
-            header_text: Rendered backend macro text.
-
-        Returns:
-            Final header file text with include guards and timestamp.
-        """
-        # Derive the include guard from the target output file name
-        guard = cls._build_header_guard(output_path)
-
-        # Stamp the generated file with the local generation time
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Build the header prologue first
-        lines = [
-            f"#ifndef {guard}",
-            f"#define {guard}",
-            "",
-            f"/* Generated at: {timestamp} */",
-            "",
-            "#ifdef __cplusplus",
-            'extern "C" {',
-            "#endif /* __cplusplus */",
-            "",
-        ]
-
-        # Insert rendered macro content only when the backend produced output
-        body = header_text.strip()
-        if body:
-            lines.extend([body, ""])
-
-        # Finish the epilogue and close the include guard
-        lines.extend([
-            "#ifdef __cplusplus",
-            "}",
-            "#endif /* __cplusplus */",
-            "",
-            f"#endif /* {guard} */",
-            "",
-        ])
-        return "\n".join(lines)
-
-    @staticmethod
-    def _build_header_guard(output_path: Path) -> str:
-        """Build an include guard macro name from the output file name.
-
-        Args:
-            output_path: Resolved output header file path.
-
-        Returns:
-            Include guard macro derived from the output file name.
-        """
-        # Normalize the file name to upper case for the guard macro
-        name = output_path.name.upper()
-        guard = []
-
-        # Replace non-alphanumeric characters so the result is a valid macro
-        for char in name:
-            guard.append(char if char.isalnum() else "_")
-        return f"__{''.join(guard)}__"
-
-    @staticmethod
-    def _preprocess(input_path: Path,
-                    diagnostics: Diagnostics) -> CompilationUnit | None:
-        """Preprocess one HTC source file into a compilation unit.
-
-        Args:
-            input_path: Resolved `.hts` source file path.
-            diagnostics: Shared diagnostic sink.
-
-        Returns:
-            Compilation unit, or `None` when preprocessing fails.
-        """
-        # Search includes relative to the input file directory
-        preprocessor = Preprocessor([str(input_path.parent)], diagnostics)
-
-        # Preprocess the entry file into a complete compilation unit
-        unit = preprocessor.process(str(input_path))
-        if diagnostics.has_errors():
-            return None
-
-        # Return the collected preprocessed files on success
-        return unit
-
-    @staticmethod
-    def _parse_roots(unit: CompilationUnit,
-                     diagnostics: Diagnostics) -> list[RootNode] | None:
-        """Parse all source files from a compilation unit.
-
-        Args:
-            unit: Preprocessed compilation unit.
-            diagnostics: Shared diagnostic sink.
-
-        Returns:
-            Parsed root nodes, or `None` when parsing fails.
-        """
-        # Collect one parsed root node for each preprocessed source file
-        roots: list[RootNode] = []
-
-        # Tokenize and parse every source file in the compilation unit
-        for source_file in unit.files:
-            print(f"Parsing: {source_file.path}")
-
-            # Convert raw source text into tokens first
-            lexer = Lexer(source_file.text, source_file.path, diagnostics)
-            tokens = lexer.tokenize()
-
-            # Parse tokens into a syntax tree root
-            parser = Parser(tokens, diagnostics)
-            roots.append(parser.parse())
-
-        # Stop here when any parse-stage diagnostics were reported
-        if diagnostics.has_errors():
-            return None
-
-        # Return parsed roots for semantic analysis
-        return roots
 
     @staticmethod
     def _write_output(

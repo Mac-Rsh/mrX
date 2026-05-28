@@ -13,7 +13,8 @@ backend-ready semantic node records.
 """
 
 from ..common import ArrayMode, ArrayValue, Diagnostics, ErrorCode, \
-    NodeDecl, RootNode, SourceSpan, StringValue, ValueExpr
+    NodeDecl, RootNode, SourceSpan, STATUS_DISABLED, STATUS_OKAY, \
+    VALID_STATUS_VALUES, StringValue, ValueExpr, parse_priority_status
 from dataclasses import dataclass, field
 from collections import OrderedDict
 
@@ -63,20 +64,9 @@ class SemanticBuilder:
 
     PROP_COMPATIBLE = "compatible"
     PROP_STATUS = "status"
-    STATUS_PRIO_PREFIX = "prio("
-    STATUS_PRIO_SUFFIX = ")"
-    STATUS_OKAY = "okay"
-    STATUS_DISABLED = "disabled"
-    STATUS_EARLY = "early"
-    STATUS_LAST = "last"
-    STATUS_DEFER = "defer"
-    VALID_STATUS_VALUES = {
-        STATUS_OKAY,
-        STATUS_DISABLED,
-        STATUS_EARLY,
-        STATUS_LAST,
-        STATUS_DEFER,
-    }
+    STATUS_OKAY = STATUS_OKAY
+    STATUS_DISABLED = STATUS_DISABLED
+    VALID_STATUS_VALUES = VALID_STATUS_VALUES
 
     def __init__(self, diagnostics: Diagnostics) -> None:
         """Initialize the semantic builder with a shared diagnostic sink."""
@@ -195,12 +185,15 @@ class SemanticBuilder:
             return value
 
         # Priority statuses use the form `prio(n)`
-        if value.startswith(self.STATUS_PRIO_PREFIX) and value.endswith(
-                self.STATUS_PRIO_SUFFIX):
+        if value.startswith("prio(") and value.endswith(")"):
             try:
-                priority = int(value[len(self.STATUS_PRIO_PREFIX):-len(
-                    self.STATUS_PRIO_SUFFIX)])
+                priority = parse_priority_status(value)
             except ValueError:
+                self._error_at(ErrorCode.INVALID_PRIO,
+                               f"invalid priority status: '{value}'",
+                               prop.value.span or prop.span)
+                return self.STATUS_OKAY
+            if priority is None:
                 self._error_at(ErrorCode.INVALID_PRIO,
                                f"invalid priority status: '{value}'",
                                prop.value.span or prop.span)

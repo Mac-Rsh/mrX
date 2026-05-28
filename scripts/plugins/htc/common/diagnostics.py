@@ -127,6 +127,11 @@ class Diagnostics:
 
     def __init__(self) -> None:
         self.diagnostics: list[Diagnostic] = []
+        self.sources: dict[str, str] = {}
+
+    def register_source(self, file_path: str, text: str) -> None:
+        """Cache source text for stable diagnostic previews."""
+        self.sources[file_path] = text
 
     def error(self, code: ErrorCode, message: str) -> Diagnostic:
         """Create and store an error diagnostic."""
@@ -160,7 +165,7 @@ class Diagnostics:
         # Inline source preview is optional when a span is available
         if diagnostic.span is not None:
             lines.append(f"   --> {diagnostic.span}")
-            lines.extend(self._source_preview(diagnostic.span))
+            lines.extend(self._source_preview(diagnostic.span, self.sources))
 
         # Notes are rendered after the main message body
         for note in diagnostic.notes:
@@ -168,9 +173,10 @@ class Diagnostics:
         return "\n".join(lines)
 
     @staticmethod
-    def _source_preview(span: SourceSpan) -> list[str]:
+    def _source_preview(span: SourceSpan, sources: dict[str, str]) -> list[str]:
         """Build inline source preview lines for a diagnostic span."""
-        source_line = Diagnostics._load_source_line(span.file_path, span.line)
+        source_line = Diagnostics._load_source_line(span.file_path, span.line,
+                                                    sources)
         if source_line is None:
             return []
         return [
@@ -185,8 +191,15 @@ class Diagnostics:
         return " " * max(column - 1, 0) + Diagnostics.POINTER_MARKER
 
     @staticmethod
-    def _load_source_line(file_path: str, line_number: int) -> str | None:
+    def _load_source_line(file_path: str, line_number: int,
+                          sources: dict[str, str]) -> str | None:
         """Load one source line for inline diagnostic display."""
+        cached = sources.get(file_path)
+        if cached is not None:
+            lines = cached.splitlines()
+            if 1 <= line_number <= len(lines):
+                return lines[line_number - 1]
+            return None
         try:
             with open(file_path, "r", encoding="utf-8") as handle:
                 for index, line in enumerate(handle, start=1):

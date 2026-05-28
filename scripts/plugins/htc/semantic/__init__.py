@@ -12,5 +12,7 @@ Exposes semantic tree models and semantic builder entry points.
 """
 
 from .builder import HardNode, HardTree, NodeProperty, SemanticBuilder
+from .reference import ReferenceResolver
 
-__all__ = ["HardNode", "HardTree", "NodeProperty", "SemanticBuilder"]
+__all__ = ["HardNode", "HardTree", "NodeProperty", "ReferenceResolver",
+           "SemanticBuilder"]

@@ -11,15 +11,21 @@ Re-exports preprocessing, lexing, parsing, and token model types.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
+from .conditional_state import ConditionalState
+from .macro_expander import MacroExpander
+from .preprocessor import Preprocessor
+from .resolver import SourceResolver
+from .tokens import Token, TokenType
 from .lexer import Lexer
 from .parser import Parser
-from .preprocessor import Preprocessor
-from .tokens import Token, TokenType
 
 __all__ = [
+    "ConditionalState",
     "Lexer",
+    "MacroExpander",
     "Parser",
     "Preprocessor",
+    "SourceResolver",
     "Token",
     "TokenType",
 ]

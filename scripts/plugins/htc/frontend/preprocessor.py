@@ -14,6 +14,9 @@ simple macro expansion while preserving source line structure.
 
 from ..common import CompilationUnit, Diagnostics, ErrorCode, IncludeSite, \
     SourceFile
+from .conditional_state import ConditionalState
+from .macro_expander import MacroExpander
+from .resolver import SourceResolver
 from .directives import (
     ConditionalDirective,
     DefineDirective,
@@ -22,22 +25,7 @@ from .directives import (
     UndefDirective,
     UnsupportedDirective,
 )
-from .conditions import ConditionEvaluator
-from dataclasses import dataclass
 from pathlib import Path
-
-
-@dataclass
-class ConditionalFrame:
-    """Tracks active state for one nested conditional compilation block."""
-
-    parent_active: bool
-    current_active: bool
-    branch_taken: bool
-    file_path: str
-    line: int
-    column: int
-    saw_else: bool = False
 
 
 class Preprocessor:
@@ -61,7 +49,8 @@ class Preprocessor:
                              include_dirs]
         self.diagnostics = diagnostics
         self.directive_parser = DirectiveParser()
-        self.condition_evaluator = ConditionEvaluator()
+        self.resolver = SourceResolver(include_dirs, diagnostics)
+        self.macro_expander = MacroExpander(diagnostics)
 
     def process(self, entry_file: str) -> CompilationUnit:
         """Process an entry file and return its compilation unit."""
@@ -80,7 +69,7 @@ class Preprocessor:
     ) -> None:
         """Scan one file, apply directives, and append it to the unit."""
         # Resolve the input path first so all later bookkeeping uses one form
-        resolved_path = self._require_file(file_path)
+        resolved_path = self.resolver.require_file(file_path)
         if resolved_path is None:
             return
 
@@ -92,6 +81,8 @@ class Preprocessor:
             return
 
         unit.include_graph.setdefault(normalized_path, [])
+        if unit.contains(normalized_path):
+            return
 
         # Read source text before scanning physical lines
         raw_text = self._read_source_text(resolved_path, included_from)
@@ -114,9 +105,10 @@ class Preprocessor:
         """Scan resolved source text and append the filtered file to the unit."""
         # Keep the file slot stable so include order is preserved in the unit
         filtered_lines: list[str] = []
-        conditional_stack: list[ConditionalFrame] = []
-        unit.append(SourceFile(path=normalized_path, text="",
-                               included_from=included_from))
+        conditional_stack = ConditionalState(self.diagnostics)
+        if not unit.append(SourceFile(path=normalized_path, text="",
+                                      included_from=included_from)):
+            return
         source_index = len(unit.files) - 1
         next_stack = [*active_stack, normalized_path]
 
@@ -131,8 +123,9 @@ class Preprocessor:
             text="".join(filtered_lines),
             included_from=included_from,
         )
-        self._report_unterminated_conditionals(normalized_path, raw_text,
-                                               conditional_stack)
+        self.diagnostics.register_source(normalized_path,
+                                         unit.files[source_index].text)
+        conditional_stack.report_unterminated()
 
     def _scan_line(
             self,
@@ -141,7 +134,7 @@ class Preprocessor:
             file_path: str,
             current_dir: Path,
             filtered_lines: list[str],
-            conditional_stack: list[ConditionalFrame],
+            conditional_stack: ConditionalState,
             active_stack: list[str],
             unit: CompilationUnit,
             macros: dict[str, str],
@@ -163,7 +156,7 @@ class Preprocessor:
             return
 
         # Skip normal work when the current branch is inactive
-        if self._is_skipping(conditional_stack):
+        if conditional_stack.is_skipping():
             self._preserve_newline(filtered_lines, line)
             return
 
@@ -200,17 +193,8 @@ class Preprocessor:
 
         # Ordinary source lines only participate in macro expansion
         filtered_lines.append(
-            self._expand_macros_in_line(line, macros, file_path=file_path,
-                                        line_number=line_number))
-
-    def _require_file(self, file_path: str) -> Path | None:
-        """Resolve and validate one source file path."""
-        resolved_path = self._resolve_file(Path(file_path))
-        if resolved_path is not None:
-            return resolved_path
-        self.diagnostics.error(ErrorCode.FILE_NOT_FOUND,
-                               f"file not found: '{file_path}'")
-        return None
+            self.macro_expander.expand_line(line, macros, file_path=file_path,
+                                            line_number=line_number))
 
     def _has_circular_include(self, normalized_path: str,
                               active_stack: list[str], file_name: str,
@@ -269,8 +253,8 @@ class Preprocessor:
             return
 
         # Quote includes search the current directory first, then include dirs
-        child_path = self._resolve_include(directive.path, current_dir,
-                                           directive.kind)
+        child_path = self.resolver.resolve_include(directive.path, current_dir,
+                                                   directive.kind)
         if child_path is None:
             self._report_line_error(
                 ErrorCode.FILE_NOT_FOUND,
@@ -290,35 +274,12 @@ class Preprocessor:
         )
         unit.add_edge(file_path, str(child_path))
 
-    def _report_unterminated_conditionals(
-            self,
-            _file_path: str,
-            _raw_text: str,
-            conditional_stack: list[ConditionalFrame],
-    ) -> None:
-        """Report an unterminated conditional block when nesting remains."""
-        if not conditional_stack:
-            return
-        frame = conditional_stack[-1]
-        self._report_line_error(
-            ErrorCode.INCLUDE_ERROR,
-            "unterminated conditional directive block",
-            frame.file_path,
-            frame.line,
-            frame.column,
-        )
-
     def _report_line_error(self, code: ErrorCode, message: str,
                            file_path: str, line_number: int,
                            column: int = 1) -> None:
         """Emit one preprocessor error attached to a source line."""
         self.diagnostics.error(code, message).with_span(file_path, line_number,
                                                         column)
-
-    @classmethod
-    def _directive_column(cls, line: str) -> int:
-        """Return the source column for a preprocessor directive marker."""
-        return cls._column_of(line, DirectiveParser.DIRECTIVE_PREFIX)
 
     @staticmethod
     def _column_of(line: str, text: str | None,
@@ -336,15 +297,6 @@ class Preprocessor:
         return len(line) - len(stripped) + 1
 
     @staticmethod
-    def _resolve_file(path: Path) -> Path | None:
-        """Resolve a path and ensure it points to a readable file."""
-        try:
-            resolved = path.resolve()
-        except OSError:
-            return None
-        return resolved if resolved.is_file() else None
-
-    @staticmethod
     def _preserve_newline(filtered_lines: list[str], line: str) -> None:
         """Preserve only the original line ending for directive lines."""
         if line.endswith(Preprocessor.NEWLINE_CRLF):
@@ -352,263 +304,15 @@ class Preprocessor:
         elif line.endswith(Preprocessor.NEWLINE_LF):
             filtered_lines.append(Preprocessor.NEWLINE_LF)
 
-    @staticmethod
-    def _is_skipping(conditional_stack: list[ConditionalFrame]) -> bool:
-        """Return True when the current conditional stack disables output."""
-        return any(not frame.current_active for frame in conditional_stack)
-
     def _handle_conditional_directive(
             self,
             directive: ConditionalDirective,
             macros: dict[str, str],
-            conditional_stack: list[ConditionalFrame],
+            conditional_stack: ConditionalState,
             file_path: str,
             line_number: int,
             line: str,
     ) -> None:
         """Update conditional compilation state for a directive line."""
-        parent_active = all(frame.current_active for frame in conditional_stack)
-        expression = directive.expression or self.condition_evaluator.DEFAULT_EXPR
-        directive_column = self._directive_column(line)
-        expression_column = self._column_of(line, expression, directive_column)
-
-        # Opening directives push a new nesting frame
-        if directive.kind == self.DIRECTIVE_IFDEF:
-            self._push_conditional_frame(conditional_stack, parent_active,
-                                         directive.expression in macros,
-                                         file_path, line_number,
-                                         expression_column)
-            return
-        if directive.kind == self.DIRECTIVE_IFNDEF:
-            self._push_conditional_frame(conditional_stack, parent_active,
-                                         directive.expression not in macros,
-                                         file_path, line_number,
-                                         expression_column)
-            return
-        if directive.kind == self.DIRECTIVE_IF:
-            matched = self._evaluate_condition(expression, macros, file_path,
-                                               line_number, expression_column)
-            self._push_conditional_frame(conditional_stack, parent_active,
-                                         matched, file_path, line_number,
-                                         expression_column)
-            return
-
-        # Mid-block directives mutate the current frame in place
-        if directive.kind == self.DIRECTIVE_ELIF:
-            if not conditional_stack:
-                self._report_unexpected_conditional(
-                    self.DIRECTIVE_ELIF,
-                    file_path,
-                    line_number,
-                    directive_column,
-                )
-                return
-            frame = conditional_stack[-1]
-            if frame.saw_else:
-                self._report_line_error(
-                    ErrorCode.INCLUDE_ERROR,
-                    f"#{self.DIRECTIVE_ELIF} cannot appear after #{self.DIRECTIVE_ELSE}",
-                    file_path,
-                    line_number,
-                    directive_column,
-                )
-                return
-            matched = self._evaluate_condition(expression, macros, file_path,
-                                               line_number, expression_column)
-            frame.current_active = frame.parent_active and (
-                not frame.branch_taken) and matched
-            frame.branch_taken = frame.branch_taken or matched
-            return
-        if directive.kind == self.DIRECTIVE_ELSE:
-            if not conditional_stack:
-                self._report_unexpected_conditional(
-                    self.DIRECTIVE_ELSE,
-                    file_path,
-                    line_number,
-                    directive_column,
-                )
-                return
-            frame = conditional_stack[-1]
-            if frame.saw_else:
-                self._report_line_error(
-                    ErrorCode.INCLUDE_ERROR,
-                    f"duplicate #{self.DIRECTIVE_ELSE} in conditional block",
-                    file_path,
-                    line_number,
-                    directive_column,
-                )
-                return
-            frame.saw_else = True
-            frame.current_active = frame.parent_active and not frame.branch_taken
-            frame.branch_taken = True
-            return
-
-        # Closing directives pop one frame when possible
-        if directive.kind == self.DIRECTIVE_ENDIF:
-            if conditional_stack:
-                conditional_stack.pop()
-                return
-            self._report_unexpected_conditional(
-                self.DIRECTIVE_ENDIF,
-                file_path,
-                line_number,
-                directive_column,
-            )
-
-    def _report_unexpected_conditional(self, directive_name: str,
-                                       file_path: str,
-                                       line_number: int,
-                                       column: int) -> None:
-        """Report a conditional directive that appears without a matching block."""
-        self._report_line_error(
-            ErrorCode.INCLUDE_ERROR,
-            f"unexpected #{directive_name} without matching conditional block",
-            file_path,
-            line_number,
-            column,
-        )
-
-    @staticmethod
-    def _push_conditional_frame(
-            conditional_stack: list[ConditionalFrame],
-            parent_active: bool,
-            matched: bool,
-            file_path: str,
-            line_number: int,
-            column: int,
-    ) -> None:
-        """Push a new conditional frame onto the nesting stack."""
-        conditional_stack.append(
-            ConditionalFrame(
-                parent_active=parent_active,
-                current_active=parent_active and matched,
-                branch_taken=matched,
-                file_path=file_path,
-                line=line_number,
-                column=column,
-            )
-        )
-
-    def _evaluate_condition(
-            self,
-            expression: str,
-            macros: dict[str, str],
-            file_path: str,
-            line_number: int,
-            column: int,
-    ) -> bool:
-        """Evaluate a `#if` or `#elif` expression against current macros."""
-        try:
-            return self.condition_evaluator.evaluate(expression, macros)
-        except ValueError as exc:
-            self.diagnostics.error(
-                ErrorCode.INCLUDE_ERROR,
-                f"invalid conditional expression: {expression}",
-            ).with_span(file_path, line_number, column).add_note(str(exc))
-            return False
-
-    def _expand_macros_in_line(
-            self,
-            line: str,
-            macros: dict[str, str],
-            file_path: str | None = None,
-            line_number: int | None = None,
-            column: int | None = None,
-            depth: int = 0,
-    ) -> str:
-        """Expand simple object-like macros in a normal source line."""
-        result: list[str] = []
-        index = 0
-        in_string = False
-        while index < len(line):
-            char = line[index]
-
-            # String literals are copied through without macro expansion
-            if char == '"':
-                in_string = not in_string
-                result.append(char)
-                index += 1
-                continue
-
-            if in_string and char == "\\" and index + 1 < len(line):
-                result.append(line[index:index + 2])
-                index += 2
-                continue
-
-            # Line comments terminate expansion for the remainder of the line
-            if not in_string and line.startswith("//", index):
-                result.append(line[index:])
-                break
-
-            # Identifiers are the only expandable macro candidates
-            if not in_string and self._is_identifier_start(char):
-                end = index + 1
-                while end < len(line) and self._is_identifier_char(line[end]):
-                    end += 1
-                name = line[index:end]
-                macro_column = column if column is not None else index + 1
-                result.append(
-                    self._expand_macro_name(name, macros, file_path,
-                                            line_number, macro_column, depth))
-                index = end
-                continue
-            result.append(char)
-            index += 1
-        return "".join(result)
-
-    def _expand_macro_name(self, name: str, macros: dict[str, str],
-                           file_path: str | None, line_number: int | None,
-                           column: int | None, depth: int) -> str:
-        """Expand a single macro name with shallow recursion control."""
-        if name not in macros:
-            return name
-        if depth >= self.MAX_MACRO_EXPANSION_DEPTH:
-            diagnostic = self.diagnostics.error(
-                ErrorCode.INCLUDE_ERROR,
-                f"macro expansion depth exceeded near '{name}'",
-            )
-            if file_path is not None and line_number is not None:
-                diagnostic.with_span(file_path, line_number, column or 1)
-            return name
-        value = macros[name]
-        if not value:
-            return ""
-        return self._expand_macros_in_line(value, macros, file_path,
-                                           line_number, column, depth + 1)
-
-    @staticmethod
-    def _is_identifier_start(char: str) -> bool:
-        """Return True when a character can start an identifier."""
-        return char.isalpha() or char == "_"
-
-    @staticmethod
-    def _is_identifier_char(char: str) -> bool:
-        """Return True when a character can continue an identifier."""
-        return char.isalnum() or char == "_"
-
-    def _resolve_include(self, raw_path: str, current_dir: Path,
-                         include_kind: str) -> Path | None:
-        """Resolve an include path according to quote or angle search rules."""
-        # Absolute paths are intentionally rejected
-        if raw_path.startswith("/"):
-            self.diagnostics.error(ErrorCode.INCLUDE_ERROR,
-                                   f"absolute includes are not allowed: '{raw_path}'")
-            return None
-
-        # Reject parent traversal before searching candidate directories
-        if ".." in Path(raw_path).parts:
-            self.diagnostics.error(ErrorCode.INCLUDE_ERROR,
-                                   f"path traversal detected in include: '{raw_path}'")
-            return None
-
-        # Quote includes look in the current directory before shared include dirs
-        candidates: list[Path] = []
-        if include_kind == self.INCLUDE_KIND_QUOTE:
-            candidates.append(current_dir / raw_path)
-        candidates.extend(
-            directory / raw_path for directory in self.include_dirs)
-        for candidate in candidates:
-            resolved = self._resolve_file(candidate)
-            if resolved is not None:
-                return resolved
-        return None
+        conditional_stack.handle(directive, macros, file_path, line_number,
+                                 line)

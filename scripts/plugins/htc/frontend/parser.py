@@ -12,6 +12,7 @@ the parsing stage rather than the lexer.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
+from .tokens import Token, TokenType
 from ..common import (
     ArrayMode,
     ArrayValue,
@@ -29,7 +30,6 @@ from ..common import (
     StringValue,
     ValueExpr,
 )
-from .tokens import Token, TokenType
 
 
 class Parser:
