@@ -1,14 +1,21 @@
+[**中文**](kernel_entry.md) | [**English**](kernel_entry_en.md)
+
+---
+
 # 内核入口
 
-内核入口模块提供可选的系统启动入口封装。启用 `MR_USE_ENTRY` 后，入口代码会在进入用户 `main()` 之前调用 `mr_kernel_init()`，用于执行 mrX 内核初始化流程。
+内核入口模块提供可选的系统启动入口封装。启用 `MR_USE_ENTRY` 后，入口代码会在进入用户 `main()` 之前调用 `mr_kernel_init()`
+，用于执行 mrX 内核初始化流程。
 
 本文对应 `kernel/entry.c`、`include/mrX.h` 和 Kconfig 中入口相关配置。
 
 ## 模块用途
 
-入口模块的目标是在应用主函数执行前统一完成内核初始化。`kernel/entry.c` 中的私有 `entry()` 函数只执行一项操作：调用 `mr_kernel_init()`。随后代码再进入真实的用户 `main()`。
+入口模块的目标是在应用主函数执行前统一完成内核初始化。`kernel/entry.c` 中的私有 `entry()` 函数只执行一项操作：调用
+`mr_kernel_init()`。随后代码再进入真实的用户 `main()`。
 
-不同工具链使用不同的入口接入方式。ARMCC 使用 `$Sub$$main()` 包装 `$Super$$main()`；其他工具链提供 `mr_entry()`，由启动代码或平台工程选择调用。
+不同工具链使用不同的入口接入方式。ARMCC 使用 `$Sub$$main()` 包装 `$Super$$main()`；其他工具链提供 `mr_entry()`
+，由启动代码或平台工程选择调用。
 
 ## 入口配置
 
@@ -20,7 +27,8 @@ config MR_USE_ENTRY
     default n
 ```
 
-`MR_USE_ENTRY` 控制 `kernel/entry.c` 是否编译入口封装。默认关闭。启用后，入口模块包含 `mr_initcall.h` 并调用 `mr_kernel_init()`。
+`MR_USE_ENTRY` 控制 `kernel/entry.c` 是否编译入口封装。默认关闭。启用后，入口模块包含 `mr_initcall.h` 并调用
+`mr_kernel_init()`。
 
 ## 主要实现
 
@@ -46,7 +54,8 @@ int $Sub$$main(void) {
 }
 ```
 
-当定义 `__ARMCC_VERSION` 时，源码使用 ARMCC 的 `$Sub$$`/`$Super$$` 机制包装 `main()`。这种模式下，用户代码仍然实现普通 `main()`，工具链链接机制会先进入 `$Sub$$main()`，再调用 `$Super$$main()`。
+当定义 `__ARMCC_VERSION` 时，源码使用 ARMCC 的 `$Sub$$`/`$Super$$` 机制包装 `main()`。这种模式下，用户代码仍然实现普通
+`main()`，工具链链接机制会先进入 `$Sub$$main()`，再调用 `$Super$$main()`。
 
 ### 通用入口函数
 
@@ -60,11 +69,13 @@ int mr_entry(void) {
 }
 ```
 
-非 ARMCC 工具链下，模块定义 `mr_entry()`。该函数先执行内核初始化，再调用用户 `main()`。当前头文件中没有单独声明 `mr_entry()`，平台启动文件或工程入口需要自行匹配该符号。
+非 ARMCC 工具链下，模块定义 `mr_entry()`。该函数先执行内核初始化，再调用用户 `main()`。当前头文件中没有单独声明 `mr_entry()`
+，平台启动文件或工程入口需要自行匹配该符号。
 
 ## 公共头文件关系
 
-`include/mrX.h` 是 mrX 的聚合头文件。它包含内核公共头文件，包括 `mr_initcall.h`、`mr_hook.h`、`mr_log.h`、`mr_printf.h`、`mr_version.h` 等。入口实现直接包含的是 `<mrX/mr_config.h>` 和 `<mrX/kernel/mr_initcall.h>`，并不依赖 `<mrX.h>` 聚合头。
+`include/mrX.h` 是 mrX 的聚合头文件。它包含内核公共头文件，包括 `mr_initcall.h`、`mr_hook.h`、`mr_log.h`、`mr_printf.h`、
+`mr_version.h` 等。入口实现直接包含的是 `<mrX/mr_config.h>` 和 `<mrX/kernel/mr_initcall.h>`，并不依赖 `<mrX.h>` 聚合头。
 
 应用代码通常可以包含 `<mrX.h>` 获取内核、libc 和已启用驱动的公共接口；入口模块自身只关心初始化调用链。
 

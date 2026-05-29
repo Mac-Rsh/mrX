@@ -1,6 +1,11 @@
+[**中文**](kernel_hashmap.md) | [**English**](kernel_hashmap_en.md)
+
+---
+
 # 哈希表
 
-`mr_hashmap` 模块提供基于固定桶数组和双向链表的侵入式哈希表。哈希表本身不分配桶数组和节点内存，调用者需要提供桶数组，并将 `mr_hashnode_t` 嵌入到业务对象中。
+`mr_hashmap` 模块提供基于固定桶数组和双向链表的侵入式哈希表。哈希表本身不分配桶数组和节点内存，调用者需要提供桶数组，并将
+`mr_hashnode_t` 嵌入到业务对象中。
 
 该模块使用 32 位无符号整数作为键，使用 `void *` 保存值。键通过乘法哈希函数映射到桶，桶内使用 `mr_list` 链表处理冲突。
 
@@ -15,7 +20,8 @@ typedef struct mr_hashmap {
 } mr_hashmap_t;
 ```
 
-`buckets` 指向调用者提供的桶数组，每个桶是一个 `mr_list_t` 链表头。`bucket_num` 表示桶数量，查找和添加时使用 `hash % bucket_num` 定位桶。
+`buckets` 指向调用者提供的桶数组，每个桶是一个 `mr_list_t` 链表头。`bucket_num` 表示桶数量，查找和添加时使用
+`hash % bucket_num` 定位桶。
 
 ### 哈希节点
 
@@ -48,7 +54,8 @@ typedef struct mr_hashnode {
 #define MR_HASHNODE_IS_ADDED(_node)     (!mr_list_is_empty(&(_node)->list))
 ```
 
-节点加入任意哈希表后，`list` 不再为空，因此该宏返回 `MR_TRUE`。节点删除后，`mr_list_del()` 会把节点恢复为自环状态，该宏返回 `MR_FALSE`。
+节点加入任意哈希表后，`list` 不再为空，因此该宏返回 `MR_TRUE`。节点删除后，`mr_list_del()` 会把节点恢复为自环状态，该宏返回
+`MR_FALSE`。
 
 ### 遍历宏
 
@@ -80,12 +87,12 @@ mr_err_t mr_hashmap_add(mr_hashmap_t *map, mr_hashnode_t *node);
 
 返回值如下：
 
-| 返回值 | 含义 |
-|--------|------|
-| `0` | 添加成功。 |
+| 返回值          | 含义                       |
+|--------------|--------------------------|
+| `0`          | 添加成功。                    |
 | `-MR_EINVAL` | `map->bucket_num` 为 `0`。 |
-| `-MR_EBUSY` | `node` 已经加入某个哈希表或链表。 |
-| `-MR_EEXIST` | 目标哈希表中已经存在相同键。 |
+| `-MR_EBUSY`  | `node` 已经加入某个哈希表或链表。     |
+| `-MR_EEXIST` | 目标哈希表中已经存在相同键。           |
 
 ### 删除节点
 
@@ -97,9 +104,9 @@ mr_err_t mr_hashmap_del(mr_hashnode_t *node);
 
 返回值如下：
 
-| 返回值 | 含义 |
-|--------|------|
-| `0` | 删除成功。 |
+| 返回值          | 含义        |
+|--------------|-----------|
+| `0`          | 删除成功。     |
 | `-MR_ENOENT` | 节点未加入哈希表。 |
 
 ### 查找节点
@@ -108,7 +115,8 @@ mr_err_t mr_hashmap_del(mr_hashnode_t *node);
 mr_hashnode_t *mr_hashmap_find(mr_hashmap_t *map, mr_uint32_t key);
 ```
 
-`mr_hashmap_find()` 使用与添加相同的哈希规则定位桶，并在桶链表中按键比较。找到时返回节点指针，未找到或 `bucket_num` 为 `0` 时返回 `MR_NULL`。
+`mr_hashmap_find()` 使用与添加相同的哈希规则定位桶，并在桶链表中按键比较。找到时返回节点指针，未找到或 `bucket_num` 为 `0`
+时返回 `MR_NULL`。
 
 ### 判空
 
@@ -128,7 +136,8 @@ MR_INLINE void mr_hashnode_value_set(mr_hashnode_t *node, void *value);
 MR_INLINE void *mr_hashnode_value(mr_hashnode_t *node);
 ```
 
-`mr_hashnode_init()` 初始化节点、键和值。`mr_hashnode_key()` 返回键；已经加入哈希表的节点不应直接修改键。`mr_hashnode_value_set()` 和 `mr_hashnode_value()` 用于设置和读取值指针。
+`mr_hashnode_init()` 初始化节点、键和值。`mr_hashnode_key()` 返回键；已经加入哈希表的节点不应直接修改键。
+`mr_hashnode_value_set()` 和 `mr_hashnode_value()` 用于设置和读取值指针。
 
 ## 使用示例
 

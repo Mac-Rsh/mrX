@@ -1,8 +1,13 @@
+[**中文**](kernel_initcall.md) | [**English**](kernel_initcall_en.md)
+
+---
+
 # 初始化调用
 
 初始化调用模块用于把初始化函数放入指定链接段，并在用户初始化阶段按链接段排序后的顺序依次执行。模块同时提供内核初始化入口，负责启动平台、内存分配、定时器和中断等基础组件。
 
-`MR_INIT_EXPORT()` 导出的条目依赖 `sections.toml` 中的 `initcall` 段规则保留并排序。链接脚本或构建系统需要提供 `__mr_initcall_start` 和 `__mr_initcall_end` 符号，`mr_user_init()` 通过这两个符号遍历初始化表。
+`MR_INIT_EXPORT()` 导出的条目依赖 `sections.toml` 中的 `initcall` 段规则保留并排序。链接脚本或构建系统需要提供
+`__mr_initcall_start` 和 `__mr_initcall_end` 符号，`mr_user_init()` 通过这两个符号遍历初始化表。
 
 ## 核心数据结构和宏
 
@@ -40,7 +45,8 @@ typedef struct mr_initcall {
         = {.name = MR_STR(_entry), .entry = (_entry)}
 ```
 
-`MR_INIT_EXPORT()` 定义一个 `const mr_initcall_t` 对象，变量名为 `__mr_initcall_<entry>`，段名为 `mr_initcall.<level>`，并使用 `MR_USED` 防止被编译器删除。
+`MR_INIT_EXPORT()` 定义一个 `const mr_initcall_t` 对象，变量名为 `__mr_initcall_<entry>`，段名为 `mr_initcall.<level>`，并使用
+`MR_USED` 防止被编译器删除。
 
 ### 段配置
 
@@ -66,7 +72,8 @@ comment = "Initcall"
 MR_INIT_EXPORT(entry, level);
 ```
 
-导出的 `entry` 必须符合 `void entry(void)` 形式。`level` 是字符串字面量或能拼接成字符串的宏，例如 `MR_INIT_LEVEL_DRIVER` 或 `MR_INIT_LEVEL_USER("0")`。
+导出的 `entry` 必须符合 `void entry(void)` 形式。`level` 是字符串字面量或能拼接成字符串的宏，例如 `MR_INIT_LEVEL_DRIVER` 或
+`MR_INIT_LEVEL_USER("0")`。
 
 ### 内核初始化
 
@@ -89,9 +96,11 @@ void mr_kernel_init(void);
 void mr_user_init(void);
 ```
 
-`mr_user_init()` 先断言 `__mr_initcall_start < __mr_initcall_end`，然后调用 `mr_kernel_init()`。用户初始化状态 `__initcall_ustatus` 确保导出初始化函数只执行一次。
+`mr_user_init()` 先断言 `__mr_initcall_start < __mr_initcall_end`，然后调用 `mr_kernel_init()`。用户初始化状态
+`__initcall_ustatus` 确保导出初始化函数只执行一次。
 
-随后函数从 `__mr_initcall_start` 遍历到 `__mr_initcall_end`，对每个 `mr_initcall_t` 调用 `call->entry()`。遍历条件为 `call <= end`，因此结束边界条目本身也会执行。
+随后函数从 `__mr_initcall_start` 遍历到 `__mr_initcall_end`，对每个 `mr_initcall_t` 调用 `call->entry()`。遍历条件为
+`call <= end`，因此结束边界条目本身也会执行。
 
 ## 使用示例
 
@@ -121,5 +130,6 @@ void boot(void) {
 - 初始化顺序取决于段名字符串排序，不是 C 文件编译顺序。
 - `MR_INIT_LEVEL_USER(_level)` 直接拼接字符串，传入参数应能形成合法字符串字面量，例如 `"0"`。
 - `mr_kernel_init()` 和 `mr_user_init()` 都只执行一次；重复调用会直接返回或跳过用户条目。
-- 构建系统必须根据 `sections.toml` 保留并排序 `mr_initcall.*` 段，同时提供 `__mr_initcall_start` 和 `__mr_initcall_end` 符号。
+- 构建系统必须根据 `sections.toml` 保留并排序 `mr_initcall.*` 段，同时提供 `__mr_initcall_start` 和 `__mr_initcall_end`
+  符号。
 - 初始化状态使用 `volatile mr_bool_t`，不是通用并发同步原语；该入口应在受控启动流程中调用。

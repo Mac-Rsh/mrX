@@ -1,6 +1,11 @@
+[**中文**](kernel_list.md) | [**English**](kernel_list_en.md)
+
+---
+
 # 双向链表
 
-`mr_list` 模块提供内核通用的侵入式双向循环链表。链表节点由使用者嵌入到业务结构体中，链表模块只维护节点之间的 `next` 和 `prev` 指针，不负责业务对象内存的申请、释放或并发保护。
+`mr_list` 模块提供内核通用的侵入式双向循环链表。链表节点由使用者嵌入到业务结构体中，链表模块只维护节点之间的 `next` 和
+`prev` 指针，不负责业务对象内存的申请、释放或并发保护。
 
 该模块适合实现队列、对象集合、哈希桶链等基础容器。空链表的头节点指向自身，普通节点从链表删除后也会被重新初始化为自环状态。
 
@@ -15,7 +20,8 @@ typedef struct mr_list {
 } mr_list_t;
 ```
 
-`next` 指向后继节点，`prev` 指向前驱节点。链表头也是一个 `mr_list_t`，空链表满足 `head.next == &head` 且 `head.prev == &head`。
+`next` 指向后继节点，`prev` 指向前驱节点。链表头也是一个 `mr_list_t`，空链表满足 `head.next == &head` 且
+`head.prev == &head`。
 
 ### 静态初始化
 
@@ -43,7 +49,8 @@ static mr_list_t head = MR_LIST_INIT(&head);
     MR_LISTS_INIT(_list, MR_ARRAY_SIZE(_list))
 ```
 
-`MR_LISTS_INIT()` 和 `MR_LIST_ARRAY_INIT()` 用于静态初始化链表数组。它们依赖 `MR_LISTIFY()` 展开初始化表达式，因此数组数量受 `MR_LISTIFY` 可展开数量限制。
+`MR_LISTS_INIT()` 和 `MR_LIST_ARRAY_INIT()` 用于静态初始化链表数组。它们依赖 `MR_LISTIFY()` 展开初始化表达式，因此数组数量受
+`MR_LISTIFY` 可展开数量限制。
 
 ### 容器换算
 
@@ -83,7 +90,8 @@ MR_INLINE void mr_list_init(mr_list_t *entry);
 MR_INLINE void mr_list_add(mr_list_t *head, mr_list_t *entry);
 ```
 
-`mr_list_add()` 将 `entry` 插入到链表尾部，即 `head->prev` 和 `head` 之间。测试中连续添加 `1、2、3` 后，正向遍历顺序保持为 `1、2、3`。
+`mr_list_add()` 将 `entry` 插入到链表尾部，即 `head->prev` 和 `head` 之间。测试中连续添加 `1、2、3` 后，正向遍历顺序保持为
+`1、2、3`。
 
 ### 头部插入
 
@@ -91,7 +99,8 @@ MR_INLINE void mr_list_add(mr_list_t *head, mr_list_t *entry);
 MR_INLINE void mr_list_insert(mr_list_t *head, mr_list_t *entry);
 ```
 
-`mr_list_insert()` 将 `entry` 插入到链表头部，即 `head` 和 `head->next` 之间。测试中先插入 `1` 再插入 `2` 后，正向遍历顺序为 `2、1`。
+`mr_list_insert()` 将 `entry` 插入到链表头部，即 `head` 和 `head->next` 之间。测试中先插入 `1` 再插入 `2` 后，正向遍历顺序为
+`2、1`。
 
 ### 删除节点
 

@@ -1,6 +1,11 @@
+[**中文**](kernel_timer.md) | [**English**](kernel_timer_en.md)
+
+---
+
 # 定时器
 
-Timer 模块用于在内核时钟 tick 到达指定时间后执行回调。定时器对象以内嵌 `mr_object_t` 管理生命周期，以链表节点加入全局定时列表，并由 `mr_kernel_timer_init()` 注册到时钟钩子中进行超时检查。
+Timer 模块用于在内核时钟 tick 到达指定时间后执行回调。定时器对象以内嵌 `mr_object_t` 管理生命周期，以链表节点加入全局定时列表，并由
+`mr_kernel_timer_init()` 注册到时钟钩子中进行超时检查。
 
 定时器支持一次性触发和周期触发。一次性定时器触发后不会自动重新加入定时列表；周期定时器触发回调后会按配置 tick 重新启动。
 
@@ -21,14 +26,14 @@ typedef struct mr_timer {
 
 字段含义如下：
 
-| 字段     | 含义 |
-|----------|------|
-| `parent` | 对象控制块，用于引用计数和静态/动态释放。 |
+| 字段       | 含义                                 |
+|----------|------------------------------------|
+| `parent` | 对象控制块，用于引用计数和静态/动态释放。              |
 | `itick`  | 初始定时时长。最高位可携带 `MR_TIMER_PERIODIC`。 |
-| `ttick`  | 绝对超时 tick，由启动时的当前 tick 加定时时长得到。 |
-| `list`   | 全局定时链表中的节点；空链表表示未处于计时状态。 |
-| `entry`  | 超时回调，类型为 `mr_timer_entry_t *`。 |
-| `param`  | 传给超时回调的用户参数。 |
+| `ttick`  | 绝对超时 tick，由启动时的当前 tick 加定时时长得到。    |
+| `list`   | 全局定时链表中的节点；空链表表示未处于计时状态。           |
+| `entry`  | 超时回调，类型为 `mr_timer_entry_t *`。     |
+| `param`  | 传给超时回调的用户参数。                       |
 
 ### 周期标志
 
@@ -61,7 +66,8 @@ mr_timer_t *mr_timer_create(mr_timer_entry_t *entry, void *param,
                             mr_tick_t tick);
 ```
 
-`mr_timer_init()` 初始化调用者提供的静态定时器对象。`mr_timer_create()` 从堆中分配 `mr_timer_t` 并初始化为动态对象。两者都要求 `entry != MR_NULL` 且 `tick > 0`。
+`mr_timer_init()` 初始化调用者提供的静态定时器对象。`mr_timer_create()` 从堆中分配 `mr_timer_t` 并初始化为动态对象。两者都要求
+`entry != MR_NULL` 且 `tick > 0`。
 
 初始化成功后，定时器对象引用计数为 1，链表节点为空，尚未开始计时。
 
@@ -96,7 +102,8 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick);
 mr_tick_t mr_timer_tick(mr_timer_t *timer);
 ```
 
-`mr_timer_tick_set()` 会先从定时链表移除定时器，再更新 `itick`。如果定时器正在运行，调用该接口会停止当前计时，调用者需要重新 `mr_timer_start()`。
+`mr_timer_tick_set()` 会先从定时链表移除定时器，再更新 `itick`。如果定时器正在运行，调用该接口会停止当前计时，调用者需要重新
+`mr_timer_start()`。
 
 `mr_timer_tick()` 返回当前 `itick`，包括可能存在的 `MR_TIMER_PERIODIC` 标志。
 

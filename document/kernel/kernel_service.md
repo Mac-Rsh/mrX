@@ -1,6 +1,11 @@
+[**中文**](kernel_service.md) | [**English**](kernel_service_en.md)
+
+---
+
 # 服务宏和基础工具
 
-Service 模块提供内核中通用的宏和小型内联工具函数，包括容器地址换算、数组长度计算、最值和对齐、可变参数宏辅助、临时复合字面量构造，以及奇偶校验计算。该模块不维护运行时状态，也没有对应的 `.c` 实现文件；接口全部在 `mr_service.h` 中以宏或 `MR_INLINE` 函数形式提供。
+Service 模块提供内核中通用的宏和小型内联工具函数，包括容器地址换算、数组长度计算、最值和对齐、可变参数宏辅助、临时复合字面量构造，以及奇偶校验计算。该模块不维护运行时状态，也没有对应的
+`.c` 实现文件；接口全部在 `mr_service.h` 中以宏或 `MR_INLINE` 函数形式提供。
 
 ## 核心宏和函数
 
@@ -59,7 +64,8 @@ Service 模块提供内核中通用的宏和小型内联工具函数，包括容
 #define MR_MACRO_IS_USED(_m)        /* 判断宏是否按约定定义为 1 */
 ```
 
-这些宏主要服务于其他内核头文件中的条件展开、名称生成和配置判断。`MR_MACRO_IF()` 要求 `_if` 和 `_else` 参数以额外括号传入，以避免表达式中逗号破坏宏实参列表；内部通过 `MR_DE_BRACKET` 去除保护括号。
+这些宏主要服务于其他内核头文件中的条件展开、名称生成和配置判断。`MR_MACRO_IF()` 要求 `_if` 和 `_else`
+参数以额外括号传入，以避免表达式中逗号破坏宏实参列表；内部通过 `MR_DE_BRACKET` 去除保护括号。
 
 ### 奇偶校验
 
@@ -68,7 +74,8 @@ MR_INLINE mr_bool_t mr_parity_even(const void *src, mr_size_t size);
 MR_INLINE mr_bool_t mr_parity_odd(const void *src, mr_size_t size);
 ```
 
-`mr_parity_even()` 统计 `src` 指向的 `size` 字节数据中置位 bit 的数量，置位数量为偶数时返回 `MR_TRUE`。`mr_parity_odd()` 返回偶校验结果的取反，置位数量为奇数时返回 `MR_TRUE`。
+`mr_parity_even()` 统计 `src` 指向的 `size` 字节数据中置位 bit 的数量，置位数量为偶数时返回 `MR_TRUE`。`mr_parity_odd()`
+返回偶校验结果的取反，置位数量为奇数时返回 `MR_TRUE`。
 
 测试用例对 16 位整数范围内的多个值计算 bit 奇偶性，并与这两个接口的返回值比较。
 

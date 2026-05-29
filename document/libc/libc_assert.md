@@ -1,3 +1,7 @@
+[**中文**](libc_assert.md) | [**English**](libc_assert_en.md)
+
+---
+
 # libc 断言
 
 `mr_assert.h` 提供运行时断言、panic 和编译期静态断言。该模块根据配置选择标准库断言、第三方断言、mrX port 层断言或空断言实现。
@@ -11,12 +15,12 @@
 #define MR_PANIC()       ...
 ```
 
-| 配置 | `MR_ASSERT(_expr)` 行为 | `MR_PANIC()` 行为 |
-|---|---|---|
-| `MR_USE_ASSERT_STD` | 调用 `assert(_expr)`。 | 调用 `assert(0)`。 |
-| `MR_USE_ASSERT_3RD` | 由 `mrX/3party/libc/mr_assert.h` 提供。 | 由第三方头文件提供。 |
-| `MR_USE_ASSERT` | 表达式为假时调用 `mr_port_assert(__FILE__, __LINE__, #_expr)`，随后进入死循环。 | 调用 `mr_port_assert(__FILE__, __LINE__, "panic")`，随后进入死循环。 |
-| 未启用上述配置 | 表达式不被求值，宏为空操作。 | 直接进入死循环。 |
+| 配置                  | `MR_ASSERT(_expr)` 行为                                          | `MR_PANIC()` 行为                                           |
+|---------------------|----------------------------------------------------------------|-----------------------------------------------------------|
+| `MR_USE_ASSERT_STD` | 调用 `assert(_expr)`。                                            | 调用 `assert(0)`。                                           |
+| `MR_USE_ASSERT_3RD` | 由 `mrX/3party/libc/mr_assert.h` 提供。                            | 由第三方头文件提供。                                                |
+| `MR_USE_ASSERT`     | 表达式为假时调用 `mr_port_assert(__FILE__, __LINE__, #_expr)`，随后进入死循环。 | 调用 `mr_port_assert(__FILE__, __LINE__, "panic")`，随后进入死循环。 |
+| 未启用上述配置             | 表达式不被求值，宏为空操作。                                                 | 直接进入死循环。                                                  |
 
 ### port 层断言回调
 
@@ -24,7 +28,8 @@
 extern void mr_port_assert(const char *file, int line, const char *expr);
 ```
 
-启用 `MR_USE_ASSERT` 时，断言失败会调用 port 层实现。`file` 为源码文件，`line` 为行号，`expr` 为失败表达式字符串或 `"panic"`。
+启用 `MR_USE_ASSERT` 时，断言失败会调用 port 层实现。`file` 为源码文件，`line` 为行号，`expr` 为失败表达式字符串或
+`"panic"`。
 
 ### 静态断言
 

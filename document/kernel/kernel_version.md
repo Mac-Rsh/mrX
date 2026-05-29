@@ -1,6 +1,11 @@
+[**中文**](kernel_version.md) | [**English**](kernel_version_en.md)
+
+---
+
 # 内核版本
 
-内核版本头文件提供 mrX 版本号常量、版本编码宏和版本匹配宏。该模块没有对应的 C 源文件，所有能力都由 `include/mrX/kernel/mr_version.h` 中的预处理宏提供。
+内核版本头文件提供 mrX 版本号常量、版本编码宏和版本匹配宏。该模块没有对应的 C 源文件，所有能力都由
+`include/mrX/kernel/mr_version.h` 中的预处理宏提供。
 
 本文对应 `include/mrX/kernel/mr_version.h`。
 
@@ -29,7 +34,8 @@
     (((_major) << 16) | ((_minor) << 8) | (_patch))
 ```
 
-`MR_VERSION_CODE()` 将三段版本号编码为一个整数：主版本位于 bit 16 到 bit 31，次版本位于 bit 8 到 bit 15，补丁版本位于 bit 0 到 bit 7。
+`MR_VERSION_CODE()` 将三段版本号编码为一个整数：主版本位于 bit 16 到 bit 31，次版本位于 bit 8 到 bit 15，补丁版本位于 bit 0
+到 bit 7。
 
 ### 当前版本编码
 

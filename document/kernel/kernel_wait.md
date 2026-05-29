@@ -1,6 +1,11 @@
+[**中文**](kernel_wait.md) | [**English**](kernel_wait_en.md)
+
+---
+
 # 等待事件
 
-Wait 模块用于把“可等待对象”的事件状态和“等待者”的回调连接起来。`mr_waitable_t` 表示能够产生事件的对象，`mr_waiter_t` 表示等待指定事件并在触发时执行回调的对象。模块支持输入、输出、错误三类事件，以及边沿触发和电平触发两种等待方式。
+Wait 模块用于把“可等待对象”的事件状态和“等待者”的回调连接起来。`mr_waitable_t` 表示能够产生事件的对象，`mr_waiter_t`
+表示等待指定事件并在触发时执行回调的对象。模块支持输入、输出、错误三类事件，以及边沿触发和电平触发两种等待方式。
 
 Wait 对象使用 `mr_object_t` 管理生命周期，并通过全局自旋锁保护等待链表的插入、删除和遍历。
 
@@ -16,7 +21,8 @@ Wait 对象使用 `mr_object_t` 管理生命周期，并通过全局自旋锁保
 #define MR_WAIT_EVENT_MASK (~(MR_WAIT_IN | MR_WAIT_OUT | MR_WAIT_ERR | MR_WAIT_EDGE))
 ```
 
-`MR_WAIT_IN`、`MR_WAIT_OUT` 和 `MR_WAIT_ERR` 表示事件类型。`MR_WAIT_EDGE` 表示等待者使用边沿触发；未设置该标志时为电平触发。低位可携带模块自定义事件数据，`MR_WAIT_EVENT_MASK` 可用于取出这部分数据。
+`MR_WAIT_IN`、`MR_WAIT_OUT` 和 `MR_WAIT_ERR` 表示事件类型。`MR_WAIT_EDGE` 表示等待者使用边沿触发；未设置该标志时为电平触发。低位可携带模块自定义事件数据，
+`MR_WAIT_EVENT_MASK` 可用于取出这部分数据。
 
 ### 可等待对象
 
@@ -33,14 +39,14 @@ typedef struct mr_waitable {
 
 字段含义如下：
 
-| 字段     | 含义 |
-|----------|------|
-| `parent` | 对象控制块。 |
-| `last`   | 上一次处理的事件，用于计算边沿事件。 |
-| `gen`    | 检查代数，用于丢弃并发嵌套检查中的旧结果。 |
-| `list`   | 等待该对象的 `mr_waiter_t` 链表头。 |
+| 字段       | 含义                                  |
+|----------|-------------------------------------|
+| `parent` | 对象控制块。                              |
+| `last`   | 上一次处理的事件，用于计算边沿事件。                  |
+| `gen`    | 检查代数，用于丢弃并发嵌套检查中的旧结果。               |
+| `list`   | 等待该对象的 `mr_waiter_t` 链表头。           |
 | `check`  | 事件检查函数，类型为 `mr_waitable_check_t *`。 |
-| `param`  | 传给检查函数的参数。 |
+| `param`  | 传给检查函数的参数。                          |
 
 ```c
 typedef mr_uint64_t(mr_waitable_check_t)(mr_waitable_t *waitable, void *param);
@@ -62,13 +68,13 @@ typedef struct mr_waiter {
 
 字段含义如下：
 
-| 字段     | 含义 |
-|----------|------|
-| `parent` | 对象控制块。 |
-| `event`  | 等待的事件类型和触发方式。 |
-| `list`   | 等待链表节点；空链表表示当前未等待。 |
+| 字段       | 含义                              |
+|----------|---------------------------------|
+| `parent` | 对象控制块。                          |
+| `event`  | 等待的事件类型和触发方式。                   |
+| `list`   | 等待链表节点；空链表表示当前未等待。              |
 | `entry`  | 触发回调，类型为 `mr_waiter_entry_t *`。 |
-| `param`  | 传给触发回调的参数。 |
+| `param`  | 传给触发回调的参数。                      |
 
 ```c
 typedef void(mr_waiter_entry_t)(mr_waiter_t *waiter, void *param,
@@ -85,7 +91,8 @@ mr_err_t mr_waitable_init(mr_waitable_t *able,
 mr_waitable_t *mr_waitable_create(mr_waitable_check_t *check, void *param);
 ```
 
-`mr_waitable_init()` 初始化调用者提供的静态对象。`mr_waitable_create()` 从堆中创建动态对象。`check` 可以为 `MR_NULL`，但此时 `mr_waitable_complete()` 不会产生事件。
+`mr_waitable_init()` 初始化调用者提供的静态对象。`mr_waitable_create()` 从堆中创建动态对象。`check` 可以为 `MR_NULL`，但此时
+`mr_waitable_complete()` 不会产生事件。
 
 ### 可等待对象删除和引用管理
 
@@ -105,7 +112,8 @@ mr_err_t mr_waitable_raise(mr_waitable_t *able, mr_uint64_t event);
 mr_err_t mr_waitable_cancel_all(mr_waitable_t *able);
 ```
 
-`mr_waitable_complete()` 在存在等待者时调用 `check` 获取当前事件，并触发匹配的等待者。若等待者链表为空，该函数直接返回，不调用 `check`。
+`mr_waitable_complete()` 在存在等待者时调用 `check` 获取当前事件，并触发匹配的等待者。若等待者链表为空，该函数直接返回，不调用
+`check`。
 
 `mr_waitable_raise()` 不调用 `check`，而是直接用传入的 `event` 触发等待者。
 
@@ -136,7 +144,8 @@ mr_uint64_t mr_waiter_event(mr_waiter_t *wait);
 
 电平触发等待者加入链表后会立即执行一次 `check`，若当前事件匹配，会立即调用等待者回调。边沿触发等待者加入时不检查历史状态，只等待后续事件变化或主动触发。
 
-`mr_waiter_cancel()` 从等待链表移除等待者。`mr_waiter_event_set()` 会先取消当前等待，再更新等待事件。`mr_waiter_event()` 返回当前等待事件。
+`mr_waiter_cancel()` 从等待链表移除等待者。`mr_waiter_event_set()` 会先取消当前等待，再更新等待事件。`mr_waiter_event()`
+返回当前等待事件。
 
 ## 使用示例
 

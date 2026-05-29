@@ -1,6 +1,11 @@
+[**中文**](libc_atomic.md) | [**English**](libc_atomic_en.md)
+
+---
+
 # libc 原子操作
 
-`mr_atomic.h` 提供 mrX 内部使用的整数原子操作。默认实现通过关闭中断保护读改写临界区；启用 `MR_USE_ATOMIC_3RD` 时，具体类型和接口由第三方头文件提供。
+`mr_atomic.h` 提供 mrX 内部使用的整数原子操作。默认实现通过关闭中断保护读改写临界区；启用 `MR_USE_ATOMIC_3RD`
+时，具体类型和接口由第三方头文件提供。
 
 ## 核心类型和宏
 

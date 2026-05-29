@@ -1,6 +1,11 @@
+[**中文**](kernel_clock.md) | [**English**](kernel_clock_en.md)
+
+---
+
 # 时钟管理
 
-时钟管理模块维护系统 tick、tickless 查询钩子、系统运行时间和可选的高分辨率时钟。普通 tick 使用 `mr_tick_t`，由 `mr_clock_increase()` 推进；高分辨率 tick 由平台层接口提供；忙等延时同样委托给平台层实现。
+时钟管理模块维护系统 tick、tickless 查询钩子、系统运行时间和可选的高分辨率时钟。普通 tick 使用 `mr_tick_t`，由
+`mr_clock_increase()` 推进；高分辨率 tick 由平台层接口提供；忙等延时同样委托给平台层实现。
 
 该模块不创建硬件定时器。硬件或平台定时中断应在合适位置调用 `mr_clock_increase()`，从而推进内核时钟并触发时钟钩子。
 
@@ -51,7 +56,8 @@ typedef struct mr_hires_timestamp {
 #endif
 ```
 
-高分辨率时钟由 `MR_USE_CLOCK_HIRES` 控制。`MR_CFG_HIRES_TICK_PER_SECOND` 默认 1000000，且编译期限制不超过 1000000。时间戳转换以 1970-01-01 00:00:00 为起点，字段拆分到微秒。
+高分辨率时钟由 `MR_USE_CLOCK_HIRES` 控制。`MR_CFG_HIRES_TICK_PER_SECOND` 默认 1000000，且编译期限制不超过 1000000。时间戳转换以
+1970-01-01 00:00:00 为起点，字段拆分到微秒。
 
 ### 时钟钩子
 
@@ -59,7 +65,8 @@ typedef struct mr_hires_timestamp {
 typedef mr_tick_t(mr_clock_hook_t)(void);
 ```
 
-时钟钩子返回下一次需要唤醒或处理的剩余 tick。模块内部通过 `mr_hook_t` 保存钩子数组，大小由 `MR_CFG_CLOCK_HOOK_SIZE` 控制，默认 2，且必须大于等于 2。
+时钟钩子返回下一次需要唤醒或处理的剩余 tick。模块内部通过 `mr_hook_t` 保存钩子数组，大小由 `MR_CFG_CLOCK_HOOK_SIZE` 控制，默认
+2，且必须大于等于 2。
 
 ### 平台时钟接口
 
@@ -80,7 +87,8 @@ void mr_clock_increase(mr_tick_t tick);
 mr_tick_t mr_clock_tick(void);
 ```
 
-`mr_clock_increase()` 将内部 `__clock_tick` 增加 `tick`。如果增加后 tick 值小于增加前的值，说明 32 位 tick 发生回绕，模块会把 `__clock_uptime` 加 1。随后函数会执行时钟钩子。
+`mr_clock_increase()` 将内部 `__clock_tick` 增加 `tick`。如果增加后 tick 值小于增加前的值，说明 32 位 tick 发生回绕，模块会把
+`__clock_uptime` 加 1。随后函数会执行时钟钩子。
 
 `mr_clock_tick()` 返回当前 32 位 tick 值。
 
@@ -106,7 +114,8 @@ mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
 
 这些接口只在 `MR_USE_CLOCK_HIRES` 启用时可用。设置和读取高分辨率 tick 直接调用平台接口。
 
-`mr_hires_tick2timestamp()` 先按 `MR_CFG_HIRES_TICK_PER_SECOND` 校正到微秒，再应用时区偏移。`time_zone` 被限制在 `[-12, 12]`，负偏移导致的负时间会被截断到 0。随后函数按闰年规则拆分为年月日时分秒、毫秒和微秒。
+`mr_hires_tick2timestamp()` 先按 `MR_CFG_HIRES_TICK_PER_SECOND` 校正到微秒，再应用时区偏移。`time_zone` 被限制在
+`[-12, 12]`，负偏移导致的负时间会被截断到 0。随后函数按闰年规则拆分为年月日时分秒、毫秒和微秒。
 
 ### 运行时间和忙等
 
@@ -115,7 +124,8 @@ mr_uptime_t mr_clock_uptime(void);
 void mr_clock_busy_wait(mr_uint32_t us);
 ```
 
-`mr_clock_uptime()` 使用双采样读取粗粒度回绕计数和当前 tick，计算从启动以来的毫秒数。换算因子为 `MR_ROUND_DIV(1000ULL, MR_CFG_TICK_PER_SECOND)`。
+`mr_clock_uptime()` 使用双采样读取粗粒度回绕计数和当前 tick，计算从启动以来的毫秒数。换算因子为
+`MR_ROUND_DIV(1000ULL, MR_CFG_TICK_PER_SECOND)`。
 
 `mr_clock_busy_wait()` 调用 `mr_port_clock_busy_wait(us)`，不会让出 CPU。
 
@@ -141,7 +151,8 @@ void example(void) {
 }
 ```
 
-测试 `test/kernel/clock.c` 覆盖了 tick 增加、tickless 钩子、毫秒/微秒转换、uptime、busy wait，以及在启用高分辨率时钟时的 tick 设置/读取、时间戳转换、闰年、负时区和时区边界。
+测试 `test/kernel/clock.c` 覆盖了 tick 增加、tickless 钩子、毫秒/微秒转换、uptime、busy wait，以及在启用高分辨率时钟时的 tick
+设置/读取、时间戳转换、闰年、负时区和时区边界。
 
 ## 注意事项
 

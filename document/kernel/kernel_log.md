@@ -1,12 +1,18 @@
+[**中文**](kernel_log.md) | [**English**](kernel_log_en.md)
+
+---
+
 # 内核日志
 
-内核日志模块提供带时间戳、等级和标签的日志输出能力。模块基于 `mr_printf` 输出文本，通过全局等级掩码控制运行时输出范围，并通过编译期配置和 `MR_LOG_TAG` 控制各级日志宏是否展开。
+内核日志模块提供带时间戳、等级和标签的日志输出能力。模块基于 `mr_printf` 输出文本，通过全局等级掩码控制运行时输出范围，并通过编译期配置和
+`MR_LOG_TAG` 控制各级日志宏是否展开。
 
 本文对应 `include/mrX/kernel/mr_log.h`、`kernel/log.c` 和 `test/kernel/log.c`。
 
 ## 模块用途
 
-`mr_log` 模块用于在内核和组件中输出结构化调试信息。调用日志宏时，宏会生成包含等级和模块标签的格式字符串；`mr_log()` 在实际输出前打印时间戳，并根据等级掩码决定是否输出该日志。
+`mr_log` 模块用于在内核和组件中输出结构化调试信息。调用日志宏时，宏会生成包含等级和模块标签的格式字符串；`mr_log()`
+在实际输出前打印时间戳，并根据等级掩码决定是否输出该日志。
 
 模块依赖 `MR_USE_LOG`。在 Kconfig 中，`MR_USE_LOG` 会 `select MR_USE_PRINTF`，因此日志输出总是基于 printf 模块。
 
@@ -30,7 +36,8 @@
 #define MR_LOG_MASK(_level)             (1U << (_level))
 ```
 
-等级掩码用于运行时过滤日志。`mr_log()` 只在 `(1U << level) & mask` 非零时输出。源码中的默认掩码为 `0xffffffffU`，表示所有 0 到 31 的等级默认开启。
+等级掩码用于运行时过滤日志。`mr_log()` 只在 `(1U << level) & mask` 非零时输出。源码中的默认掩码为 `0xffffffffU`，表示所有 0
+到 31 的等级默认开启。
 
 ### 默认编译期等级
 
@@ -40,7 +47,8 @@
 #endif
 ```
 
-`MR_CFG_LOG_LEVEL` 控制日志宏的编译期展开上限。Kconfig 中该配置依赖 `MR_USE_LOG`，默认值为 4，取值范围为 0 到 4。若源码包含日志宏的位置未定义 `MR_LOG_TAG`，对应日志宏会展开为空操作。
+`MR_CFG_LOG_LEVEL` 控制日志宏的编译期展开上限。Kconfig 中该配置依赖 `MR_USE_LOG`，默认值为 4，取值范围为 0 到
+4。若源码包含日志宏的位置未定义 `MR_LOG_TAG`，对应日志宏会展开为空操作。
 
 ### 日志格式宏
 
@@ -75,19 +83,19 @@ void mr_log(mr_uint32_t level, const char *fmt, ...);
 
 无返回值。以下情况会直接返回且不输出：
 
-| 条件 | 行为 |
-|-----|------|
-| `level >= 32U` | 等级超出 32 位掩码范围，直接忽略。 |
-| `fmt == MR_NULL` | 格式串无效，直接忽略。 |
-| `fmt[0] == '\0'` | 空格式串，直接忽略。 |
-| 当前等级未被掩码启用 | 输出被过滤。 |
+| 条件               | 行为                  |
+|------------------|---------------------|
+| `level >= 32U`   | 等级超出 32 位掩码范围，直接忽略。 |
+| `fmt == MR_NULL` | 格式串无效，直接忽略。         |
+| `fmt[0] == '\0'` | 空格式串，直接忽略。          |
+| 当前等级未被掩码启用       | 输出被过滤。              |
 
 时间戳格式由时钟配置决定：
 
-| 配置 | 时间戳来源和格式 |
-|-----|----------------|
-| `MR_USE_CLOCK_HIRES` | 使用 `mr_clock_hires_tick()` 和 `mr_hires_tick2timestamp()`，输出 `[YYYY-MM-DD-HH:MM:SS:ms:us]`。 |
-| 未启用 `MR_USE_CLOCK_HIRES` | 使用 `mr_clock_uptime()`，输出 `[seconds.millisecond]`。 |
+| 配置                       | 时间戳来源和格式                                                                                   |
+|--------------------------|--------------------------------------------------------------------------------------------|
+| `MR_USE_CLOCK_HIRES`     | 使用 `mr_clock_hires_tick()` 和 `mr_hires_tick2timestamp()`，输出 `[YYYY-MM-DD-HH:MM:SS:ms:us]`。 |
+| 未启用 `MR_USE_CLOCK_HIRES` | 使用 `mr_clock_uptime()`，输出 `[seconds.millisecond]`。                                         |
 
 ### 设置日志掩码
 

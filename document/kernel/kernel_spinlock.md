@@ -1,3 +1,7 @@
+[**中文**](kernel_spinlock.md) | [**English**](kernel_spinlock_en.md)
+
+---
+
 # 自旋锁
 
 自旋锁模块提供基于原子变量的忙等互斥原语，并提供带中断保存和恢复的锁操作。该模块用于保护短临界区，尤其适合内核全局表、对象状态等不能在临界区内睡眠的路径。
@@ -52,7 +56,8 @@ void mr_spinlock_unlock_irqrestore(mr_spinlock_t *lock, int mask);
 
 `mr_spinlock_lock_irqsave()` 先调用 `mr_port_irq_disable()` 获取当前中断 mask 或嵌套层级，再获取自旋锁，并返回该 mask。
 
-`mr_spinlock_unlock_irqrestore()` 先释放自旋锁，再调用 `mr_port_irq_enable(mask)` 恢复中断状态。`mask` 必须来自配对的 `mr_spinlock_lock_irqsave()` 调用。
+`mr_spinlock_unlock_irqrestore()` 先释放自旋锁，再调用 `mr_port_irq_enable(mask)` 恢复中断状态。`mask` 必须来自配对的
+`mr_spinlock_lock_irqsave()` 调用。
 
 ### 查询锁状态
 
@@ -76,7 +81,8 @@ void update_shared_state(void) {
 }
 ```
 
-测试 `test/kernel/spinlock.c` 覆盖了静态初始化、普通加锁解锁、带中断保存和恢复的加锁解锁，以及 `mr_spinlock_is_locked()` 的状态变化。
+测试 `test/kernel/spinlock.c` 覆盖了静态初始化、普通加锁解锁、带中断保存和恢复的加锁解锁，以及 `mr_spinlock_is_locked()`
+的状态变化。
 
 ## 注意事项
 

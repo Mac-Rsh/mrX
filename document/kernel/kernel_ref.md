@@ -1,6 +1,11 @@
+[**中文**](kernel_ref.md) | [**English**](kernel_ref_en.md)
+
+---
+
 # 引用计数
 
-引用计数模块提供轻量级生命周期标记和原子引用计数能力。`mr_ref_t` 将固定 magic 值和计数值保存在同一个原子变量中，初始化后引用计数为 1；调用者通过 `mr_ref_get()` 增加引用，通过 `mr_ref_put()` 释放引用，并在最后一个引用释放时触发释放回调。
+引用计数模块提供轻量级生命周期标记和原子引用计数能力。`mr_ref_t` 将固定 magic 值和计数值保存在同一个原子变量中，初始化后引用计数为
+1；调用者通过 `mr_ref_get()` 增加引用，通过 `mr_ref_put()` 释放引用，并在最后一个引用释放时触发释放回调。
 
 该模块只管理引用计数本身，不管理被引用对象的内存布局。对象管理模块中的 `mr_object_t` 以内嵌 `mr_ref_t` 的方式复用该能力。
 
@@ -29,7 +34,8 @@ typedef void(mr_ref_release_t)(mr_ref_t *ref);
 #endif
 ```
 
-未定义 `MR_USE_REF_LONG_COUNT` 时，引用计数使用低 8 位，magic 使用高 24 位；定义 `MR_USE_REF_LONG_COUNT` 时，引用计数使用低 16 位，magic 使用高 16 位。`MR_REF_OVERFLOW` 用于在 `mr_ref_get()` 检测到溢出标记时触发断言。
+未定义 `MR_USE_REF_LONG_COUNT` 时，引用计数使用低 8 位，magic 使用高 24 位；定义 `MR_USE_REF_LONG_COUNT` 时，引用计数使用低
+16 位，magic 使用高 16 位。`MR_REF_OVERFLOW` 用于在 `mr_ref_get()` 检测到溢出标记时触发断言。
 
 ### 初始化和读取宏
 
@@ -57,7 +63,8 @@ void mr_ref_init(mr_ref_t *ref);
 mr_bool_t mr_ref_get(mr_ref_t *ref);
 ```
 
-`mr_ref_get()` 先读取当前值，如果 magic 无效或计数为 0，则返回 `MR_FALSE`，表示对象生命周期已经结束或尚未初始化。否则通过 `mr_atomic_compare_exchange()` 将计数加 1，成功后返回 `MR_TRUE`。
+`mr_ref_get()` 先读取当前值，如果 magic 无效或计数为 0，则返回 `MR_FALSE`，表示对象生命周期已经结束或尚未初始化。否则通过
+`mr_atomic_compare_exchange()` 将计数加 1，成功后返回 `MR_TRUE`。
 
 当当前值等于 `MR_REF_OVERFLOW` 时，函数中的断言会失败。该行为用于暴露计数溢出，而不是返回普通错误码。
 
@@ -67,9 +74,11 @@ mr_bool_t mr_ref_get(mr_ref_t *ref);
 mr_bool_t mr_ref_put(mr_ref_t *ref, mr_ref_release_t *release);
 ```
 
-`mr_ref_put()` 使用 `mr_atomic_fetch_sub()` 将计数减 1。如果递减前 magic 有效、计数为 1，且 `release` 非空，则先清除 magic 标记，再调用 `release(ref)`，并返回 `MR_TRUE`。其他情况下返回 `MR_FALSE`。
+`mr_ref_put()` 使用 `mr_atomic_fetch_sub()` 将计数减 1。如果递减前 magic 有效、计数为 1，且 `release` 非空，则先清除 magic
+标记，再调用 `release(ref)`，并返回 `MR_TRUE`。其他情况下返回 `MR_FALSE`。
 
-需要注意，当前实现只有在 `release != MR_NULL` 时才会执行“最后一个引用释放”的分支；如果最后一次 `put` 传入空释放函数，函数不会清除 magic，也不会返回 `MR_TRUE`。
+需要注意，当前实现只有在 `release != MR_NULL` 时才会执行“最后一个引用释放”的分支；如果最后一次 `put` 传入空释放函数，函数不会清除
+magic，也不会返回 `MR_TRUE`。
 
 ## 使用示例
 
@@ -94,7 +103,8 @@ void example(void) {
 }
 ```
 
-测试 `test/kernel/ref.c` 覆盖了静态初始化、动态初始化、连续获取引用、最后一次释放调用回调，以及生命周期结束后 `mr_ref_get()` 返回失败。
+测试 `test/kernel/ref.c` 覆盖了静态初始化、动态初始化、连续获取引用、最后一次释放调用回调，以及生命周期结束后 `mr_ref_get()`
+返回失败。
 
 ## 注意事项
 

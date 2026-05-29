@@ -1,6 +1,11 @@
+[**中文**](libc_sscanf.md) | [**English**](libc_sscanf_en.md)
+
+---
+
 # libc 格式化输入
 
-`mr_sscanf.h` 和 `libc/sscanf.c` 提供从字符串读取格式化数据的接口。启用 `MR_USE_SSCANF_STD` 时直接映射到标准库 `sscanf()`；否则 mrX 当前实现对参数做空指针检查后调用标准库 `vsscanf()`。
+`mr_sscanf.h` 和 `libc/sscanf.c` 提供从字符串读取格式化数据的接口。启用 `MR_USE_SSCANF_STD` 时直接映射到标准库 `sscanf()`
+；否则 mrX 当前实现对参数做空指针检查后调用标准库 `vsscanf()`。
 
 ## 核心接口
 
@@ -8,7 +13,8 @@
 int mr_sscanf(const char *buf, const char *fmt, ...);
 ```
 
-`mr_sscanf()` 从 `buf` 中按 `fmt` 描述解析数据，并把结果写入可变参数指向的目标对象。返回值为成功赋值的字段数量；匹配失败时返回标准库 `vsscanf()` 的返回值。
+`mr_sscanf()` 从 `buf` 中按 `fmt` 描述解析数据，并把结果写入可变参数指向的目标对象。返回值为成功赋值的字段数量；匹配失败时返回标准库
+`vsscanf()` 的返回值。
 
 ## 实现方式
 

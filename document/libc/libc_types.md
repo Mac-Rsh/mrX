@@ -1,6 +1,11 @@
+[**中文**](libc_types.md) | [**English**](libc_types_en.md)
+
+---
+
 # libc 基础类型
 
-`mr_types.h` 为 mrX 提供统一的基础类型、边界值宏、布尔值、空指针和可变参数封装。该头文件用于减少不同编译环境、标准库配置和 32/64 位架构之间的类型差异。
+`mr_types.h` 为 mrX 提供统一的基础类型、边界值宏、布尔值、空指针和可变参数封装。该头文件用于减少不同编译环境、标准库配置和
+32/64 位架构之间的类型差异。
 
 ## 核心类型和宏
 
@@ -8,12 +13,12 @@
 
 当启用 `MR_USE_TYPES_STD` 时，整数类型来自 `<stdint.h>`；否则使用 C 基础类型定义固定宽度整数。
 
-| 类型 | 含义 |
-|---|---|
-| `mr_int8_t`、`mr_int16_t`、`mr_int32_t`、`mr_int64_t` | 8/16/32/64 位有符号整数。 |
+| 类型                                                     | 含义                 |
+|--------------------------------------------------------|--------------------|
+| `mr_int8_t`、`mr_int16_t`、`mr_int32_t`、`mr_int64_t`     | 8/16/32/64 位有符号整数。 |
 | `mr_uint8_t`、`mr_uint16_t`、`mr_uint32_t`、`mr_uint64_t` | 8/16/32/64 位无符号整数。 |
-| `MR_INT8_MIN` 到 `MR_INT64_MAX` | 有符号整数边界值。 |
-| `MR_UINT8_MAX` 到 `MR_UINT64_MAX` | 无符号整数最大值。 |
+| `MR_INT8_MIN` 到 `MR_INT64_MAX`                         | 有符号整数边界值。          |
+| `MR_UINT8_MAX` 到 `MR_UINT64_MAX`                       | 无符号整数最大值。          |
 
 ### 大小和指针类型
 
@@ -23,14 +28,15 @@ typedef mr_int64_t mr_ssize_t; /* MR_USE_ARCH_64B */
 typedef void *mr_ptr_t;
 ```
 
-`mr_size_t` 在标准类型模式下映射到 `size_t`，否则根据 `MR_USE_ARCH_64B` 选择 `mr_uint64_t` 或 `mr_uint32_t`。`mr_ssize_t` 始终根据架构位宽选择有符号类型。
+`mr_size_t` 在标准类型模式下映射到 `size_t`，否则根据 `MR_USE_ARCH_64B` 选择 `mr_uint64_t` 或 `mr_uint32_t`。`mr_ssize_t`
+始终根据架构位宽选择有符号类型。
 
-| 宏 | 含义 |
-|---|---|
-| `MR_SIZE_MAX` | `mr_size_t` 最大值。 |
-| `MR_SSIZE_MIN`、`MR_SSIZE_MAX` | `mr_ssize_t` 边界值。 |
-| `mr_intptr_t`、`mr_uintptr_t` | 可保存指针值的有符号/无符号整数类型。 |
-| `MR_NULL` | 空指针。标准类型模式下为 `NULL`，否则为 `((void *)0)`。 |
+| 宏                             | 含义                                     |
+|-------------------------------|----------------------------------------|
+| `MR_SIZE_MAX`                 | `mr_size_t` 最大值。                       |
+| `MR_SSIZE_MIN`、`MR_SSIZE_MAX` | `mr_ssize_t` 边界值。                      |
+| `mr_intptr_t`、`mr_uintptr_t`  | 可保存指针值的有符号/无符号整数类型。                    |
+| `MR_NULL`                     | 空指针。标准类型模式下为 `NULL`，否则为 `((void *)0)`。 |
 
 ### 布尔和浮点类型
 

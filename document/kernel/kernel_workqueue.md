@@ -1,8 +1,14 @@
+[**中文**](kernel_workqueue.md) | [**English**](kernel_workqueue_en.md)
+
+---
+
 # 工作队列
 
-Workqueue 模块用于把工作项提交到队列中，并在调用者显式执行队列时运行工作回调。模块支持立即工作和延迟工作：立即工作进入运行链表，延迟工作先进入按超时 tick 排序的定时链表，到期后由内部定时器移动到运行链表。
+Workqueue 模块用于把工作项提交到队列中，并在调用者显式执行队列时运行工作回调。模块支持立即工作和延迟工作：立即工作进入运行链表，延迟工作先进入按超时
+tick 排序的定时链表，到期后由内部定时器移动到运行链表。
 
-工作队列和工作项都以内嵌 `mr_object_t` 管理生命周期。队列内部使用自旋锁保护链表，使用原子计数记录待执行深度，并可在启用 `MR_USE_WORKQUEUE_HOOK` 时通过 hook 通知外部执行上下文唤醒或挂起。
+工作队列和工作项都以内嵌 `mr_object_t` 管理生命周期。队列内部使用自旋锁保护链表，使用原子计数记录待执行深度，并可在启用
+`MR_USE_WORKQUEUE_HOOK` 时通过 hook 通知外部执行上下文唤醒或挂起。
 
 ## 核心数据结构和宏
 
@@ -24,15 +30,15 @@ typedef struct mr_workqueue {
 
 字段含义如下：
 
-| 字段     | 含义 |
-|----------|------|
-| `parent` | 对象控制块。 |
+| 字段       | 含义                                   |
+|----------|--------------------------------------|
+| `parent` | 对象控制块。                               |
 | `depth`  | 队列待执行深度，用于控制 wakeup/suspend hook 调用。 |
-| `dying`  | 删除标记；置位后拒绝新的工作提交。 |
-| `timer`  | 内部定时器，用于把延迟工作移动到运行链表。 |
-| `tlist`  | 延迟工作链表，按到期 tick 排序。 |
-| `list`   | 待执行工作链表。 |
-| `hook`   | 可选的唤醒/挂起回调。 |
+| `dying`  | 删除标记；置位后拒绝新的工作提交。                    |
+| `timer`  | 内部定时器，用于把延迟工作移动到运行链表。                |
+| `tlist`  | 延迟工作链表，按到期 tick 排序。                  |
+| `list`   | 待执行工作链表。                             |
+| `hook`   | 可选的唤醒/挂起回调。                          |
 
 ### 工作项控制块
 
@@ -49,14 +55,14 @@ typedef struct mr_work {
 
 字段含义如下：
 
-| 字段     | 含义 |
-|----------|------|
-| `parent` | 对象控制块。 |
-| `list`   | 工作链表节点；非空表示工作正在队列或延迟链表中。 |
-| `queue`  | 绑定或最近提交到的工作队列。 |
-| `tick`   | 延迟工作到期的绝对 tick。 |
+| 字段       | 含义                            |
+|----------|-------------------------------|
+| `parent` | 对象控制块。                        |
+| `list`   | 工作链表节点；非空表示工作正在队列或延迟链表中。      |
+| `queue`  | 绑定或最近提交到的工作队列。                |
+| `tick`   | 延迟工作到期的绝对 tick。               |
 | `entry`  | 工作回调，类型为 `mr_work_entry_t *`。 |
-| `param`  | 传给工作回调的参数。 |
+| `param`  | 传给工作回调的参数。                    |
 
 ```c
 typedef void(mr_work_entry_t)(struct mr_work *work, void *param);
@@ -87,7 +93,8 @@ mr_workqueue_t *mr_workqueue_create(void);
 mr_err_t mr_workqueue_del(mr_workqueue_t *queue);
 ```
 
-`mr_workqueue_init()` 初始化静态队列，并初始化内部定时器。`mr_workqueue_create()` 从堆中创建动态队列。`mr_workqueue_del()` 将队列标记为 dying，释放对象引用；释放路径会删除内部定时器，并清空立即工作链表和延迟工作链表。
+`mr_workqueue_init()` 初始化静态队列，并初始化内部定时器。`mr_workqueue_create()` 从堆中创建动态队列。`mr_workqueue_del()`
+将队列标记为 dying，释放对象引用；释放路径会删除内部定时器，并清空立即工作链表和延迟工作链表。
 
 ### 执行队列
 
@@ -95,7 +102,8 @@ mr_err_t mr_workqueue_del(mr_workqueue_t *queue);
 mr_err_t mr_workqueue_execute(mr_workqueue_t *queue);
 ```
 
-`mr_workqueue_execute()` 将当前待执行链表替换到局部操作链表，逐个移除工作项并在释放内部锁后调用工作回调。执行结束后调用内部 suspend 逻辑。
+`mr_workqueue_execute()` 将当前待执行链表替换到局部操作链表，逐个移除工作项并在释放内部锁后调用工作回调。执行结束后调用内部
+suspend 逻辑。
 
 该接口不会自动循环等待新工作。外部调度器通常在收到 hook wakeup 后调用它。
 
@@ -107,9 +115,11 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
                                    mr_tick_t tick);
 ```
 
-`mr_workqueue_work()` 将工作加入队列运行链表，并唤醒队列。若队列正在删除，返回 `-MR_ENOENT`；若工作已经在某个链表中，返回 `-MR_EBUSY`。
+`mr_workqueue_work()` 将工作加入队列运行链表，并唤醒队列。若队列正在删除，返回 `-MR_ENOENT`；若工作已经在某个链表中，返回
+`-MR_EBUSY`。
 
-`mr_workqueue_delayed_work()` 将工作加入延迟链表。`tick == 0` 时退化为立即提交。非零延迟要求 `tick < MR_TICK_MAX / 2`。如果新工作是最早到期项，内部定时器会被设置为最优 tick 并启动。
+`mr_workqueue_delayed_work()` 将工作加入延迟链表。`tick == 0` 时退化为立即提交。非零延迟要求 `tick < MR_TICK_MAX / 2`
+。如果新工作是最早到期项，内部定时器会被设置为最优 tick 并启动。
 
 ### 设置 Hook 和引用管理
 
@@ -132,7 +142,8 @@ mr_work_t *mr_work_create(mr_work_entry_t *entry, void *param);
 mr_err_t mr_work_del(mr_work_t *work);
 ```
 
-`mr_work_init()` 初始化静态工作项。`mr_work_create()` 创建动态工作项。两者都要求 `entry != MR_NULL`。`mr_work_del()` 先取消工作，再释放对象引用。
+`mr_work_init()` 初始化静态工作项。`mr_work_create()` 创建动态工作项。两者都要求 `entry != MR_NULL`。`mr_work_del()`
+先取消工作，再释放对象引用。
 
 ### 绑定、调度和取消工作
 
@@ -145,7 +156,8 @@ mr_work_t *mr_work_get(mr_work_t *work);
 mr_bool_t mr_work_put(mr_work_t *work);
 ```
 
-`mr_work_bind()` 将工作项绑定到工作队列。`mr_work_schedule()` 和 `mr_work_delayed_schedule()` 使用 `work->queue` 指向的队列提交工作；如果工作尚未绑定或队列生命周期已经结束，返回 `-MR_ENOENT`。
+`mr_work_bind()` 将工作项绑定到工作队列。`mr_work_schedule()` 和 `mr_work_delayed_schedule()` 使用 `work->queue`
+指向的队列提交工作；如果工作尚未绑定或队列生命周期已经结束，返回 `-MR_ENOENT`。
 
 `mr_work_cancel()` 从当前链表移除工作项。`mr_work_get()` 和 `mr_work_put()` 是工作项引用计数封装。
 
