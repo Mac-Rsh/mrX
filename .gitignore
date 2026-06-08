@@ -1,0 +1,85 @@
+# OS and editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Build directories and generated binaries
+build/
+out/
+dist/
+bin/
+obj/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+*.elf
+*.hex
+*.bin
+*.map
+*.lst
+
+# Coverage and test artifacts
+.coverage
+coverage/
+htmlcov/
+*.gcda
+*.gcno
+*.gcov
+
+# Kconfig generated state
+.config.old
+.config
+
+# mrX generated files
+include/mrX/mr_config.h
+include/mrX/mr_hardgen.h
+include/mrX/platform/
+.platform/
+
+# Keil/MDK generated files
+Listings/
+Objects/
+RTE/
+*.uvguix.*
+*.uvgui.*
+*.uvopt
+*.uvoptx
+*.uvproj.bak
+*.uvprojx.bak
+*.dep
+*.crf
+*.d
+*.axf
+*.htm
+*.build_log.htm
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig

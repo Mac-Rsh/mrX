@@ -13,8 +13,9 @@ backend-ready semantic node records.
 """
 
 from ..common import ArrayMode, ArrayValue, Diagnostics, ErrorCode, \
-    NodeDecl, RootNode, SourceSpan, STATUS_DISABLED, STATUS_OKAY, \
-    VALID_STATUS_VALUES, StringValue, ValueExpr, parse_priority_status
+    NodeDecl, PropertyDecl, RootNode, SourceSpan, STATUS_DISABLED, \
+    STATUS_OKAY, VALID_STATUS_VALUES, StringValue, ValueExpr, \
+    parse_priority_status
 from dataclasses import dataclass, field
 from collections import OrderedDict
 
@@ -77,11 +78,45 @@ class SemanticBuilder:
         # The semantic stage merges multiple parsed roots into one logical tree
         tree = HardTree()
         for root in roots:
+            self._merge_root(root, tree)
+
+        root_status = tree.nodes_by_path["/"].effective_status
+        for root in roots:
             for child in root.children:
-                self._add_node(child, tree, parent_path=None,
-                               parent_status=self.STATUS_OKAY)
+                self._add_node(child, tree, parent_path="/",
+                               parent_status=root_status)
 
         return tree
+
+    def _merge_root(self, root: RootNode, tree: HardTree) -> None:
+        """Add or merge the logical root node into the semantic tree."""
+        node = NodeDecl(name="root", properties=root.properties,
+                        span=root.span)
+        self._verify_unique_properties(node)
+        declared_status = self._get_status(node)
+
+        if "/" not in tree.nodes_by_path:
+            tree.nodes_by_path["/"] = HardNode(
+                path="/",
+                name=node.name,
+                label=None,
+                address=None,
+                declared_status=declared_status,
+                effective_status=declared_status,
+                span=root.span,
+                parent_path=None,
+                compatible=self._extract_compatible("/", node),
+                properties=self._copy_properties(root.properties),
+            )
+            return
+
+        hard_node = tree.nodes_by_path["/"]
+        self._verify_merge_properties(hard_node, root.properties)
+        hard_node.properties.extend(self._copy_properties(root.properties))
+        hard_node.compatible.extend(self._extract_compatible("/", node))
+        if hard_node.declared_status == self.STATUS_OKAY:
+            hard_node.declared_status = declared_status
+            hard_node.effective_status = declared_status
 
     def _add_node(
             self,
@@ -93,7 +128,8 @@ class SemanticBuilder:
         """Add one syntax node and all descendants into the semantic tree."""
         # Paths are canonical identifiers in the semantic IR
         segment = self._path_segment(node)
-        path = f"/{segment}" if parent_path is None else f"{parent_path}/{segment}"
+        path = f"/{segment}" if parent_path in (None, "/") else \
+            f"{parent_path}/{segment}"
 
         # Duplicate nodes are detected by canonical path
         if path in tree.nodes_by_path:
@@ -126,8 +162,7 @@ class SemanticBuilder:
             span=node.span,
             parent_path=parent_path,
             compatible=self._extract_compatible(path, node),
-            properties=[NodeProperty(prop.name, prop.value, prop.span) for
-                        prop in node.properties],
+            properties=self._copy_properties(node.properties),
         )
         tree.nodes_by_path[path] = hard_node
 
@@ -156,6 +191,12 @@ class SemanticBuilder:
             return node.name
         return f"{node.name}@{node.address}"
 
+    @staticmethod
+    def _copy_properties(properties: list[PropertyDecl]) -> list[NodeProperty]:
+        """Copy syntax properties into semantic property records."""
+        return [NodeProperty(prop.name, prop.value, prop.span) for prop in
+                properties]
+
     def _verify_unique_properties(self, node: NodeDecl) -> None:
         """Report duplicate properties before semantic lookups pick one."""
         seen: set[str] = set()
@@ -165,6 +206,17 @@ class SemanticBuilder:
                                f"duplicate property: {prop.name}", prop.span)
                 continue
             seen.add(prop.name)
+
+    def _verify_merge_properties(self, node: HardNode,
+                                 properties: list[PropertyDecl]) -> None:
+        """Report duplicate properties when merging syntax into a node."""
+        seen = {prop.name for prop in node.properties}
+        for prop in properties:
+            if prop.name not in seen:
+                seen.add(prop.name)
+                continue
+            self._error_at(ErrorCode.INVALID_PROPERTY,
+                           f"duplicate property: {prop.name}", prop.span)
 
     def _get_status(self, node: NodeDecl) -> str:
         """Get and validate the effective status string for a node."""

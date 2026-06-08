@@ -2,7 +2,7 @@
 name = "wch,ch32v"
 
 [dir]
-src = "./.."
+src = "."
 dst = "./../../.."
 
 [[platform.add]]

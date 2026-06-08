@@ -1,4 +1,4 @@
-menu "Platform options"
+menu "Platform: Platform abstraction"
 
 # ==================================
 # PLATFORM

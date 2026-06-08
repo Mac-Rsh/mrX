@@ -129,5 +129,6 @@ class NodeDecl:
 class RootNode:
     """Represents the parsed root of a single source file."""
 
+    properties: list[PropertyDecl] = field(default_factory=list)
     children: list[NodeDecl] = field(default_factory=list)
     span: SourceSpan | None = None

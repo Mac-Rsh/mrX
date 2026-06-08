@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-HTC command - Compile `.hts` source files into C header output.
+HTC command - Compile `.hts`/`.htsi` source files into C header output.
 
 Runs the HTC preprocessing, lexing, parsing, semantic validation, and backend
 macro emission pipeline for one input source file.
@@ -21,13 +21,13 @@ from pathlib import Path
 
 @export_plugin
 class HTCCommand:
-    """Built-in command for compiling `.hts` files."""
+    """Built-in command for compiling `.hts`/`.htsi` files."""
 
     DEFAULT_OUTPUT_PATH = "./include/mrX/mr_hardgen.h"
 
     spec = PluginSpec(
         name="htc",
-        description="Compile a `.hts` file into a `.h` header.",
+        description="Compile a `.hts`/`.htsi` file into a `.h` header.",
     )
 
     def help(self) -> str:
@@ -37,11 +37,13 @@ class HTCCommand:
             Human-readable help text for the command.
         """
         return "\n".join([
-            "Usage: python ./scripts/cli.py htc -i <input.hts> [-o <output.h>]",
-            "Description: Compile a `.hts` file into a `.h` header.",
+            "Usage: python ./scripts/cli.py htc -i "
+            "<input.hts|input.htsi> [-o <output.h>]",
+            "Description: Compile a `.hts` or `.htsi` file into a `.h` header.",
             "Aliases: (none)",
             "Examples:",
             "- python ./scripts/cli.py htc -i input.hts",
+            "- python ./scripts/cli.py htc -i input.htsi",
             "- python ./scripts/cli.py htc -i input.hts -o output.h",
             f"Default output: {self.DEFAULT_OUTPUT_PATH}",
         ])
@@ -100,7 +102,7 @@ class HTCCommand:
             "-i",
             "--input",
             required=True,
-            help="Input '.hts' file path",
+            help="Input '.hts' or '.htsi' file path",
         )
         parser.add_argument(
             "-o",
@@ -132,7 +134,8 @@ class HTCCommand:
     def _print_usage() -> None:
         """Print short HTC command usage guidance."""
         print(
-            "Usage: python ./scripts/cli.py htc -i <input.hts> [-o <output.h>]")
+            "Usage: python ./scripts/cli.py htc -i "
+            "<input.hts|input.htsi> [-o <output.h>]")
 
     @classmethod
     def _parse_paths(cls, args: Namespace) -> tuple[Path, Path] | None:

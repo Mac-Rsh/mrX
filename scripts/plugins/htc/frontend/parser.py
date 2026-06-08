@@ -65,14 +65,35 @@ class Parser:
                              "expected '/' for root node")
         self._expect(TokenType.LBRACE, ErrorCode.EXPECTED_LBRACE,
                      "expected '{' after '/'")
+        properties: list[PropertyDecl] = []
         children: list[NodeDecl] = []
         while not self._check(TokenType.RBRACE, TokenType.EOF):
+            if not self._check(TokenType.IDENTIFIER):
+                token = self._peek()
+                self._error(ErrorCode.INVALID_NODE_DECL,
+                            "expected property or child node in root",
+                            token.span if token else slash.span if slash
+                            else None)
+                if token is not None:
+                    self._error(ErrorCode.EXPECTED_IDENTIFIER,
+                                f"unexpected token '{token.value}' ({token.type.value})",
+                                token.span)
+                self._sync()
+                continue
+
+            if self._starts_property():
+                prop = self._parse_property()
+                if prop is not None:
+                    properties.append(prop)
+                continue
+
             node = self._parse_node()
             if node is not None:
                 children.append(node)
         self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
                      "expected '}' to close root node")
-        return RootNode(children=children, span=slash.span if slash else None)
+        return RootNode(properties=properties, children=children,
+                        span=slash.span if slash else None)
 
     def _parse_node(self) -> NodeDecl | None:
         """Parse a node declaration including properties and child nodes."""
