@@ -6,11 +6,11 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mrX/drivers/gpio/mr_gpio.h>
-#if defined(MR_USE_DRIVER_GPIO_HC165)
-
 /* HardTree compatible */
 #define MR_HT_COMPAT                    gpio_hc165
+
+#include <mrX/drivers/gpio/mr_gpio.h>
+#if defined(MR_USE_DRIVER_GPIO) && MR_HT_HAS_DRIVER()
 
 /* Driver GPIO operations */
 static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
@@ -208,4 +208,4 @@ static mr_err_t drv_port_read(const mr_driver_t *drv, mr_uint32_t *mask) {
     };                                                                         \
     MR_HT_GPIO_INSTALL(_id, &MR_CAT(__drv_gpio_hc165_priv_, _id), _ops)
 MR_HT_DRIVER_FOREACH(GPIO_HC165_HT_GPIO_INSTALL, &__drv_gpio_hc165_ops);
-#endif /* defined(MR_USE_DRIVER_GPIO_HC165) */
+#endif /* defined(MR_USE_DRIVER_GPIO) && MR_HT_HAS_DRIVER() */

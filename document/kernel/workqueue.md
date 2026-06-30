@@ -164,7 +164,7 @@ mr_bool_t mr_work_put(mr_work_t *work);
 ## 使用示例
 
 ```c
-#include <mrX/kernel/mr_workqueue.h>
+#include <mrX/kernel/mr_work.h>
 
 static void sample_work_entry(struct mr_work *work, void *param)
 {
@@ -193,7 +193,7 @@ void sample_workqueue_usage(void)
 
 ## 注意事项
 
-- Workqueue 模块只有在 `MR_USE_WORKQUEUE` 启用时可用，并依赖 Timer 模块处理延迟工作。
+- Workqueue 模块只有在 `MR_USE_WORK` 启用时可用，并依赖 Timer 模块处理延迟工作。
 - `mr_work_schedule()` 和 `mr_work_delayed_schedule()` 需要工作项已通过 `mr_work_bind()` 或先前提交设置了有效队列。
 - 同一个工作项在 `MR_WORK_IS_RUNNING()` 为真时不能再次提交。
 - 删除队列会清空待执行和延迟链表，但不会删除工作项对象本身。

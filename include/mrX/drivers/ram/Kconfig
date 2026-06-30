@@ -16,14 +16,4 @@ config MR_USE_DRIVER_RAM
             - Device-specific timing configuration
         Useful for external memory expansion and unified memory management.
 
-config MR_USE_DRIVER_RAM_HEAPS
-    depends on MR_USE_DRIVER_RAM
-    depends on MR_USE_MALLOC
-    bool "Use RAM-HEAPS"
-    default y
-    help
-        Register RAM devices as system heaps for dynamic memory allocation.
-        Allows malloc/free to use external memory in addition to internal heap.
-        Automatically registered with the memory allocator system.
-
 endmenu

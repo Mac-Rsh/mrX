@@ -1,0 +1,16 @@
+menu "RamFs: In-memory file system"
+
+# ==================================
+# RAMFS
+# ==================================
+config MR_USE_FS_RAMFS
+    depends on MR_USE_FS
+    bool "Use ramfs"
+    default n
+    help
+        Enable the in-memory reference file system(ramfs). It is automatically
+        registered at boot and can be mounted by name("ramfs"). Regular files
+        are backed by a growable heap buffer. Use it as an example filesystem
+        implementation and for testing the FS.
+
+endmenu

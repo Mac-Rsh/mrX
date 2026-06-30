@@ -221,16 +221,15 @@ mr_driver_t *mr_driver_find(const char *name) {
     const mr_driver_entry_t *end = &__mr_driver_entry_end;
     const mr_driver_entry_t *entry;
 
+    /* Check parameter */
+    MR_ASSERT((name != MR_NULL) && (name[0] != '\0'));
+
+    /* Find the driver */
     for (entry = start + 1; entry < end; entry++) {
-        MR_ASSERT(entry->name != MR_NULL);
-
-        /* Match driver */
-        if (mr_strcmp(entry->name, name) != 0) {
-            continue;
+        if (mr_strcmp(entry->name, name) == 0) {
+            /* Get driver */
+            return mr_driver_get(entry->drv);
         }
-
-        /* Found */
-        return entry->drv;
     }
 
     /* Not found */

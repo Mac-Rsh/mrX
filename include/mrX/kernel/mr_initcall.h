@@ -23,6 +23,7 @@ extern "C" {
 /* Initcall level definition */
 #define MR_INIT_LEVEL_IRQ               "1.0"
 #define MR_INIT_LEVEL_DRIVER            "1.1"
+#define MR_INIT_LEVEL_FS                "1.2"
 #define MR_INIT_LEVEL_USER(_level)      "8."_level
 
 /* Initcall entry type */

@@ -16,30 +16,4 @@ config MR_USE_DRIVER_GPIO
             - Port-based batch operations for efficiency
         Fundamental for controlling LEDs, buttons, switches, and chip selects.
 
-# ==================================
-# HC595
-# ==================================
-config MR_USE_DRIVER_GPIO_HC595
-    depends on MR_USE_DRIVER_GPIO
-    bool "Use GPIO HC595"
-    default n
-    help
-        Enable a GPIO adapter built on top of independent 74HC595 style
-        serial-in/parallel-out shift registers.
-        The adapter exposes cascaded HC595 outputs as a new GPIO driver and
-        uses existing GPIO drivers to bit-bang the control lines.
-
-# ==================================
-# HC165
-# ==================================
-config MR_USE_DRIVER_GPIO_HC165
-    depends on MR_USE_DRIVER_GPIO
-    bool "Use GPIO HC165"
-    default n
-    help
-        Enable a GPIO adapter built on top of independent 74HC165 style
-        parallel-in/serial-out shift registers.
-        The adapter exposes cascaded HC165 inputs as a new GPIO driver and
-        uses existing GPIO drivers to bit-bang the control lines.
-
 endmenu

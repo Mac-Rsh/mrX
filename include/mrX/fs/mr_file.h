@@ -1,0 +1,257 @@
+/**
+ * @copyright (c) 2024-2026, MacRsh
+ *
+ * @license SPDX-License-Identifier: Apache-2.0
+ *
+ * @date 2024-09-06        MacRsh        First version
+ */
+
+#ifndef __MR_FS_FILE_H__
+#define __MR_FS_FILE_H__
+
+#include <mrX/mr_config.h>
+#if defined(MR_USE_FS)
+#include <mrX/kernel/mr_initcall.h>
+#include <mrX/fs/mr_sb.h>
+#endif /* defined(MR_USE_FS) */
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+/**
+ * @addtogroup File
+ * @{
+ */
+
+#if defined(MR_USE_FS)
+/* File open flags */
+#define MR_O_RDONLY                     (0x0000)
+#define MR_O_WRONLY                     (0x0001)
+#define MR_O_RDWR                       (0x0002)
+#define MR_O_ACCMODE                    (0x0003)
+#define MR_O_CREAT                      (0x0100)
+#define MR_O_EXCL                       (0x0200)
+#define MR_O_TRUNC                      (0x0400)
+#define MR_O_APPEND                     (0x0800)
+#define MR_O_DIRECTORY                  (0x1000)
+
+/* File seek whence */
+#define MR_SEEK_SET                     (0)
+#define MR_SEEK_CUR                     (1)
+#define MR_SEEK_END                     (2)
+
+/* File type */
+typedef struct mr_file {
+    mr_dentry_t *dentry;
+    mr_inode_t *inode;
+    const mr_file_ops_t *fops;
+    mr_int64_t pos;
+    int flags;
+    void *priv;
+} mr_file_t;
+
+/**
+ * @brief This function mounts a file-system at a path.
+ *
+ * @param source The mount source.
+ * @param path The mount-point path.
+ * @param fstype The file-system name(must be registered).
+ * @param flags The mount flags.
+ * @param data The mount private data(passed to the fs mount callback).
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
+                     int flags, void *data);
+
+/**
+ * @brief This function unmounts the file-system at a path.
+ *
+ * @param path The mount-point path.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_umount(const char *path);
+
+/**
+ * @brief This function opens a file by path.
+ *
+ * @param file The file.
+ * @param path The file path.
+ * @param flags The open flags(see MR_O_*).
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_open(mr_file_t *file, const char *path, int flags);
+
+/**
+ * @brief This function closes a file.
+ *
+ * @param file The file.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_close(mr_file_t *file);
+
+/**
+ * @brief This function opens a directory for reading its entries.
+ *
+ * @param file The file.
+ * @param path The directory path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The node must be a directory(-MR_ENOTDIR). Iterate with the directory
+ * read API and close with mr_fs_closedir().
+ */
+mr_err_t mr_fs_opendir(mr_file_t *file, const char *path);
+
+/**
+ * @brief This function closes a directory handle.
+ *
+ * @param file The file.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_closedir(mr_file_t *file);
+
+/**
+ * @brief This function reads the next directory entry.
+ *
+ * @param file The directory(must be open).
+ * @param dirent The directory entry to fill.
+ * @return MR_TRUE if an entry was read, MR_FALSE at end-of-directory.
+ *
+ * @note The file must be a directory opened with mr_fs_opendir().
+ */
+mr_bool_t mr_fs_readdir(mr_file_t *file, mr_dirent_t *dirent);
+
+/**
+ * @brief This function gets file status by path.
+ *
+ * @param path The file path.
+ * @param stat The file status to fill.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note Generic inode fields are filled first; if the file-system provides a
+ * stat hook, it may override or extend them.
+ */
+mr_err_t mr_fs_stat(const char *path, mr_stat_t *stat);
+
+/**
+ * @brief This function reads from a file.
+ *
+ * @param file The file.
+ * @param buf The buffer.
+ * @param size The number of bytes to read.
+ * @return The number of bytes read on success, a negative error code on
+ * failure.
+ */
+mr_ssize_t mr_fs_read(mr_file_t *file, void *buf, mr_size_t size);
+
+/**
+ * @brief This function writes to a file.
+ *
+ * @param file The file.
+ * @param buf The buffer.
+ * @param size The number of bytes to write.
+ * @return The number of bytes written on success, a negative error code on
+ * failure.
+ */
+mr_ssize_t mr_fs_write(mr_file_t *file, const void *buf, mr_size_t size);
+
+/**
+ * @brief This function seeks a file.
+ *
+ * @param file The file.
+ * @param offset The offset.
+ * @param whence The seek base(see MR_SEEK_*).
+ * @return The new position on success, a negative error code on failure.
+ */
+mr_int64_t mr_fs_seek(mr_file_t *file, mr_int64_t offset, int whence);
+
+/**
+ * @brief This function gets the current position of a file.
+ *
+ * @param file The file.
+ * @return The current position on success, a negative error code on failure.
+ */
+mr_int64_t mr_fs_tell(mr_file_t *file);
+
+/**
+ * @brief This function performs an I/O control on a file.
+ *
+ * @param file The file.
+ * @param cmd The command.
+ * @param arg The argument.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_ioctl(mr_file_t *file, int cmd, void *arg);
+
+/**
+ * @brief This function truncates a file to the given length.
+ *
+ * @param file The file(must be open for writing).
+ * @param length The new length.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note Only regular files may be truncated; directories are rejected with
+ * -MR_EISDIR.
+ * @note The file position is left unchanged even if it now points past EOF.
+ */
+mr_err_t mr_fs_truncate(mr_file_t *file, mr_int64_t length);
+
+/**
+ * @brief This function removes a file-system node by path.
+ *
+ * @param path The file path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note Files and empty directories may be removed; a non-empty directory is
+ * rejected with -MR_ENOTEMPTY.
+ * @note A mount-point directory can not be removed(-MR_EBUSY).
+ * @note An open file keeps its data alive until it is closed.
+ */
+mr_err_t mr_fs_unlink(const char *path);
+
+/**
+ * @brief This function renames a file-system node.
+ *
+ * @param old_path The current path.
+ * @param new_path The new path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The destination must not already exist; renaming onto an existing node
+ * is rejected with -MR_EEXIST.
+ * @note Renaming across file-systems(different super-blocks) is rejected with
+ * -MR_EXDEV.
+ * @note A mount-point directory can not be renamed(-MR_EBUSY).
+ */
+mr_err_t mr_fs_rename(const char *old_path, const char *new_path);
+
+/**
+ * @brief This function creates a directory at the given path.
+ *
+ * @param path The directory path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note Intermediate directories are not created; the parent must already
+ * exist(-MR_ENOENT).
+ * @note A leaf that already exists is rejected with -MR_EEXIST.
+ */
+mr_err_t mr_fs_mkdir(const char *path);
+
+/**
+ * @brief This function syncs an open file.
+ *
+ * @param file The file(must be open).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note Only file-systems that provide a sync hook flush data; others return
+ * -MR_ENOSYS.
+ */
+mr_err_t mr_fs_sync(mr_file_t *file);
+#endif /* defined(MR_USE_FS) */
+
+/** @} */
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* __MR_FS_FILE_H__ */

@@ -6,13 +6,13 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#ifndef __MR_WORKQUEUE_H__
-#define __MR_WORKQUEUE_H__
+#ifndef __MR_WORK_H__
+#define __MR_WORK_H__
 
 #include <mrX/mr_config.h>
-#if defined(MR_USE_WORKQUEUE)
+#if defined(MR_USE_WORK)
 #include <mrX/kernel/mr_timer.h>
-#endif /* defined(MR_USE_WORKQUEUE) */
+#endif /* defined(MR_USE_WORK) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,7 +23,7 @@ extern "C" {
  * @{
  */
 
-#if defined(MR_USE_WORKQUEUE)
+#if defined(MR_USE_WORK)
 #if defined(MR_USE_WORKQUEUE_HOOK)
 struct mr_workqueue;
 
@@ -310,7 +310,7 @@ MR_INLINE mr_bool_t mr_work_put(mr_work_t *work) {
     /* Put work reference */
     return mr_object_put((mr_object_t *)work);
 }
-#endif /* defined(MR_USE_WORKQUEUE) */
+#endif /* defined(MR_USE_WORK) */
 
 /** @} */
 
@@ -318,4 +318,4 @@ MR_INLINE mr_bool_t mr_work_put(mr_work_t *work) {
 }
 #endif /* __cplusplus */
 
-#endif /* __MR_WORKQUEUE_H__ */
+#endif /* __MR_WORK_H__ */

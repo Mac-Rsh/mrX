@@ -12,7 +12,7 @@
 #include <mrX/mr_config.h>
 #if defined(MR_USE_IRQ)
 #if defined(MR_USE_IRQ_DEFER)
-#include <mrX/kernel/mr_workqueue.h>
+#include <mrX/kernel/mr_work.h>
 #else
 #include <mrX/kernel/mr_object.h>
 #endif /* defined(MR_USE_IRQ_DEFER) */

@@ -176,7 +176,7 @@ reference-counting wrappers for work items.
 ## Usage Example
 
 ```c
-#include <mrX/kernel/mr_workqueue.h>
+#include <mrX/kernel/mr_work.h>
 
 static void sample_work_entry(struct mr_work *work, void *param)
 {
@@ -206,7 +206,7 @@ scheduled and then the callback is executed via `mr_workqueue_execute()`.
 
 ## Notes
 
-- The Workqueue module is only available when `MR_USE_WORKQUEUE` is enabled, and depends on the Timer module for
+- The Workqueue module is only available when `MR_USE_WORK` is enabled, and depends on the Timer module for
   handling delayed work.
 - `mr_work_schedule()` and `mr_work_delayed_schedule()` require that the work item has a valid queue set via
   `mr_work_bind()` or a prior submission.

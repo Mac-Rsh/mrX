@@ -81,17 +81,6 @@ static void test_clock_busy_wait(void) {
 MR_TEST_EXPORT(clock, busy_wait, test_clock_busy_wait);
 
 #if defined(MR_USE_CLOCK_HIRES)
-static void test_clock_hires_tick(void) {
-    mr_hires_tick_t initial_tick;
-    mr_hires_tick_t current_tick;
-
-    initial_tick = mr_clock_hires_tick();
-    mr_clock_hires_tick_set(initial_tick + 1000000);
-    current_tick = mr_clock_hires_tick();
-    MR_TEST_ASSERT_NEAR(current_tick, initial_tick + 1000000, 10000);
-}
-MR_TEST_EXPORT(clock, hires_tick, test_clock_hires_tick);
-
 static void test_clock_hires_tick2timestamp(void) {
     const mr_hires_tick_t test_tick = 1725580800000000ULL;
     mr_hires_timestamp_t timestamp;

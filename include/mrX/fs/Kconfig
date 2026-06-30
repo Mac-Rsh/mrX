@@ -1,0 +1,31 @@
+menu "Fs: File system"
+
+# ==================================
+# FS
+# ==================================
+config MR_USE_FS
+    bool "Use file system"
+    default n
+    help
+        Enable the file system. Provides a path-based namespace built
+        on a directory-entry(dentry) tree, independent inodes with file
+        operations, a handle-based open/read/write API, and a file-system
+        mount/unmount framework.
+
+config MR_CFG_FS_DENTRY_NAME_LEN
+    depends on MR_USE_FS
+    int "Inline name length"
+    default 4
+    range 2 256
+    help
+        Length of the inline buffer used to store short dentry names. Names
+        shorter than this length are stored directly in the dentry object,
+        avoiding dynamic memory allocation. Increase this value to reduce heap
+        usage when short names are common.
+
+# ==================================
+# RSOURCE
+# ==================================
+rsource "*/Kconfig"
+
+endmenu

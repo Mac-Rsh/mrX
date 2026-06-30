@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mrX/kernel/mr_workqueue.h>
-#if defined(MR_USE_WORKQUEUE)
+#include <mrX/kernel/mr_work.h>
+#if defined(MR_USE_WORK)
 #include <mrX/kernel/mr_spinlock.h>
 #include <mrX/libc/mr_malloc.h>
 
@@ -567,4 +567,4 @@ static void work_dynamic_release(mr_object_t *obj) {
     /* Free work */
     mr_free(work);
 }
-#endif /* defined(MR_USE_WORKQUEUE) */
+#endif /* defined(MR_USE_WORK) */

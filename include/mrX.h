@@ -18,7 +18,6 @@
 
 #include <mrX/kernel/mr_clock.h>
 #include <mrX/kernel/mr_fifo.h>
-#include <mrX/kernel/mr_finder.h>
 #include <mrX/kernel/mr_hashmap.h>
 #include <mrX/kernel/mr_hook.h>
 #include <mrX/kernel/mr_initcall.h>
@@ -35,7 +34,7 @@
 #include <mrX/kernel/mr_timer.h>
 #include <mrX/kernel/mr_version.h>
 #include <mrX/kernel/mr_wait.h>
-#include <mrX/kernel/mr_workqueue.h>
+#include <mrX/kernel/mr_work.h>
 
 /** @} */
 
@@ -85,6 +84,29 @@
 #include <mrX/drivers/dma/mr_dma.h>
 #endif /* defined(MR_USE_DRIVER_DMA) */
 #endif /* defined(MR_USE_DRIVER) */
+
+/** @} */
+
+/**
+ * @addtogroup File-System
+ * @{
+ */
+
+#if defined(MR_USE_FS)
+#include <mrX/fs/mr_dentry.h>
+#include <mrX/fs/mr_inode.h>
+#include <mrX/fs/mr_file.h>
+#include <mrX/fs/mr_fs.h>
+#include <mrX/fs/mr_sb.h>
+#endif /* defined(MR_USE_FS) */
+
+/**
+ * @addtogroup Modules
+ * @{
+ */
+
+#if defined(MR_USE_MODULE)
+#endif /* defined(MR_USE_MODULE) */
 
 /** @} */
 

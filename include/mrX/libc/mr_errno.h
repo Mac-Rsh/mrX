@@ -40,6 +40,13 @@ typedef int                             mr_err_t;
 #define MR_EINVAL                       EINVAL
 #define MR_ENOSYS                       ENOSYS
 #define MR_ETIMEDOUT                    ETIMEDOUT
+#define MR_EBADF                        EBADF
+#define MR_ENOTDIR                      ENOTDIR
+#define MR_EISDIR                       EISDIR
+#define MR_ENOTEMPTY                    ENOTEMPTY
+#define MR_EMFILE                       EMFILE
+#define MR_ENAMETOOLONG                 ENAMETOOLONG
+#define MR_EXDEV                        EXDEV
 #elif defined(MR_USE_ERRNO_3RD)
 /* In 'mrX/3party/libc/mr_errno.h' */
 #else
@@ -53,6 +60,13 @@ typedef int                             mr_err_t;
 #define MR_EINVAL                       (22)
 #define MR_ENOSYS                       (40)
 #define MR_ETIMEDOUT                    (116)
+#define MR_EBADF                        (9)
+#define MR_ENOTDIR                      (20)
+#define MR_EISDIR                       (21)
+#define MR_ENOTEMPTY                    (39)
+#define MR_EMFILE                       (24)
+#define MR_ENAMETOOLONG                 (36)
+#define MR_EXDEV                        (18)
 #endif /* defined(MR_USE_ERRNO_STD) */
 
 /** @} */

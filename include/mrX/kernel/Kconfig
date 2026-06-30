@@ -156,11 +156,11 @@ config MR_USE_TIMER
         Suitable for time-critical operations but callbacks must be fast and non-blocking.
 
 # ==================================
-# WORKQUEUE
+# WORK
 # ==================================
-config MR_USE_WORKQUEUE
+config MR_USE_WORK
     select MR_USE_TIMER
-    bool "Use workqueue"
+    bool "Use work"
     default y
     help
         Enable low-priority deferred work execution in process context.
@@ -170,7 +170,7 @@ config MR_USE_WORKQUEUE
         Automatically enables timer support for delayed work scheduling.
 
 config MR_USE_WORKQUEUE_HOOK
-    depends on MR_USE_WORKQUEUE
+    depends on MR_USE_WORK
     bool "Use workqueue hook"
     default n
     help
@@ -201,7 +201,7 @@ config MR_CFG_IRQ_TABLE_SIZE
 
 config MR_USE_IRQ_DEFER
     depends on MR_USE_IRQ
-    select MR_USE_WORKQUEUE
+    select MR_USE_WORK
     bool "Use irq defer"
     default y
     help
@@ -228,29 +228,5 @@ config MR_USE_WAIT
     help
         Enable wait/synchronization primitives. Provides mechanisms for tasks
         to wait for events, conditions, or resources with timeout support.
-
-# ==================================
-# FINDER
-# ==================================
-config MR_USE_FINDER
-    bool "Use finder"
-    default y
-    help
-        Enable hierarchical finder support. Provides a lightweight path-based
-        object organization and lookup mechanism.
-        Suitable for building device trees, service namespaces, or other
-        parent-child object hierarchies.
-
-config MR_CFG_FINDER_INAME_LEN
-    depends on MR_USE_FINDER
-    int "Finder inline name length"
-    default 4
-    range 2 256
-    help
-        Length of the inline buffer used to store short finder names.
-        Names shorter than this length are stored directly in the finder object,
-        avoiding dynamic memory allocation.
-        Increase this value if short names are common and you want to reduce
-        heap usage, at the cost of a larger finder object.
 
 endmenu

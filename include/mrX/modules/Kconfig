@@ -1,0 +1,19 @@
+menu "Modules: Extension modules"
+
+# ==================================
+# MODULE(master switch)
+# ==================================
+config MR_USE_MODULE
+    bool "Use module"
+    default y
+    help
+        Enable the module subsystem. Modules build on top of the kernel and
+        provide higher-level services such as the virtual file system and
+        transfer protocols.
+
+# ==================================
+# RSOURCE
+# ==================================
+rsource '*/Kconfig'
+
+endmenu
