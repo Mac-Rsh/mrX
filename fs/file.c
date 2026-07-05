@@ -20,10 +20,30 @@ typedef struct fs_path_split {
 
 /* Global FS root dentry("/") */
 static mr_dentry_t __fs_root = MR_DENTRY_ROOT_INIT(&__fs_root);
+#if !defined(MR_USE_FS_MULTIUSER)
+static mr_fs_struct_t __fs_struct;
+#endif /* !defined(MR_USE_FS_MULTIUSER) */
+
+static mr_dentry_t *fs_lookup(mr_fs_struct_t *fs_struct, const char *path) {
+    mr_dentry_t *start;
+
+    /* Absolute: start at root; relative: start at cwd */
+    start = (path[0] == '/') ? fs_struct->root : fs_struct->cwd;
+    return mr_dentry_lookup(start, fs_struct->root, "%s", path);
+}
+
+static mr_dentry_t *fs_mkpath(mr_fs_struct_t *fs_struct, const char *path) {
+    mr_dentry_t *start;
+
+    /* Absolute: start at root; relative: start at cwd */
+    start = (path[0] == '/') ? fs_struct->root : fs_struct->cwd;
+    return mr_dentry_mkpath(start, fs_struct->root, "%s", path);
+}
 
 mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
                      int flags, void *data) {
     mr_bool_t mnt_created, mnt_held;
+    mr_fs_struct_t *fs_struct;
     mr_file_system_t *fs;
     mr_super_block_t *sb;
     mr_dentry_t *mnt;
@@ -33,7 +53,13 @@ mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
     MR_ASSERT((fstype != MR_NULL) && (fstype[0] != '\0'));
     MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
 
-    /* Find file-system */
+    /* Get current file-system structure */
+    fs_struct = mr_fs_current();
+    if (!fs_struct) {
+        return -MR_EINVAL;
+    }
+
+    /* Find FS */
     fs = mr_file_system_find(fstype);
     if (!fs) {
         return -MR_ENOENT;
@@ -42,12 +68,12 @@ mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
     /* Resolve or create the mount-point dentry */
     if ((path[0] != '/') || (path[1] != '\0')) {
         /* Mounting a subdirectory */
-        mnt = mr_dentry_lookup(&__fs_root, MR_NULL, "%s", path);
+        mnt = fs_lookup(fs_struct, path);
         if (!mnt) {
             /* Create the mount-point dentry path */
-            mnt = mr_dentry_mkpath(&__fs_root, MR_NULL, "%s", path);
+            mnt = fs_mkpath(fs_struct, path);
             if (!mnt) {
-                /* Put file-system */
+                /* Put FS */
                 mr_file_system_put(fs);
                 return -MR_ENOMEM;
             }
@@ -59,11 +85,11 @@ mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
     } else {
         /* Mounting the root */
         mnt_created = MR_FALSE;
+        mnt = fs_struct->root;
         mnt_held = MR_FALSE;
-        mnt = &__fs_root;
     }
 
-    /* A mount-point may only host one file-system */
+    /* Mount-point must be a bare dentry */
     if (mnt->inode) {
         /* Repeated mount */
         mr_file_system_put(fs);
@@ -133,6 +159,7 @@ static void fs_purge_children(mr_dentry_t *dentry) {
 }
 
 mr_err_t mr_fs_umount(const char *path) {
+    mr_fs_struct_t *fs_struct;
     mr_super_block_t *sb;
     mr_dentry_t *mnt;
     mr_err_t ret;
@@ -140,30 +167,36 @@ mr_err_t mr_fs_umount(const char *path) {
     /* Check parameter */
     MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
 
+    /* Get current file-system structure */
+    fs_struct = mr_fs_current();
+    if (!fs_struct) {
+        return -MR_EINVAL;
+    }
+
     /* Resolve the mount-point dentry */
     if ((path[0] != '/') || (path[1] != '\0')) {
-        /* Mounting a subdirectory */
-        mnt = mr_dentry_lookup(&__fs_root, MR_NULL, "%s", path);
+        /* Unmounting a subdirectory */
+        mnt = fs_lookup(fs_struct, path);
         if (!mnt) {
             return -MR_ENOENT;
         }
     } else {
-        /* Mounting the root */
-        mnt = &__fs_root;
+        /* Unmounting the root */
+        mnt = fs_struct->root;
     }
 
     /* Find the super-block mounted at this path */
     sb = mr_super_block_find_by_mnt(mnt);
     if (!sb) {
         /* Not mounted */
-        if (mnt != &__fs_root) {
+        if (mnt != fs_struct->root) {
             mr_dentry_put(mnt);
         }
         return -MR_ENOENT;
     }
 
     /* Invisible from the tree */
-    if (mnt != &__fs_root) {
+    if (mnt != fs_struct->root) {
         mr_dentry_remove(mnt);
     }
 
@@ -181,7 +214,7 @@ mr_err_t mr_fs_umount(const char *path) {
     /* Delete the mount-point dentry unless it is the global root. Done
      * unconditionally so a super-block deletion failure can not strand the
      * already-detached mount-point dentry */
-    if (mnt != &__fs_root) {
+    if (mnt != fs_struct->root) {
         mr_dentry_del(mnt);
         mr_dentry_put(mnt);
     } else {
@@ -428,6 +461,7 @@ _exit:
 
 mr_err_t mr_fs_open(mr_file_t *file, const char *path, int flags) {
     mr_dentry_t *dentry, *parent;
+    mr_fs_struct_t *fs_struct;
     fs_path_split_t split;
     mr_inode_t *inode;
     mr_err_t ret;
@@ -446,8 +480,14 @@ mr_err_t mr_fs_open(mr_file_t *file, const char *path, int flags) {
         return -MR_EINVAL;
     }
 
+    /* Get current file-system structure */
+    fs_struct = mr_fs_current();
+    if (!fs_struct) {
+        return -MR_EINVAL;
+    }
+
     /* Try to look up the existing node */
-    dentry = mr_dentry_lookup(&__fs_root, MR_NULL, "%s", path);
+    dentry = fs_lookup(fs_struct, path);
     if (dentry) {
         /* O_CREAT|O_EXCL: the file must not already exist */
         if ((flags & MR_O_CREAT) && (flags & MR_O_EXCL)) {
@@ -473,7 +513,7 @@ mr_err_t mr_fs_open(mr_file_t *file, const char *path, int flags) {
         }
 
         /* Look up the parent directory */
-        parent = mr_dentry_lookup(&__fs_root, MR_NULL, "%s", split.parent);
+        parent = fs_lookup(fs_struct, split.parent);
         if (!parent) {
             /* Parent not found */
             fs_split_path_free(&split);
@@ -559,6 +599,7 @@ mr_bool_t mr_fs_readdir(mr_file_t *file, mr_dirent_t *dirent) {
 }
 
 mr_err_t mr_fs_stat(const char *path, mr_stat_t *stat) {
+    mr_fs_struct_t *fs_struct;
     mr_dentry_t *dentry;
     mr_inode_t *inode;
     mr_err_t ret;
@@ -567,8 +608,14 @@ mr_err_t mr_fs_stat(const char *path, mr_stat_t *stat) {
     MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
     MR_ASSERT(stat != MR_NULL);
 
+    /* Get current file-system structure */
+    fs_struct = mr_fs_current();
+    if (!fs_struct) {
+        return -MR_EINVAL;
+    }
+
     /* Look up the node */
-    dentry = mr_dentry_lookup(&__fs_root, MR_NULL, "%s", path);
+    dentry = fs_lookup(fs_struct, path);
     if (!dentry) {
         return -MR_ENOENT;
     }
@@ -603,14 +650,21 @@ _exit:
 
 mr_err_t mr_fs_unlink(const char *path) {
     mr_dentry_t *dentry, *parent;
+    mr_fs_struct_t *fs_struct;
     mr_err_t ret;
 
     /* Check parameter */
     MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
 
+    /* Get current file-system structure */
+    fs_struct = mr_fs_current();
+    if (!fs_struct) {
+        return -MR_EINVAL;
+    }
+
     /* Look up the target node. A non-directory mid-path component also fails
      * here as -MR_ENOENT (not -MR_ENOTDIR); matches mr_fs_open */
-    dentry = mr_dentry_lookup(&__fs_root, MR_NULL, "%s", path);
+    dentry = fs_lookup(fs_struct, path);
     if (!dentry) {
         return -MR_ENOENT;
     }
@@ -669,7 +723,9 @@ _exit:
 }
 
 mr_err_t mr_fs_rename(const char *old_path, const char *new_path) {
-    mr_dentry_t *old_dentry, *old_parent, *new_parent, *existing, *p;
+    mr_dentry_t *new_parent, *existing, *p;
+    mr_dentry_t *old_dentry, *old_parent;
+    mr_fs_struct_t *fs_struct;
     fs_path_split_t split;
     mr_err_t ret;
 
@@ -677,8 +733,14 @@ mr_err_t mr_fs_rename(const char *old_path, const char *new_path) {
     MR_ASSERT((old_path != MR_NULL) && (old_path[0] != '\0'));
     MR_ASSERT((new_path != MR_NULL) && (new_path[0] != '\0'));
 
+    /* Get current file-system structure */
+    fs_struct = mr_fs_current();
+    if (!fs_struct) {
+        return -MR_EINVAL;
+    }
+
     /* Look up the source node */
-    old_dentry = mr_dentry_lookup(&__fs_root, MR_NULL, "%s", old_path);
+    old_dentry = fs_lookup(fs_struct, old_path);
     if ((!old_dentry) || (!old_dentry->inode)) {
         ret = -MR_ENOENT;
         goto _exit;
@@ -710,7 +772,7 @@ mr_err_t mr_fs_rename(const char *old_path, const char *new_path) {
     }
 
     /* Look up the destination parent directory */
-    new_parent = mr_dentry_lookup(&__fs_root, MR_NULL, "%s", split.parent);
+    new_parent = fs_lookup(fs_struct, split.parent);
     if ((!new_parent) || (!new_parent->inode)) {
         ret = -MR_ENOENT;
         goto _exit_free;
@@ -722,7 +784,7 @@ mr_err_t mr_fs_rename(const char *old_path, const char *new_path) {
         goto _exit_put;
     }
 
-    /* Renaming across file-systems is not supported */
+    /* Renaming across FS is not supported */
     if (old_parent->inode->sb && new_parent->inode->sb
         && (old_parent->inode->sb != new_parent->inode->sb)) {
         ret = -MR_EXDEV;
@@ -780,11 +842,18 @@ _exit:
 
 mr_err_t mr_fs_mkdir(const char *path) {
     mr_dentry_t *parent, *dentry;
+    mr_fs_struct_t *fs_struct;
     fs_path_split_t split;
     mr_err_t ret;
 
     /* Check parameter */
     MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+
+    /* Get current file-system structure */
+    fs_struct = mr_fs_current();
+    if (!fs_struct) {
+        return -MR_EINVAL;
+    }
 
     /* Split path into parent + leaf */
     ret = fs_split_path(path, &split);
@@ -793,7 +862,7 @@ mr_err_t mr_fs_mkdir(const char *path) {
     }
 
     /* Look up the parent directory */
-    parent = mr_dentry_lookup(&__fs_root, MR_NULL, "%s", split.parent);
+    parent = fs_lookup(fs_struct, split.parent);
     if (!parent) {
         /* Parent not found */
         fs_split_path_free(&split);
@@ -995,5 +1064,154 @@ mr_err_t mr_fs_sync(mr_file_t *file) {
 
     /* Sync the file */
     return file->fops->sync(file);
+}
+
+mr_err_t mr_fs_struct_init(mr_fs_struct_t *fs_struct) {
+    MR_ASSERT(fs_struct != MR_NULL);
+
+    /* Init FS structure */
+    fs_struct->root = mr_dentry_get(&__fs_root);
+    if (!fs_struct->root) {
+        return -MR_EINVAL;
+    }
+    fs_struct->cwd = mr_dentry_get(&__fs_root);
+    if (!fs_struct->cwd) {
+        mr_dentry_put(fs_struct->root);
+        return -MR_EINVAL;
+    }
+    return 0;
+}
+
+mr_err_t mr_fs_chroot(const char *path) {
+    mr_fs_struct_t *fs_struct;
+    mr_dentry_t *dentry;
+    mr_inode_t *inode;
+
+    /* Check parameter */
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+
+    /* Get current file-system structure */
+    fs_struct = mr_fs_current();
+    if (!fs_struct) {
+        return -MR_EINVAL;
+    }
+
+    /* Look up the new root */
+    dentry = fs_lookup(fs_struct, path);
+    if (!dentry) {
+        return -MR_ENOENT;
+    }
+
+    /* The new root must be a directory */
+    inode = dentry->inode;
+    if ((!inode) || (inode->type != MR_INODE_DIR)) {
+        mr_dentry_put(dentry);
+        return -MR_ENOTDIR;
+    }
+
+    /* Swap the context root */
+    mr_dentry_put(fs_struct->root);
+    fs_struct->root = dentry;
+    return 0;
+}
+
+mr_err_t mr_fs_chdir(const char *path) {
+    mr_fs_struct_t *fs_struct;
+    mr_dentry_t *dentry;
+    mr_inode_t *inode;
+
+    /* Check parameter */
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+
+    /* Get current file-system structure */
+    fs_struct = mr_fs_current();
+    if (!fs_struct) {
+        return -MR_EINVAL;
+    }
+
+    /* Look up the new working directory */
+    dentry = fs_lookup(fs_struct, path);
+    if (!dentry) {
+        return -MR_ENOENT;
+    }
+
+    /* The new working directory must be a directory */
+    inode = dentry->inode;
+    if ((!inode) || (inode->type != MR_INODE_DIR)) {
+        mr_dentry_put(dentry);
+        return -MR_ENOTDIR;
+    }
+
+    /* Swap the context cwd */
+    mr_dentry_put(fs_struct->cwd);
+    fs_struct->cwd = dentry;
+    return 0;
+}
+
+mr_ssize_t mr_fs_getcwd(char *buf, mr_size_t size) {
+    mr_fs_struct_t *fs = mr_fs_current();
+    mr_dentry_t *dentry;
+    mr_size_t len, pos, name_len;
+
+    /* Check parameter */
+    MR_ASSERT((buf != MR_NULL) && (size > 0));
+
+    dentry = fs->cwd;
+
+    /* The cwd is the root */
+    if (dentry == fs->root) {
+        if (size < 2) {
+            return -MR_ERANGE;
+        }
+        buf[0] = '/';
+        buf[1] = '\0';
+        return 1;
+    }
+
+    /* First pass: compute the path length(excluding '\0') */
+    len = 0;
+    while (dentry != fs->root) {
+        if (!dentry->upper) {
+            /* The cwd is not under the root */
+            return -MR_ENOENT;
+        }
+        name_len = MR_DENTRY_NAME_LEN(dentry);
+        len += name_len + 1u;
+        dentry = dentry->upper;
+    }
+
+    /* Check the buffer can hold the path and the terminator */
+    if ((len + 1u) > size) {
+        return -MR_ERANGE;
+    }
+
+    /* Second pass: write the path backwards from the end */
+    dentry = fs->cwd;
+    pos = len;
+    buf[pos] = '\0';
+    while (dentry != fs->root) {
+        name_len = MR_DENTRY_NAME_LEN(dentry);
+
+        pos -= name_len;
+        mr_strncpy(&buf[pos], MR_DENTRY_NAME(dentry), name_len);
+        pos -= 1u;
+        buf[pos] = '/';
+        dentry = dentry->upper;
+    }
+    return (mr_ssize_t)len;
+}
+
+#if !defined(MR_USE_FS_MULTIUSER)
+mr_fs_struct_t *mr_fs_current(void) {
+    /* Return the single user FS structure */
+    return &__fs_struct;
+}
+#endif /* !defined(MR_USE_FS_MULTIUSER) */
+
+void mr_fs_init(void) {
+#if !defined(MR_USE_FS_MULTIUSER)
+    /* Init single user FS structure */
+    mr_fs_struct_init(&__fs_struct);
+#endif /* !defined(MR_USE_FS_MULTIUSER) */
 }
 #endif /* defined(MR_USE_FS) */

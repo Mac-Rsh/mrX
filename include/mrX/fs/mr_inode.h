@@ -41,10 +41,10 @@ typedef enum mr_inode_type {
 
 /* Directory entry type */
 typedef struct mr_dirent {
-#if !defined(MR_CFG_FS_FILE_NAME_LEN)
-#define MR_CFG_FS_FILE_NAME_LEN        (260)
-#endif /* !defined(MR_CFG_FS_FILE_NAME_LEN) */
-    char name[MR_CFG_FS_FILE_NAME_LEN];
+#if !defined(MR_CFG_FS_PATH_LEN)
+#define MR_CFG_FS_PATH_LEN              (260)
+#endif /* !defined(MR_CFG_FS_PATH_LEN) */
+    char name[MR_CFG_FS_PATH_LEN];
     mr_inode_type_t type;
 } mr_dirent_t;
 

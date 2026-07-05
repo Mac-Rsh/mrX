@@ -257,9 +257,8 @@ static mr_bool_t ramfs_file_readdir(mr_file_t *file, mr_dirent_t *dirent) {
     }
 
     /* Read directory entry */
-    mr_strncpy(dirent->name, MR_DENTRY_NAME(child),
-               MR_CFG_FS_FILE_NAME_LEN - 1);
-    dirent->name[MR_CFG_FS_FILE_NAME_LEN - 1] = '\0';
+    mr_strncpy(dirent->name, MR_DENTRY_NAME(child), MR_CFG_FS_PATH_LEN - 1);
+    dirent->name[MR_CFG_FS_PATH_LEN - 1] = '\0';
     dirent->type = child->inode ? child->inode->type : MR_INODE_NONE;
     mr_dentry_put(child);
 
@@ -311,8 +310,8 @@ static void ramfs_kill_sb(mr_super_block_t *sb) {
     }
 }
 
-static void ramfs_init(void) {
-    (void)mr_file_system_register(&__ramfs);
+static void mr_fs_ramfs_init(void) {
+    mr_file_system_register(&__ramfs);
 }
-MR_INIT_EXPORT(ramfs_init, MR_INIT_LEVEL_DRIVER);
+MR_INIT_EXPORT(mr_fs_ramfs_init, MR_INIT_LEVEL_DRIVER);
 #endif /* defined(MR_USE_FS_RAMFS) */

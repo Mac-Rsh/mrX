@@ -12,6 +12,28 @@ config MR_USE_FS
         operations, a handle-based open/read/write API, and a file-system
         mount/unmount framework.
 
+config MR_USE_FS_MULTIUSER
+    depends on MR_USE_FS
+    bool "Use multi-user"
+    default n
+    help
+        Provide per-caller FS contexts(root/cwd) instead of a single
+        global one. When enabled, the built-in mr_fs_current() is not
+        compiled and the platform must supply it so each task/user owns
+        an independent mr_fs_struct_t. When disabled, the library exposes
+        a single shared mr_fs_current() for single-user use.
+
+config MR_CFG_FS_PATH_LEN
+    depends on MR_USE_FS
+    int "Path length"
+    default 260
+    range 32 65535
+    help
+        Maximum length, in characters, of an absolute path. It is the
+        recommended buffer size for mr_fs_getcwd(); passing a buffer smaller
+        than the actual working-directory path makes mr_fs_getcwd() return
+        -MR_ERANGE.
+
 config MR_CFG_FS_DENTRY_NAME_LEN
     depends on MR_USE_FS
     int "Inline name length"

@@ -6,12 +6,13 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
+#if defined(MR_USE_DRIVER_RAM)
+#include <mrX/drivers/ram/mr_ram.h>
+#include <mrX/libc/mr_malloc.h>
+
 /* HardTree compatible */
 #define MR_HT_COMPAT                    ram_heaps
-
-#include <mrX/drivers/ram/mr_ram.h>
-#if defined(MR_USE_DRIVER_RAM) && MR_HT_HAS_DRIVER()
-#include <mrX/libc/mr_malloc.h>
+#if MR_HT_HAS_DRIVER()
 
 /* Driver RAM operations */
 static mr_err_t ram_heap_mount(const mr_driver_t *drv);
@@ -45,4 +46,5 @@ static mr_err_t ram_heap_unmount(const mr_driver_t *drv) {
 #define RAM_HEAP_HT_RAM_INSTALL(_id, _ops)                                     \
     MR_HT_RAM_INSTALL(_id, MR_NULL, _ops)
 MR_HT_DRIVER_FOREACH(RAM_HEAP_HT_RAM_INSTALL, &__drv_ram_ops);
-#endif /* defined(MR_USE_DRIVER_RAM) && MR_HT_HAS_DRIVER() */
+#endif /* MR_HT_HAS_DRIVER() */
+#endif /* defined(MR_USE_DRIVER_RAM) */

@@ -51,6 +51,12 @@ typedef struct mr_file {
     void *priv;
 } mr_file_t;
 
+/* File-system structure type */
+typedef struct mr_fs_struct {
+    mr_dentry_t *root;
+    mr_dentry_t *cwd;
+} mr_fs_struct_t;
+
 /**
  * @brief This function mounts a file-system at a path.
  *
@@ -97,8 +103,7 @@ mr_err_t mr_fs_close(mr_file_t *file);
  * @param path The directory path.
  * @return 0 on success, a negative error code on failure.
  *
- * @note The node must be a directory(-MR_ENOTDIR). Iterate with the directory
- * read API and close with mr_fs_closedir().
+ * @note The node must be a directory(-MR_ENOTDIR).
  */
 mr_err_t mr_fs_opendir(mr_file_t *file, const char *path);
 
@@ -116,8 +121,6 @@ mr_err_t mr_fs_closedir(mr_file_t *file);
  * @param file The directory(must be open).
  * @param dirent The directory entry to fill.
  * @return MR_TRUE if an entry was read, MR_FALSE at end-of-directory.
- *
- * @note The file must be a directory opened with mr_fs_opendir().
  */
 mr_bool_t mr_fs_readdir(mr_file_t *file, mr_dirent_t *dirent);
 
@@ -128,8 +131,7 @@ mr_bool_t mr_fs_readdir(mr_file_t *file, mr_dirent_t *dirent);
  * @param stat The file status to fill.
  * @return 0 on success, a negative error code on failure.
  *
- * @note Generic inode fields are filled first; if the file-system provides a
- * stat hook, it may override or extend them.
+ * @note A file-system stat hook may override the generic fields.
  */
 mr_err_t mr_fs_stat(const char *path, mr_stat_t *stat);
 
@@ -190,9 +192,7 @@ mr_err_t mr_fs_ioctl(mr_file_t *file, int cmd, void *arg);
  * @param length The new length.
  * @return 0 on success, a negative error code on failure.
  *
- * @note Only regular files may be truncated; directories are rejected with
- * -MR_EISDIR.
- * @note The file position is left unchanged even if it now points past EOF.
+ * @note Only regular files may be truncated(-MR_EISDIR).
  */
 mr_err_t mr_fs_truncate(mr_file_t *file, mr_int64_t length);
 
@@ -202,10 +202,8 @@ mr_err_t mr_fs_truncate(mr_file_t *file, mr_int64_t length);
  * @param path The file path.
  * @return 0 on success, a negative error code on failure.
  *
- * @note Files and empty directories may be removed; a non-empty directory is
- * rejected with -MR_ENOTEMPTY.
+ * @note A non-empty directory is rejected with -MR_ENOTEMPTY.
  * @note A mount-point directory can not be removed(-MR_EBUSY).
- * @note An open file keeps its data alive until it is closed.
  */
 mr_err_t mr_fs_unlink(const char *path);
 
@@ -216,10 +214,8 @@ mr_err_t mr_fs_unlink(const char *path);
  * @param new_path The new path.
  * @return 0 on success, a negative error code on failure.
  *
- * @note The destination must not already exist; renaming onto an existing node
- * is rejected with -MR_EEXIST.
- * @note Renaming across file-systems(different super-blocks) is rejected with
- * -MR_EXDEV.
+ * @note The destination must not already exist(-MR_EEXIST).
+ * @note A cross-file-system rename is rejected with -MR_EXDEV.
  * @note A mount-point directory can not be renamed(-MR_EBUSY).
  */
 mr_err_t mr_fs_rename(const char *old_path, const char *new_path);
@@ -230,9 +226,8 @@ mr_err_t mr_fs_rename(const char *old_path, const char *new_path);
  * @param path The directory path.
  * @return 0 on success, a negative error code on failure.
  *
- * @note Intermediate directories are not created; the parent must already
- * exist(-MR_ENOENT).
- * @note A leaf that already exists is rejected with -MR_EEXIST.
+ * @note The parent must already exist(-MR_ENOENT).
+ * @note An existing leaf is rejected with -MR_EEXIST.
  */
 mr_err_t mr_fs_mkdir(const char *path);
 
@@ -242,10 +237,51 @@ mr_err_t mr_fs_mkdir(const char *path);
  * @param file The file(must be open).
  * @return 0 on success, a negative error code on failure.
  *
- * @note Only file-systems that provide a sync hook flush data; others return
- * -MR_ENOSYS.
+ * @note Returns -MR_ENOSYS if no sync hook is provided.
  */
 mr_err_t mr_fs_sync(mr_file_t *file);
+
+/**
+ * @brief This function initializes a FS structure with the built-in
+ * default(root = cwd = the global root).
+ *
+ * @param fs_struct The FS structure.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_struct_init(mr_fs_struct_t *fs_struct);
+
+/**
+ * @brief This function gets the current FS context.
+ *
+ * @return The current FS context.
+ */
+mr_fs_struct_t *mr_fs_current(void);
+
+/**
+ * @brief This function changes the root directory of the current context.
+ *
+ * @param path The new root path(resolved relative to the current context).
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_chroot(const char *path);
+
+/**
+ * @brief This function changes the current working directory.
+ *
+ * @param path The new working directory path.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_chdir(const char *path);
+
+/**
+ * @brief This function gets the absolute path of the current working
+ * directory.
+ *
+ * @param buf The buffer to hold the path.
+ * @param size The buffer size.
+ * @return The path length on success, a negative error code on failure.
+ */
+mr_ssize_t mr_fs_getcwd(char *buf, mr_size_t size);
 #endif /* defined(MR_USE_FS) */
 
 /** @} */

@@ -55,6 +55,12 @@ void mr_kernel_init(void) {
     extern void mr_kernel_irq_init(void);
     mr_kernel_irq_init();
 #endif /* defined(MR_USE_IRQ) */
+
+#if defined(MR_USE_FS)
+    /* Init FS */
+    extern void mr_fs_init(void);
+    mr_fs_init();
+#endif /* defined(MR_USE_FS) */
 }
 
 void mr_user_init(void) {
