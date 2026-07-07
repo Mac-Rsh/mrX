@@ -1,0 +1,33 @@
+menu "XVM: Virtual machine"
+
+# ==================================
+# XVM
+# ==================================
+config MR_USE_MODULE_XVM
+    depends on MR_USE_MODULE
+    bool "Use XVM"
+    default n
+    help
+        Enable the extensible virtual machine(XVM). Provides a small virtual
+        machine with pluggable instruction-set architectures(ISA):
+            - Load and execute binary images(flash) in separate data memory(RAM)
+            - Register ISA implementations by name at runtime
+            - Instruction-step scheduling with syscall and exception events
+            - Pause/resume and status query
+
+config MR_CFG_XVM_SYSCALL_PARAM_NUM
+    depends on MR_USE_MODULE_XVM
+    int "Syscall parameter number"
+    default 6
+    range 1 64
+    help
+        Number of parameter slots in the XVM syscall event. Each slot holds a
+        pointer to a 64-bit syscall argument. Increase this value if an ISA
+        needs to pass more arguments in a single syscall event.
+
+# ==================================
+# RSOURCE
+# ==================================
+rsource '*/*/Kconfig'
+
+endmenu

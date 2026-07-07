@@ -1,0 +1,18 @@
+menu "RISCV32: RISC-V 32-bit ISA"
+
+# ==================================
+# RISCV32
+# ==================================
+config MR_USE_MODULE_XVM_RISCV32
+    depends on MR_USE_MODULE_XVM
+    bool "Use RISC-V32"
+    default n
+    help
+        Enable the RISC-V 32-bit ISA backend for XVM. This registers the
+        "riscv32" ISA implementation and provides:
+            - RV32 instruction decode and execution
+            - Machine-mode CSR and trap handling
+            - XVM syscall and exception delivery
+            - MMIO-based external interrupt injection
+
+endmenu
