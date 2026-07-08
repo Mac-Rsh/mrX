@@ -18,7 +18,7 @@ config MR_USE_MODULE_XVM
 config MR_CFG_XVM_SYSCALL_PARAM_NUM
     depends on MR_USE_MODULE_XVM
     int "Syscall parameter number"
-    default 6
+    default 7
     range 1 64
     help
         Number of parameter slots in the XVM syscall event. Each slot holds a

@@ -57,7 +57,7 @@ typedef struct mr_xvm_none {
 typedef struct mr_xvm_syscall {
     mr_uint32_t nr;
 #if !defined(MR_CFG_XVM_SYSCALL_PARAM_NUM)
-#define MR_CFG_XVM_SYSCALL_PARAM_NUM    (6)
+#define MR_CFG_XVM_SYSCALL_PARAM_NUM    (7)
 #endif /* !defined(MR_CFG_XVM_SYSCALL_PARAM_NUM) */
     mr_uint64_t *param[MR_CFG_XVM_SYSCALL_PARAM_NUM];
     mr_uint64_t *ret;
@@ -240,6 +240,7 @@ MR_INLINE mr_err_t mr_xvm_reg_load(mr_xvm_t *xvm, const char *name,
     /* Check parameter */
     MR_ASSERT((xvm != MR_NULL) && MR_OBJECT_IS_INITED(xvm));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
+    MR_ASSERT(xvm->isa->ops->reg_load != MR_NULL);
     MR_ASSERT((name != MR_NULL) && (name[0] != '\0'));
     MR_ASSERT(val != MR_NULL);
 
@@ -260,6 +261,7 @@ MR_INLINE mr_err_t mr_xvm_reg_store(mr_xvm_t *xvm, const char *name,
     /* Check parameter */
     MR_ASSERT((xvm != MR_NULL) && MR_OBJECT_IS_INITED(xvm));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
+    MR_ASSERT(xvm->isa->ops->reg_store != MR_NULL);
     MR_ASSERT((name != MR_NULL) && (name[0] != '\0'));
 
     /* Store register from user */

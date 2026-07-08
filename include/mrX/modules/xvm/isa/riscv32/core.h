@@ -81,8 +81,6 @@ typedef enum trap_type {
 typedef struct core_regs {
     mr_uint32_t x[32];
     mr_uint32_t pc;
-    mr_uint32_t lr_addr;
-    mr_uint32_t lr_valid;
     mr_uint32_t mstatus;
     mr_uint32_t misa;
     mr_uint32_t mie;
@@ -132,8 +130,6 @@ typedef struct name_addr_name {
 #define CORE_REG(_core)                 ((_core)->regs)
 #define CORE_REG_X(_core, _reg)         (CORE_REG(_core).x[(_reg)])
 #define CORE_REG_PC(_core)              (CORE_REG(_core).pc)
-#define CORE_REG_LR_ADDR(_core)         (CORE_REG(_core).lr_addr)
-#define CORE_REG_LR_VALID(_core)        (CORE_REG(_core).lr_valid)
 #define CORE_REG_MSTATUS(_core)         (CORE_REG(_core).mstatus)
 #define CORE_REG_MISA(_core)            (CORE_REG(_core).misa)
 #define CORE_REG_MIE(_core)             (CORE_REG(_core).mie)

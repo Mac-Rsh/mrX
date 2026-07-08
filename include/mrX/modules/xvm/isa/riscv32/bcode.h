@@ -77,18 +77,6 @@ typedef enum bcode {
     BCODE_DIVU,
     BCODE_REM,
     BCODE_REMU,
-    /* A extension */
-    BCODE_LR_W,
-    BCODE_SC_W,
-    BCODE_AMOSWAP_W,
-    BCODE_AMOADD_W,
-    BCODE_AMOXOR_W,
-    BCODE_AMOAND_W,
-    BCODE_AMOOR_W,
-    BCODE_AMOMIN_W,
-    BCODE_AMOMAX_W,
-    BCODE_AMOMINU_W,
-    BCODE_AMOMAXU_W,
     /* System */
     BCODE_ECALL,
     BCODE_EBREAK,

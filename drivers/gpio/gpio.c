@@ -30,6 +30,8 @@ mr_err_t mr_gpio_configure(mr_driver_t *drv, mr_uint32_t pin,
     /* Get GPIO data and operations */
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
     gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
+    MR_ASSERT(gp_ops->pin_configure != MR_NULL);
+    MR_ASSERT(gp_ops->pin_write != MR_NULL);
 
     /* Check if pin is existed */
     if ((pin >= 32U) || (!(gp_data->exist_mask & (1U << pin)))) {
@@ -64,6 +66,7 @@ mr_err_t mr_gpio_configuration(mr_driver_t *drv, mr_uint32_t pin,
     /* Get GPIO data and operations */
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
     gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
+    MR_ASSERT(gp_ops->pin_configuration != MR_NULL);
 
     /* Check if pin is existed */
     if ((pin >= 32U) || (!(gp_data->exist_mask & (1U << pin)))) {

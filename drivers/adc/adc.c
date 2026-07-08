@@ -30,6 +30,7 @@ mr_err_t mr_adc_configure(mr_driver_t *drv, mr_uint32_t channel,
     /* Get ADC data and operations */
     ad_data = (mr_adc_data_t *)MR_DRIVER_DATA(drv);
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
+    MR_ASSERT(ad_ops->channel_configure != MR_NULL);
 
     /* Check if channel is existed */
     if ((channel >= 32U) || (!(ad_data->exist_mask & (1U << channel)))) {
@@ -54,6 +55,7 @@ mr_err_t mr_adc_configuration(mr_driver_t *drv, mr_uint32_t channel,
     /* Get ADC data and operations */
     ad_data = (mr_adc_data_t *)MR_DRIVER_DATA(drv);
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
+    MR_ASSERT(ad_ops->channel_configure != MR_NULL);
 
     /* Check if channel is existed */
     if ((channel >= 32U) || (!(ad_data->exist_mask & (1U << channel)))) {

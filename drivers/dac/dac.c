@@ -30,6 +30,7 @@ mr_err_t mr_dac_configure(mr_driver_t *drv, mr_uint32_t channel,
     /* Get DAC data and operations */
     da_data = (mr_dac_data_t *)MR_DRIVER_DATA(drv);
     da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+    MR_ASSERT(da_ops->channel_configure != MR_NULL);
 
     /* Check if channel is existed */
     if ((channel >= 32U) || (!(da_data->exist_mask & (1U << channel)))) {
@@ -54,6 +55,7 @@ mr_err_t mr_dac_configuration(mr_driver_t *drv, mr_uint32_t channel,
     /* Get DAC data and operations */
     da_data = (mr_dac_data_t *)MR_DRIVER_DATA(drv);
     da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+    MR_ASSERT(da_ops->channel_configure != MR_NULL);
 
     /* Check if channel is existed */
     if ((channel >= 32U) || (!(da_data->exist_mask & (1U << channel)))) {

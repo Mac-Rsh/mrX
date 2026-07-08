@@ -212,6 +212,7 @@ MR_INLINE mr_ssize_t mr_dac_write(mr_driver_t *drv, mr_dac_seq_t *seq) {
 
     /* Get DAC operations */
     da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+    MR_ASSERT(da_ops->write != MR_NULL);
 
     /* Write DAC sequence */
     return da_ops->write(drv, seq);

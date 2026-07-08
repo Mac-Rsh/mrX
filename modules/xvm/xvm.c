@@ -145,6 +145,7 @@ mr_err_t mr_xvm_load(mr_xvm_t *xvm, const void *image, mr_size_t image_size,
     /* Check parameter */
     MR_ASSERT((xvm != MR_NULL) && MR_OBJECT_IS_INITED(xvm));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
+    MR_ASSERT(xvm->isa->ops->load != MR_NULL);
     MR_ASSERT((image != MR_NULL) && (image_size > 0));
     MR_ASSERT(entry >= image_size);
 
@@ -155,6 +156,7 @@ mr_err_t mr_xvm_load(mr_xvm_t *xvm, const void *image, mr_size_t image_size,
     }
 
     /* Load XVM binary */
+    mr_memset(xvm->datamem.data, 0, xvm->datamem.size);
     xvm->bin.size = image_size;
     xvm->bin.image = image;
     xvm->bin.entry = entry;
@@ -180,6 +182,7 @@ mr_xvm_return_t mr_xvm_execute(mr_xvm_t *xvm, mr_xvm_event_t *event,
     /* Check parameter */
     MR_ASSERT((xvm != MR_NULL) && MR_OBJECT_IS_INITED(xvm));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
+    MR_ASSERT(xvm->isa->ops->execute != MR_NULL);
     MR_ASSERT(event != MR_NULL);
 
     /* Lock */
@@ -229,6 +232,7 @@ mr_ssize_t mr_xvm_datamem_load(mr_xvm_t *xvm, mr_uint64_t addr, void *datamem,
     /* Check parameter */
     MR_ASSERT((xvm != MR_NULL) && MR_OBJECT_IS_INITED(xvm));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
+    MR_ASSERT(xvm->isa->ops->mem_map != MR_NULL);
     MR_ASSERT((datamem != MR_NULL) || (size == 0));
 
     /* Map data memory */
@@ -252,6 +256,7 @@ mr_ssize_t mr_xvm_datamem_store(mr_xvm_t *xvm, mr_uint64_t addr,
     /* Check parameter */
     MR_ASSERT((xvm != MR_NULL) && MR_OBJECT_IS_INITED(xvm));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
+    MR_ASSERT(xvm->isa->ops->mem_map != MR_NULL);
     MR_ASSERT((datamem != MR_NULL) || (size == 0));
 
     /* Map data memory */

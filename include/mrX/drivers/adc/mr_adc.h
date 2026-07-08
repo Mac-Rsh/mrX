@@ -242,6 +242,7 @@ MR_INLINE mr_ssize_t mr_adc_read(mr_driver_t *drv, mr_adc_seq_t *seq) {
 
     /* Get ADC operations */
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
+    MR_ASSERT(ad_ops->read != MR_NULL);
 
     /* Read ADC sequence */
     return ad_ops->read(drv, seq);

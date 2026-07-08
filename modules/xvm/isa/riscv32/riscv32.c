@@ -69,10 +69,9 @@ static mr_err_t xvm_riscv32_load(mr_xvm_t *xvm) {
     }
 
     /* Load RISCV32 core */
-    mr_memset(core, 0, sizeof(*core));
     core->mem_size = datamem->size - sizeof(*core);
     mr_atomic_init(&core->intr.active, 0);
-    core->regs.misa = 0x40001101;
+    core->regs.misa = 0x40001100;
     core->bin = MR_XVM_BIN(xvm);
     core->trap_mtval = 0;
     return 0;
@@ -116,9 +115,6 @@ MR_INLINE mr_bool_t trap_enter_cause(core_t *core, mr_uint32_t cause,
     mstatus |= REG_MSTATUS_MPP_M;
     mstatus &= ~REG_MSTATUS_MIE;
     CORE_REG_MSTATUS(core) = mstatus;
-
-    /* Clear LR */
-    CORE_REG_LR_VALID(core) = 0;
 
     /* Switch to trap handler */
     if ((cause & 0x80000000u) && ((mtvec & 0x3u) == 1)) {
@@ -281,36 +277,16 @@ MR_INLINE bcode_t instr_decode(instr_t instr) {
         /* JAL (J-type) */
         BCODE_DECODE_MAP(0b1101111, BCODE_JAL);
         /* JALR (I-type) */
-        BCODE_DECODE_MAP(0b1100111, BCODE_JALR);
+        case 0b1100111: {
+            if (instr.I_type.funct3 == 0x0) {
+                return BCODE_JALR;
+            }
+            return BCODE_UNKNOWN;
+        }
         /* LUI (U-type) */
         BCODE_DECODE_MAP(0b0110111, BCODE_LUI);
         /* AUIPC (U-type) */
         BCODE_DECODE_MAP(0b0010111, BCODE_AUIPC);
-        /* AMO (R-type): A extension */
-        case 0b0101111: {
-            if (instr.R_type.funct3 != 0x2) {
-                return BCODE_UNKNOWN;
-            }
-            switch (instr.R_type.funct7 >> 2) {
-                BCODE_DECODE_FUNC(0x02) {
-                    if (instr.R_type.rs2 == 0) {
-                        return BCODE_LR_W;
-                    }
-                    return BCODE_UNKNOWN;
-                }
-                BCODE_DECODE_MAP(0x03, BCODE_SC_W);
-                BCODE_DECODE_MAP(0x01, BCODE_AMOSWAP_W);
-                BCODE_DECODE_MAP(0x00, BCODE_AMOADD_W);
-                BCODE_DECODE_MAP(0x04, BCODE_AMOXOR_W);
-                BCODE_DECODE_MAP(0x0c, BCODE_AMOAND_W);
-                BCODE_DECODE_MAP(0x08, BCODE_AMOOR_W);
-                BCODE_DECODE_MAP(0x10, BCODE_AMOMIN_W);
-                BCODE_DECODE_MAP(0x14, BCODE_AMOMAX_W);
-                BCODE_DECODE_MAP(0x18, BCODE_AMOMINU_W);
-                BCODE_DECODE_MAP(0x1c, BCODE_AMOMAXU_W);
-                BCODE_DECODE_DEFAULT(BCODE_UNKNOWN);
-            }
-        }
         /* SYSTEM (I-type): ECALL, EBREAK, MRET, CSR */
         case 0b1110011: {
             switch (instr.I_type.funct3) {
@@ -361,7 +337,7 @@ static mr_uint32_t trap_except_cause(mr_uint32_t except_nr) {
 }
 
 MR_INLINE mr_bool_t trap_enter(core_t *core, mr_uint32_t except_nr,
-                            mr_uint32_t mtval) {
+                               mr_uint32_t mtval) {
     /* Enter trap handler */
     return trap_enter_cause(core, trap_except_cause(except_nr), mtval);
 }
@@ -1052,229 +1028,6 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
             } else {
                 CORE_REG_X(core, instr.R_type.rd) = tmp0u4;
             }
-            CORE_REG_PC(core) += 4;
-            BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
-        }
-        /* ---- A extension ---- */
-        BCODE_EXECUTE_FUNC(BCODE_LR_W) {
-            tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
-            if (!CORE_ADDR_IS_ALIGN(tmp0u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ALIGN);
-            }
-            tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
-            if (CORE_ADDR_IS_IN_BIN(core, tmp0u4, 4)) {
-                tmp2u4 = *CORE_BIN_u4(core, tmp0u4);
-            } else if (CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                tmp2u4 = *CORE_MEM_u4(core, tmp1u4);
-            } else {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
-            }
-            CORE_REG_X(core, instr.R_type.rd) = tmp2u4;
-            CORE_REG_LR_ADDR(core) = tmp0u4;
-            CORE_REG_LR_VALID(core) = 1;
-            CORE_REG_PC(core) += 4;
-            BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
-        }
-        BCODE_EXECUTE_FUNC(BCODE_SC_W) {
-            tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
-            if (!CORE_ADDR_IS_ALIGN(tmp0u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ALIGN);
-            }
-            tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
-            if (!CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
-            }
-            if (CORE_REG_LR_VALID(core) && (CORE_REG_LR_ADDR(core) == tmp0u4)) {
-                *CORE_MEM_u4(core, tmp1u4) = CORE_REG_X(core, instr.R_type.rs2);
-                CORE_REG_X(core, instr.R_type.rd) = 0;
-            } else {
-                CORE_REG_X(core, instr.R_type.rd) = 1;
-            }
-            CORE_REG_LR_VALID(core) = 0;
-            CORE_REG_PC(core) += 4;
-            BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
-        }
-        BCODE_EXECUTE_FUNC(BCODE_AMOSWAP_W) {
-            tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
-            if (!CORE_ADDR_IS_ALIGN(tmp0u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ALIGN);
-            }
-            tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
-            if (!CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
-            }
-            tmp2u4 = *CORE_MEM_u4(core, tmp1u4);
-            *CORE_MEM_u4(core, tmp1u4) = CORE_REG_X(core, instr.R_type.rs2);
-            CORE_REG_X(core, instr.R_type.rd) = tmp2u4;
-            CORE_REG_LR_VALID(core) = 0;
-            CORE_REG_PC(core) += 4;
-            BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
-        }
-        BCODE_EXECUTE_FUNC(BCODE_AMOADD_W) {
-            tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
-            if (!CORE_ADDR_IS_ALIGN(tmp0u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ALIGN);
-            }
-            tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
-            if (!CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
-            }
-            tmp2u4 = *CORE_MEM_u4(core, tmp1u4);
-            *CORE_MEM_u4(core, tmp1u4)
-                = tmp2u4 + CORE_REG_X(core, instr.R_type.rs2);
-            CORE_REG_X(core, instr.R_type.rd) = tmp2u4;
-            CORE_REG_LR_VALID(core) = 0;
-            CORE_REG_PC(core) += 4;
-            BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
-        }
-        BCODE_EXECUTE_FUNC(BCODE_AMOXOR_W) {
-            tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
-            if (!CORE_ADDR_IS_ALIGN(tmp0u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ALIGN);
-            }
-            tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
-            if (!CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
-            }
-            tmp2u4 = *CORE_MEM_u4(core, tmp1u4);
-            *CORE_MEM_u4(core, tmp1u4)
-                = tmp2u4 ^ CORE_REG_X(core, instr.R_type.rs2);
-            CORE_REG_X(core, instr.R_type.rd) = tmp2u4;
-            CORE_REG_LR_VALID(core) = 0;
-            CORE_REG_PC(core) += 4;
-            BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
-        }
-        BCODE_EXECUTE_FUNC(BCODE_AMOAND_W) {
-            tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
-            if (!CORE_ADDR_IS_ALIGN(tmp0u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ALIGN);
-            }
-            tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
-            if (!CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
-            }
-            tmp2u4 = *CORE_MEM_u4(core, tmp1u4);
-            *CORE_MEM_u4(core, tmp1u4)
-                = tmp2u4 & CORE_REG_X(core, instr.R_type.rs2);
-            CORE_REG_X(core, instr.R_type.rd) = tmp2u4;
-            CORE_REG_LR_VALID(core) = 0;
-            CORE_REG_PC(core) += 4;
-            BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
-        }
-        BCODE_EXECUTE_FUNC(BCODE_AMOOR_W) {
-            tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
-            if (!CORE_ADDR_IS_ALIGN(tmp0u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ALIGN);
-            }
-            tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
-            if (!CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
-            }
-            tmp2u4 = *CORE_MEM_u4(core, tmp1u4);
-            *CORE_MEM_u4(core, tmp1u4)
-                = tmp2u4 | CORE_REG_X(core, instr.R_type.rs2);
-            CORE_REG_X(core, instr.R_type.rd) = tmp2u4;
-            CORE_REG_LR_VALID(core) = 0;
-            CORE_REG_PC(core) += 4;
-            BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
-        }
-        BCODE_EXECUTE_FUNC(BCODE_AMOMIN_W) {
-            tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
-            if (!CORE_ADDR_IS_ALIGN(tmp0u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ALIGN);
-            }
-            tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
-            if (!CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
-            }
-            tmp2u4 = *CORE_MEM_u4(core, tmp1u4);
-            *CORE_MEM_u4(core, tmp1u4)
-                = ((mr_int32_t)tmp2u4
-                   < (mr_int32_t)CORE_REG_X(core, instr.R_type.rs2))
-                    ? tmp2u4
-                    : CORE_REG_X(core, instr.R_type.rs2);
-            CORE_REG_X(core, instr.R_type.rd) = tmp2u4;
-            CORE_REG_LR_VALID(core) = 0;
-            CORE_REG_PC(core) += 4;
-            BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
-        }
-        BCODE_EXECUTE_FUNC(BCODE_AMOMAX_W) {
-            tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
-            if (!CORE_ADDR_IS_ALIGN(tmp0u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ALIGN);
-            }
-            tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
-            if (!CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
-            }
-            tmp2u4 = *CORE_MEM_u4(core, tmp1u4);
-            *CORE_MEM_u4(core, tmp1u4)
-                = ((mr_int32_t)tmp2u4
-                   > (mr_int32_t)CORE_REG_X(core, instr.R_type.rs2))
-                    ? tmp2u4
-                    : CORE_REG_X(core, instr.R_type.rs2);
-            CORE_REG_X(core, instr.R_type.rd) = tmp2u4;
-            CORE_REG_LR_VALID(core) = 0;
-            CORE_REG_PC(core) += 4;
-            BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
-        }
-        BCODE_EXECUTE_FUNC(BCODE_AMOMINU_W) {
-            tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
-            if (!CORE_ADDR_IS_ALIGN(tmp0u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ALIGN);
-            }
-            tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
-            if (!CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
-            }
-            tmp2u4 = *CORE_MEM_u4(core, tmp1u4);
-            *CORE_MEM_u4(core, tmp1u4)
-                = (tmp2u4 < CORE_REG_X(core, instr.R_type.rs2))
-                    ? tmp2u4
-                    : CORE_REG_X(core, instr.R_type.rs2);
-            CORE_REG_X(core, instr.R_type.rd) = tmp2u4;
-            CORE_REG_LR_VALID(core) = 0;
-            CORE_REG_PC(core) += 4;
-            BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
-        }
-        BCODE_EXECUTE_FUNC(BCODE_AMOMAXU_W) {
-            tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
-            if (!CORE_ADDR_IS_ALIGN(tmp0u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ALIGN);
-            }
-            tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
-            if (!CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                core->trap_mtval = tmp0u4;
-                BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
-            }
-            tmp2u4 = *CORE_MEM_u4(core, tmp1u4);
-            *CORE_MEM_u4(core, tmp1u4)
-                = (tmp2u4 > CORE_REG_X(core, instr.R_type.rs2))
-                    ? tmp2u4
-                    : CORE_REG_X(core, instr.R_type.rs2);
-            CORE_REG_X(core, instr.R_type.rd) = tmp2u4;
-            CORE_REG_LR_VALID(core) = 0;
             CORE_REG_PC(core) += 4;
             BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
         }
