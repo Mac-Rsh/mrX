@@ -1208,7 +1208,7 @@ mr_fs_struct_t *mr_fs_current(void) {
 }
 #endif /* !defined(MR_USE_FS_MULTIUSER) */
 
-void mr_fs_init(void) {
+void mr_fs_file_init(void) {
 #if !defined(MR_USE_FS_MULTIUSER)
     /* Init single user FS structure */
     mr_fs_struct_init(&__fs_struct);

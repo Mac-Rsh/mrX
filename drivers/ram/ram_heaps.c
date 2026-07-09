@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#if defined(MR_USE_DRIVER_RAM)
 #include <mrX/drivers/ram/mr_ram.h>
+#if defined(MR_USE_DRIVER_RAM)
 #include <mrX/libc/mr_malloc.h>
 
 /* HardTree compatible */

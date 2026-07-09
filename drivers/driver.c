@@ -277,7 +277,7 @@ static void driver_dynamic_release(mr_object_t *obj) {
     mr_free(drv);
 }
 
-static void mr_drivers_init(void) {
+static void mr_drivers_driver_init(void) {
     const mr_driver_entry_t *start = &__mr_driver_entry_start;
     const mr_driver_entry_t *end = &__mr_driver_entry_defer;
     const mr_driver_entry_t *entry;
@@ -289,5 +289,5 @@ static void mr_drivers_init(void) {
         mr_driver_setup(entry->drv);
     }
 }
-MR_INIT_EXPORT(mr_drivers_init, MR_INIT_LEVEL_DRIVER);
+MR_INIT_EXPORT(mr_drivers_driver_init, MR_INIT_LEVEL_DRIVER);
 #endif /* defined(MR_USE_DRIVER) */

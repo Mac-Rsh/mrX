@@ -313,5 +313,5 @@ static void ramfs_kill_sb(mr_super_block_t *sb) {
 static void mr_fs_ramfs_init(void) {
     mr_file_system_register(&__ramfs);
 }
-MR_INIT_EXPORT(mr_fs_ramfs_init, MR_INIT_LEVEL_DRIVER);
+MR_INIT_EXPORT(mr_fs_ramfs_init, MR_INIT_LEVEL_FS);
 #endif /* defined(MR_USE_FS_RAMFS) */

@@ -6,8 +6,8 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#if defined(MR_USE_DRIVER_GPIO)
 #include <mrX/drivers/gpio/mr_gpio.h>
+#if defined(MR_USE_DRIVER_GPIO)
 
 /* HardTree compatible */
 #define MR_HT_COMPAT                    gpio_hc595

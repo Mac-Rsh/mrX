@@ -24,6 +24,14 @@ static void end(void) {
 }
 MR_INIT_EXPORT(end, "9.end");
 
+static void kernel_extensions_init(void) {
+#if defined(MR_USE_FS)
+    /* Init FS */
+    extern void mr_fs_file_init(void);
+    mr_fs_file_init();
+#endif /* defined(MR_USE_FS) */
+}
+
 void mr_kernel_init(void) {
     /* Check kernel init status */
     if (__initcall_kstatus) {
@@ -56,11 +64,8 @@ void mr_kernel_init(void) {
     mr_kernel_irq_init();
 #endif /* defined(MR_USE_IRQ) */
 
-#if defined(MR_USE_FS)
-    /* Init FS */
-    extern void mr_fs_init(void);
-    mr_fs_init();
-#endif /* defined(MR_USE_FS) */
+    /* Kernel extensions init */
+    kernel_extensions_init();
 }
 
 void mr_user_init(void) {
