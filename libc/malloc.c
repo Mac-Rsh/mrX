@@ -29,41 +29,47 @@ static mr_heap_info_t __heap_info;
 #define HEAP_SPLIT_THRESHOLD            (sizeof(mr_heap_block_t) << 2)
 
 static void heap_insert_block(mr_heap_block_t *blk) {
-    mr_heap_block_t *prev;
+    mr_heap_block_t *prev, *next;
+    mr_uintptr_t end;
     mr_size_t size;
-    void *merge;
 
     /* Search for the previous block */
     for (prev = &__heap_blk_head; prev->next; prev = prev->next) {
-        if (prev->next < blk) {
+        if ((mr_uintptr_t)(prev->next) < (mr_uintptr_t)blk) {
             continue;
         }
         break;
     }
+    next = prev->next;
 
-    /* Insert the block */
-    if (prev->next) {
-        /* Merge with the previous block */
+    /* Insert one free fragment */
+    __heap_info.frag_num++;
+
+    /* Merge with the previous block */
+    if (prev != &__heap_blk_head) {
         size = sizeof(mr_heap_block_t) + prev->size;
-        merge = (mr_uint8_t *)prev + size;
-        if (merge == (void *)blk) {
+        end = (mr_uintptr_t)prev + size;
+        if (end == (mr_uintptr_t)blk) {
             prev->size += blk->size + sizeof(mr_heap_block_t);
             blk = prev;
 
             /* Decrease fragment number */
             __heap_info.frag_num--;
         }
+    }
 
-        /* Merge with the next block */
+    /* Link the block to the next block */
+    if (blk != prev) {
+        blk->next = next;
+    }
+
+    /* Merge with the next block */
+    if (next) {
         size = sizeof(mr_heap_block_t) + blk->size;
-        merge = (mr_uint8_t *)blk + size;
-        if (merge == (void *)prev->next) {
-            blk->size += prev->next->size + sizeof(mr_heap_block_t);
-            blk->next = prev->next->next;
-            if (blk != prev) {
-                prev->next = blk;
-                blk = prev;
-            }
+        end = (mr_uintptr_t)blk + size;
+        if (end == (mr_uintptr_t)next) {
+            blk->size += next->size + sizeof(mr_heap_block_t);
+            blk->next = next->next;
 
             /* Decrease fragment number */
             __heap_info.frag_num--;
@@ -72,7 +78,6 @@ static void heap_insert_block(mr_heap_block_t *blk) {
 
     /* Insert the block */
     if (blk != prev) {
-        blk->next = prev->next;
         prev->next = blk;
     }
 }
@@ -122,6 +127,9 @@ void *mr_malloc(mr_size_t size) {
     blk->next = MR_NULL;
     blk->magic = MR_HEAP_MAGIC;
 
+    /* Remove one free fragment */
+    __heap_info.frag_num--;
+
     /* Check if we need to allocate a new block */
     if (res > HEAP_SPLIT_THRESHOLD) {
         /* Shrink the old block */
@@ -135,9 +143,6 @@ void *mr_malloc(mr_size_t size) {
 
         /* Insert the new block */
         heap_insert_block(new);
-
-        /* Increase fragment number */
-        __heap_info.frag_num++;
     }
 
     /* Update used & free bytes */
@@ -263,13 +268,6 @@ static mr_heap_block_t *heap_block_make(mr_ptr_t mem, mr_size_t size) {
     blk->size = size - offset;
     blk->next = MR_NULL;
     blk->magic = ~MR_HEAP_MAGIC;
-
-    /* Update used & free bytes and fragment number */
-    if (blk->size > 0) {
-        __heap_info.total_bytes += blk->size;
-        __heap_info.free_bytes += blk->size;
-        __heap_info.frag_num++;
-    }
     return blk;
 }
 
@@ -294,35 +292,51 @@ void mr_heap_region_add(const mr_heap_region_t *regions) {
         blk = heap_block_make(mem, blk_head->size);
         blk_head->size = 0;
 
+        /* Update heap information once */
+        if (blk->size > 0) {
+            __heap_info.total_bytes += blk->size;
+            __heap_info.free_bytes += blk->size;
+        }
+
         /* Insert the blocks */
-        heap_insert_block(blk_head);
         heap_insert_block(blk);
     }
 }
 
 static void heap_information_full_update(mr_heap_info_t *info) {
-    mr_size_t free_max, free_cnt;
+    mr_size_t free_max_bytes, free_cnt;
     mr_heap_block_t *blk;
+    mr_uint64_t ratio;
 
     /* Get the full information */
-    for (free_max = 0, free_cnt = 0, blk = __heap_blk_head.next; blk;
+    for (free_max_bytes = 0, free_cnt = 0, blk = __heap_blk_head.next; blk;
          blk = blk->next) {
-        if (blk->size > free_max) {
-            free_max = blk->size;
+        if (blk->size > free_max_bytes) {
+            free_max_bytes = blk->size;
         }
         free_cnt++;
     }
     if (info->free_bytes > 0) {
-        info->disp_kb_ratio = (free_cnt * 102400U) / info->free_bytes;
-        if (info->disp_kb_ratio > 1000U) {
-            info->disp_kb_ratio = 1000U;
+        /* Calculate dispersion ratio with a wider intermediate */
+        ratio = ((mr_uint64_t)free_cnt * 102400ULL)
+              / (mr_uint64_t)info->free_bytes;
+        if (ratio > 1000ULL) {
+            ratio = 1000ULL;
         }
-        info->frag_ratio = 1000U - (free_max * 1000U / info->free_bytes);
+        info->disp_kb_ratio = (mr_size_t)ratio;
+
+        /* Calculate fragmentation ratio with a wider intermediate */
+        ratio = ((mr_uint64_t)free_max_bytes * 1000ULL)
+              / (mr_uint64_t)info->free_bytes;
+        if (ratio > 1000ULL) {
+            ratio = 1000ULL;
+        }
+        info->frag_ratio = 1000U - (mr_size_t)ratio;
     } else {
         info->disp_kb_ratio = 0U;
         info->frag_ratio = 0U;
     }
-    info->max_free_bytes = free_max;
+    info->max_free_bytes = free_max_bytes;
 }
 
 mr_heap_info_t mr_heap_information(mr_bool_t lazy) {
@@ -351,6 +365,13 @@ void mr_libc_malloc_init(void) {
 
     /* Make the first block */
     blk = heap_block_make(__heap, sizeof(__heap));
+
+    /* Initialize heap information */
+    if (blk->size > 0) {
+        __heap_info.total_bytes = blk->size;
+        __heap_info.free_bytes = blk->size;
+        __heap_info.frag_num = 1;
+    }
 
     /* Insert the first block */
     __heap_blk_head.next = blk;

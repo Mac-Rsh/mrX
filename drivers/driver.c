@@ -13,10 +13,9 @@
 #include <mrX/libc/mr_string.h>
 
 /* Driver clazzes(static & dynamic) */
-static void driver_dynamic_release(mr_object_t *obj);
+static void driver_release(mr_object_t *obj);
 static void driver_statik_release(mr_object_t *obj);
-MR_CLAZZES_DEFINE(driver, driver_statik_release, driver_dynamic_release,
-                  MR_NULL);
+MR_CLAZZES_DEFINE(driver, driver_statik_release, driver_release, MR_NULL);
 
 /* Driver start/defer/end sections */
 MR_DRIVER_INSTALL(start, MR_NULL, 0, MR_NULL, MR_NULL, MR_NULL, "0.end");
@@ -44,7 +43,7 @@ mr_err_t mr_driver_init(mr_driver_t *drv, const mr_driver_clazz_t *dclazz,
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(driver);
 
     /* Check parameter */
-    MR_ASSERT((drv != MR_NULL) && (!MR_OBJECT_IS_INITED(drv)));
+    MR_ASSERT(drv != MR_NULL);
     MR_ASSERT((type != MR_DRIVER_TYPE_NONE) && (dclazz != MR_NULL));
 
     /* Init driver */
@@ -218,6 +217,7 @@ _exit:
 
 mr_driver_t *mr_driver_find(const char *name) {
     const mr_driver_entry_t *start = &__mr_driver_entry_start;
+    const mr_driver_entry_t *defer = &__mr_driver_entry_defer;
     const mr_driver_entry_t *end = &__mr_driver_entry_end;
     const mr_driver_entry_t *entry;
 
@@ -227,6 +227,11 @@ mr_driver_t *mr_driver_find(const char *name) {
     /* Find the driver */
     for (entry = start + 1; entry < end; entry++) {
         if (mr_strcmp(entry->name, name) == 0) {
+            if (entry == defer) {
+                /* Internal drive */
+                return MR_NULL;
+            }
+
             /* Get driver */
             return mr_driver_get(entry->drv);
         }
@@ -259,6 +264,11 @@ static mr_driver_t *driver_obj_release(mr_object_t *obj) {
 
     /* Delete driver */
     driver_del(drv);
+
+    /* Release driver resources */
+    if ((drv->clazz) && (drv->clazz->release)) {
+        drv->clazz->release(drv);
+    }
     return drv;
 }
 
@@ -267,7 +277,7 @@ static void driver_statik_release(mr_object_t *obj) {
     driver_obj_release(obj);
 }
 
-static void driver_dynamic_release(mr_object_t *obj) {
+static void driver_release(mr_object_t *obj) {
     mr_driver_t *drv;
 
     /* Release driver */

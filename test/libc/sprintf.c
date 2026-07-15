@@ -10,6 +10,7 @@
 #if defined(MR_USE_TEST)
 #include <mrX/libc/mr_sprintf.h>
 #include <mrX/libc/mr_string.h>
+#include <limits.h>
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf basic integer formatting                                     */
@@ -143,11 +144,11 @@ MR_TEST_EXPORT(sprintf, hh_modifier, test_sprintf_hh_modifier);
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf signed minimum values                                        */
 static void test_sprintf_signed_min(void) {
-    const mr_int64_t int64_min = -MR_INT64_MAX - 1LL;
+    const long long int64_min = LLONG_MIN;
     char buf[32];
     int ret;
 
-    ret = mr_sprintf(buf, "%d", MR_INT32_MIN);
+    ret = mr_sprintf(buf, "%d", INT_MIN);
     MR_TEST_ASSERT_EQ_INT(ret, 11);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "-2147483648"), 0);
 
@@ -156,6 +157,50 @@ static void test_sprintf_signed_min(void) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "-9223372036854775808"), 0);
 }
 MR_TEST_EXPORT(sprintf, signed_min, test_sprintf_signed_min);
+
+/* -------------------------------------------------------------------------- */
+/* Test: sprintf exact integer argument types */
+static void test_sprintf_integer_arguments(void) {
+#if LONG_MAX == 2147483647L
+    const char expected[]
+        = "-2147483648|4294967295|-128|255|-32768|65535|-2147483648|"
+          "4294967295|-9223372036854775808|18446744073709551615";
+#else
+    const char expected[] = "-2147483648|4294967295|-128|255|-32768|65535|"
+                            "-9223372036854775808|18446744073709551615|"
+                            "-9223372036854775808|18446744073709551615";
+#endif
+    char buf[192];
+    int ret;
+
+    ret = mr_sprintf(buf, "%d|%u|%hhd|%hhu|%hd|%hu|%ld|%lu|%lld|%llu", INT_MIN,
+                     UINT_MAX, SCHAR_MIN, (unsigned int)UCHAR_MAX, SHRT_MIN,
+                     (unsigned int)USHRT_MAX, LONG_MIN, ULONG_MAX, LLONG_MIN,
+                     ULLONG_MAX);
+    MR_TEST_ASSERT_EQ_INT(ret, (int)(sizeof(expected) - 1));
+    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, expected), 0);
+
+#if defined(MR_USE_ARCH_64B)
+    ret = mr_sprintf(buf, "%zd|%zu", (mr_ssize_t)LLONG_MIN,
+                     (mr_size_t)MR_SIZE_MAX);
+    MR_TEST_ASSERT_EQ_INT(ret, 41);
+    MR_TEST_ASSERT_EQ_INT(
+        mr_strcmp(buf, "-9223372036854775808|18446744073709551615"), 0);
+#else
+    ret = mr_sprintf(buf, "%zd|%zu", (mr_ssize_t)INT_MIN,
+                     (mr_size_t)MR_SIZE_MAX);
+    MR_TEST_ASSERT_EQ_INT(ret, 22);
+    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "-2147483648|4294967295"), 0);
+#endif /* defined(MR_USE_ARCH_64B) */
+
+    ret = mr_sprintf(buf, "%d|%llu|%hd|%lu|%hhu|%zd|%x", -7,
+                     18446744073709551615ULL, -123, 123456UL, 250U,
+                     (mr_ssize_t)-99, 0xabU);
+    MR_TEST_ASSERT_EQ_INT(ret, 46);
+    MR_TEST_ASSERT_EQ_INT(
+        mr_strcmp(buf, "-7|18446744073709551615|-123|123456|250|-99|ab"), 0);
+}
+MR_TEST_EXPORT(sprintf, integer_arguments, test_sprintf_integer_arguments);
 
 /* -------------------------------------------------------------------------- */
 /* Test: snprintf NULL buffer with zero size                                  */
@@ -168,7 +213,7 @@ static void test_sprintf_snprintf_null_zero(void) {
 MR_TEST_EXPORT(sprintf, snprintf_null_zero, test_sprintf_snprintf_null_zero);
 
 /* -------------------------------------------------------------------------- */
-/* Test: sprintf with NULL string                                              */
+/* Test: sprintf with NULL string */
 static void test_sprintf_null_string(void) {
     char buf[32];
     int ret;
@@ -180,7 +225,7 @@ static void test_sprintf_null_string(void) {
 MR_TEST_EXPORT(sprintf, null_string, test_sprintf_null_string);
 
 /* -------------------------------------------------------------------------- */
-/* Test: unsigned, octal, binary, percent                                      */
+/* Test: unsigned, octal, binary, percent */
 static void test_sprintf_unsigned_octal_bin(void) {
     char buf[64];
     int ret;
@@ -204,7 +249,7 @@ static void test_sprintf_unsigned_octal_bin(void) {
 MR_TEST_EXPORT(sprintf, unsigned_octal_bin, test_sprintf_unsigned_octal_bin);
 
 /* -------------------------------------------------------------------------- */
-/* Test: uppercase hex                                                         */
+/* Test: uppercase hex */
 static void test_sprintf_hex_upper(void) {
     char buf[32];
     int ret;
@@ -220,7 +265,7 @@ static void test_sprintf_hex_upper(void) {
 MR_TEST_EXPORT(sprintf, hex_upper, test_sprintf_hex_upper);
 
 /* -------------------------------------------------------------------------- */
-/* Test: sign flags (+ and space)                                              */
+/* Test: sign flags (+ and space) */
 static void test_sprintf_sign_flags(void) {
     char buf[32];
     int ret;
@@ -240,7 +285,7 @@ static void test_sprintf_sign_flags(void) {
 MR_TEST_EXPORT(sprintf, sign_flags, test_sprintf_sign_flags);
 
 /* -------------------------------------------------------------------------- */
-/* Test: special prefix (#) for hex, octal, binary                             */
+/* Test: special prefix (#) for hex, octal, binary */
 static void test_sprintf_special_prefix(void) {
     char buf[32];
     int ret;
@@ -264,7 +309,7 @@ static void test_sprintf_special_prefix(void) {
 MR_TEST_EXPORT(sprintf, special_prefix, test_sprintf_special_prefix);
 
 /* -------------------------------------------------------------------------- */
-/* Test: precision for integer and string                                      */
+/* Test: precision for integer and string */
 static void test_sprintf_precision(void) {
     char buf[32];
     int ret;
@@ -280,7 +325,7 @@ static void test_sprintf_precision(void) {
 MR_TEST_EXPORT(sprintf, precision, test_sprintf_precision);
 
 /* -------------------------------------------------------------------------- */
-/* Test: asterisk width (positive and negative)                                */
+/* Test: asterisk width (positive and negative) */
 static void test_sprintf_asterisk_width(void) {
     char buf[32];
     int ret;
@@ -296,7 +341,7 @@ static void test_sprintf_asterisk_width(void) {
 MR_TEST_EXPORT(sprintf, asterisk_width, test_sprintf_asterisk_width);
 
 /* -------------------------------------------------------------------------- */
-/* Test: long modifier (l)                                                     */
+/* Test: long modifier (l) */
 static void test_sprintf_long_modifier(void) {
     char buf[32];
     int ret;
@@ -312,7 +357,7 @@ static void test_sprintf_long_modifier(void) {
 MR_TEST_EXPORT(sprintf, long_modifier, test_sprintf_long_modifier);
 
 /* -------------------------------------------------------------------------- */
-/* Test: short modifier (h)                                                    */
+/* Test: short modifier (h) */
 static void test_sprintf_short_modifier(void) {
     char buf[32];
     int ret;
@@ -328,7 +373,7 @@ static void test_sprintf_short_modifier(void) {
 MR_TEST_EXPORT(sprintf, short_modifier, test_sprintf_short_modifier);
 
 /* -------------------------------------------------------------------------- */
-/* Test: mr_snprintf with NULL format                                          */
+/* Test: mr_snprintf with NULL format */
 static void test_sprintf_snprintf_null_fmt(void) {
     char buf[32];
     int ret;
@@ -339,7 +384,7 @@ static void test_sprintf_snprintf_null_fmt(void) {
 MR_TEST_EXPORT(sprintf, snprintf_null_fmt, test_sprintf_snprintf_null_fmt);
 
 /* -------------------------------------------------------------------------- */
-/* Test: mr_vsprintf via wrapper helper                                        */
+/* Test: mr_vsprintf via wrapper helper */
 static int vsprintf_wrapper(char *buf, const char *fmt, ...) {
     mr_va_list args;
     int ret;
@@ -361,7 +406,7 @@ static void test_sprintf_vsprintf(void) {
 MR_TEST_EXPORT(sprintf, vsprintf, test_sprintf_vsprintf);
 
 /* -------------------------------------------------------------------------- */
-/* Test: snprintf with size=1 (only null terminator)                           */
+/* Test: snprintf with size=1 (only null terminator) */
 static void test_sprintf_snprintf_size1(void) {
     char buf[1];
     int ret;

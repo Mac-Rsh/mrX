@@ -24,6 +24,17 @@ MR_CLAZZES_DEFINE(dentry, dentry_statik_release, dentry_dynamic_release,
 /* Dentry lock */
 static mr_spinlock_t __dentry_lock = MR_SPINLOCK_INIT();
 
+/* Prepared dentry move type */
+typedef struct dentry_move {
+    char iname[MR_CFG_FS_DENTRY_NAME_LEN];
+    mr_dentry_t *dentry;
+    mr_dentry_t *upper;
+    mr_uint32_t hash;
+    mr_uint32_t len;
+    mr_bool_t noop;
+    char *dname;
+} dentry_move_t;
+
 /* Last-word definition */
 #define LWORD_DOT2                      (0x2e2e)
 #define LWORD_DOT                       (0x2e)
@@ -115,8 +126,7 @@ static mr_err_t dentry_name_alloc(mr_dentry_t *dentry, const char *name,
 
     /* Name must be a single component. "/" is allowed as the sole name of
      * the VFS root dentry */
-    if (mr_strchr(name, '/')
-        && !((name[0] == '/') && (name[1] == '\0'))) {
+    if (mr_strchr(name, '/') && (!((name[0] == '/') && (name[1] == '\0')))) {
         return -MR_EINVAL;
     }
 
@@ -148,10 +158,6 @@ static mr_err_t dentry_init(mr_dentry_t *dentry, const mr_clazz_t *clazz,
     char istr[MR_CFG_FS_DENTRY_NAME_LEN * 2];
     const char *str;
     mr_err_t ret;
-
-    /* Check parameter */
-    MR_ASSERT((dentry != MR_NULL) && (clazz != MR_NULL));
-    MR_ASSERT((fmt != MR_NULL) && (fmt[0] != '\0'));
 
     /* Allocate string */
     ret = str_varg_alloc(fmt, args, &str, istr, sizeof(istr));
@@ -187,7 +193,7 @@ mr_err_t mr_dentry_vinit(mr_dentry_t *dentry, const mr_dentry_ops_t *ops,
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(dentry);
 
     /* Check parameter */
-    MR_ASSERT((dentry != MR_NULL) && (!MR_OBJECT_IS_INITED(dentry)));
+    MR_ASSERT(dentry != MR_NULL);
     MR_ASSERT((fmt != MR_NULL) && (fmt[0] != '\0'));
 
     /* Init dentry */
@@ -223,6 +229,10 @@ mr_err_t mr_dentry_init(mr_dentry_t *dentry, const mr_dentry_ops_t *ops,
     mr_va_list args;
     mr_err_t ret;
 
+    /* Check parameter */
+    MR_ASSERT(dentry != MR_NULL);
+    MR_ASSERT((fmt != MR_NULL) && (fmt[0] != '\0'));
+
     /* Init dentry */
     mr_va_start(args, fmt);
     ret = mr_dentry_vinit(dentry, ops, fmt, args);
@@ -234,6 +244,9 @@ mr_dentry_t *mr_dentry_create(const mr_dentry_ops_t *ops, const char *fmt,
                               ...) {
     mr_dentry_t *dentry;
     mr_va_list args;
+
+    /* Check parameter */
+    MR_ASSERT((fmt != MR_NULL) && (fmt[0] != '\0'));
 
     /* Create dentry */
     mr_va_start(args, fmt);
@@ -391,33 +404,23 @@ _exit:
     return ret;
 }
 
-mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
-                        const char *name) {
-    mr_dentry_t *old_upper, *p;
+static mr_err_t dentry_move_prepare(mr_dentry_t *dentry, mr_dentry_t *upper,
+                                    const char *name, dentry_move_t *move) {
     mr_dentry_name_t lookup;
     mr_uint32_t lword;
     mr_size_t newlen;
+    mr_dentry_t *p;
     mr_err_t ret;
     char *newbuf;
     int mask;
 
-    /* Check parameter */
-    MR_ASSERT((dentry != MR_NULL) && MR_OBJECT_IS_INITED(dentry));
-    MR_ASSERT(MR_OBJECT_IS_CLAZZES(dentry, dentry));
-    MR_ASSERT((upper != MR_NULL) && MR_OBJECT_IS_INITED(upper));
-    MR_ASSERT(MR_OBJECT_IS_CLAZZES(upper, dentry));
-    MR_ASSERT((name != MR_NULL) && (name[0] != '\0'));
+    /* Init move */
+    mr_memset(move, 0, sizeof(*move));
 
-    /* Name must be a single component (no '/') */
-    if (!mr_strchr(name, '/')) {
-        /* Get new name length */
-        newlen = mr_strlen(name);
-    } else {
-        return -MR_EINVAL;
-    }
+    /* Get new name length */
+    newlen = mr_strlen(name);
 
-    /* If the new name does not fit inline, pre-allocate it so an allocation
-     * failure is reported before any tree mutation */
+    /* Pre-allocate dynamic name */
     if (newlen >= MR_CFG_FS_DENTRY_NAME_LEN) {
         /* Use dynamic name */
         newbuf = mr_malloc(newlen + 1);
@@ -433,12 +436,6 @@ mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__dentry_lock);
-
-    /* Can not move a dentry into itself */
-    if (dentry == upper) {
-        ret = -MR_EINVAL;
-        goto _exit;
-    }
 
     /* Can not move a dentry into its own subtree: walk up from the new parent
      * and reject if the source is an ancestor of it */
@@ -459,6 +456,7 @@ mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
      * -MR_EEXIST */
     if ((dentry->upper == upper)
         && (dentry_name_match(&dentry->name, &lookup, upper->ops))) {
+        move->noop = MR_TRUE;
         ret = 0;
         goto _exit;
     }
@@ -469,42 +467,163 @@ mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
         goto _exit;
     }
 
-    /* Detach from the old parent's sibling list */
-    old_upper = dentry->upper;
-    mr_list_del(&dentry->sibling);
-    dentry->upper = MR_NULL;
-
-    /* Install the new name */
-    dentry_name_free(dentry);
+    /* Save prepared move */
+    move->hash = lookup.hash;
+    move->len = lookup.len;
+    move->dentry = dentry;
+    move->upper = upper;
     if (!newbuf) {
         /* Use the inline name */
-        mr_strncpy(dentry->iname, name, newlen);
-        dentry->iname[newlen] = '\0';
-        dentry->name.str = dentry->iname;
+        mr_strncpy(move->iname, name, newlen);
+        move->iname[newlen] = '\0';
     } else {
         /* Use the dynamic name */
-        dentry->name.str = newbuf;
+        move->dname = newbuf;
         newbuf = MR_NULL;
-    }
-    dentry->name.hash = lookup.hash;
-    dentry->name.len = lookup.len;
-
-    /* Attach to the new parent: sets upper, inherits ops, re-hashes */
-    dentry_add(dentry, upper);
-
-    /* Put old parent */
-    if (old_upper) {
-        mr_dentry_put(old_upper);
     }
     ret = 0;
 _exit:
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__dentry_lock, mask);
 
-    /* Free the pre-allocated buffer */
+    /* Free unused name */
     if (newbuf) {
         mr_free(newbuf);
     }
+    return ret;
+}
+
+static void dentry_move_commit(dentry_move_t *move) {
+    mr_dentry_t *dentry, *old_upper;
+    int mask;
+
+    /* Ignore no-op move */
+    if (move->noop) {
+        return;
+    }
+
+    /* Get prepared objects */
+    dentry = move->dentry;
+
+    /* Lock */
+    mask = mr_spinlock_lock_irqsave(&__dentry_lock);
+
+    /* Detach from the old parent */
+    old_upper = dentry->upper;
+    mr_list_del(&dentry->sibling);
+    dentry->upper = MR_NULL;
+
+    /* Install prepared name */
+    dentry_name_free(dentry);
+    if (move->dname) {
+        dentry->name.str = move->dname;
+        move->dname = MR_NULL;
+    } else {
+        mr_strncpy(dentry->iname, move->iname, move->len);
+        dentry->iname[move->len] = '\0';
+        dentry->name.str = dentry->iname;
+    }
+    dentry->name.hash = move->hash;
+    dentry->name.len = move->len;
+
+    /* Attach to the prepared parent */
+    dentry_add(dentry, move->upper);
+
+    /* Unlock */
+    mr_spinlock_unlock_irqrestore(&__dentry_lock, mask);
+
+    /* Put old parent */
+    if (old_upper) {
+        mr_dentry_put(old_upper);
+    }
+}
+
+static void dentry_move_cancel(dentry_move_t *move) {
+    /* Free prepared name */
+    if (move->dname) {
+        mr_free(move->dname);
+        move->dname = MR_NULL;
+    }
+}
+
+mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
+                        const char *name) {
+    dentry_move_t move;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT((dentry != MR_NULL) && MR_OBJECT_IS_INITED(dentry));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(dentry, dentry));
+    MR_ASSERT((upper != MR_NULL) && MR_OBJECT_IS_INITED(upper));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(upper, dentry));
+    MR_ASSERT((name != MR_NULL) && (name[0] != '\0'));
+    MR_ASSERT(MR_DENTRY_IS_ADDED(dentry));
+
+    /* Check if dentry is moved to itself or has a slash in the name */
+    if ((dentry == upper) || mr_strchr(name, '/')) {
+        return -MR_EINVAL;
+    }
+
+    /* Prepare move */
+    ret = dentry_move_prepare(dentry, upper, name, &move);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Commit move */
+    dentry_move_commit(&move);
+    return 0;
+}
+
+mr_err_t mr_dentry_rename(mr_dentry_t *dentry, mr_dentry_t *upper,
+                          const char *name) {
+    mr_dentry_t *old_upper;
+    dentry_move_t move;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT((dentry != MR_NULL) && MR_OBJECT_IS_INITED(dentry));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(dentry, dentry));
+    MR_ASSERT((upper != MR_NULL) && MR_OBJECT_IS_INITED(upper));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(upper, dentry));
+    MR_ASSERT((name != MR_NULL) && (name[0] != '\0'));
+    MR_ASSERT(MR_DENTRY_IS_ADDED(dentry));
+
+    /* Check if dentry is moved to itself or has a slash in the name */
+    if ((dentry == upper) || mr_strchr(name, '/')) {
+        return -MR_EINVAL;
+    }
+
+    /* Check if old and new parent is valid */
+    old_upper = dentry->upper;
+    if ((!old_upper) || (!old_upper->inode) || (!upper->inode)) {
+        return -MR_ENOENT;
+    }
+
+    /* Prepare move */
+    ret = dentry_move_prepare(dentry, upper, name, &move);
+    if ((ret != 0) || move.noop) {
+        return ret;
+    }
+
+    /* Check filesystem rename operation */
+    if ((!old_upper->inode->ops) || (!old_upper->inode->ops->rename)) {
+        ret = -MR_ENOSYS;
+        goto _exit;
+    }
+
+    /* Rename backing node */
+    ret = old_upper->inode->ops->rename(
+        old_upper->inode, MR_DENTRY_NAME(dentry), upper->inode, name);
+    if (ret != 0) {
+        goto _exit;
+    }
+
+    /* Commit dentry move */
+    dentry_move_commit(&move);
+    return 0;
+_exit:
+    dentry_move_cancel(&move);
     return ret;
 }
 
@@ -636,7 +755,7 @@ static mr_dentry_t *dentry_fs_lookup(mr_dentry_t *parent, const char *name,
     mr_strncpy(str, name, len);
     str[len] = '\0';
 
-    /* lookup returns an inode reference that we drop after binding */
+    /* lookup returns the inode's initial namespace reference */
     ret = parent->inode->ops->lookup(parent->inode, str, &inode);
     if (ret == 0) {
         /* Inherit the super-block */
@@ -687,10 +806,13 @@ static mr_dentry_t *dentry_fs_lookup(mr_dentry_t *parent, const char *name,
     } else {
         /* Get dentry */
         child = mr_dentry_get(child);
+        inode = MR_NULL;
     }
 
-    /* Put inode */
-    mr_inode_put(inode);
+    /* Put an inode not retained by the cached dentry */
+    if (inode) {
+        mr_inode_put(inode);
+    }
 _exit:
     /* Free the component copy */
     str_free(str, istr);
@@ -703,6 +825,7 @@ mr_dentry_t *mr_dentry_vlookup(mr_dentry_t *start, mr_dentry_t *limit,
     char istr[MR_CFG_FS_DENTRY_NAME_LEN * 2];
     const char *path, *orig_path;
     int attempt, mask;
+    mr_inode_t *inode;
     mr_uint32_t len;
     mr_err_t ret;
 
@@ -805,12 +928,17 @@ mr_dentry_t *mr_dentry_vlookup(mr_dentry_t *start, mr_dentry_t *limit,
          * lookup can rebuild it */
         if ((attempt == 0) && MR_DENTRY_IS_ADDED(result)
             && mr_list_is_empty(&result->lower)) {
+            inode = result->inode;
+
             /* Unlock */
             mr_spinlock_unlock_irqrestore(&__dentry_lock, mask);
 
-            /* Delete the dentry */
+            /* Delete the dentry and its namespace inode reference */
             mr_dentry_del(result);
             mr_dentry_put(result);
+            if (inode) {
+                mr_inode_del(inode);
+            }
             result = MR_NULL;
             continue;
         }

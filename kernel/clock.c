@@ -28,6 +28,8 @@ static mr_hook_t __clock_hook
 static mr_atomic_t __clock_uptime = MR_ATOMIC_INIT(0);
 /* Clock tick */
 static mr_atomic_t __clock_tick = MR_ATOMIC_INIT(0);
+/* Clock tick generation */
+static mr_atomic_t __clock_gen = MR_ATOMIC_INIT(0);
 
 static mr_tick_t clock_hook(void) {
     mr_tick_t tickless, less;
@@ -51,14 +53,20 @@ static mr_tick_t clock_hook(void) {
 }
 
 void mr_clock_increase(mr_tick_t tick) {
-    mr_atomic_t last;
+    mr_tick_t last;
+
+    /* Clock generation increase */
+    mr_atomic_fetch_add(&__clock_gen, 1);
 
     /* Clock tick increase */
-    last = mr_atomic_fetch_add(&__clock_tick, (mr_atomic_t)tick);
-    if (mr_atomic_load(&__clock_tick) < last) {
+    last = (mr_tick_t)mr_atomic_fetch_add(&__clock_tick, (mr_atomic_t)tick);
+    if ((last + tick) < last) {
         /* Clock uptime increase */
         mr_atomic_fetch_add(&__clock_uptime, 1);
     }
+
+    /* Clock generation increase */
+    mr_atomic_fetch_add(&__clock_gen, 1);
 
     /* Call clock hooks */
     clock_hook();
@@ -164,32 +172,30 @@ mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
 mr_uptime_t mr_clock_uptime(void) {
     const mr_uint64_t time_correct
         = MR_ROUND_DIV(1000ULL, MR_CFG_TICK_PER_SECOND);
-    mr_atomic_t thin, coarse, coarse2;
-    mr_uint64_t uptime;
+    mr_tick_t gen, gen2, coarse;
+    mr_uint64_t tick;
+    mr_tick_t thin;
 
-    /* Get current coarse tick */
-    coarse = mr_atomic_load(&__clock_uptime);
-
-    /* Dual sampling */
+    /* Read a consistent clock snapshot */
     do {
-        /* Get current thin tick */
-        thin = mr_atomic_load(&__clock_tick);
+        do {
+            /* Get start clock generation */
+            gen = (mr_tick_t)mr_atomic_load(&__clock_gen);
 
-        /* Check if coarse tick is updated */
-        coarse2 = mr_atomic_load(&__clock_uptime);
-        if (coarse2 != coarse) {
-            /* Retry */
-            coarse = coarse2;
-            continue;
-        }
+            /* An odd number of accesses will be invalid */
+        } while (gen & 1);
 
-        /* No updated */
-        break;
-    } while (1);
+        /* Get clock uptime and tick */
+        coarse = (mr_tick_t)mr_atomic_load(&__clock_uptime);
+        thin = (mr_tick_t)mr_atomic_load(&__clock_tick);
 
-    /* Calculate uptime */
-    uptime = ((mr_uint64_t)coarse * MR_TICK_MAX) + (mr_uint64_t)thin;
-    return (mr_uptime_t)(uptime * time_correct);
+        /* Get end clock generation */
+        gen2 = (mr_tick_t)mr_atomic_load(&__clock_gen);
+    } while (gen != gen2);
+
+    /* Combine 32-bit coarse and thin ticks */
+    tick = ((mr_uint64_t)coarse * ((mr_uint64_t)MR_TICK_MAX + 1ULL)) + thin;
+    return (mr_uptime_t)(tick * time_correct);
 }
 
 void mr_clock_busy_wait(mr_uint32_t us) {

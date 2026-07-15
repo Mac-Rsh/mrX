@@ -46,7 +46,7 @@ mr_err_t mr_waitable_init(mr_waitable_t *able, mr_waitable_check_t *check,
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(waitable);
 
     /* Check parameter */
-    MR_ASSERT((able != MR_NULL) && (!MR_OBJECT_IS_INITED(able)));
+    MR_ASSERT(able != MR_NULL);
 
     /* Init waitable */
     return waitable_init(able, clazz, check, param);
@@ -143,11 +143,6 @@ static void waitable_handle(mr_waitable_t *able, mr_uint64_t event) {
     mr_list_t oplist;
     void *param;
     int mask;
-
-    /* Check if event is untyped */
-    if ((event & WAIT_TYPE_MASK) == 0) {
-        return;
-    }
 
     /* Init operation list */
     mr_list_init(&oplist);
@@ -281,7 +276,7 @@ mr_err_t mr_waiter_init(mr_waiter_t *wait, mr_waiter_entry_t *entry,
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(waiter);
 
     /* Check parameter */
-    MR_ASSERT((wait != MR_NULL) && (!MR_OBJECT_IS_INITED(wait)));
+    MR_ASSERT(wait != MR_NULL);
     MR_ASSERT(entry != MR_NULL);
 
     /* Init waiter */

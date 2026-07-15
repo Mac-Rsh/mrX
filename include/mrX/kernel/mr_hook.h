@@ -73,9 +73,9 @@ mr_err_t mr_hook_add(mr_hook_t *hook, mr_ptr_t entry);
  * @param _hook The entry hook.
  */
 #define MR_HOOK_EACH(_i, _entry, _type, _hook)                                 \
-    for ((_i) = 0, (_entry) = (_type *)(_hook)->entry[(_i)];                   \
-         (_i) < (_hook)->next;                                                 \
-         (_i)++, (_entry) = (_type *)(_hook)->entry[(_i)])
+    for ((_i) = 0; ((_i) < (_hook)->next)                                      \
+                   && (((_entry) = (_type *)(_hook)->entry[(_i)]), 1);         \
+         (_i)++)
 
 /** @} */
 

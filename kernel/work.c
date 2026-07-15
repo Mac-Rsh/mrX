@@ -129,7 +129,7 @@ mr_err_t mr_workqueue_init(mr_workqueue_t *queue) {
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(workqueue);
 
     /* Check parameter */
-    MR_ASSERT((queue != MR_NULL) && (!MR_OBJECT_IS_INITED(queue)));
+    MR_ASSERT(queue != MR_NULL);
 
     /* Init workqueue */
     return workqueue_init(queue, clazz);
@@ -188,6 +188,7 @@ static void queue_suspend(mr_workqueue_t *queue) {
 
 mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
     mr_work_entry_t *entry;
+    mr_bool_t pending;
     mr_list_t oplist;
     mr_work_t *work;
     void *param;
@@ -240,11 +241,16 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
         mask = mr_spinlock_lock_irqsave(&__work_lock);
     }
 
+    /* Check if the callback commits the next batch */
+    pending = !mr_list_is_empty(&queue->list);
+
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 
     /* Suspend workqueue */
-    queue_suspend(queue);
+    if (!pending) {
+        queue_suspend(queue);
+    }
     return 0;
 }
 
@@ -431,7 +437,7 @@ mr_err_t mr_work_init(mr_work_t *work, mr_work_entry_t *entry, void *param) {
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(work);
 
     /* Check parameter */
-    MR_ASSERT((work != MR_NULL) && (!MR_OBJECT_IS_INITED(work)));
+    MR_ASSERT(work != MR_NULL);
     MR_ASSERT(entry != MR_NULL);
 
     /* Init work */

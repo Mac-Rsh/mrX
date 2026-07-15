@@ -30,7 +30,17 @@ struct mr_super_block;
 typedef mr_err_t(mr_file_system_mount_t)(struct mr_super_block *sb,
                                          const char *source, int flags,
                                          void *data);
-/* File-system super-block destroy type */
+/**
+ * @brief File-system super-block final-release callback type.
+ *
+ * @param sb The super-block.
+ *
+ * @note The VFS releases and clears sb->root before invoking this callback.
+ * The callback must release only file-system-private resources.
+ * @note After a successful mount, this callback runs when the final
+ * super-block reference is released. It also runs when later VFS mount
+ * initialization fails.
+ */
 typedef void(mr_file_system_kill_sb_t)(struct mr_super_block *sb);
 
 /* File-system type */

@@ -149,9 +149,24 @@ mr_err_t mr_dentry_remove(mr_dentry_t *dentry);
  *
  * @note The dentry must not be moved into itself or its own subtree(-MR_EINVAL).
  * @note A name already in use under the new parent is rejected(-MR_EEXIST).
+ * @note This function does not rename the backing filesystem node.
  */
 mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
-                        const char *name);
+                         const char *name);
+
+/**
+ * @brief This function renames a filesystem dentry.
+ *
+ * @param dentry The dentry to rename(must already be added to a tree).
+ * @param upper The new upper(parent) dentry.
+ * @param name The new single-component name(no '/').
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note This function calls the source parent's filesystem rename operation.
+ * The backing node and dentry transition are failure-atomic.
+ */
+mr_err_t mr_dentry_rename(mr_dentry_t *dentry, mr_dentry_t *upper,
+                           const char *name);
 
 /**
  * @brief This function gets the n-th child of a dentry.

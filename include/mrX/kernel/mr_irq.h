@@ -76,8 +76,8 @@ typedef struct mr_irq {
 /* Irq action type */
 typedef struct mr_irq_action {
     struct mr_irq_action *next;
-    mr_uint32_t pending: 1;
-    mr_uint32_t irq: 31;
+    mr_uint32_t pending;
+    mr_uint32_t irq;
     mr_ptr_t entry;
     mr_ptr_t owner;
 #if defined(MR_USE_IRQ_DEFER)

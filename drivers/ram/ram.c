@@ -12,9 +12,9 @@
 
 /* RAM driver clazzes(static & dynamic) */
 static mr_err_t ram_init(const mr_driver_t *drv);
-static mr_err_t ram_statik_deinit(const mr_driver_t *drv);
-static mr_err_t ram_dynamic_deinit(const mr_driver_t *drv);
-MR_DRIVER_CLAZZES_DEFINE(ram, ram_init, ram_statik_deinit, ram_dynamic_deinit);
+static mr_err_t ram_deinit(const mr_driver_t *drv);
+static void ram_release(const mr_driver_t *drv);
+MR_DRIVER_CLAZZES_DEFINE(ram, ram_init, ram_deinit, ram_release);
 
 static mr_err_t ram_init(const mr_driver_t *drv) {
     const mr_ram_ops_t *rm_ops;
@@ -36,7 +36,7 @@ static mr_err_t ram_init(const mr_driver_t *drv) {
     return 0;
 }
 
-static mr_err_t ram_statik_deinit(const mr_driver_t *drv) {
+static mr_err_t ram_deinit(const mr_driver_t *drv) {
     const mr_ram_ops_t *rm_ops;
     mr_err_t ret;
 
@@ -56,17 +56,8 @@ static mr_err_t ram_statik_deinit(const mr_driver_t *drv) {
     return 0;
 }
 
-static mr_err_t ram_dynamic_deinit(const mr_driver_t *drv) {
-    mr_err_t ret;
-
-    /* Deinit RAM */
-    ret = ram_statik_deinit(drv);
-    if (ret != 0) {
-        return ret;
-    }
-
+static void ram_release(const mr_driver_t *drv) {
     /* Free RAM data */
     mr_free(MR_DRIVER_DATA(drv));
-    return 0;
 }
 #endif /* defined(MR_USE_DRIVER_RAM) */

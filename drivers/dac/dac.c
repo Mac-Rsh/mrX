@@ -12,9 +12,9 @@
 
 /* DAC driver clazzes(static & dynamic) */
 static mr_err_t dac_init(const mr_driver_t *drv);
-static mr_err_t dac_statik_deinit(const mr_driver_t *drv);
-static mr_err_t dac_dynamic_deinit(const mr_driver_t *drv);
-MR_DRIVER_CLAZZES_DEFINE(dac, dac_init, dac_statik_deinit, dac_dynamic_deinit);
+static mr_err_t dac_deinit(const mr_driver_t *drv);
+static void dac_release(const mr_driver_t *drv);
+MR_DRIVER_CLAZZES_DEFINE(dac, dac_init, dac_deinit, dac_release);
 
 mr_err_t mr_dac_configure(mr_driver_t *drv, mr_uint32_t channel,
                           mr_dac_config_t *config) {
@@ -55,7 +55,7 @@ mr_err_t mr_dac_configuration(mr_driver_t *drv, mr_uint32_t channel,
     /* Get DAC data and operations */
     da_data = (mr_dac_data_t *)MR_DRIVER_DATA(drv);
     da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
-    MR_ASSERT(da_ops->channel_configure != MR_NULL);
+    MR_ASSERT(da_ops->channel_configuration != MR_NULL);
 
     /* Check if channel is existed */
     if ((channel >= 32U) || (!(da_data->exist_mask & (1U << channel)))) {
@@ -84,7 +84,7 @@ static mr_err_t dac_init(const mr_driver_t *drv) {
     return 0;
 }
 
-static mr_err_t dac_statik_deinit(const mr_driver_t *drv) {
+static mr_err_t dac_deinit(const mr_driver_t *drv) {
     mr_dac_data_t *da_data;
 
     /* Check parameter */
@@ -98,17 +98,8 @@ static mr_err_t dac_statik_deinit(const mr_driver_t *drv) {
     return 0;
 }
 
-static mr_err_t dac_dynamic_deinit(const mr_driver_t *drv) {
-    mr_err_t ret;
-
-    /* Deinit DAC */
-    ret = dac_statik_deinit(drv);
-    if (ret != 0) {
-        return ret;
-    }
-
+static void dac_release(const mr_driver_t *drv) {
     /* Free DAC data */
     mr_free(MR_DRIVER_DATA(drv));
-    return 0;
 }
 #endif /* defined(MR_USE_DRIVER_DAC) */

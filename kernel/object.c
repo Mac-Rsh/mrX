@@ -10,7 +10,7 @@
 
 mr_err_t mr_object_init(mr_object_t *obj, const mr_clazz_t *clazz) {
     /* Check parameter */
-    if ((!obj) || MR_OBJECT_IS_INITED(obj)) {
+    if (!obj) {
         return -MR_EINVAL;
     }
 

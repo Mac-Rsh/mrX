@@ -55,12 +55,15 @@ typedef enum mr_driver_type {
 
 /* Driver method type */
 typedef mr_err_t(mr_driver_method_t)(const struct mr_driver *drv);
+/* Driver release type */
+typedef void(mr_driver_release_t)(const struct mr_driver *drv);
 
 /* Driver clazz type */
 typedef struct mr_driver_clazz {
     const char *name;
     mr_driver_method_t *init;
     mr_driver_method_t *deinit;
+    mr_driver_release_t *release;
 } mr_driver_clazz_t;
 
 /* Driver clazzes type */
@@ -94,12 +97,14 @@ typedef struct mr_driver_entry {
  * @param _name The driver clazz name.
  * @param _init The init function.
  * @param _deinit The deinit function.
+ * @param _release The release function.
  */
-#define MR_DRIVER_CLAZZ_INIT(_name, _init, _deinit)                            \
+#define MR_DRIVER_CLAZZ_INIT(_name, _init, _deinit, _release)                  \
     {                                                                          \
         .name = (_name),                                                       \
         .init = (_init),                                                       \
         .deinit = (_deinit),                                                   \
+        .release = (_release),                                                 \
     }
 
 /**
@@ -109,10 +114,12 @@ typedef struct mr_driver_entry {
  * @param name The driver clazz name.
  * @param init The init function.
  * @param deinit The deinit function.
+ * @param release The release function.
  */
 MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
                                     mr_driver_method_t *init,
-                                    mr_driver_method_t *deinit) {
+                                    mr_driver_method_t *deinit,
+                                    mr_driver_release_t *release) {
     /* Check parameter */
     MR_ASSERT(dclazz != MR_NULL);
 
@@ -120,6 +127,7 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
     dclazz->name = name;
     dclazz->init = init;
     dclazz->deinit = deinit;
+    dclazz->release = release;
 }
 
 /**
@@ -127,13 +135,14 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
  *
  * @param _name The driver clazz name.
  * @param _init The init function.
- * @param _statik_deinit The static deinit function.
- * @param _dynamic_deinit The dynamic deinit function.
+ * @param _deinit The deinit function.
+ * @param _release The release function.
  */
-#define MR_DRIVER_CLAZZES_INIT(_name, _init, _statik_deinit, _dynamic_deinit)  \
+#define MR_DRIVER_CLAZZES_INIT(_name, _init, _deinit, _release)                \
     {                                                                          \
-        .statik = MR_DRIVER_CLAZZ_INIT((_name), (_init), (_statik_deinit)),    \
-        .dynamic = MR_DRIVER_CLAZZ_INIT((_name), (_init), (_dynamic_deinit)),  \
+        .statik = MR_DRIVER_CLAZZ_INIT((_name), (_init), (_deinit), MR_NULL),  \
+        .dynamic = MR_DRIVER_CLAZZ_INIT((_name), (_init), (_deinit),           \
+                                        (_release)),                           \
     }
 
 /**
@@ -141,14 +150,13 @@ MR_INLINE void mr_driver_clazz_init(mr_driver_clazz_t *dclazz, const char *name,
  *
  * @param _name The driver clazz name.
  * @param _init The init function.
- * @param _statik_deinit The static deinit function.
- * @param _dynamic_deinit The dynamic deinit function.
+ * @param _deinit The deinit function.
+ * @param _release The release function.
  */
-#define MR_DRIVER_CLAZZES_DEFINE(_name, _init, _statik_deinit,                 \
-                                 _dynamic_deinit)                              \
+#define MR_DRIVER_CLAZZES_DEFINE(_name, _init, _deinit, _release)              \
     const mr_driver_clazzes_t MR_CAT(__mr_driver_clazzes_, _name)              \
-        = MR_DRIVER_CLAZZES_INIT(MR_STR(_name), (_init), (_statik_deinit),     \
-                                 (_dynamic_deinit))
+        = MR_DRIVER_CLAZZES_INIT(MR_STR(_name), (_init), (_deinit),            \
+                                 (_release))
 
 /**
  * @brief This macro function exports driver clazzes.

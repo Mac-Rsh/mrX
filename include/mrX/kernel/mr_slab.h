@@ -21,8 +21,14 @@ extern "C" {
  * @{
  */
 
+/* Slab bitmap bits */
+#define MR_SLAB_MAP_BITS                                                       \
+    ((mr_uint32_t)(sizeof(mr_atomic_t) * 8U))
+
 /* Slab bitmap size */
-#define MR_SLAB_MAP_SIZE(_num)          ((((_num) + 31U) >> 5) << 2)
+#define MR_SLAB_MAP_SIZE(_num)                                                 \
+    ((((_num) / MR_SLAB_MAP_BITS) + (((_num) % MR_SLAB_MAP_BITS) != 0U))       \
+     * sizeof(mr_atomic_t))
 
 /* Slab type */
 typedef struct mr_slab {
@@ -62,9 +68,22 @@ typedef struct mr_slab {
 MR_INLINE mr_uint32_t mr_slab_init(mr_slab_t *slab, void *map,
                                    mr_uint32_t map_size, void *buf,
                                    mr_uint32_t size, mr_uint32_t num) {
+    mr_uint32_t i;
+
+    /* Check parameter */
+    if (((mr_uintptr_t)map % sizeof(mr_atomic_t)) != 0U) {
+        /* Align error */
+        return 0;
+    }
+
     /* Limit num */
-    map_size = MR_MIN(map_size, MR_SLAB_MAP_SIZE(num));
-    num = MR_MIN(num, map_size * 8U);
+    map_size /= sizeof(mr_atomic_t);
+    num = MR_MIN(num, map_size * MR_SLAB_MAP_BITS);
+
+    /* Init slab map */
+    for (i = 0; i < map_size; i++) {
+        mr_atomic_init(&((mr_atomic_t *)map)[i], 0);
+    }
 
     /* Init slab */
     slab->map = (mr_atomic_t *)map;
@@ -106,9 +125,15 @@ MR_INLINE int mr_slab_ptr2index(mr_slab_t *slab, void *mem) {
         return -1;
     }
 
-    /* Get bit index */
-    off = (mr_uint32_t)((mr_uint8_t *)mem - slab->buf) / slab->size;
-    return (int)off;
+    /* Get memory offset */
+    off = (mr_uint32_t)((mr_uint8_t *)mem - slab->buf);
+    if ((off % slab->size) != 0U) {
+        /* Memory is not an object start */
+        return -1;
+    }
+
+    /* Return memory index */
+    return (int)(off / slab->size);
 }
 
 /**

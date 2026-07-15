@@ -43,7 +43,7 @@ mr_err_t mr_inode_init(mr_inode_t *inode, mr_inode_type_t type,
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(inode);
 
     /* Check parameter */
-    MR_ASSERT((inode != MR_NULL) && (!MR_OBJECT_IS_INITED(inode)));
+    MR_ASSERT(inode != MR_NULL);
     MR_ASSERT((type != MR_INODE_NONE) && (type <= MR_INODE_LNK));
 
     /* Init inode */

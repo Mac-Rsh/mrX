@@ -75,8 +75,46 @@ mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
  *
  * @param path The mount-point path.
  * @return 0 on success, a negative error code on failure.
+ *
+ * @note A mount containing child mounts is not recursively unmounted and
+ * returns -MR_EBUSY. Unmount child mounts first.
  */
 mr_err_t mr_fs_umount(const char *path);
+
+/**
+ * @brief This macro function initializes a file.
+ *
+ * @param _file The file to initialize.
+ */
+#define MR_FILE_INIT(_file)                                                    \
+    {                                                                          \
+        .dentry = MR_NULL,                                                     \
+        .inode = MR_NULL,                                                      \
+        .fops = MR_NULL,                                                       \
+        .pos = 0,                                                              \
+        .flags = 0,                                                            \
+        .priv = MR_NULL,                                                       \
+    }
+
+/**
+ * @brief This function initializes a file.
+ *
+ * @param file The file to initialize.
+ *
+ * @note Call this function only before the file's first use or after it has
+ * been closed. Initializing an open file bypasses its close operation.
+ */
+MR_INLINE void mr_file_init(mr_file_t *file) {
+    MR_ASSERT(file != MR_NULL);
+
+    /* Init the file */
+    file->dentry = MR_NULL;
+    file->inode = MR_NULL;
+    file->fops = MR_NULL;
+    file->pos = 0;
+    file->flags = 0;
+    file->priv = MR_NULL;
+}
 
 /**
  * @brief This function opens a file by path.
@@ -85,6 +123,10 @@ mr_err_t mr_fs_umount(const char *path);
  * @param path The file path.
  * @param flags The open flags(see MR_O_*).
  * @return 0 on success, a negative error code on failure.
+ *
+ * @note The file must be initialized with MR_FILE_INIT(file), mr_file_init(),
+ * or all-zero storage before its first use. A closed file can be opened again
+ * without reinitializing it.
  */
 mr_err_t mr_fs_open(mr_file_t *file, const char *path, int flags);
 
@@ -120,9 +162,10 @@ mr_err_t mr_fs_closedir(mr_file_t *file);
  *
  * @param file The directory(must be open).
  * @param dirent The directory entry to fill.
- * @return MR_TRUE if an entry was read, MR_FALSE at end-of-directory.
+ * @return 1 if an entry was read, 0 at end-of-directory, or a negative error
+ * code on failure.
  */
-mr_bool_t mr_fs_readdir(mr_file_t *file, mr_dirent_t *dirent);
+mr_err_t mr_fs_readdir(mr_file_t *file, mr_dirent_t *dirent);
 
 /**
  * @brief This function gets file status by path.
@@ -154,6 +197,9 @@ mr_ssize_t mr_fs_read(mr_file_t *file, void *buf, mr_size_t size);
  * @param size The number of bytes to write.
  * @return The number of bytes written on success, a negative error code on
  * failure.
+ *
+ * @note MR_O_APPEND selects the current end-of-file before every write. A
+ * failed or zero-length append does not change the previous file position.
  */
 mr_ssize_t mr_fs_write(mr_file_t *file, const void *buf, mr_size_t size);
 
@@ -164,6 +210,9 @@ mr_ssize_t mr_fs_write(mr_file_t *file, const void *buf, mr_size_t size);
  * @param offset The offset.
  * @param whence The seek base(see MR_SEEK_*).
  * @return The new position on success, a negative error code on failure.
+ *
+ * @note The default seek returns -MR_ERANGE without changing the position if
+ * the requested position cannot be represented by mr_int64_t.
  */
 mr_int64_t mr_fs_seek(mr_file_t *file, mr_int64_t offset, int whence);
 
@@ -262,6 +311,10 @@ mr_fs_struct_t *mr_fs_current(void);
  *
  * @param path The new root path(resolved relative to the current context).
  * @return 0 on success, a negative error code on failure.
+ *
+ * @note The current working directory is retained when it is contained by the
+ * new root. Otherwise, it is reset to the new root so relative paths cannot
+ * escape the new root.
  */
 mr_err_t mr_fs_chroot(const char *path);
 
@@ -280,6 +333,9 @@ mr_err_t mr_fs_chdir(const char *path);
  * @param buf The buffer to hold the path.
  * @param size The buffer size.
  * @return The path length on success, a negative error code on failure.
+ *
+ * @note The caller must serialize changes to the current FS context and
+ * namespace for the full duration of this call.
  */
 mr_ssize_t mr_fs_getcwd(char *buf, mr_size_t size);
 #endif /* defined(MR_USE_FS) */

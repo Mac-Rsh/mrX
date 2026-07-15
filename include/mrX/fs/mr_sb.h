@@ -54,10 +54,14 @@ mr_super_block_t *mr_super_block_create(mr_file_system_t *type,
                                         void *data);
 
 /**
- * @brief This function deletes a super-block(drops one reference).
+ * @brief This function removes and deletes a super-block.
  *
  * @param sb The super-block.
  * @return 0 on success, a negative error code on failure.
+ *
+ * @note This function removes the super-block from the global list and
+ * releases its root inode creation reference. Final file-system cleanup is
+ * deferred until the final super-block reference is released.
  */
 mr_err_t mr_super_block_del(mr_super_block_t *sb);
 

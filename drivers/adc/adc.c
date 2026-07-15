@@ -12,9 +12,9 @@
 
 /* ADC driver clazzes(static & dynamic) */
 static mr_err_t adc_init(const mr_driver_t *drv);
-static mr_err_t adc_statik_deinit(const mr_driver_t *drv);
-static mr_err_t adc_dynamic_deinit(const mr_driver_t *drv);
-MR_DRIVER_CLAZZES_DEFINE(adc, adc_init, adc_statik_deinit, adc_dynamic_deinit);
+static mr_err_t adc_deinit(const mr_driver_t *drv);
+static void adc_release(const mr_driver_t *drv);
+MR_DRIVER_CLAZZES_DEFINE(adc, adc_init, adc_deinit, adc_release);
 
 mr_err_t mr_adc_configure(mr_driver_t *drv, mr_uint32_t channel,
                           mr_adc_config_t *config) {
@@ -55,7 +55,7 @@ mr_err_t mr_adc_configuration(mr_driver_t *drv, mr_uint32_t channel,
     /* Get ADC data and operations */
     ad_data = (mr_adc_data_t *)MR_DRIVER_DATA(drv);
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
-    MR_ASSERT(ad_ops->channel_configure != MR_NULL);
+    MR_ASSERT(ad_ops->channel_configuration != MR_NULL);
 
     /* Check if channel is existed */
     if ((channel >= 32U) || (!(ad_data->exist_mask & (1U << channel)))) {
@@ -84,7 +84,7 @@ static mr_err_t adc_init(const mr_driver_t *drv) {
     return 0;
 }
 
-static mr_err_t adc_statik_deinit(const mr_driver_t *drv) {
+static mr_err_t adc_deinit(const mr_driver_t *drv) {
     mr_adc_data_t *ad_data;
 
     /* Check parameter */
@@ -98,17 +98,8 @@ static mr_err_t adc_statik_deinit(const mr_driver_t *drv) {
     return 0;
 }
 
-static mr_err_t adc_dynamic_deinit(const mr_driver_t *drv) {
-    mr_err_t ret;
-
-    /* Deinit ADC */
-    ret = adc_statik_deinit(drv);
-    if (ret != 0) {
-        return ret;
-    }
-
+static void adc_release(const mr_driver_t *drv) {
     /* Free ADC data */
     mr_free(MR_DRIVER_DATA(drv));
-    return 0;
 }
 #endif /* defined(MR_USE_DRIVER_ADC) */

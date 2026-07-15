@@ -34,6 +34,17 @@ static void sb_list_add(mr_super_block_t *sb) {
     mr_spinlock_unlock_irqrestore(&__sb_lock, mask);
 }
 
+static void super_block_root_put(mr_super_block_t *sb) {
+    mr_inode_t *inode;
+
+    /* Put root inode */
+    inode = sb->root;
+    sb->root = MR_NULL;
+    if (inode) {
+        mr_inode_put(inode);
+    }
+}
+
 static mr_err_t super_block_init(mr_super_block_t *sb, const mr_clazz_t *clazz,
                                  mr_file_system_t *type, const char *source,
                                  int flags, void *data) {
@@ -87,6 +98,9 @@ static mr_err_t super_block_init(mr_super_block_t *sb, const mr_clazz_t *clazz,
     sb_list_add(sb);
     return 0;
 _kill_exit:
+    /* Put super-block root */
+    super_block_root_put(sb);
+
     /* Kill the super-block */
     sb->type->kill_sb(sb);
 _exit:
@@ -179,8 +193,8 @@ mr_err_t mr_super_block_del(mr_super_block_t *sb) {
         return ret;
     }
 
-    /* Kill the super-block */
-    super_block_kill(sb);
+    /* Put super-block root */
+    super_block_root_put(sb);
 
     /* Delete object */
     mr_object_del((mr_object_t *)sb);
@@ -241,7 +255,7 @@ static mr_super_block_t *sb_obj_release(mr_object_t *obj) {
     /* Detach from the global list if still linked. This is the safety net for
      * a super-block whose last reference is dropped without going through
      * mr_super_block_del(); remove is a no-op if already detached */
-    (void)super_block_remove(sb);
+    super_block_remove(sb);
 
     /* Kill the super-block */
     super_block_kill(sb);

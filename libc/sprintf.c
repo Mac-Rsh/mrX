@@ -17,54 +17,10 @@
 #define MOD_LEFT                        (1U << 4)
 #define MOD_SPECIAL                     (1U << 5)
 #define MOD_LARGE                       (1U << 6)
-
-static mr_uint64_t format_signed_abs(char eff, mr_uint64_t num, char *sign) {
-    switch (eff) {
-        case 'l': {
-            mr_int32_t sval = (mr_int32_t)(mr_uint32_t)num;
-            if (sval < 0) {
-                *sign = '-';
-                return (mr_uint64_t)(0U - (mr_uint32_t)sval);
-            }
-            return (mr_uint32_t)sval;
-        }
-        case 'L': {
-            mr_int64_t sval = (mr_int64_t)num;
-            if (sval < 0) {
-                *sign = '-';
-                return 0ULL - (mr_uint64_t)sval;
-            }
-            return (mr_uint64_t)sval;
-        }
-        case 'h': {
-            mr_int16_t sval = (mr_int16_t)(mr_uint16_t)num;
-            if (sval < 0) {
-                *sign = '-';
-                return (mr_uint64_t)(mr_uint16_t)(0U - (mr_uint16_t)sval);
-            }
-            return (mr_uint16_t)sval;
-        }
-        case 'H': {
-            mr_int8_t sval = (mr_int8_t)(mr_uint8_t)num;
-            if (sval < 0) {
-                *sign = '-';
-                return (mr_uint64_t)(mr_uint8_t)(0U - (mr_uint8_t)sval);
-            }
-            return (mr_uint8_t)sval;
-        }
-        default: {
-            mr_int32_t sval = (mr_int32_t)(mr_uint32_t)num;
-            if (sval < 0) {
-                *sign = '-';
-                return (mr_uint64_t)(0U - (mr_uint32_t)sval);
-            }
-            return (mr_uint32_t)sval;
-        }
-    }
-}
+#define MOD_NEGATIVE                    (1U << 7)
 
 static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
-                           int prec, char eff, int base, mr_uint64_t num) {
+                           int prec, int base, mr_uint64_t num) {
     const char sdigits[] = "0123456789abcdef";
     const char ldigits[] = "0123456789ABCDEF";
     char fill, sign, tmp[64];
@@ -74,7 +30,9 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
     /* Sign */
     sign = 0;
     if (mod & MOD_SIGN) {
-        num = format_signed_abs(eff, num, &sign);
+        if (mod & MOD_NEGATIVE) {
+            sign = '-';
+        }
         if (sign != '-') {
             if (mod & MOD_PLUS) {
                 sign = '+';
@@ -215,6 +173,7 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
 int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
     int width, prec, len, i, base;
     char *str, *end, *s;
+    mr_int64_t snum;
     mr_uint32_t mod;
     mr_uint64_t num;
     char eff, dummy;
@@ -382,7 +341,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
                     width = (sizeof(void *) << 1) + 2;
                     mod |= (MOD_SPECIAL | MOD_ZEROPAD);
                 }
-                str = format_number(str, end, mod, width, prec, eff, 16,
+                str = format_number(str, end, mod, width, prec, 16,
                                     (mr_uintptr_t)mr_va_arg(args, void *));
                 continue;
             }
@@ -447,43 +406,71 @@ _default:
             }
         }
 
-        /* Handle number format */
-        switch (eff) {
-            case 'l': {
-                num = mr_va_arg(args, mr_uint32_t);
-                break;
-            }
-            case 'L': {
-                num = mr_va_arg(args, mr_uint64_t);
-                break;
-            }
-            case 'z': {
-                num = mr_va_arg(args, mr_size_t);
-                if (mod & MOD_SIGN) {
-                    num = (mr_uint64_t)((mr_ssize_t)num);
+        /* Get number argument */
+        if (mod & MOD_SIGN) {
+            switch (eff) {
+                case 'l': {
+                    snum = (mr_int64_t)mr_va_arg(args, long);
+                    break;
                 }
-                break;
-            }
-            case 'h': {
-                num = (mr_uint16_t)mr_va_arg(args, mr_int32_t);
-                if (mod & MOD_SIGN) {
-                    num = (mr_uint64_t)((mr_int16_t)num);
+                case 'L': {
+                    snum = (mr_int64_t)mr_va_arg(args, long long);
+                    break;
                 }
-                break;
-            }
-            case 'H': {
-                num = (mr_uint8_t)mr_va_arg(args, mr_int32_t);
-                if (mod & MOD_SIGN) {
-                    num = (mr_uint64_t)((mr_int8_t)num);
+                case 'z': {
+                    snum = (mr_int64_t)mr_va_arg(args, mr_ssize_t);
+                    break;
                 }
-                break;
+                case 'h': {
+                    snum = (mr_int16_t)mr_va_arg(args, int);
+                    break;
+                }
+                case 'H': {
+                    snum = (mr_int8_t)mr_va_arg(args, int);
+                    break;
+                }
+                default: {
+                    snum = (mr_int64_t)mr_va_arg(args, int);
+                    break;
+                }
             }
-            default: {
-                num = mr_va_arg(args, mr_uint32_t);
-                break;
+
+            /* Convert signed magnitude without signed overflow */
+            if (snum < 0) {
+                mod |= MOD_NEGATIVE;
+                num = 0ULL - (mr_uint64_t)snum;
+            } else {
+                num = (mr_uint64_t)snum;
+            }
+        } else {
+            switch (eff) {
+                case 'l': {
+                    num = (mr_uint64_t)mr_va_arg(args, unsigned long);
+                    break;
+                }
+                case 'L': {
+                    num = (mr_uint64_t)mr_va_arg(args, unsigned long long);
+                    break;
+                }
+                case 'z': {
+                    num = (mr_uint64_t)mr_va_arg(args, mr_size_t);
+                    break;
+                }
+                case 'h': {
+                    num = (mr_uint16_t)mr_va_arg(args, unsigned int);
+                    break;
+                }
+                case 'H': {
+                    num = (mr_uint8_t)mr_va_arg(args, unsigned int);
+                    break;
+                }
+                default: {
+                    num = (mr_uint64_t)mr_va_arg(args, unsigned int);
+                    break;
+                }
             }
         }
-        str = format_number(str, end, mod, width, prec, eff, base, num);
+        str = format_number(str, end, mod, width, prec, base, num);
     }
 
     /* Handle end */

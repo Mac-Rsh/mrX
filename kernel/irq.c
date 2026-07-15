@@ -98,7 +98,12 @@ static void irq_table_remove(mr_irq_t *irq) {
             /* Remove irq action from irq descriptor */
             action = __irq_table[i].action;
             __irq_table[i].action = action->next;
-            irq_action_free(action);
+
+            /* Free irq action */
+            action->owner = MR_NULL;
+            if (action->pending == 0U) {
+                irq_action_free(action);
+            }
         }
 
         /* Disable irq */
@@ -146,7 +151,7 @@ mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(irq);
 
     /* Check parameter */
-    MR_ASSERT((irq != MR_NULL) && (!MR_OBJECT_IS_INITED(irq)));
+    MR_ASSERT(irq != MR_NULL);
     MR_ASSERT(irq_start < MR_CFG_IRQ_TABLE_SIZE);
     MR_ASSERT(irq_end < MR_CFG_IRQ_TABLE_SIZE);
     MR_ASSERT(irq_start <= irq_end);
@@ -197,9 +202,31 @@ mr_err_t mr_irq_del(mr_irq_t *irq) {
 }
 
 #if defined(MR_USE_IRQ_DEFER)
+static void irq_action_remove(mr_irq_action_t *action) {
+    mr_irq_action_t **a;
+    mr_irq_desc_t *desc;
+    mr_bool_t removed;
+
+    /* Remove irq action from irq descriptor */
+    desc = &__irq_table[action->irq];
+    for (removed = MR_FALSE, a = &desc->action; *a; a = &(*a)->next) {
+        if (*a == action) {
+            *a = action->next;
+            removed = MR_TRUE;
+            break;
+        }
+    }
+
+    /* Disable irq if no irq action */
+    if (removed && (!desc->action)) {
+        irq_depth_disable(action->irq, desc);
+    }
+}
+
 static void irq_action_defer_entry(mr_work_t *work, void *param) {
     mr_irq_action_t *action;
     mr_irq_entry_t *entry;
+    mr_bool_t release;
     mr_uint32_t irq;
     void *owner;
     int mask;
@@ -220,13 +247,29 @@ static void irq_action_defer_entry(mr_work_t *work, void *param) {
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
 
-    /* Check if irq action was freed */
-    if (!owner) {
-        return;
+    /* Call irq action defer entry */
+    if (owner) {
+        entry(irq, owner);
     }
 
-    /* Call irq action defer entry */
-    entry(irq, owner);
+    /* Lock */
+    mask = mr_spinlock_lock_irqsave(&__irq_lock);
+
+    /* Remove irq action if no pending defer entry and no owner */
+    if (((--action->pending) == 0U) && (!action->owner)) {
+        irq_action_remove(action);
+        release = MR_TRUE;
+    } else {
+        release = MR_FALSE;
+    }
+
+    /* Unlock */
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
+
+    /* Free irq action */
+    if (release) {
+        irq_action_free(action);
+    }
 }
 #endif /* defined(MR_USE_IRQ_DEFER) */
 
@@ -257,10 +300,10 @@ static mr_irq_action_t *irq_action_alloc(mr_uint32_t irq, mr_irq_entry_t *entry,
 
     /* Init irq action */
     action->irq = irq & ((1U << 31) - 1U);
-    action->pending = MR_FALSE;
     action->next = MR_NULL;
     action->entry = entry;
     action->owner = owner;
+    action->pending = 0;
     return action;
 }
 
@@ -405,6 +448,17 @@ mr_err_t mr_irq_defer_request(mr_uint32_t irq, mr_irq_entry_t *entry,
     return irq_defer_request(irq, entry, owner, flags, defer_entry);
 }
 
+static mr_bool_t irq_action_is_empty(mr_irq_desc_t *desc) {
+    mr_irq_action_t *action;
+
+    for (action = desc->action; action; action = action->next) {
+        if (action->owner) {
+            return MR_FALSE;
+        }
+    }
+    return MR_TRUE;
+}
+
 mr_err_t mr_irq_free(mr_uint32_t irq, void *owner) {
     mr_irq_action_t *action, **a;
     mr_irq_desc_t *desc;
@@ -433,9 +487,14 @@ mr_err_t mr_irq_free(mr_uint32_t irq, void *owner) {
         }
 
         /* Check if irq action is pending */
-        if ((*a)->pending) {
+        if ((*a)->pending > 0) {
             /* Mark irq action, defer free */
             (*a)->owner = MR_NULL;
+
+            /* Disable irq if no valid action remains */
+            if (irq_action_is_empty(desc)) {
+                irq_depth_disable(irq, desc);
+            }
             ret = 0;
             goto _exit;
         }
@@ -456,8 +515,8 @@ mr_err_t mr_irq_free(mr_uint32_t irq, void *owner) {
     /* Free irq action */
     irq_action_free(action);
 
-    /* Disable irq if no irq action */
-    if (!desc->action) {
+    /* Disable irq if no valid action remains */
+    if (irq_action_is_empty(desc)) {
         irq_depth_disable(irq, desc);
     }
     ret = 0;
@@ -600,9 +659,10 @@ _exit:
 
 mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
     mr_irq_action_t **a, *action, action2;
+    mr_irq_return_t irq_ret;
     mr_irq_entry_t *entry;
-    mr_irq_return_t ret;
     mr_irq_desc_t *desc;
+    mr_err_t ret;
     void *owner;
     int mask;
 
@@ -615,18 +675,22 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
     /* Check if irq is dying */
     desc = &__irq_table[irq];
     if ((!desc->irq) || mr_atomic_load(&desc->irq->dying)) {
-        ret = MR_IRQ_NONE;
+        irq_ret = MR_IRQ_NONE;
         goto _exit;
     }
 
     /* Get irq run-time */
-    mr_irq_get(desc->irq);
+    desc->irq = mr_irq_get(desc->irq);
+    if (!desc->irq) {
+        irq_ret = MR_IRQ_NONE;
+        goto _exit;
+    }
 
     /* Mask irq */
     desc->irq->ops->mask(irq, desc->irq->priv);
 
     /* Handle irq action */
-    for (ret = MR_IRQ_NONE, action = desc->action; action;
+    for (irq_ret = MR_IRQ_NONE, action = desc->action; action;
          action = action->next) {
         /* Check if irq action is being freed */
         if (!action->owner) {
@@ -634,7 +698,7 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
         }
 
         /* Mark irq action pending */
-        action->pending = MR_TRUE;
+        action->pending++;
 
         /* Save irq action entry and owner */
         entry = (mr_irq_entry_t *)action->entry;
@@ -644,16 +708,16 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
         mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
 
         /* Call irq action entry */
-        ret = entry(irq, owner);
+        irq_ret = entry(irq, owner);
 
         /* Lock */
         mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
         /* Mark irq action not pending */
-        action->pending = MR_FALSE;
+        action->pending--;
 
         /* Check if irq action is being freed */
-        if (!action->owner) {
+        if ((!action->owner) && (action->pending == 0U)) {
             /* Free irq action */
             for (a = &desc->action; *a; a = &(*a)->next) {
                 /* Match irq action */
@@ -675,22 +739,25 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
         }
 
         /* Check if irq action is handled */
-        if (ret == MR_IRQ_HANDLED) {
+        if (irq_ret == MR_IRQ_HANDLED) {
             break;
         }
 
         /* Check if irq action is deferred */
-        if (ret == MR_IRQ_DEFERRED) {
+        if (irq_ret == MR_IRQ_DEFERRED) {
 #if defined(MR_USE_IRQ_DEFER)
             /* Check if irq action supports deferring */
             if (action->defer_entry) {
                 /* Add irq action to the defer workqueue */
-                mr_workqueue_work(&__irq_defer_queue, &action->defer);
+                ret = mr_workqueue_work(&__irq_defer_queue, &action->defer);
+                if (ret == 0) {
+                    action->pending++;
+                }
             } else
 #endif /* defined(MR_USE_IRQ_DEFER) */
             {
                 /* Not support deferring */
-                ret = MR_IRQ_HANDLED;
+                irq_ret = MR_IRQ_HANDLED;
             }
             break;
         }
@@ -701,12 +768,16 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
         desc->irq->ops->unmask(irq, desc->irq->priv);
     }
 
+    /* Unlock */
+    mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
+
     /* Put irq run-time */
     mr_irq_put(desc->irq);
+    return irq_ret;
 _exit:
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
-    return ret;
+    return irq_ret;
 }
 
 #if defined(MR_USE_IRQ_DEFER)

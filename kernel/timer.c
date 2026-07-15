@@ -38,8 +38,8 @@ mr_err_t mr_timer_init(mr_timer_t *timer, mr_timer_entry_t *entry, void *param,
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(timer);
 
     /* Check parameter */
-    MR_ASSERT((timer != MR_NULL) && (!MR_OBJECT_IS_INITED(timer)));
-    MR_ASSERT((entry != MR_NULL) && (tick > 0));
+    MR_ASSERT(timer != MR_NULL);
+    MR_ASSERT((entry != MR_NULL) && ((tick & (~MR_TIMER_PERIODIC)) > 0U));
 
     /* Init timer */
     return timer_init(timer, clazz, entry, param, tick);
@@ -52,7 +52,7 @@ mr_timer_t *mr_timer_create(mr_timer_entry_t *entry, void *param,
     mr_err_t ret;
 
     /* Check parameter */
-    MR_ASSERT((entry != MR_NULL) && (tick > 0));
+    MR_ASSERT((entry != MR_NULL) && ((tick & (~MR_TIMER_PERIODIC)) > 0U));
 
     /* Create timer */
     timer = mr_malloc(sizeof(mr_timer_t));
@@ -128,6 +128,7 @@ mr_err_t mr_timer_start(mr_timer_t *timer) {
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(timer, timer));
+    MR_ASSERT((timer->itick & (~MR_TIMER_PERIODIC)) > 0U);
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__timer_lock);
@@ -156,7 +157,7 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
     /* Check parameter */
     MR_ASSERT((timer != MR_NULL) && MR_OBJECT_IS_INITED(timer));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(timer, timer));
-    MR_ASSERT(tick > 0);
+    MR_ASSERT((tick & (~MR_TIMER_PERIODIC)) > 0U);
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__timer_lock);

@@ -40,7 +40,7 @@ mr_err_t mr_file_system_init(mr_file_system_t *fs, const char *name,
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(file_system);
 
     /* Check parameter */
-    MR_ASSERT((fs != MR_NULL) && (!MR_OBJECT_IS_INITED(fs)));
+    MR_ASSERT(fs != MR_NULL);
     MR_ASSERT((mount != MR_NULL) && (kill_sb != MR_NULL));
     MR_ASSERT(name != MR_NULL);
 

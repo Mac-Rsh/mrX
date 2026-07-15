@@ -9,6 +9,7 @@
 #include <mrX/kernel/mr_printf.h>
 #if defined(MR_USE_PRINTF)
 #include <mrX/port/mr_port_output.h>
+#include <mrX/kernel/mr_service.h>
 #include <mrX/libc/mr_sprintf.h>
 #if defined(MR_USE_PRINTF_SAFE)
 #include <mrX/libc/mr_malloc.h>
@@ -40,11 +41,11 @@ int mr_vprintf(const char *fmt, mr_va_list args) {
 
     /* Format string */
     ret = mr_vsnprintf(buf, MR_CFG_PRINTF_BUF_SIZE, fmt, args);
-    if (ret < 0) {
+    if (ret >= 0) {
+        outsz = MR_MIN(ret, (int)(MR_CFG_PRINTF_BUF_SIZE - 1U));
+    } else {
         ret = -MR_EINVAL;
         goto _exit;
-    } else {
-        outsz = ret;
     }
 
     /* Output string */

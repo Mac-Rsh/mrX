@@ -11,8 +11,8 @@
 #include <mrX/libc/mr_malloc.h>
 
 /* GPIO driver clazzes(static & dynamic) */
-static mr_err_t gpio_dynamic_deinit(const mr_driver_t *drv);
-MR_DRIVER_CLAZZES_DEFINE(gpio, MR_NULL, MR_NULL, gpio_dynamic_deinit);
+static void gpio_release(const mr_driver_t *drv);
+MR_DRIVER_CLAZZES_DEFINE(gpio, MR_NULL, MR_NULL, gpio_release);
 
 mr_err_t mr_gpio_configure(mr_driver_t *drv, mr_uint32_t pin,
                            mr_gpio_config_t *config) {
@@ -77,9 +77,8 @@ mr_err_t mr_gpio_configuration(mr_driver_t *drv, mr_uint32_t pin,
     return gp_ops->pin_configuration(drv, pin, config);
 }
 
-static mr_err_t gpio_dynamic_deinit(const mr_driver_t *drv) {
+static void gpio_release(const mr_driver_t *drv) {
     /* Free GPIO data */
     mr_free(MR_DRIVER_DATA(drv));
-    return 0;
 }
 #endif /* defined(MR_USE_DRIVER_GPIO) */

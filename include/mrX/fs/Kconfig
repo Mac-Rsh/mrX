@@ -5,6 +5,7 @@ menu "Fs: File system"
 # ==================================
 config MR_USE_FS
     bool "Use file system"
+    select MR_USE_REF_LONG_COUNT
     default n
     help
         Enable the file system. Provides a path-based namespace built

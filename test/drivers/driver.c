@@ -15,10 +15,12 @@
 /* Mock state */
 static int test_driver_init_count;
 static int test_driver_deinit_count;
+static int test_driver_release_count;
 
 static void test_driver_reset(void) {
     test_driver_init_count = 0;
     test_driver_deinit_count = 0;
+    test_driver_release_count = 0;
 }
 
 static mr_err_t test_driver_init(const mr_driver_t *drv) {
@@ -33,6 +35,11 @@ static mr_err_t test_driver_deinit(const mr_driver_t *drv) {
     return 0;
 }
 
+static void test_driver_release(const mr_driver_t *drv) {
+    MR_IGNORE(drv);
+    test_driver_release_count++;
+}
+
 static mr_err_t test_driver_init_fail(const mr_driver_t *drv) {
     MR_IGNORE(drv);
     test_driver_init_count++;
@@ -40,11 +47,16 @@ static mr_err_t test_driver_init_fail(const mr_driver_t *drv) {
 }
 
 static const mr_driver_clazz_t test_driver_clazz
-    = MR_DRIVER_CLAZZ_INIT("test_driver", test_driver_init, test_driver_deinit);
+    = MR_DRIVER_CLAZZ_INIT("test_driver", test_driver_init,
+                           test_driver_deinit, MR_NULL);
 
 static const mr_driver_clazz_t test_driver_clazz_fail
     = MR_DRIVER_CLAZZ_INIT("test_driver_fail", test_driver_init_fail,
-                           test_driver_deinit);
+                           test_driver_deinit, MR_NULL);
+
+static const mr_driver_clazz_t test_driver_release_clazz
+    = MR_DRIVER_CLAZZ_INIT("test_driver_release", test_driver_init,
+                           test_driver_deinit, test_driver_release);
 
 /* Tests */
 static void test_driver_del_without_setup(void) {
@@ -194,6 +206,56 @@ static void test_driver_setup_shutdown_multiple(void) {
 }
 MR_TEST_EXPORT(driver, setup_shutdown_multiple,
                test_driver_setup_shutdown_multiple);
+
+static void test_driver_release_without_setup(void) {
+    mr_driver_t *drv = MR_NULL;
+    mr_err_t ret;
+
+    test_driver_reset();
+
+    drv = mr_driver_create(&test_driver_release_clazz, MR_DRIVER_TYPE_RAM,
+                           MR_NULL, MR_NULL, MR_NULL);
+    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+
+    ret = mr_driver_del(drv);
+
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(test_driver_init_count, 0);
+    MR_TEST_EXPECT_EQ_INT(test_driver_deinit_count, 0);
+    MR_TEST_EXPECT_EQ_INT(test_driver_release_count, 1);
+}
+MR_TEST_EXPORT(driver, release_without_setup,
+               test_driver_release_without_setup);
+
+static void test_driver_release_after_shutdown(void) {
+    mr_driver_t *drv = MR_NULL;
+    mr_err_t ret;
+
+    test_driver_reset();
+
+    drv = mr_driver_create(&test_driver_release_clazz, MR_DRIVER_TYPE_RAM,
+                           MR_NULL, MR_NULL, MR_NULL);
+    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+
+    ret = mr_driver_setup(drv);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+
+    ret = mr_driver_shutdown(drv);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(test_driver_release_count, 0);
+
+    ret = mr_driver_setup(drv);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+
+    ret = mr_driver_del(drv);
+
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(test_driver_init_count, 2);
+    MR_TEST_EXPECT_EQ_INT(test_driver_deinit_count, 2);
+    MR_TEST_EXPECT_EQ_INT(test_driver_release_count, 1);
+}
+MR_TEST_EXPORT(driver, release_after_shutdown,
+               test_driver_release_after_shutdown);
 
 static void test_driver_setup_fail(void) {
     mr_driver_t *drv = MR_NULL;

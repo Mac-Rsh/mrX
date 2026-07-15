@@ -63,7 +63,7 @@ mr_err_t mr_xvm_init(mr_xvm_t *xvm, const char *isa_name, void *data,
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(xvm);
 
     /* Check parameter */
-    MR_ASSERT((xvm != MR_NULL) && (!MR_OBJECT_IS_INITED(xvm)));
+    MR_ASSERT(xvm != MR_NULL);
     MR_ASSERT((data != MR_NULL) && (data_size > 0));
     MR_ASSERT(isa_name != MR_NULL);
 
@@ -321,7 +321,7 @@ mr_err_t mr_xvm_isa_init(mr_xvm_isa_t *isa, const char *name,
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(xvm_isa);
 
     /* Check parameter */
-    MR_ASSERT((isa != MR_NULL) && (!MR_OBJECT_IS_INITED(isa)));
+    MR_ASSERT(isa != MR_NULL);
     MR_ASSERT(name != MR_NULL);
     MR_ASSERT(ops != MR_NULL);
 

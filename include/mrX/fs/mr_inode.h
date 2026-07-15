@@ -70,7 +70,10 @@ typedef struct mr_inode_ops {
     void (*destroy)(struct mr_inode *inode);
 } mr_inode_ops_t;
 
-/* File operations type */
+/* File operations type. Write callbacks use file->pos as the supplied write
+ * offset and advance it by the number of bytes written. VFS selects EOF before
+ * append writes, so callbacks do not interpret MR_O_APPEND independently.
+ * Readdir callbacks return 1 for an entry, 0 for EOF, or a negative error. */
 typedef struct mr_file_ops {
     mr_err_t (*open)(struct mr_inode *inode, struct mr_file *file);
     mr_err_t (*close)(struct mr_file *file);
@@ -78,7 +81,7 @@ typedef struct mr_file_ops {
     mr_ssize_t (*write)(struct mr_file *file, const void *buf, mr_size_t size);
     mr_int64_t (*llseek)(struct mr_file *file, mr_int64_t offset, int whence);
     mr_err_t (*ioctl)(struct mr_file *file, int cmd, void *arg);
-    mr_bool_t (*readdir)(struct mr_file *file, mr_dirent_t *dirent);
+    mr_err_t (*readdir)(struct mr_file *file, mr_dirent_t *dirent);
     mr_err_t (*sync)(struct mr_file *file);
 } mr_file_ops_t;
 

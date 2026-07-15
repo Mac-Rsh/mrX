@@ -37,7 +37,7 @@ static mr_err_t ramfs_file_close(mr_file_t *file);
 static mr_ssize_t ramfs_file_read(mr_file_t *file, void *buf, mr_size_t size);
 static mr_ssize_t ramfs_file_write(mr_file_t *file, const void *buf,
                                    mr_size_t size);
-static mr_bool_t ramfs_file_readdir(mr_file_t *file, mr_dirent_t *dirent);
+static mr_err_t ramfs_file_readdir(mr_file_t *file, mr_dirent_t *dirent);
 static const mr_file_ops_t __ramfs_files = {
     .open = ramfs_file_open,
     .close = ramfs_file_close,
@@ -214,9 +214,13 @@ static mr_ssize_t ramfs_file_write(mr_file_t *file, const void *buf,
         return 0;
     }
 
-    /* Check overflow */
+    /* Check position range before conversion and addition */
+    if (((mr_uint64_t)size > (mr_uint64_t)(MR_INT64_MAX - file->pos))
+        || (file->pos < 0)) {
+        return -MR_ERANGE;
+    }
     end = file->pos + (mr_int64_t)size;
-    if ((end < file->pos) || ((mr_uint64_t)end > (mr_uint64_t)MR_SIZE_MAX)) {
+    if ((mr_uint64_t)end > (mr_uint64_t)MR_SIZE_MAX) {
         return -MR_ENOMEM;
     }
 
@@ -245,7 +249,7 @@ static mr_ssize_t ramfs_file_write(mr_file_t *file, const void *buf,
     return (mr_ssize_t)size;
 }
 
-static mr_bool_t ramfs_file_readdir(mr_file_t *file, mr_dirent_t *dirent) {
+static mr_err_t ramfs_file_readdir(mr_file_t *file, mr_dirent_t *dirent) {
     mr_dentry_t *child;
     mr_size_t idx;
 
@@ -253,7 +257,7 @@ static mr_bool_t ramfs_file_readdir(mr_file_t *file, mr_dirent_t *dirent) {
     idx = (mr_size_t)file->pos;
     child = mr_dentry_child_get(file->dentry, idx);
     if (!child) {
-        return MR_FALSE;
+        return 0;
     }
 
     /* Read directory entry */
@@ -264,7 +268,7 @@ static mr_bool_t ramfs_file_readdir(mr_file_t *file, mr_dirent_t *dirent) {
 
     /* Update position */
     file->pos = (mr_int64_t)(idx + 1);
-    return MR_TRUE;
+    return 1;
 }
 
 static mr_err_t ramfs_mount(mr_super_block_t *sb, const char *source, int flags,
@@ -303,11 +307,7 @@ _exit:
 }
 
 static void ramfs_kill_sb(mr_super_block_t *sb) {
-    /* Put root inode */
-    if (sb->root) {
-        mr_inode_put(sb->root);
-        sb->root = MR_NULL;
-    }
+    MR_IGNORE(sb);
 }
 
 static void mr_fs_ramfs_init(void) {

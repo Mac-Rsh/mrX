@@ -110,6 +110,11 @@ void *mr_realloc(void *mem, mr_size_t size);
  * @param regions The memory regions.
  *
  * @note The last region address must be MR_NULL.
+ * @note This function may only be called after the kernel heap is initialized
+ * and before concurrent heap operations begin.
+ * @note Each region may only be added once, must not overlap another heap
+ * region, and must remain valid for the lifetime of the allocator.
+ * @note The caller must provide external serialization.
  */
 void mr_heap_region_add(const mr_heap_region_t *regions);
 

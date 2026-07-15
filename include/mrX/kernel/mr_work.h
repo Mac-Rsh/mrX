@@ -64,29 +64,6 @@ typedef struct mr_work {
 typedef void(mr_work_entry_t)(struct mr_work *work, void *param);
 
 /**
- * @brief This macro function initializes a derived workqueue.
- *
- * @param _queue The workqueue.
- * @param _clazz The workqueue clazz.
- */
-#define MR_WORKQUEUE_DERIVE_INIT(_queue, _clazz)                               \
-    {                                                                          \
-        .parent = MR_OBJECT_INIT(_clazz),                                      \
-        .depth = MR_ATOMIC_INIT(0),                                            \
-        .dying = MR_ATOMIC_INIT(MR_FALSE),                                     \
-        .tlist = MR_LIST_INIT(&(_queue)->tlist),                               \
-        .list = MR_LIST_INIT(&(_queue)->list),                                 \
-    }
-
-/**
- * @brief This macro function initializes a workqueue.
- *
- * @param _queue The workqueue.
- */
-#define MR_WORKQUEUE_INIT(_queue)                                              \
-    MR_WORKQUEUE_DERIVE_INIT((_queue), MR_CLAZZES_STATIK(workqueue))
-
-/**
  * @brief This function initializes a workqueue.
  *
  * @param queue The workqueue.
