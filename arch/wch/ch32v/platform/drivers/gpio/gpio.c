@@ -174,7 +174,7 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
         } else {
             /* Initialize the waitable */
             if (!MR_OBJECT_IS_INITED((mr_object_t *)&__drv_gpio_exti[pin])) {
-                mr_waitable_init(&__drv_gpio_exti[pin], MR_NULL, MR_NULL);
+                mr_waitable_init(&__drv_gpio_exti[pin]);
             }
 
             /* Mark the irq as used */
@@ -360,7 +360,7 @@ static mr_err_t drv_event_attach(const mr_driver_t *drv, mr_uint32_t pin,
 
     /* Initialize the waitable */
     if (!MR_OBJECT_IS_INITED((mr_object_t *)&__drv_gpio_exti[pin])) {
-        mr_waitable_init(&__drv_gpio_exti[pin], MR_NULL, MR_NULL);
+        mr_waitable_init(&__drv_gpio_exti[pin]);
     }
 
     /* Attach GPIO EXTI event */
@@ -369,11 +369,12 @@ static mr_err_t drv_event_attach(const mr_driver_t *drv, mr_uint32_t pin,
 
 static void drv_gpio_irq_handle(mr_uint32_t pin) {
     mr_driver_t *drv = (mr_driver_t *)__drv_gpio_irq_map[pin].drv;
+    mr_gpio_event_exti_data_t data = (mr_gpio_event_exti_data_t)pin;
 
     /* Call IRQ handler */
     if (drv != MR_NULL) {
         /* Raise GPIO EXTI event */
-        mr_waitable_raise(&__drv_gpio_exti[pin], MR_GPIO_WAIT_EXTI);
+        mr_waitable_raise(&__drv_gpio_exti[pin], MR_GPIO_WAIT_EXTI, &data);
     }
 }
 

@@ -25,7 +25,7 @@ extern "C" {
 
 #if defined(MR_USE_DRIVER_GPIO)
 /* GPIO wait event definition */
-#define MR_GPIO_WAIT_EXTI               (MR_WAIT_IN | (1ULL << 0))
+#define MR_GPIO_WAIT_EXTI               (MR_WAIT_IN | (1U << 0))
 
 /* GPIO mode definition */
 typedef enum mr_gpio_mode {
@@ -96,6 +96,9 @@ typedef struct mr_gpio_ops {
     mr_err_t (*event_attach)(const mr_driver_t *drv, mr_uint32_t pin,
                              mr_waiter_t *entry);
 } mr_gpio_ops_t;
+
+/* GPIO event type */
+typedef mr_uint32_t                     mr_gpio_event_exti_data_t;
 
 /**
  * @brief This macro function initializes a GPIO data.

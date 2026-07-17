@@ -25,8 +25,8 @@ extern "C" {
 
 #if defined(MR_USE_DRIVER_DAC)
 /* DAC wait event type definition */
-#define MR_DAC_WAIT_STREAM_HALF         (MR_WAIT_IN | (1ULL << 0))
-#define MR_DAC_WAIT_STREAM_FULL         (MR_WAIT_IN | (1ULL << 1))
+#define MR_DAC_WAIT_STREAM_HALF         (MR_WAIT_IN | (1U << 0))
+#define MR_DAC_WAIT_STREAM_FULL         (MR_WAIT_IN | (1U << 1))
 
 /* DAC reference definition */
 typedef enum mr_dac_ref {
@@ -374,7 +374,8 @@ MR_INLINE mr_err_t mr_dac_event_attach(mr_driver_t *drv, mr_waiter_t *entry) {
  * @param events The DAC events.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_dac_event_raise(mr_driver_t *drv, mr_uint64_t events) {
+MR_INLINE mr_err_t mr_dac_event_raise(mr_driver_t *drv,
+                                      mr_wait_event_t events) {
     mr_dac_data_t *da_data;
 
     /* Check parameter */
@@ -385,7 +386,7 @@ MR_INLINE mr_err_t mr_dac_event_raise(mr_driver_t *drv, mr_uint64_t events) {
     da_data = (mr_dac_data_t *)MR_DRIVER_DATA(drv);
 
     /* Raise DAC events */
-    return mr_waitable_raise(&da_data->event, events);
+    return mr_waitable_raise(&da_data->event, events, MR_NULL);
 }
 
 /**

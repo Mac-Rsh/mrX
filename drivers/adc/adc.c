@@ -77,7 +77,7 @@ static mr_err_t adc_init(const mr_driver_t *drv) {
     ad_data = (mr_adc_data_t *)MR_DRIVER_DATA(drv);
 
     /* Init ADC event */
-    ret = mr_waitable_init(&ad_data->event, MR_NULL, (void *)drv);
+    ret = mr_waitable_init(&ad_data->event);
     if (ret != 0) {
         return ret;
     }

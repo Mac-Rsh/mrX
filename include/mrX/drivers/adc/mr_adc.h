@@ -25,8 +25,8 @@ extern "C" {
 
 #if defined(MR_USE_DRIVER_ADC)
 /* ADC wait event type definition */
-#define MR_ADC_WAIT_STREAM_HALF         (MR_WAIT_IN | (1ULL << 0))
-#define MR_ADC_WAIT_STREAM_FULL         (MR_WAIT_IN | (1ULL << 1))
+#define MR_ADC_WAIT_STREAM_HALF         (MR_WAIT_IN | (1U << 0))
+#define MR_ADC_WAIT_STREAM_FULL         (MR_WAIT_IN | (1U << 1))
 
 /* ADC differential mode definition */
 typedef enum mr_adc_diff {
@@ -404,7 +404,8 @@ MR_INLINE mr_err_t mr_adc_event_attach(mr_driver_t *drv, mr_waiter_t *entry) {
  * @param events The ADC events.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_adc_event_raise(mr_driver_t *drv, mr_uint64_t events) {
+MR_INLINE mr_err_t mr_adc_event_raise(mr_driver_t *drv,
+                                      mr_wait_event_t events) {
     mr_adc_data_t *ad_data;
 
     /* Check parameter */
@@ -415,7 +416,7 @@ MR_INLINE mr_err_t mr_adc_event_raise(mr_driver_t *drv, mr_uint64_t events) {
     ad_data = (mr_adc_data_t *)MR_DRIVER_DATA(drv);
 
     /* Raise ADC events */
-    return mr_waitable_raise(&ad_data->event, events);
+    return mr_waitable_raise(&ad_data->event, events, MR_NULL);
 }
 
 /**

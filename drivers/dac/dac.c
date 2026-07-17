@@ -77,7 +77,7 @@ static mr_err_t dac_init(const mr_driver_t *drv) {
     da_data = (mr_dac_data_t *)MR_DRIVER_DATA(drv);
 
     /* Init DAC event */
-    ret = mr_waitable_init(&da_data->event, MR_NULL, (void *)drv);
+    ret = mr_waitable_init(&da_data->event);
     if (ret != 0) {
         return ret;
     }
