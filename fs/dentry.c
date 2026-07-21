@@ -606,17 +606,13 @@ mr_err_t mr_dentry_rename(mr_dentry_t *dentry, mr_dentry_t *upper,
         return ret;
     }
 
-    /* Check filesystem rename operation */
-    if ((!old_upper->inode->ops) || (!old_upper->inode->ops->rename)) {
-        ret = -MR_ENOSYS;
-        goto _exit;
-    }
-
     /* Rename backing node */
-    ret = old_upper->inode->ops->rename(
-        old_upper->inode, MR_DENTRY_NAME(dentry), upper->inode, name);
-    if (ret != 0) {
-        goto _exit;
+    if (old_upper->inode->ops && old_upper->inode->ops->rename) {
+        ret = old_upper->inode->ops->rename(
+            old_upper->inode, MR_DENTRY_NAME(dentry), upper->inode, name);
+        if (ret != 0) {
+            goto _exit;
+        }
     }
 
     /* Commit dentry move */

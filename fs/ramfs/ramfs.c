@@ -13,47 +13,35 @@
 
 #define RAMFS_NAME                      "ramfs"
 
-/* RamFs inode operations */
+/* RamFS inode operations */
 static mr_err_t ramfs_inode_create(mr_inode_t *dir, const char *name,
                                    mr_inode_type_t type, mr_inode_t **out);
-static mr_err_t ramfs_inode_stat(mr_inode_t *inode, mr_stat_t *stat);
-static mr_err_t ramfs_inode_unlink(mr_inode_t *dir, const char *name);
-static mr_err_t ramfs_inode_rename(mr_inode_t *old_dir, const char *old_name,
-                                   mr_inode_t *new_dir, const char *new_name);
 static mr_err_t ramfs_inode_truncate(mr_inode_t *inode, mr_int64_t length);
 static void ramfs_inode_destroy(mr_inode_t *inode);
 static const mr_inode_ops_t __ramfs_inodes = {
     .create = ramfs_inode_create,
-    .stat = ramfs_inode_stat,
-    .unlink = ramfs_inode_unlink,
-    .rename = ramfs_inode_rename,
     .truncate = ramfs_inode_truncate,
     .destroy = ramfs_inode_destroy,
 };
 
-/* RamFs file operations */
-static mr_err_t ramfs_file_open(mr_inode_t *inode, mr_file_t *file);
-static mr_err_t ramfs_file_close(mr_file_t *file);
+/* RamFS file operations */
 static mr_ssize_t ramfs_file_read(mr_file_t *file, void *buf, mr_size_t size);
 static mr_ssize_t ramfs_file_write(mr_file_t *file, const void *buf,
                                    mr_size_t size);
 static mr_err_t ramfs_file_readdir(mr_file_t *file, mr_dirent_t *dirent);
 static const mr_file_ops_t __ramfs_files = {
-    .open = ramfs_file_open,
-    .close = ramfs_file_close,
     .read = ramfs_file_read,
     .write = ramfs_file_write,
     .readdir = ramfs_file_readdir,
 };
 
-/* RamFs file system operations */
+/* RamFS file system operations */
 static mr_err_t ramfs_mount(mr_super_block_t *sb, const char *source, int flags,
                             void *data);
-static void ramfs_kill_sb(mr_super_block_t *sb);
 static mr_file_system_t __ramfs
-    = MR_FILE_SYSTEM_INIT(RAMFS_NAME, ramfs_mount, ramfs_kill_sb);
+    = MR_FILE_SYSTEM_INIT(RAMFS_NAME, ramfs_mount, MR_NULL);
 
-/* RamFs node type */
+/* RamFS node type */
 typedef struct ramfs_node {
     mr_uint8_t *data;
 } ramfs_node_t;
@@ -89,27 +77,6 @@ static mr_err_t ramfs_inode_create(mr_inode_t *dir, const char *name,
 _exit:
     *out = MR_NULL;
     return ret;
-}
-
-static mr_err_t ramfs_inode_stat(mr_inode_t *inode, mr_stat_t *stat) {
-    MR_IGNORE(inode);
-    MR_IGNORE(stat);
-    return 0;
-}
-
-static mr_err_t ramfs_inode_unlink(mr_inode_t *dir, const char *name) {
-    MR_IGNORE(dir);
-    MR_IGNORE(name);
-    return 0;
-}
-
-static mr_err_t ramfs_inode_rename(mr_inode_t *old_dir, const char *old_name,
-                                   mr_inode_t *new_dir, const char *new_name) {
-    MR_IGNORE(old_dir);
-    MR_IGNORE(old_name);
-    MR_IGNORE(new_dir);
-    MR_IGNORE(new_name);
-    return 0;
 }
 
 static mr_err_t ramfs_inode_truncate(mr_inode_t *inode, mr_int64_t length) {
@@ -171,17 +138,6 @@ static void ramfs_inode_destroy(mr_inode_t *inode) {
     }
     inode->priv = MR_NULL;
     mr_free(node);
-}
-
-static mr_err_t ramfs_file_open(mr_inode_t *inode, mr_file_t *file) {
-    MR_IGNORE(inode);
-    MR_IGNORE(file);
-    return 0;
-}
-
-static mr_err_t ramfs_file_close(mr_file_t *file) {
-    MR_IGNORE(file);
-    return 0;
 }
 
 static mr_ssize_t ramfs_file_read(mr_file_t *file, void *buf, mr_size_t size) {
@@ -304,10 +260,6 @@ static mr_err_t ramfs_mount(mr_super_block_t *sb, const char *source, int flags,
     return 0;
 _exit:
     return ret;
-}
-
-static void ramfs_kill_sb(mr_super_block_t *sb) {
-    MR_IGNORE(sb);
 }
 
 static void mr_fs_ramfs_init(void) {

@@ -11,6 +11,12 @@
 #include <mrX/libc/mr_malloc.h>
 #include <mrX/libc/mr_string.h>
 
+/* FS node creation operation */
+typedef enum fs_node_create_op {
+    FS_NODE_OP_CREATE,
+    FS_NODE_OP_MKNOD,
+} fs_node_create_op_t;
+
 /* FS path split type */
 typedef struct fs_path_split {
     char ipath[MR_CFG_FS_DENTRY_NAME_LEN * 2];
@@ -347,7 +353,8 @@ static void fs_split_path_free(fs_path_split_t *split) {
 }
 
 static mr_err_t fs_create_node(mr_dentry_t *parent, const char *name,
-                               mr_inode_type_t type, mr_dentry_t **dentry) {
+                               mr_inode_type_t type, fs_node_create_op_t op,
+                               void *priv, mr_dentry_t **dentry) {
     mr_dentry_t *child, *existing;
     mr_super_block_t *sb;
     mr_inode_t *inode;
@@ -360,9 +367,23 @@ static mr_err_t fs_create_node(mr_dentry_t *parent, const char *name,
     if ((!parent->inode) || (parent->inode->type != MR_INODE_DIR)) {
         return -MR_ENOTDIR;
     }
-    /* Check the FS supports creation */
-    if ((!parent->inode->ops) || (!parent->inode->ops->create)) {
-        return -MR_ENOSYS;
+
+    /* Check the FS supports the requested operation */
+    switch (op) {
+        case FS_NODE_OP_CREATE: {
+            if ((!parent->inode->ops) || (!parent->inode->ops->create)) {
+                return -MR_ENOSYS;
+            }
+            break;
+        }
+        case FS_NODE_OP_MKNOD: {
+            if ((!parent->inode->ops)
+                || ((!parent->inode->ops->mknod)
+                    && (!parent->inode->ops->create))) {
+                return -MR_ENOSYS;
+            }
+            break;
+        }
     }
 
     /* Check if the name is existing */
@@ -394,7 +415,22 @@ static mr_err_t fs_create_node(mr_dentry_t *parent, const char *name,
     }
 
     /* Create backing inode */
-    ret = parent->inode->ops->create(parent->inode, name, type, &inode);
+    switch (op) {
+        case FS_NODE_OP_CREATE: {
+            ret = parent->inode->ops->create(parent->inode, name, type, &inode);
+            break;
+        }
+        case FS_NODE_OP_MKNOD: {
+            if (parent->inode->ops->mknod) {
+                ret = parent->inode->ops->mknod(parent->inode, name, type, priv,
+                                                &inode);
+            } else {
+                ret = parent->inode->ops->create(parent->inode, name, type,
+                                                 &inode);
+            }
+            break;
+        }
+    }
     if (ret != 0) {
         goto _exit;
     }
@@ -581,7 +617,8 @@ mr_err_t mr_fs_open(mr_file_t *file, const char *path, int flags) {
         }
 
         /* Create the node */
-        ret = fs_create_node(parent, split.leaf, MR_INODE_REG, &dentry);
+        ret = fs_create_node(parent, split.leaf, MR_INODE_REG,
+                             FS_NODE_OP_CREATE, MR_NULL, &dentry);
         fs_split_path_free(&split);
         mr_dentry_put(parent);
         if (ret != 0) {
@@ -716,6 +753,52 @@ _exit:
     return ret;
 }
 
+mr_err_t mr_fs_mknod(const char *path, mr_inode_type_t type, void *priv) {
+    mr_dentry_t *parent, *dentry;
+    mr_fs_struct_t *fs_struct;
+    fs_path_split_t split;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+
+    /* Check node type */
+    if ((type <= MR_INODE_NONE) || (type > MR_INODE_LNK)) {
+        return -MR_EINVAL;
+    }
+
+    /* Get current file-system structure */
+    fs_struct = mr_fs_current();
+    if (!fs_struct) {
+        return -MR_EINVAL;
+    }
+
+    /* Split path into parent + leaf */
+    ret = fs_split_path(path, &split);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Look up the parent directory */
+    parent = fs_lookup(fs_struct, split.parent);
+    if (!parent) {
+        fs_split_path_free(&split);
+        return -MR_ENOENT;
+    }
+
+    /* Create the node */
+    ret = fs_create_node(parent, split.leaf, type, FS_NODE_OP_MKNOD, priv,
+                         &dentry);
+
+    /* Put resources */
+    fs_split_path_free(&split);
+    mr_dentry_put(parent);
+    if (ret == 0) {
+        mr_dentry_put(dentry);
+    }
+    return ret;
+}
+
 mr_err_t mr_fs_unlink(const char *path) {
     mr_dentry_t *dentry, *parent;
     mr_fs_struct_t *fs_struct;
@@ -770,17 +853,13 @@ mr_err_t mr_fs_unlink(const char *path) {
         goto _exit;
     }
 
-    /* Check the FS supports unlink */
-    if ((!parent->inode->ops) || (!parent->inode->ops->unlink)) {
-        ret = -MR_ENOSYS;
-        goto _exit;
-    }
-
     /* Ask the FS to remove the name from the directory. On failure the dentry
      * is left intact in the tree */
-    ret = parent->inode->ops->unlink(parent->inode, MR_DENTRY_NAME(dentry));
-    if (ret != 0) {
-        goto _exit;
+    if (parent->inode->ops && parent->inode->ops->unlink) {
+        ret = parent->inode->ops->unlink(parent->inode, MR_DENTRY_NAME(dentry));
+        if (ret != 0) {
+            goto _exit;
+        }
     }
 
     /* Delete the dentry and its bound inode reference */
@@ -907,7 +986,8 @@ mr_err_t mr_fs_mkdir(const char *path) {
     }
 
     /* Create the directory node */
-    ret = fs_create_node(parent, split.leaf, MR_INODE_DIR, &dentry);
+    ret = fs_create_node(parent, split.leaf, MR_INODE_DIR, FS_NODE_OP_CREATE,
+                         MR_NULL, &dentry);
     fs_split_path_free(&split);
     mr_dentry_put(parent);
     if (ret == 0) {

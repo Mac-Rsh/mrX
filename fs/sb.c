@@ -55,7 +55,7 @@ static mr_err_t super_block_init(mr_super_block_t *sb, const mr_clazz_t *clazz,
     if (!sb->type) {
         return -MR_ENOENT;
     }
-    if ((!sb->type->mount) || (!sb->type->kill_sb)) {
+    if (!sb->type->mount) {
         ret = -MR_EIO;
         goto _exit;
     }
@@ -102,7 +102,9 @@ _kill_exit:
     super_block_root_put(sb);
 
     /* Kill the super-block */
-    sb->type->kill_sb(sb);
+    if (sb->type->kill_sb) {
+        sb->type->kill_sb(sb);
+    }
 _exit:
     /* Put file-system */
     mr_file_system_put(sb->type);

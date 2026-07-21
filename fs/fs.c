@@ -41,7 +41,7 @@ mr_err_t mr_file_system_init(mr_file_system_t *fs, const char *name,
 
     /* Check parameter */
     MR_ASSERT(fs != MR_NULL);
-    MR_ASSERT((mount != MR_NULL) && (kill_sb != MR_NULL));
+    MR_ASSERT(mount != MR_NULL);
     MR_ASSERT(name != MR_NULL);
 
     /* Init file-system */

@@ -161,9 +161,6 @@ mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
  * @param upper The new upper(parent) dentry.
  * @param name The new single-component name(no '/').
  * @return 0 on success, a negative error code on failure.
- *
- * @note This function calls the source parent's filesystem rename operation.
- * The backing node and dentry transition are failure-atomic.
  */
 mr_err_t mr_dentry_rename(mr_dentry_t *dentry, mr_dentry_t *upper,
                            const char *name);

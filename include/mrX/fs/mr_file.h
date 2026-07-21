@@ -179,6 +179,51 @@ mr_err_t mr_fs_readdir(mr_file_t *file, mr_dirent_t *dirent);
 mr_err_t mr_fs_stat(const char *path, mr_stat_t *stat);
 
 /**
+ * @brief This function creates a file-system-specific node.
+ *
+ * @param path The node path.
+ * @param type The inode type.
+ * @param priv The private data passed to the parent mknod callback.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_mknod(const char *path, mr_inode_type_t type, void *priv);
+
+/**
+ * @brief This function removes a file-system node by path.
+ *
+ * @param path The file path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note A non-empty directory is rejected with -MR_ENOTEMPTY.
+ * @note A mount-point directory can not be removed(-MR_EBUSY).
+ */
+mr_err_t mr_fs_unlink(const char *path);
+
+/**
+ * @brief This function renames a file-system node.
+ *
+ * @param old_path The current path.
+ * @param new_path The new path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The destination must not already exist(-MR_EEXIST).
+ * @note A cross-file-system rename is rejected with -MR_EXDEV.
+ * @note A mount-point directory can not be renamed(-MR_EBUSY).
+ */
+mr_err_t mr_fs_rename(const char *old_path, const char *new_path);
+
+/**
+ * @brief This function creates a directory at the given path.
+ *
+ * @param path The directory path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The parent must already exist(-MR_ENOENT).
+ * @note An existing leaf is rejected with -MR_EEXIST.
+ */
+mr_err_t mr_fs_mkdir(const char *path);
+
+/**
  * @brief This function reads from a file.
  *
  * @param file The file.
@@ -244,41 +289,6 @@ mr_err_t mr_fs_ioctl(mr_file_t *file, int cmd, void *arg);
  * @note Only regular files may be truncated(-MR_EISDIR).
  */
 mr_err_t mr_fs_truncate(mr_file_t *file, mr_int64_t length);
-
-/**
- * @brief This function removes a file-system node by path.
- *
- * @param path The file path.
- * @return 0 on success, a negative error code on failure.
- *
- * @note A non-empty directory is rejected with -MR_ENOTEMPTY.
- * @note A mount-point directory can not be removed(-MR_EBUSY).
- */
-mr_err_t mr_fs_unlink(const char *path);
-
-/**
- * @brief This function renames a file-system node.
- *
- * @param old_path The current path.
- * @param new_path The new path.
- * @return 0 on success, a negative error code on failure.
- *
- * @note The destination must not already exist(-MR_EEXIST).
- * @note A cross-file-system rename is rejected with -MR_EXDEV.
- * @note A mount-point directory can not be renamed(-MR_EBUSY).
- */
-mr_err_t mr_fs_rename(const char *old_path, const char *new_path);
-
-/**
- * @brief This function creates a directory at the given path.
- *
- * @param path The directory path.
- * @return 0 on success, a negative error code on failure.
- *
- * @note The parent must already exist(-MR_ENOENT).
- * @note An existing leaf is rejected with -MR_EEXIST.
- */
-mr_err_t mr_fs_mkdir(const char *path);
 
 /**
  * @brief This function syncs an open file.

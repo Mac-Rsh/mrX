@@ -145,7 +145,7 @@ MR_INLINE mr_bool_t interrupt_enter(core_t *core) {
         return MR_FALSE;
     }
 
-    /* Refresh pending interrupt only when it can be taken. */
+    /* Refresh pending interrupt only when it can be taken */
     interrupt_update(core);
 
     /* Check if machine external interrupt is pending */

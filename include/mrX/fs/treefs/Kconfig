@@ -1,0 +1,17 @@
+menu "TreeFS: Namespace-only file system"
+
+# ==================================
+# TREEFS
+# ==================================
+config MR_USE_FS_TREEFS
+    depends on MR_USE_FS
+    bool "Use treefs"
+    default n
+    help
+        Enable the namespace-only tree file system(treefs). It is automatically
+        registered at boot and can be mounted by name("treefs"). It maintains
+        directories and typed nodes without storing regular-file data. Directory
+        enumeration is supported, while read, write, and truncate operations are
+        not provided.
+
+endmenu
