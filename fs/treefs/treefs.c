@@ -8,9 +8,9 @@
 
 #include <mrX/fs/mr_file.h>
 #if defined(MR_USE_FS_TREEFS)
-#include <mrX/libc/mr_string.h>
 
-#define TREEFS_NAME                     "treefs"
+/* FS name */
+#define FS_NAME                         "treefs"
 
 /* TreeFS inode operations */
 static mr_err_t treefs_inode_create(mr_inode_t *dir, const char *name,
@@ -23,24 +23,18 @@ static const mr_inode_ops_t __treefs_inodes = {
     .mknod = treefs_inode_mknod,
 };
 
-/* TreeFS file operations */
-static mr_err_t treefs_file_readdir(mr_file_t *file, mr_dirent_t *dirent);
-static const mr_file_ops_t __treefs_files = {
-    .readdir = treefs_file_readdir,
-};
-
 /* TreeFS file system operations */
 static mr_err_t treefs_mount(mr_super_block_t *sb, const char *source,
                              int flags, void *data);
 static mr_file_system_t __treefs
-    = MR_FILE_SYSTEM_INIT(TREEFS_NAME, treefs_mount, MR_NULL);
+    = MR_FILE_SYSTEM_INIT(FS_NAME, treefs_mount, MR_NULL);
 
 static mr_err_t treefs_inode_alloc(mr_inode_type_t type, void *priv,
                                    mr_inode_t **out) {
     mr_inode_t *inode;
 
     /* Create a namespace-only inode */
-    inode = mr_inode_create(type, &__treefs_inodes, &__treefs_files, priv);
+    inode = mr_inode_create(type, &__treefs_inodes, MR_NULL, priv);
     if (!inode) {
         *out = MR_NULL;
         return -MR_ENOMEM;
@@ -72,28 +66,6 @@ static mr_err_t treefs_inode_mknod(mr_inode_t *dir, const char *name,
     return treefs_inode_alloc(type, priv, out);
 }
 
-static mr_err_t treefs_file_readdir(mr_file_t *file, mr_dirent_t *dirent) {
-    mr_dentry_t *child;
-    mr_size_t index;
-
-    /* Get child dentry */
-    index = (mr_size_t)file->pos;
-    child = mr_dentry_child_get(file->dentry, index);
-    if (!child) {
-        return 0;
-    }
-
-    /* Read directory entry */
-    mr_strncpy(dirent->name, MR_DENTRY_NAME(child), MR_CFG_FS_PATH_LEN - 1);
-    dirent->name[MR_CFG_FS_PATH_LEN - 1] = '\0';
-    dirent->type = child->inode ? child->inode->type : MR_INODE_NONE;
-    mr_dentry_put(child);
-
-    /* Update position */
-    file->pos = (mr_int64_t)(index + 1);
-    return 1;
-}
-
 static mr_err_t treefs_mount(mr_super_block_t *sb, const char *source,
                              int flags, void *data) {
     mr_inode_t *root;
@@ -103,8 +75,7 @@ static mr_err_t treefs_mount(mr_super_block_t *sb, const char *source,
     MR_IGNORE(data);
 
     /* Create root inode */
-    root = mr_inode_create(MR_INODE_DIR, &__treefs_inodes, &__treefs_files,
-                           MR_NULL);
+    root = mr_inode_create(MR_INODE_DIR, &__treefs_inodes, MR_NULL, MR_NULL);
     if (!root) {
         return -MR_ENOMEM;
     }

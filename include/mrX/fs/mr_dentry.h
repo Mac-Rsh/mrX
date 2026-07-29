@@ -227,62 +227,6 @@ mr_dentry_t *mr_dentry_mkpath(mr_dentry_t *start, mr_dentry_t *limit,
 mr_err_t mr_dentry_instantiate(mr_dentry_t *dentry, struct mr_inode *inode);
 
 /**
- * @brief This function initializes a dentry.
- *
- * @param dentry The dentry.
- * @param ops The dentry operations(maybe MR_NULL for the default).
- * @param fmt The dentry name format.
- * @param args The variable argument list.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_dentry_vinit(mr_dentry_t *dentry, const mr_dentry_ops_t *ops,
-                         const char *fmt, mr_va_list args);
-
-/**
- * @brief This function creates a dentry.
- *
- * @param ops The dentry operations(maybe MR_NULL for the default).
- * @param fmt The dentry name format.
- * @param args The variable argument list.
- * @return The dentry on success, MR_NULL on failure.
- */
-mr_dentry_t *mr_dentry_vcreate(const mr_dentry_ops_t *ops, const char *fmt,
-                               mr_va_list args);
-
-/**
- * @brief This function looks up a dentry from a path.
- *
- * @param start The start dentry.
- * @param limit The lookup limit.
- * @param fmt The path format.
- * @param args The variable argument list.
- * @return The dentry on success, MR_NULL on failure.
- *
- * @note The returned dentry holds one reference; call mr_dentry_put() to
- * release it when no longer needed.
- * @note Paths are relative to start.
- */
-mr_dentry_t *mr_dentry_vlookup(mr_dentry_t *start, mr_dentry_t *limit,
-                               const char *fmt, mr_va_list args);
-
-/**
- * @brief This function creates a dentry path, making intermediate dentries as
- * needed.
- *
- * @param start The start dentry.
- * @param limit The lookup limit.
- * @param fmt The path format.
- * @param args The variable argument list.
- * @return The dentry on success, MR_NULL on failure.
- *
- * @note The returned dentry holds one reference; call mr_dentry_put() to
- * release it when no longer needed.
- * @note Paths are relative to start.
- */
-mr_dentry_t *mr_dentry_vmkpath(mr_dentry_t *start, mr_dentry_t *limit,
-                               const char *fmt, mr_va_list args);
-
-/**
  * @brief This macro function gets a dentry name.
  */
 #define MR_DENTRY_NAME(_dentry)         ((_dentry)->name.str)

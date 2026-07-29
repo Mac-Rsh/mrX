@@ -11,7 +11,8 @@
 #include <mrX/libc/mr_malloc.h>
 #include <mrX/libc/mr_string.h>
 
-#define RAMFS_NAME                      "ramfs"
+/* FS name */
+#define FS_NAME                         "ramfs"
 
 /* RamFS inode operations */
 static mr_err_t ramfs_inode_create(mr_inode_t *dir, const char *name,
@@ -28,18 +29,16 @@ static const mr_inode_ops_t __ramfs_inodes = {
 static mr_ssize_t ramfs_file_read(mr_file_t *file, void *buf, mr_size_t size);
 static mr_ssize_t ramfs_file_write(mr_file_t *file, const void *buf,
                                    mr_size_t size);
-static mr_err_t ramfs_file_readdir(mr_file_t *file, mr_dirent_t *dirent);
 static const mr_file_ops_t __ramfs_files = {
     .read = ramfs_file_read,
     .write = ramfs_file_write,
-    .readdir = ramfs_file_readdir,
 };
 
 /* RamFS file system operations */
 static mr_err_t ramfs_mount(mr_super_block_t *sb, const char *source, int flags,
                             void *data);
 static mr_file_system_t __ramfs
-    = MR_FILE_SYSTEM_INIT(RAMFS_NAME, ramfs_mount, MR_NULL);
+    = MR_FILE_SYSTEM_INIT(FS_NAME, ramfs_mount, MR_NULL);
 
 /* RamFS node type */
 typedef struct ramfs_node {
@@ -203,28 +202,6 @@ static mr_ssize_t ramfs_file_write(mr_file_t *file, const void *buf,
         file->inode->size = end;
     }
     return (mr_ssize_t)size;
-}
-
-static mr_err_t ramfs_file_readdir(mr_file_t *file, mr_dirent_t *dirent) {
-    mr_dentry_t *child;
-    mr_size_t idx;
-
-    /* Get child dentry */
-    idx = (mr_size_t)file->pos;
-    child = mr_dentry_child_get(file->dentry, idx);
-    if (!child) {
-        return 0;
-    }
-
-    /* Read directory entry */
-    mr_strncpy(dirent->name, MR_DENTRY_NAME(child), MR_CFG_FS_PATH_LEN - 1);
-    dirent->name[MR_CFG_FS_PATH_LEN - 1] = '\0';
-    dirent->type = child->inode ? child->inode->type : MR_INODE_NONE;
-    mr_dentry_put(child);
-
-    /* Update position */
-    file->pos = (mr_int64_t)(idx + 1);
-    return 1;
 }
 
 static mr_err_t ramfs_mount(mr_super_block_t *sb, const char *source, int flags,

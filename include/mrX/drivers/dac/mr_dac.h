@@ -25,8 +25,8 @@ extern "C" {
 
 #if defined(MR_USE_DRIVER_DAC)
 /* DAC wait event type definition */
-#define MR_DAC_WAIT_STREAM_HALF         (MR_WAIT_IN | (1U << 0))
-#define MR_DAC_WAIT_STREAM_FULL         (MR_WAIT_IN | (1U << 1))
+#define MR_DAC_WAIT_STREAM_HALF         (1U << 0)
+#define MR_DAC_WAIT_STREAM_FULL         (1U << 1)
 
 /* DAC reference definition */
 typedef enum mr_dac_ref {

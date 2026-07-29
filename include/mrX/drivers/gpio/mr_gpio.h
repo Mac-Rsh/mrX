@@ -25,7 +25,7 @@ extern "C" {
 
 #if defined(MR_USE_DRIVER_GPIO)
 /* GPIO wait event definition */
-#define MR_GPIO_WAIT_EXTI               (MR_WAIT_IN | (1U << 0))
+#define MR_GPIO_WAIT_EXTI               (1U << 0)
 
 /* GPIO mode definition */
 typedef enum mr_gpio_mode {

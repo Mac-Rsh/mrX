@@ -70,7 +70,7 @@ static void test_clock_uptime(void) {
     mr_clock_increase(MR_CFG_TICK_PER_SECOND);
     uptime = mr_clock_uptime();
 
-    MR_TEST_ASSERT_GE_UINT(uptime - base, 1000);
+    MR_TEST_ASSERT_EQ_UINT(uptime - base, 1000);
 }
 MR_TEST_EXPORT(clock, uptime, test_clock_uptime);
 
@@ -81,6 +81,24 @@ static void test_clock_busy_wait(void) {
 MR_TEST_EXPORT(clock, busy_wait, test_clock_busy_wait);
 
 #if defined(MR_USE_CLOCK_HIRES)
+static void test_clock_hires_tick2timestamp_frequency(void) {
+    mr_hires_timestamp_t timestamp;
+
+    timestamp = mr_clock_hires_tick2timestamp(
+        MR_CFG_HIRES_TICK_PER_SECOND, 0);
+
+    MR_TEST_ASSERT_EQ_INT(timestamp.year, 1970);
+    MR_TEST_ASSERT_EQ_INT(timestamp.month, 1);
+    MR_TEST_ASSERT_EQ_INT(timestamp.day, 1);
+    MR_TEST_ASSERT_EQ_INT(timestamp.hour, 0);
+    MR_TEST_ASSERT_EQ_INT(timestamp.minute, 0);
+    MR_TEST_ASSERT_EQ_INT(timestamp.second, 1);
+    MR_TEST_ASSERT_EQ_INT(timestamp.millisecond, 0);
+    MR_TEST_ASSERT_EQ_INT(timestamp.microsecond, 0);
+}
+MR_TEST_EXPORT(clock, hires_tick2timestamp_frequency,
+               test_clock_hires_tick2timestamp_frequency);
+
 static void test_clock_hires_tick2timestamp(void) {
     const mr_hires_tick_t test_tick = 1725580800000000ULL;
     mr_hires_timestamp_t timestamp;

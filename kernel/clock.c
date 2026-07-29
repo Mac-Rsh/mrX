@@ -90,6 +90,21 @@ mr_err_t mr_clock_hook_add(mr_clock_hook_t *entry) {
     return mr_hook_add(&__clock_hook, entry);
 }
 
+static mr_uint64_t clock_scale_floor(mr_uint64_t tick, mr_uint32_t scale,
+                                     mr_uint32_t frequency) {
+    mr_uint64_t fraction, quotient;
+
+    /* Split before multiplication */
+    fraction = ((tick % frequency) * scale) / frequency;
+    quotient = tick / frequency;
+
+    /* Saturate the result */
+    if (quotient > ((MR_UINT64_MAX - fraction) / scale)) {
+        return MR_UINT64_MAX;
+    }
+    return quotient * scale + fraction;
+}
+
 #if defined(MR_USE_CLOCK_HIRES)
 void mr_clock_hires_tick_set(mr_hires_tick_t tick) {
     /* Set clock high resolution tick */
@@ -103,8 +118,6 @@ mr_hires_tick_t mr_clock_hires_tick(void) {
 
 mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
                                              int time_zone) {
-    const mr_uint64_t tick_correct
-        = MR_ROUND_DIV(1000000ULL, MR_CFG_HIRES_TICK_PER_SECOND);
     const mr_uint8_t day_of_month_comm[]
         = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     const mr_uint8_t day_of_month_leap[]
@@ -119,8 +132,8 @@ mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
     time_zone = time_zone <= 12 ? time_zone : 12;
     time_zone = time_zone >= -12 ? time_zone : -12;
 
-    /* Correct to the microsecond */
-    tick *= tick_correct;
+    /* Convert high resolution ticks to microseconds */
+    tick = clock_scale_floor(tick, 1000000U, MR_CFG_HIRES_TICK_PER_SECOND);
 
     /* Time zone(UTC + n) */
     zone_offset = (mr_int64_t)time_zone * 3600000000LL;
@@ -170,8 +183,6 @@ mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
 #endif /* defined(MR_USE_CLOCK_HIRES) */
 
 mr_uptime_t mr_clock_uptime(void) {
-    const mr_uint64_t time_correct
-        = MR_ROUND_DIV(1000ULL, MR_CFG_TICK_PER_SECOND);
     mr_tick_t gen, gen2, coarse;
     mr_uint64_t tick;
     mr_tick_t thin;
@@ -195,7 +206,8 @@ mr_uptime_t mr_clock_uptime(void) {
 
     /* Combine 32-bit coarse and thin ticks */
     tick = ((mr_uint64_t)coarse * ((mr_uint64_t)MR_TICK_MAX + 1ULL)) + thin;
-    return (mr_uptime_t)(tick * time_correct);
+    /* Convert elapsed ticks to milliseconds */
+    return (mr_uptime_t)clock_scale_floor(tick, 1000U, MR_CFG_TICK_PER_SECOND);
 }
 
 void mr_clock_busy_wait(mr_uint32_t us) {

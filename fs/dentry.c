@@ -39,32 +39,29 @@ typedef struct dentry_move {
 #define LWORD_DOT2                      (0x2e2e)
 #define LWORD_DOT                       (0x2e)
 
-static mr_uint32_t dentry_default_hash(const char *str, mr_uint32_t len) {
-    mr_uint32_t hash = MR_DENTRY_HASH_SEED;
-    mr_uint32_t i;
-
-    /* Default djb2-xor hash */
-    for (i = 0; i < len; i++) {
-        hash = ((hash << 5) + hash) ^ ((mr_uint8_t)str[i]);
-    }
-    return hash;
-}
-
 static const char *dentry_name_hash(mr_dentry_name_t *name, const char *str,
                                     const mr_dentry_ops_t *ops,
                                     mr_uint32_t *lword) {
+    mr_uint32_t hash;
+    mr_uint8_t ch;
+
     /* Scan name up to the next '/' or end, computing the last-word for
      * recognizing '.' and '..' */
-    for (name->str = str, *lword = 0; (*str != '\0') && (*str != '/'); str++) {
-        *lword = (*lword << 8) + ((mr_uint8_t)(*str));
+    for (name->str = str, hash = MR_DENTRY_HASH_SEED, *lword = 0;
+         (*str != '\0') && (*str != '/'); str++) {
+        ch = (mr_uint8_t)(*str);
+        *lword = (*lword << 8) + ch;
+
+        /* Default djb2-xor hash */
+        hash = ((hash << 5) + hash) ^ ch;
     }
     name->len = (mr_uint32_t)(str - name->str);
 
     /* Use ops->hash if provided, otherwise the default */
-    if ((!ops) || (!ops->hash)) {
-        name->hash = dentry_default_hash(name->str, name->len);
-    } else {
+    if (ops && ops->hash) {
         name->hash = ops->hash(name->str, name->len);
+    } else {
+        name->hash = hash;
     }
     return str;
 }
@@ -126,12 +123,11 @@ static mr_err_t dentry_name_alloc(mr_dentry_t *dentry, const char *name,
 
     /* Name must be a single component. "/" is allowed as the sole name of
      * the VFS root dentry */
-    if (mr_strchr(name, '/') && (!((name[0] == '/') && (name[1] == '\0')))) {
-        return -MR_EINVAL;
+    for (len = 0; name[len] != '\0'; len++) {
+        if ((name[len] == '/') && ((len != 0) || (name[len + 1] != '\0'))) {
+            return -MR_EINVAL;
+        }
     }
-
-    /* Get name length */
-    len = mr_strlen(name);
 
     /* Allocate name */
     s = str_alloc((mr_uint32_t)len, dentry->iname, sizeof(dentry->iname));
@@ -188,22 +184,28 @@ _exit:
     return ret;
 }
 
-mr_err_t mr_dentry_vinit(mr_dentry_t *dentry, const mr_dentry_ops_t *ops,
-                         const char *fmt, mr_va_list args) {
+mr_err_t mr_dentry_init(mr_dentry_t *dentry, const mr_dentry_ops_t *ops,
+                        const char *fmt, ...) {
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(dentry);
+    mr_va_list args;
+    mr_err_t ret;
 
     /* Check parameter */
     MR_ASSERT(dentry != MR_NULL);
     MR_ASSERT((fmt != MR_NULL) && (fmt[0] != '\0'));
 
     /* Init dentry */
-    return dentry_init(dentry, clazz, ops, fmt, args);
+    mr_va_start(args, fmt);
+    ret = dentry_init(dentry, clazz, ops, fmt, args);
+    mr_va_end(args);
+    return ret;
 }
 
-mr_dentry_t *mr_dentry_vcreate(const mr_dentry_ops_t *ops, const char *fmt,
-                               mr_va_list args) {
+mr_dentry_t *mr_dentry_create(const mr_dentry_ops_t *ops, const char *fmt,
+                              ...) {
     const mr_clazz_t *clazz = MR_CLAZZES_DYNAMIC(dentry);
     mr_dentry_t *dentry;
+    mr_va_list args;
     mr_err_t ret;
 
     /* Check parameter */
@@ -216,42 +218,13 @@ mr_dentry_t *mr_dentry_vcreate(const mr_dentry_ops_t *ops, const char *fmt,
     }
 
     /* Init dentry */
+    mr_va_start(args, fmt);
     ret = dentry_init(dentry, clazz, ops, fmt, args);
+    mr_va_end(args);
     if (ret != 0) {
         mr_free(dentry);
         return MR_NULL;
     }
-    return dentry;
-}
-
-mr_err_t mr_dentry_init(mr_dentry_t *dentry, const mr_dentry_ops_t *ops,
-                        const char *fmt, ...) {
-    mr_va_list args;
-    mr_err_t ret;
-
-    /* Check parameter */
-    MR_ASSERT(dentry != MR_NULL);
-    MR_ASSERT((fmt != MR_NULL) && (fmt[0] != '\0'));
-
-    /* Init dentry */
-    mr_va_start(args, fmt);
-    ret = mr_dentry_vinit(dentry, ops, fmt, args);
-    mr_va_end(args);
-    return ret;
-}
-
-mr_dentry_t *mr_dentry_create(const mr_dentry_ops_t *ops, const char *fmt,
-                              ...) {
-    mr_dentry_t *dentry;
-    mr_va_list args;
-
-    /* Check parameter */
-    MR_ASSERT((fmt != MR_NULL) && (fmt[0] != '\0'));
-
-    /* Create dentry */
-    mr_va_start(args, fmt);
-    dentry = mr_dentry_vcreate(ops, fmt, args);
-    mr_va_end(args);
     return dentry;
 }
 
@@ -672,7 +645,7 @@ mr_bool_t mr_dentry_is_empty(mr_dentry_t *dentry) {
 }
 
 static mr_dentry_t *dentry_path_lookup(mr_dentry_t **last, const char **path,
-                                       mr_dentry_t *limit) {
+                                       mr_dentry_t *limit, mr_uint32_t *miss) {
     mr_dentry_name_t name;
     mr_dentry_t *dentry;
     mr_uint32_t lword;
@@ -712,6 +685,7 @@ static mr_dentry_t *dentry_path_lookup(mr_dentry_t **last, const char **path,
                 dentry = dentry_lookup(*last, &name);
                 if (!dentry) {
                     /* Not found */
+                    *miss = name.len;
                     return MR_NULL;
                 }
                 break;
@@ -815,14 +789,15 @@ _exit:
     return child;
 }
 
-mr_dentry_t *mr_dentry_vlookup(mr_dentry_t *start, mr_dentry_t *limit,
-                               const char *fmt, mr_va_list args) {
+mr_dentry_t *mr_dentry_lookup(mr_dentry_t *start, mr_dentry_t *limit,
+                              const char *fmt, ...) {
     mr_dentry_t *orig_start, *result, *cur, *parent, *held;
     char istr[MR_CFG_FS_DENTRY_NAME_LEN * 2];
     const char *path, *orig_path;
     int attempt, mask;
     mr_inode_t *inode;
     mr_uint32_t len;
+    mr_va_list args;
     mr_err_t ret;
 
     /* Check parameter */
@@ -833,7 +808,9 @@ mr_dentry_t *mr_dentry_vlookup(mr_dentry_t *start, mr_dentry_t *limit,
     MR_ASSERT((fmt != MR_NULL) && (fmt[0] != '\0'));
 
     /* Allocate the path string */
+    mr_va_start(args, fmt);
     ret = str_varg_alloc(fmt, args, &path, istr, sizeof(istr));
+    mr_va_end(args);
     if (ret != 0) {
         return MR_NULL;
     }
@@ -857,7 +834,7 @@ mr_dentry_t *mr_dentry_vlookup(mr_dentry_t *start, mr_dentry_t *limit,
 
             /* Resolve the cached prefix under the lock. On a full hit, take a
              * reference before unlocking so the entry cannot vanish */
-            result = dentry_path_lookup(&cur, &path, limit);
+            result = dentry_path_lookup(&cur, &path, limit, &len);
             if (result) {
                 /* Get dentry */
                 result = mr_dentry_get(result);
@@ -870,8 +847,6 @@ mr_dentry_t *mr_dentry_vlookup(mr_dentry_t *start, mr_dentry_t *limit,
             /* Miss: 'cur' is the deepest cached parent, 'path' the unresolved
              * component. Snapshot a parent reference and component bounds, then
              * unlock so the (sleepable) FS hook can run */
-            for (len = 0; (path[len] != '\0') && (path[len] != '/'); len++) {
-            }
             parent = mr_dentry_get(cur);
 
             /* Unlock */
@@ -955,14 +930,15 @@ mr_dentry_t *mr_dentry_vlookup(mr_dentry_t *start, mr_dentry_t *limit,
 
 static mr_dentry_t *dentry_path_mkpath(mr_dentry_t *start, mr_dentry_t *limit,
                                        char *path) {
+    mr_uint32_t len, lword;
     mr_dentry_name_t name;
     const char *next_path;
     mr_dentry_t *dentry;
-    mr_uint32_t lword;
 
     do {
         /* Lookup existing prefix (as deep as possible) */
-        dentry = dentry_path_lookup(&start, (const char **)&path, limit);
+        dentry = dentry_path_lookup(&start, (const char **)&path, limit, &len);
+        MR_IGNORE(len);
         if (dentry) {
             /* Entire path already exists */
             return dentry;
@@ -993,11 +969,12 @@ static mr_dentry_t *dentry_path_mkpath(mr_dentry_t *start, mr_dentry_t *limit,
     return dentry;
 }
 
-mr_dentry_t *mr_dentry_vmkpath(mr_dentry_t *start, mr_dentry_t *limit,
-                               const char *fmt, mr_va_list args) {
+mr_dentry_t *mr_dentry_mkpath(mr_dentry_t *start, mr_dentry_t *limit,
+                              const char *fmt, ...) {
     char istr[MR_CFG_FS_DENTRY_NAME_LEN * 2];
     mr_dentry_t *dentry;
     const char *path;
+    mr_va_list args;
     mr_err_t ret;
     int mask;
 
@@ -1009,7 +986,9 @@ mr_dentry_t *mr_dentry_vmkpath(mr_dentry_t *start, mr_dentry_t *limit,
     }
 
     /* Allocate path string */
+    mr_va_start(args, fmt);
     ret = str_varg_alloc(fmt, args, &path, istr, sizeof(istr));
+    mr_va_end(args);
     if (ret != 0) {
         return MR_NULL;
     }
@@ -1030,30 +1009,6 @@ mr_dentry_t *mr_dentry_vmkpath(mr_dentry_t *start, mr_dentry_t *limit,
 
     /* Free path */
     str_free(path, istr);
-    return dentry;
-}
-
-mr_dentry_t *mr_dentry_lookup(mr_dentry_t *start, mr_dentry_t *limit,
-                              const char *fmt, ...) {
-    mr_dentry_t *dentry;
-    mr_va_list args;
-
-    /* Lookup dentry */
-    mr_va_start(args, fmt);
-    dentry = mr_dentry_vlookup(start, limit, fmt, args);
-    mr_va_end(args);
-    return dentry;
-}
-
-mr_dentry_t *mr_dentry_mkpath(mr_dentry_t *start, mr_dentry_t *limit,
-                              const char *fmt, ...) {
-    mr_dentry_t *dentry;
-    mr_va_list args;
-
-    /* Make dentry path */
-    mr_va_start(args, fmt);
-    dentry = mr_dentry_vmkpath(start, limit, fmt, args);
-    mr_va_end(args);
     return dentry;
 }
 

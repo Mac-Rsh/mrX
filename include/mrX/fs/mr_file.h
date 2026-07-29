@@ -58,30 +58,6 @@ typedef struct mr_fs_struct {
 } mr_fs_struct_t;
 
 /**
- * @brief This function mounts a file-system at a path.
- *
- * @param source The mount source.
- * @param path The mount-point path.
- * @param fstype The file-system name(must be registered).
- * @param flags The mount flags.
- * @param data The mount private data(passed to the fs mount callback).
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
-                     int flags, void *data);
-
-/**
- * @brief This function unmounts the file-system at a path.
- *
- * @param path The mount-point path.
- * @return 0 on success, a negative error code on failure.
- *
- * @note A mount containing child mounts is not recursively unmounted and
- * returns -MR_EBUSY. Unmount child mounts first.
- */
-mr_err_t mr_fs_umount(const char *path);
-
-/**
  * @brief This macro function initializes a file.
  *
  * @param _file The file to initialize.
@@ -117,6 +93,51 @@ MR_INLINE void mr_file_init(mr_file_t *file) {
 }
 
 /**
+ * @brief This function mounts a file-system at a path.
+ *
+ * @param source The mount source.
+ * @param path The mount-point path.
+ * @param fstype The file-system name(must be registered).
+ * @param flags The mount flags.
+ * @param data The mount private data(passed to the fs mount callback).
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
+                     int flags, void *data);
+
+/**
+ * @brief This function unmounts the file-system at a path.
+ *
+ * @param path The mount-point path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note A mount containing child mounts is not recursively unmounted and
+ * returns -MR_EBUSY. Unmount child mounts first.
+ */
+mr_err_t mr_fs_umount(const char *path);
+
+/**
+ * @brief This function creates a directory at the given path.
+ *
+ * @param path The directory path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The parent must already exist(-MR_ENOENT).
+ * @note An existing leaf is rejected with -MR_EEXIST.
+ */
+mr_err_t mr_fs_mkdir(const char *path);
+
+/**
+ * @brief This function creates a file-system-specific node.
+ *
+ * @param path The node path.
+ * @param type The inode type.
+ * @param priv The private data passed to the parent mknod callback.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_mknod(const char *path, mr_inode_type_t type, void *priv);
+
+/**
  * @brief This function opens a file by path.
  *
  * @param file The file.
@@ -129,6 +150,24 @@ MR_INLINE void mr_file_init(mr_file_t *file) {
  * without reinitializing it.
  */
 mr_err_t mr_fs_open(mr_file_t *file, const char *path, int flags);
+
+/**
+ * @brief This function opens a file relative to a directory handle.
+ *
+ * @param file The file to open.
+ * @param dir The base directory for a relative path. It is ignored for an
+ * absolute path and may be MR_NULL in that case.
+ * @param path The file path.
+ * @param flags The open flags(see MR_O_*).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note For a relative path, dir must be an open directory handle.
+ * @note An absolute path starts at the current FS root and ignores dir.
+ * @note The file must be initialized with MR_FILE_INIT(file), mr_file_init(),
+ * or all-zero storage before its first use.
+ */
+mr_err_t mr_fs_openat(mr_file_t *file, const mr_file_t *dir, const char *path,
+                      int flags);
 
 /**
  * @brief This function closes a file.
@@ -150,14 +189,6 @@ mr_err_t mr_fs_close(mr_file_t *file);
 mr_err_t mr_fs_opendir(mr_file_t *file, const char *path);
 
 /**
- * @brief This function closes a directory handle.
- *
- * @param file The file.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_fs_closedir(mr_file_t *file);
-
-/**
  * @brief This function reads the next directory entry.
  *
  * @param file The directory(must be open).
@@ -168,41 +199,29 @@ mr_err_t mr_fs_closedir(mr_file_t *file);
 mr_err_t mr_fs_readdir(mr_file_t *file, mr_dirent_t *dirent);
 
 /**
- * @brief This function gets file status by path.
+ * @brief This function closes a directory handle.
  *
- * @param path The file path.
+ * @param file The file.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_closedir(mr_file_t *file);
+
+/**
+ * @brief This function gets the status of an open file.
+ *
+ * @param file The file(must be open).
  * @param stat The file status to fill.
  * @return 0 on success, a negative error code on failure.
  *
+ * @note The status remains available after the file has been unlinked.
  * @note A file-system stat hook may override the generic fields.
  */
-mr_err_t mr_fs_stat(const char *path, mr_stat_t *stat);
+mr_err_t mr_fs_stat(const mr_file_t *file, mr_stat_t *stat);
 
 /**
- * @brief This function creates a file-system-specific node.
+ * @brief This function renames the current name of an open file.
  *
- * @param path The node path.
- * @param type The inode type.
- * @param priv The private data passed to the parent mknod callback.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_fs_mknod(const char *path, mr_inode_type_t type, void *priv);
-
-/**
- * @brief This function removes a file-system node by path.
- *
- * @param path The file path.
- * @return 0 on success, a negative error code on failure.
- *
- * @note A non-empty directory is rejected with -MR_ENOTEMPTY.
- * @note A mount-point directory can not be removed(-MR_EBUSY).
- */
-mr_err_t mr_fs_unlink(const char *path);
-
-/**
- * @brief This function renames a file-system node.
- *
- * @param old_path The current path.
+ * @param file The file(must be open).
  * @param new_path The new path.
  * @return 0 on success, a negative error code on failure.
  *
@@ -210,18 +229,19 @@ mr_err_t mr_fs_unlink(const char *path);
  * @note A cross-file-system rename is rejected with -MR_EXDEV.
  * @note A mount-point directory can not be renamed(-MR_EBUSY).
  */
-mr_err_t mr_fs_rename(const char *old_path, const char *new_path);
+mr_err_t mr_fs_rename(mr_file_t *file, const char *new_path);
 
 /**
- * @brief This function creates a directory at the given path.
+ * @brief This function unlinks the current name of an open file.
  *
- * @param path The directory path.
+ * @param file The file(must be open).
  * @return 0 on success, a negative error code on failure.
  *
- * @note The parent must already exist(-MR_ENOENT).
- * @note An existing leaf is rejected with -MR_EEXIST.
+ * @note The file remains open after its name is removed.
+ * @note A non-empty directory is rejected with -MR_ENOTEMPTY.
+ * @note A mount-point directory can not be removed(-MR_EBUSY).
  */
-mr_err_t mr_fs_mkdir(const char *path);
+mr_err_t mr_fs_unlink(mr_file_t *file);
 
 /**
  * @brief This function reads from a file.
@@ -270,23 +290,14 @@ mr_int64_t mr_fs_seek(mr_file_t *file, mr_int64_t offset, int whence);
 mr_int64_t mr_fs_tell(mr_file_t *file);
 
 /**
- * @brief This function performs an I/O control on a file.
- *
- * @param file The file.
- * @param cmd The command.
- * @param arg The argument.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_fs_ioctl(mr_file_t *file, int cmd, void *arg);
-
-/**
  * @brief This function truncates a file to the given length.
  *
  * @param file The file(must be open for writing).
  * @param length The new length.
  * @return 0 on success, a negative error code on failure.
  *
- * @note Only regular files may be truncated(-MR_EISDIR).
+ * @note Directories are rejected with -MR_EISDIR. Other non-regular files are
+ * rejected with -MR_EINVAL.
  */
 mr_err_t mr_fs_truncate(mr_file_t *file, mr_int64_t length);
 
@@ -299,6 +310,16 @@ mr_err_t mr_fs_truncate(mr_file_t *file, mr_int64_t length);
  * @note Returns -MR_ENOSYS if no sync hook is provided.
  */
 mr_err_t mr_fs_sync(mr_file_t *file);
+
+/**
+ * @brief This function performs an I/O control on a file.
+ *
+ * @param file The file.
+ * @param cmd The command.
+ * @param arg The argument.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_ioctl(mr_file_t *file, int cmd, void *arg);
 
 /**
  * @brief This function initializes a FS structure with the built-in
@@ -323,8 +344,8 @@ mr_fs_struct_t *mr_fs_current(void);
  * @return 0 on success, a negative error code on failure.
  *
  * @note The current working directory is retained when it is contained by the
- * new root. Otherwise, it is reset to the new root so relative paths cannot
- * escape the new root.
+ * new root. Otherwise, it is reset to the new root so cwd-relative paths
+ * cannot escape the new root. Pre-opened directory handles are unaffected.
  */
 mr_err_t mr_fs_chroot(const char *path);
 
