@@ -241,6 +241,10 @@ char *mr_strerror(int errnum) {
             error = "Connection timed out";
             break;
         }
+        case MR_ELOOP: {
+            error = "Too many levels of symbolic links";
+            break;
+        }
         default: {
             error = "Unknown error";
         }

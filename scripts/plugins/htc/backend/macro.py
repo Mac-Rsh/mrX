@@ -304,7 +304,7 @@ class MacroBuilder:
     @classmethod
     def _normalize_path(cls, path: str) -> str:
         """Normalize a canonical path into macro-safe text."""
-        return path.replace("/", "_S_").replace("@", "_A_").replace("-", "_")
+        return path.replace("/", "_S_").replace("-", "_")
 
     @staticmethod
     def _escape_c_string(value: str) -> str:

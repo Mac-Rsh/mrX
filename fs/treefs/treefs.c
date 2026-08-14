@@ -27,7 +27,7 @@ static const mr_inode_ops_t __treefs_inodes = {
 static mr_err_t treefs_mount(mr_super_block_t *sb, const char *source,
                              int flags, void *data);
 static mr_file_system_t __treefs
-    = MR_FILE_SYSTEM_INIT(FS_NAME, treefs_mount, MR_NULL);
+    = MR_FILE_SYSTEM_INIT(FS_NAME, treefs_mount, MR_NULL, MR_NULL);
 
 static mr_err_t treefs_inode_alloc(mr_inode_type_t type, void *priv,
                                    mr_inode_t **out) {

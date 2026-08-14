@@ -17,7 +17,8 @@
 /* RamFS inode operations */
 static mr_err_t ramfs_inode_create(mr_inode_t *dir, const char *name,
                                    mr_inode_type_t type, mr_inode_t **out);
-static mr_err_t ramfs_inode_truncate(mr_inode_t *inode, mr_int64_t length);
+static mr_err_t ramfs_inode_truncate(mr_inode_t *inode, mr_file_t *file,
+                                     mr_int64_t length);
 static void ramfs_inode_destroy(mr_inode_t *inode);
 static const mr_inode_ops_t __ramfs_inodes = {
     .create = ramfs_inode_create,
@@ -38,7 +39,7 @@ static const mr_file_ops_t __ramfs_files = {
 static mr_err_t ramfs_mount(mr_super_block_t *sb, const char *source, int flags,
                             void *data);
 static mr_file_system_t __ramfs
-    = MR_FILE_SYSTEM_INIT(FS_NAME, ramfs_mount, MR_NULL);
+    = MR_FILE_SYSTEM_INIT(FS_NAME, ramfs_mount, MR_NULL, MR_NULL);
 
 /* RamFS node type */
 typedef struct ramfs_node {
@@ -78,8 +79,9 @@ _exit:
     return ret;
 }
 
-static mr_err_t ramfs_inode_truncate(mr_inode_t *inode, mr_int64_t length) {
-    ramfs_node_t *node = inode->priv;
+static mr_err_t ramfs_inode_truncate(mr_inode_t *inode, mr_file_t *file,
+                                     mr_int64_t length) {
+    ramfs_node_t *node = file->inode->priv;
     mr_uint8_t *data;
 
     /* Check parameter */

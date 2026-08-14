@@ -18,11 +18,9 @@ config MR_USE_FS_MULTIUSER
     bool "Use multi-user"
     default n
     help
-        Provide per-caller FS contexts(root/cwd) instead of a single
-        global one. When enabled, the built-in mr_fs_current() is not
-        compiled and the platform must supply it so each task/user owns
-        an independent mr_fs_struct_t. When disabled, the library exposes
-        a single shared mr_fs_current() for single-user use.
+        Provide a file-system namespace(root/cwd) for each caller instead of
+        using one global namespace. When enabled, the platform must provide
+        mr_fs_nsp_current() and return the namespace owned by the current task.
 
 config MR_CFG_FS_PATH_LEN
     depends on MR_USE_FS
@@ -45,6 +43,15 @@ config MR_CFG_FS_DENTRY_NAME_LEN
         shorter than this length are stored directly in the dentry object,
         avoiding dynamic memory allocation. Increase this value to reduce heap
         usage when short names are common.
+
+config MR_CFG_FS_SYMLINK_MAX
+    depends on MR_USE_FS
+    int "Symbolic link depth"
+    default 16
+    range 1 255
+    help
+        Maximum number of symbolic links followed during a single path
+        lookup. Exceeding this limit makes path resolution return -MR_ELOOP.
 
 # ==================================
 # RSOURCE

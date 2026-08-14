@@ -35,6 +35,7 @@ extern "C" {
 #define MR_O_TRUNC                      (0x0400)
 #define MR_O_APPEND                     (0x0800)
 #define MR_O_DIRECTORY                  (0x1000)
+#define MR_O_NOFOLLOW                   (0x2000)
 
 /* File seek whence */
 #define MR_SEEK_SET                     (0)
@@ -50,12 +51,6 @@ typedef struct mr_file {
     int flags;
     void *priv;
 } mr_file_t;
-
-/* File-system structure type */
-typedef struct mr_fs_struct {
-    mr_dentry_t *root;
-    mr_dentry_t *cwd;
-} mr_fs_struct_t;
 
 /**
  * @brief This macro function initializes a file.
@@ -101,6 +96,8 @@ MR_INLINE void mr_file_init(mr_file_t *file) {
  * @param flags The mount flags.
  * @param data The mount private data(passed to the fs mount callback).
  * @return 0 on success, a negative error code on failure.
+ *
+ * @note A non-root mount-point must already exist and be a directory.
  */
 mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
                      int flags, void *data);
@@ -219,6 +216,54 @@ mr_err_t mr_fs_closedir(mr_file_t *file);
 mr_err_t mr_fs_stat(const mr_file_t *file, mr_stat_t *stat);
 
 /**
+ * @brief This function gets file status by path.
+ *
+ * @param path The file path.
+ * @param stat The file status to fill.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The final symbolic link is followed.
+ */
+mr_err_t mr_fs_stat_by_path(const char *path, mr_stat_t *stat);
+
+/**
+ * @brief This function creates a hard link to an open file.
+ *
+ * @param file The source file(must be open).
+ * @param new_path The new link path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note Directory hard links are rejected with -MR_EPERM.
+ * @note A cross-file-system link is rejected with -MR_EXDEV.
+ * @note A missing link callback uses the built-in namespace-only behavior.
+ */
+mr_err_t mr_fs_link(const mr_file_t *file, const char *new_path);
+
+/**
+ * @brief This function creates a symbolic link.
+ *
+ * @param target The target path stored in the link.
+ * @param link_path The symbolic link path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note A missing symlink callback creates an in-memory target with built-in
+ * readlink support.
+ */
+mr_err_t mr_fs_symlink(const char *target, const char *link_path);
+
+/**
+ * @brief This function reads an opened symbolic link.
+ *
+ * @param file The symbolic link opened with MR_O_NOFOLLOW.
+ * @param buf The target path buffer.
+ * @param size The buffer size.
+ * @return The target length on success, a negative error code on failure.
+ *
+ * @note The returned target is not null-terminated.
+ */
+mr_ssize_t mr_fs_readlink(const mr_file_t *file, char *buf, mr_size_t size);
+
+/**
  * @brief This function renames the current name of an open file.
  *
  * @param file The file(must be open).
@@ -232,6 +277,15 @@ mr_err_t mr_fs_stat(const mr_file_t *file, mr_stat_t *stat);
 mr_err_t mr_fs_rename(mr_file_t *file, const char *new_path);
 
 /**
+ * @brief This function renames a file by path.
+ *
+ * @param old_path The current file path.
+ * @param new_path The new file path.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_rename_by_path(const char *old_path, const char *new_path);
+
+/**
  * @brief This function unlinks the current name of an open file.
  *
  * @param file The file(must be open).
@@ -242,6 +296,14 @@ mr_err_t mr_fs_rename(mr_file_t *file, const char *new_path);
  * @note A mount-point directory can not be removed(-MR_EBUSY).
  */
 mr_err_t mr_fs_unlink(mr_file_t *file);
+
+/**
+ * @brief This function unlinks a file by path.
+ *
+ * @param path The file path.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_unlink_by_path(const char *path);
 
 /**
  * @brief This function reads from a file.
@@ -322,22 +384,6 @@ mr_err_t mr_fs_sync(mr_file_t *file);
 mr_err_t mr_fs_ioctl(mr_file_t *file, int cmd, void *arg);
 
 /**
- * @brief This function initializes a FS structure with the built-in
- * default(root = cwd = the global root).
- *
- * @param fs_struct The FS structure.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_fs_struct_init(mr_fs_struct_t *fs_struct);
-
-/**
- * @brief This function gets the current FS context.
- *
- * @return The current FS context.
- */
-mr_fs_struct_t *mr_fs_current(void);
-
-/**
  * @brief This function changes the root directory of the current context.
  *
  * @param path The new root path(resolved relative to the current context).
@@ -364,9 +410,6 @@ mr_err_t mr_fs_chdir(const char *path);
  * @param buf The buffer to hold the path.
  * @param size The buffer size.
  * @return The path length on success, a negative error code on failure.
- *
- * @note The caller must serialize changes to the current FS context and
- * namespace for the full duration of this call.
  */
 mr_ssize_t mr_fs_getcwd(char *buf, mr_size_t size);
 #endif /* defined(MR_USE_FS) */

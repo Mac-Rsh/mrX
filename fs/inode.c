@@ -74,15 +74,6 @@ mr_inode_t *mr_inode_create(mr_inode_type_t type, const mr_inode_ops_t *i_op,
     return inode;
 }
 
-mr_err_t mr_inode_del(mr_inode_t *inode) {
-    /* Check parameter */
-    MR_ASSERT((inode != MR_NULL) && MR_OBJECT_IS_INITED(inode));
-
-    /* Delete object */
-    mr_object_del((mr_object_t *)inode);
-    return 0;
-}
-
 static mr_inode_t *inode_obj_release(mr_object_t *obj) {
     mr_inode_t *inode;
 

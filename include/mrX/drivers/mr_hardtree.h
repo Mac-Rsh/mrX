@@ -9,8 +9,11 @@
 #ifndef __MR_DRIVER_HARDTREE_H__
 #define __MR_DRIVER_HARDTREE_H__
 
+#include <mrX/mr_config.h>
+#if defined(MR_USE_DRIVER)
 #include <mrX/kernel/mr_listify.h>
 #include <mrX/mr_hardgen.h>
+#endif /* defined(MR_USE_DRIVER) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,6 +24,7 @@ extern "C" {
  * @{
  */
 
+#if defined(MR_USE_DRIVER)
 /* The implementation mechanism of HT is based on 'zephyr' */
 
 /**
@@ -247,6 +251,7 @@ extern "C" {
  * @return The node address.
  */
 #define MR_HT_NODE_ADDR(_node)          MR_HT_NODE_PROP(_node, ADDR)
+#endif /* defined(MR_USE_DRIVER) */
 
 /** @} */
 

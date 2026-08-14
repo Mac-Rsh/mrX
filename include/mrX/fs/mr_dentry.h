@@ -39,9 +39,6 @@ typedef struct mr_dentry_name {
 typedef struct mr_dentry_ops {
     mr_uint32_t (*hash)(const char *name, mr_uint32_t len);
     mr_bool_t (*compare)(const char *a, const char *b, mr_uint32_t len);
-    mr_bool_t (*revalidate)(struct mr_dentry *dentry);
-    void (*release)(struct mr_dentry *dentry);
-    void (*iput)(struct mr_dentry *dentry, struct mr_inode *inode);
 } mr_dentry_ops_t;
 
 /* Dentry type */
@@ -53,10 +50,12 @@ typedef struct mr_dentry {
 #endif /* defined(MR_CFG_FS_DENTRY_NAME_LEN) */
     char iname[MR_CFG_FS_DENTRY_NAME_LEN];
     mr_dentry_name_t name;
+    struct mr_dentry *mounted;
     struct mr_dentry *upper;
     mr_list_t sibling, lower;
     const mr_dentry_ops_t *ops;
     struct mr_inode *inode;
+    mr_uint8_t state;
 } mr_dentry_t;
 
 /* Default hash seed for the djb2-xor hash used by dentry names */
@@ -67,7 +66,7 @@ typedef struct mr_dentry {
  *
  * @param _dentry The root dentry.
  *
- * @note This macro is only applicable to the VFS root dentry(name "/").
+ * @note This macro is only applicable to the FS root dentry(name "/").
  */
 #define MR_DENTRY_ROOT_INIT(_dentry)                                           \
     {                                                                          \
@@ -76,11 +75,13 @@ typedef struct mr_dentry {
         .name.str = (_dentry)->iname,                                          \
         .name.hash = MR_DENTRY_HASH_SEED,                                      \
         .name.len = 0,                                                         \
+        .mounted = MR_NULL,                                                    \
         .upper = MR_NULL,                                                      \
         .sibling = MR_LIST_INIT(&(_dentry)->sibling),                          \
         .lower = MR_LIST_INIT(&(_dentry)->lower),                              \
         .ops = MR_NULL,                                                        \
         .inode = MR_NULL,                                                      \
+        .state = 0,                                                            \
     }
 
 /**
@@ -147,12 +148,13 @@ mr_err_t mr_dentry_remove(mr_dentry_t *dentry);
  * @param name The new single-component name(no '/').
  * @return 0 on success, a negative error code on failure.
  *
- * @note The dentry must not be moved into itself or its own subtree(-MR_EINVAL).
+ * @note The dentry must not be moved into itself or its own
+ * subtree(-MR_EINVAL).
  * @note A name already in use under the new parent is rejected(-MR_EEXIST).
  * @note This function does not rename the backing filesystem node.
  */
 mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
-                         const char *name);
+                        const char *name);
 
 /**
  * @brief This function renames a filesystem dentry.
@@ -163,7 +165,16 @@ mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_dentry_rename(mr_dentry_t *dentry, mr_dentry_t *upper,
-                           const char *name);
+                          const char *name);
+
+/**
+ * @brief This function unlinks a filesystem dentry.
+ *
+ * @param dentry The
+ * dentry to unlink(must already be added to a tree).
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_dentry_unlink(mr_dentry_t *dentry);
 
 /**
  * @brief This function gets the n-th child of a dentry.
@@ -188,33 +199,16 @@ mr_bool_t mr_dentry_is_empty(mr_dentry_t *dentry);
  *
  * @param start The start dentry.
  * @param limit The lookup limit(dentry that '..' cannot escape).
- * @param fmt The path format.
- * @param ... The format arguments.
- * @return The dentry on success, MR_NULL on failure.
+ * @param path The relative path.
+ * @param result The resolved dentry.
+ * @return 0 on success, a negative error code on failure.
  *
  * @note The returned dentry holds one reference; call mr_dentry_put() to
  * release it when no longer needed.
  * @note Paths are relative to start.
  */
-mr_dentry_t *mr_dentry_lookup(mr_dentry_t *start, mr_dentry_t *limit,
-                              const char *fmt, ...);
-
-/**
- * @brief This function creates a dentry path, making intermediate dentries as
- * needed.
- *
- * @param start The start dentry.
- * @param limit The lookup limit.
- * @param fmt The path format.
- * @param ... The format arguments.
- * @return The dentry on success, MR_NULL on failure.
- *
- * @note The returned dentry holds one reference; call mr_dentry_put() to
- * release it when no longer needed.
- * @note Paths are relative to start.
- */
-mr_dentry_t *mr_dentry_mkpath(mr_dentry_t *start, mr_dentry_t *limit,
-                              const char *fmt, ...);
+mr_err_t mr_dentry_lookup(mr_dentry_t *start, mr_dentry_t *limit,
+                          const char *path, mr_dentry_t **result);
 
 /**
  * @brief This function binds an inode to a dentry.
@@ -227,6 +221,17 @@ mr_dentry_t *mr_dentry_mkpath(mr_dentry_t *start, mr_dentry_t *limit,
 mr_err_t mr_dentry_instantiate(mr_dentry_t *dentry, struct mr_inode *inode);
 
 /**
+ * @brief This function unbinds an inode from a dentry.
+ *
+ * @param dentry The dentry(must have an inode bound).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note This function releases the inode reference owned by the dentry. Other
+ * inode references are unaffected.
+ */
+mr_err_t mr_dentry_uninstantiate(mr_dentry_t *dentry);
+
+/**
  * @brief This macro function gets a dentry name.
  */
 #define MR_DENTRY_NAME(_dentry)         ((_dentry)->name.str)
@@ -235,11 +240,6 @@ mr_err_t mr_dentry_instantiate(mr_dentry_t *dentry, struct mr_inode *inode);
  * @brief This macro function gets a dentry name length(excluding '\0').
  */
 #define MR_DENTRY_NAME_LEN(_dentry)     ((_dentry)->name.len)
-
-/**
- * @brief This macro function gets the inode bound to a dentry(maybe MR_NULL).
- */
-#define MR_DENTRY_INODE(_dentry)        ((_dentry)->inode)
 
 /**
  * @brief This function gets a dentry.

@@ -25,7 +25,7 @@ extern "C" {
 
 #if defined(MR_USE_FS)
 struct mr_super_block;
-struct mr_dirent;
+struct mr_dentry;
 struct mr_inode;
 struct mr_file;
 
@@ -62,13 +62,19 @@ typedef struct mr_inode_ops {
                        mr_inode_type_t type, struct mr_inode **out);
     mr_err_t (*mknod)(struct mr_inode *dir, const char *name,
                       mr_inode_type_t type, void *priv, struct mr_inode **out);
+    mr_err_t (*link)(struct mr_inode *dir, const char *name,
+                     struct mr_inode *inode);
+    mr_err_t (*symlink)(struct mr_inode *dir, const char *name,
+                        const char *target, struct mr_inode **out);
     mr_err_t (*lookup)(struct mr_inode *dir, const char *name,
                        struct mr_inode **out);
+    mr_ssize_t (*readlink)(struct mr_inode *inode, char *buf, mr_size_t size);
     mr_err_t (*stat)(struct mr_inode *inode, mr_stat_t *stat);
     mr_err_t (*unlink)(struct mr_inode *dir, const char *name);
-    mr_err_t (*rename)(struct mr_inode *old_dir, const char *old_name,
-                       struct mr_inode *new_dir, const char *new_name);
-    mr_err_t (*truncate)(struct mr_inode *inode, mr_int64_t length);
+    mr_err_t (*rename)(struct mr_inode *old_dir, struct mr_dentry *old_dentry,
+                       struct mr_inode *new_dir, struct mr_dentry *new_dentry);
+    mr_err_t (*truncate)(struct mr_inode *inode, struct mr_file *file,
+                         mr_int64_t length);
     void (*destroy)(struct mr_inode *inode);
 } mr_inode_ops_t;
 
@@ -133,14 +139,6 @@ mr_inode_t *mr_inode_create(mr_inode_type_t type, const mr_inode_ops_t *i_op,
  * @brief This macro function gets the inode size.
  */
 #define MR_INODE_SIZE(_inode)           ((_inode)->size)
-
-/**
- * @brief This function deletes an inode.
- *
- * @param inode The inode.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_inode_del(mr_inode_t *inode);
 
 /**
  * @brief This function gets an inode.

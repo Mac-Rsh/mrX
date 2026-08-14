@@ -31,11 +31,17 @@ MR_CLAZZES_EXPORT(superblock);
 typedef struct mr_super_block {
     mr_object_t parent;
     mr_dentry_t *mnt;
+    mr_dentry_t *root_dentry;
     mr_inode_t *root;
     int flags;
     struct mr_super_block *next;
+    struct mr_super_block *mount_parent;
+    struct mr_super_block *mount_child;
+    struct mr_super_block *mount_next;
     struct mr_file_system *type;
     const mr_dentry_ops_t *dops;
+    mr_bool_t detaching;
+    mr_size_t op_cnt;
     void *priv;
 } mr_super_block_t;
 
@@ -47,11 +53,41 @@ typedef struct mr_super_block {
  * @param source The mount source(maybe MR_NULL).
  * @param flags The mount flags.
  * @param data The mount private data.
- * @return The super-block on success, MR_NULL on failure.
+ * @param out The created super-block.
+ * @return 0 on success, a negative error code on failure.
  */
-mr_super_block_t *mr_super_block_create(mr_file_system_t *type,
-                                        const char *source, int flags,
-                                        void *data);
+mr_err_t mr_super_block_create(mr_file_system_t *type, const char *source,
+                               int flags, void *data, mr_super_block_t **out);
+
+/**
+ * @brief This function prepares a super-block for detach.
+ *
+ * @param sb The super-block.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_super_block_detach_prepare(mr_super_block_t *sb);
+
+/**
+ * @brief This function cancels a prepared super-block detach.
+ *
+ * @param sb The super-block.
+ */
+void mr_super_block_detach_cancel(mr_super_block_t *sb);
+
+/**
+ * @brief This function enters a super-block namespace operation.
+ *
+ * @param sb The super-block.
+ * @return 0 on success, or -MR_EBUSY while the super-block is detaching.
+ */
+mr_err_t mr_super_block_op_enter(mr_super_block_t *sb);
+
+/**
+ * @brief This function leaves a super-block namespace operation.
+ *
+ * @param sb The super-block.
+ */
+void mr_super_block_op_exit(mr_super_block_t *sb);
 
 /**
  * @brief This function removes and deletes a super-block.
@@ -66,20 +102,44 @@ mr_super_block_t *mr_super_block_create(mr_file_system_t *type,
 mr_err_t mr_super_block_del(mr_super_block_t *sb);
 
 /**
- * @brief This function finds a super-block by its mount-point dentry.
- *
- * @param mnt The mount-point dentry.
- * @return The super-block on success, MR_NULL on failure. The returned object
- * holds one reference; call mr_super_block_put() when done.
- */
-mr_super_block_t *mr_super_block_find_by_mnt(mr_dentry_t *mnt);
-
-/**
- * @brief This function detaches the mount-point dentry from a super-block.
+ * @brief This function attaches a super-block to a mount-point.
  *
  * @param sb The super-block.
+ * @param mnt The mount-point dentry.
+ * @param root The mounted root dentry(bound to the super-block root inode).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note On success, the super-block acquires references to mnt and root and
+ * links itself into the mount topology.
  */
-void mr_super_block_detach_mnt(mr_super_block_t *sb);
+mr_err_t mr_super_block_attach(mr_super_block_t *sb, mr_dentry_t *mnt,
+                               mr_dentry_t *root);
+
+/**
+ * @brief This function detaches a super-block from its mount-point.
+ *
+ * @param sb The super-block.
+ * @param mnt The detached mount-point dentry.
+ * @param root The detached mounted root dentry.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The references previously held by the super-block are transferred to
+ * mnt and root on success. The caller must release both references.
+ * @note A super-block containing child mounts returns -MR_EBUSY.
+ */
+mr_err_t mr_super_block_detach(mr_super_block_t *sb, mr_dentry_t **mnt,
+                               mr_dentry_t **root);
+
+/**
+ * @brief This function finds a mounted super-block by dentry.
+ *
+ * @param dentry The mount-point or mounted root dentry.
+ * @return The super-block on success, MR_NULL on failure.
+ *
+ * @note The returned super-block holds one reference. Call
+ * mr_super_block_put() when it is no longer needed.
+ */
+mr_super_block_t *mr_super_block_find_by_dentry(mr_dentry_t *dentry);
 
 /**
  * @brief This function gets a super-block.

@@ -187,9 +187,7 @@ class SemanticBuilder:
     @staticmethod
     def _path_segment(node: NodeDecl) -> str:
         """Return the canonical path segment for one syntax node."""
-        if node.address is None:
-            return node.name
-        return f"{node.name}@{node.address}"
+        return node.name
 
     @staticmethod
     def _copy_properties(properties: list[PropertyDecl]) -> list[NodeProperty]:
