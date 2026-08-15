@@ -159,32 +159,6 @@ typedef struct name_addr_name {
 #define CORE_ADDR_IS_IN_MMIO(_core, _addr, _size)                              \
     ((CORE_MMIO_SIZE >= (_size)) && ((_addr) >= CORE_MMIO_BASE)                \
      && ((_addr) <= (CORE_MMIO_END - (_size))))
-
-/* RISCV32 core binary and memory macro function definition */
-#define CORE_BIN_u1(_core, _addr)                                              \
-    ((mr_uint8_t *)((_core)->bin->image + (_addr)))
-#define CORE_BIN_u2(_core, _addr)                                              \
-    ((mr_uint16_t *)((_core)->bin->image + (_addr)))
-#define CORE_BIN_u4(_core, _addr)                                              \
-    ((mr_uint32_t *)((_core)->bin->image + (_addr)))
-#define CORE_BIN_i1(_core, _addr)                                              \
-    ((mr_int8_t *)((_core)->bin->image + (_addr)))
-#define CORE_BIN_i2(_core, _addr)                                              \
-    ((mr_int16_t *)((_core)->bin->image + (_addr)))
-#define CORE_BIN_i4(_core, _addr)                                              \
-    ((mr_int32_t *)((_core)->bin->image + (_addr)))
-#define CORE_MEM_u1(_core, _addr)                                              \
-    ((mr_uint8_t *)((_core)->mem + (_addr)))
-#define CORE_MEM_u2(_core, _addr)                                              \
-    ((mr_uint16_t *)((_core)->mem + (_addr)))
-#define CORE_MEM_u4(_core, _addr)                                              \
-    ((mr_uint32_t *)((_core)->mem + (_addr)))
-#define CORE_MEM_i1(_core, _addr)                                              \
-    ((mr_int8_t *)((_core)->mem + (_addr)))
-#define CORE_MEM_i2(_core, _addr)                                              \
-    ((mr_int16_t *)((_core)->mem + (_addr)))
-#define CORE_MEM_i4(_core, _addr)                                              \
-    ((mr_int32_t *)((_core)->mem + (_addr)))
 #endif /* defined(MR_USE_MODULE_XVM_RISCV32) */
 
 /** @} */

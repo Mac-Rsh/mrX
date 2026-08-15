@@ -260,8 +260,6 @@ MR_INLINE mr_ssize_t mr_adc_read(mr_driver_t *drv, mr_adc_seq_t *seq) {
 MR_INLINE mr_err_t mr_adc_stream_start(mr_driver_t *drv, mr_adc_seq_t *seq,
                                        mr_bool_t circular) {
     const mr_adc_ops_t *ad_ops;
-    mr_bool_t busy;
-    mr_err_t ret;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_ADC);
@@ -272,20 +270,6 @@ MR_INLINE mr_err_t mr_adc_stream_start(mr_driver_t *drv, mr_adc_seq_t *seq,
 
     /* Get ADC operations */
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
-
-    /* Check if ADC stream is busy */
-    if (ad_ops->stream_is_busy && ad_ops->stream_start) {
-        ret = ad_ops->stream_is_busy(drv, &busy);
-        if (ret != 0) {
-            return ret;
-        }
-        if (busy) {
-            return -MR_EBUSY;
-        }
-    } else {
-        /* Not supported */
-        return -MR_ENOSYS;
-    }
 
     /* Start ADC stream */
     return ad_ops->stream_start(drv, seq, circular);

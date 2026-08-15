@@ -55,6 +55,19 @@ static const name_addr_map_t csr_map_table[] = {
     {  "mhartid",   REG_CSR_MHARTID},
 };
 
+MR_INLINE mr_uint32_t core_load(const void *memory, mr_size_t size) {
+    mr_uint32_t value = 0;
+
+    /* Load potentially unaligned memory */
+    mr_memcpy(&value, memory, size);
+    return value;
+}
+
+MR_INLINE void core_store(void *memory, mr_uint32_t value, mr_size_t size) {
+    /* Store potentially unaligned memory */
+    mr_memcpy(memory, &value, size);
+}
+
 static mr_err_t xvm_riscv32_load(mr_xvm_t *xvm) {
     mr_xvm_datamem_t *datamem;
     core_t *core;
@@ -172,7 +185,7 @@ MR_INLINE int instr_fetch(core_t *core, mr_uint32_t addr, mr_uint32_t *val) {
     }
 
     /* Fetch instruction */
-    *val = *CORE_BIN_u4(core, addr);
+    *val = core_load(core->bin->image + addr, 4);
     return 0;
 }
 
@@ -696,10 +709,11 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
             tmp2u4 = CORE_ADDR_MEM(core, tmp0u4);
             if (CORE_ADDR_IS_IN_BIN(core, tmp1u4, 1)) {
                 CORE_REG_X(core, instr.I_type.rd)
-                    = (mr_uint32_t)*CORE_BIN_i1(core, tmp1u4);
+                    = (mr_uint32_t)(mr_int8_t)core_load(
+                        core->bin->image + tmp1u4, 1);
             } else if (CORE_ADDR_IS_IN_MEM(core, tmp2u4, 1)) {
                 CORE_REG_X(core, instr.I_type.rd)
-                    = (mr_uint32_t)*CORE_MEM_i1(core, tmp2u4);
+                    = (mr_uint32_t)(mr_int8_t)core_load(core->mem + tmp2u4, 1);
             } else {
                 core->trap_mtval = tmp0u4;
                 BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
@@ -718,10 +732,11 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
             tmp2u4 = CORE_ADDR_MEM(core, tmp0u4);
             if (CORE_ADDR_IS_IN_BIN(core, tmp1u4, 2)) {
                 CORE_REG_X(core, instr.I_type.rd)
-                    = (mr_uint32_t)*CORE_BIN_i2(core, tmp1u4);
+                    = (mr_uint32_t)(mr_int16_t)core_load(
+                        core->bin->image + tmp1u4, 2);
             } else if (CORE_ADDR_IS_IN_MEM(core, tmp2u4, 2)) {
                 CORE_REG_X(core, instr.I_type.rd)
-                    = (mr_uint32_t)*CORE_MEM_i2(core, tmp2u4);
+                    = (mr_uint32_t)(mr_int16_t)core_load(core->mem + tmp2u4, 2);
             } else {
                 core->trap_mtval = tmp0u4;
                 BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
@@ -740,10 +755,10 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
             tmp2u4 = CORE_ADDR_MEM(core, tmp0u4);
             if (CORE_ADDR_IS_IN_BIN(core, tmp1u4, 4)) {
                 CORE_REG_X(core, instr.I_type.rd)
-                    = (mr_uint32_t)*CORE_BIN_i4(core, tmp1u4);
+                    = core_load(core->bin->image + tmp1u4, 4);
             } else if (CORE_ADDR_IS_IN_MEM(core, tmp2u4, 4)) {
                 CORE_REG_X(core, instr.I_type.rd)
-                    = (mr_uint32_t)*CORE_MEM_i4(core, tmp2u4);
+                    = core_load(core->mem + tmp2u4, 4);
             } else if (CORE_ADDR_IS_IN_MMIO(core, tmp0u4, 4)) {
                 ret = mmio_load(core, tmp0u4, &tmp1u4);
                 if (ret != 0) {
@@ -765,10 +780,10 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
             tmp2u4 = CORE_ADDR_MEM(core, tmp0u4);
             if (CORE_ADDR_IS_IN_BIN(core, tmp1u4, 1)) {
                 CORE_REG_X(core, instr.I_type.rd)
-                    = (mr_uint32_t)*CORE_BIN_u1(core, tmp1u4);
+                    = core_load(core->bin->image + tmp1u4, 1);
             } else if (CORE_ADDR_IS_IN_MEM(core, tmp2u4, 1)) {
                 CORE_REG_X(core, instr.I_type.rd)
-                    = (mr_uint32_t)*CORE_MEM_u1(core, tmp2u4);
+                    = core_load(core->mem + tmp2u4, 1);
             } else {
                 core->trap_mtval = tmp0u4;
                 BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
@@ -787,10 +802,10 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
             tmp2u4 = CORE_ADDR_MEM(core, tmp0u4);
             if (CORE_ADDR_IS_IN_BIN(core, tmp1u4, 2)) {
                 CORE_REG_X(core, instr.I_type.rd)
-                    = (mr_uint32_t)*CORE_BIN_u2(core, tmp1u4);
+                    = core_load(core->bin->image + tmp1u4, 2);
             } else if (CORE_ADDR_IS_IN_MEM(core, tmp2u4, 2)) {
                 CORE_REG_X(core, instr.I_type.rd)
-                    = (mr_uint32_t)*CORE_MEM_u2(core, tmp2u4);
+                    = core_load(core->mem + tmp2u4, 2);
             } else {
                 core->trap_mtval = tmp0u4;
                 BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
@@ -804,8 +819,8 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
             tmp0u4 = CORE_REG_X(core, instr.S_type.rs1) + tmp0u4;
             tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
             if (CORE_ADDR_IS_IN_MEM(core, tmp1u4, 1)) {
-                *CORE_MEM_i1(core, tmp1u4)
-                    = (mr_int8_t)CORE_REG_X(core, instr.S_type.rs2);
+                core_store(core->mem + tmp1u4,
+                           CORE_REG_X(core, instr.S_type.rs2), 1);
             } else {
                 core->trap_mtval = tmp0u4;
                 BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
@@ -822,8 +837,8 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
             }
             tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
             if (CORE_ADDR_IS_IN_MEM(core, tmp1u4, 2)) {
-                *CORE_MEM_i2(core, tmp1u4)
-                    = (mr_int16_t)CORE_REG_X(core, instr.S_type.rs2);
+                core_store(core->mem + tmp1u4,
+                           CORE_REG_X(core, instr.S_type.rs2), 2);
             } else {
                 core->trap_mtval = tmp0u4;
                 BCODE_EXECUTE_EXIT(-MR_XVM_EXCEPT_NR_ACCESS);
@@ -840,8 +855,8 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
             }
             tmp1u4 = CORE_ADDR_MEM(core, tmp0u4);
             if (CORE_ADDR_IS_IN_MEM(core, tmp1u4, 4)) {
-                *CORE_MEM_i4(core, tmp1u4)
-                    = (mr_int32_t)CORE_REG_X(core, instr.S_type.rs2);
+                core_store(core->mem + tmp1u4,
+                           CORE_REG_X(core, instr.S_type.rs2), 4);
             } else if (CORE_ADDR_IS_IN_MMIO(core, tmp0u4, 4)) {
                 ret = mmio_store(core, tmp0u4,
                                  CORE_REG_X(core, instr.S_type.rs2));
@@ -1317,7 +1332,7 @@ static mr_ssize_t xvm_riscv32_mem_map(mr_xvm_t *xvm, mr_uint64_t addr,
 
     /* Map binary image region(read-only) */
     if (CORE_ADDR_IS_IN_BIN(core, addr32, 1)) {
-        *memory = CORE_BIN_u1(core, addr32);
+        *memory = (void *)(core->bin->image + addr32);
         *writable = MR_FALSE;
         return (mr_ssize_t)(core->bin->size - addr32);
     }
@@ -1325,7 +1340,7 @@ static mr_ssize_t xvm_riscv32_mem_map(mr_xvm_t *xvm, mr_uint64_t addr,
     /* Map data memory region(read-write) */
     mem_addr = CORE_ADDR_MEM(core, addr32);
     if (CORE_ADDR_IS_IN_MEM(core, mem_addr, 1)) {
-        *memory = CORE_MEM_u1(core, mem_addr);
+        *memory = core->mem + mem_addr;
         *writable = MR_TRUE;
         return (mr_ssize_t)(core->mem_size - mem_addr);
     }

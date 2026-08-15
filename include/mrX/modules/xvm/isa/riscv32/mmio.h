@@ -10,9 +10,6 @@
 #define __RISCV32_MMIO_H__
 
 #include <mrX/mr_config.h>
-#if defined(MR_USE_MODULE_XVM_RISCV32)
-#include <mrX/modules/xvm/mr_xvm.h>
-#endif /* defined(MR_USE_MODULE_XVM_RISCV32) */
 
 #ifdef __cplusplus
 extern "C" {

@@ -101,29 +101,22 @@ void mr_port_clock_hires_tick_set(mr_uint64_t tick) {
 #endif /* defined(MR_USE_CLOCK_HIRES) */
 
 void mr_port_clock_busy_wait(mr_uint32_t us) {
-    mr_uint64_t cur, last, start, end;
-
-    /* Calculate wait time */
-    end = us * ((SysTick->CMP + 1) / 1000000ULL / MR_CFG_TICK_PER_SECOND);
-    cur = SysTick->CNT;
-    us = 0;
+    mr_uint64_t period, target, last, elapsed;
 
     /* Init start time */
-    start = last = cur;
+    target = ((mr_uint64_t)us * SystemCoreClock + 999999ULL) / 1000000ULL;
+    period = SysTick->CMP + 1;
+    last = SysTick->CNT;
+    elapsed = 0;
 
-    do {
-        /* Get current tick */
+    /* Wait */
+    while (elapsed < target) {
         cur = SysTick->CNT;
-
-        /* Check if tick will be rewound */
-        if (cur > last) {
-            us += (start + 1);
-            start = cur;
+        if (cur < last) {
+            elapsed += period - last + cur;
+        } else {
+            elapsed += cur - last;
         }
-
-        /* Iterate */
         last = cur;
-
-        /* Check if tick is reached */
-    } while ((us + (start - cur)) < end);
+    }
 }

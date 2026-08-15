@@ -81,6 +81,11 @@ mr_xvm_t *mr_xvm_create(const char *isa_name, mr_size_t data_size) {
     MR_ASSERT(isa_name != MR_NULL);
     MR_ASSERT(data_size > 0);
 
+    /* Check allocation-size overflow */
+    if (data_size > (MR_SIZE_MAX - sizeof(*xvm))) {
+        return MR_NULL;
+    }
+
     /* Create XVM */
     xvm = mr_malloc(sizeof(mr_xvm_t) + data_size);
     if (!xvm) {

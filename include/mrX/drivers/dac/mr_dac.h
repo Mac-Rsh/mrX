@@ -230,8 +230,6 @@ MR_INLINE mr_ssize_t mr_dac_write(mr_driver_t *drv, mr_dac_seq_t *seq) {
 MR_INLINE mr_err_t mr_dac_stream_start(mr_driver_t *drv, mr_dac_seq_t *seq,
                                        mr_bool_t circular) {
     const mr_dac_ops_t *da_ops;
-    mr_bool_t busy;
-    mr_err_t ret;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_DAC);
@@ -242,20 +240,6 @@ MR_INLINE mr_err_t mr_dac_stream_start(mr_driver_t *drv, mr_dac_seq_t *seq,
 
     /* Get DAC operations */
     da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
-
-    /* Check if DAC stream is busy */
-    if (da_ops->stream_is_busy && da_ops->stream_start) {
-        ret = da_ops->stream_is_busy(drv, &busy);
-        if (ret != 0) {
-            return ret;
-        }
-        if (busy) {
-            return -MR_EBUSY;
-        }
-    } else {
-        /* Not supported */
-        return -MR_ENOSYS;
-    }
 
     /* Start DAC stream */
     return da_ops->stream_start(drv, seq, circular);
