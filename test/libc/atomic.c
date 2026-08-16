@@ -96,4 +96,43 @@ static void test_atomic_bitwise(void) {
     MR_TEST_ASSERT_EQ_INT(v, 0x00);
 }
 MR_TEST_EXPORT(atomic, bitwise, test_atomic_bitwise);
+
+/* -------------------------------------------------------------------------- */
+/* Test: zero and negative values                                             */
+static void test_atomic_boundary_values(void) {
+    mr_atomic_t v;
+    mr_atomic_t old;
+
+    mr_atomic_init(&v, 0);
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_fetch_sub(&v, 1), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), -1);
+
+    old = mr_atomic_exchange(&v, 0x55AA);
+    MR_TEST_ASSERT_EQ_INT(old, -1);
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 0x55AA);
+
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_fetch_add(&v, -0xAA), 0x55AA);
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 0x5500);
+}
+MR_TEST_EXPORT(atomic, boundary_values, test_atomic_boundary_values);
+
+/* -------------------------------------------------------------------------- */
+/* Test: compare-exchange updates the expected value on mismatch              */
+static void test_atomic_compare_exchange_mismatch(void) {
+    mr_atomic_t v;
+    mr_atomic_t expect;
+
+    mr_atomic_init(&v, 0x1234);
+    expect = 0x4321;
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_compare_exchange(&v, &expect, 0x9999),
+                          MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(expect, 0x1234);
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 0x1234);
+
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_compare_exchange(&v, &expect, 0x9999),
+                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 0x9999);
+}
+MR_TEST_EXPORT(atomic, compare_exchange_mismatch,
+               test_atomic_compare_exchange_mismatch);
 #endif /* defined(MR_USE_TEST) */

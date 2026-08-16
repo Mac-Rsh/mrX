@@ -189,14 +189,14 @@ _exit:
 MR_TEST_EXPORT(slab, invalid_free, test_slab_invalid_free);
 
 static void test_slab_init_map_size_limit(void) {
-    mr_uint8_t map[4] = {0};
+    mr_atomic_t map[1] = {0};
     mr_uint8_t buf[64 * 64];
     mr_slab_t slab;
     mr_uint32_t num;
 
     num = mr_slab_init(&slab, map, sizeof(map), buf, 64, 64);
-    MR_TEST_ASSERT_EQ_UINT(num, 32);
-    MR_TEST_ASSERT_EQ_UINT(slab.num, 32);
+    MR_TEST_ASSERT_EQ_UINT(num, MR_SLAB_MAP_BITS);
+    MR_TEST_ASSERT_EQ_UINT(slab.num, MR_SLAB_MAP_BITS);
 }
 MR_TEST_EXPORT(slab, init_map_size_limit, test_slab_init_map_size_limit);
 
@@ -217,8 +217,8 @@ static void test_slab_unaligned_free(void) {
     mr_slab_free(&test_slab, (mr_uint8_t *)allocated[0] + 1);
     allocated[2] = mr_slab_alloc(&test_slab);
     p2_index = mr_slab_ptr2index(&test_slab, allocated[2]);
-    MR_TEST_EXPECT_EQ_INT(p2_index, 0);
-    if (p2_index != 0) {
+    MR_TEST_EXPECT_EQ_INT(p2_index, 2);
+    if (p2_index != 2) {
         goto _exit;
     }
 
@@ -231,4 +231,47 @@ _exit:
     test_slab_free_unique(allocated, MR_ARRAY_SIZE(allocated));
 }
 MR_TEST_EXPORT(slab, unaligned_free, test_slab_unaligned_free);
+
+static void test_slab_index_conversion_boundaries(void) {
+    void *first;
+    void *last;
+
+    slab_reset();
+    first = mr_slab_index2ptr(&test_slab, 0);
+    last = mr_slab_index2ptr(&test_slab, TEST_SLAB_OBJ_NUM - 1);
+
+    MR_TEST_ASSERT_EQ_PTR(first, test_slab.buf);
+    MR_TEST_ASSERT_EQ_INT(mr_slab_ptr2index(&test_slab, first), 0);
+    MR_TEST_ASSERT_EQ_PTR(
+        last, test_slab.buf + ((TEST_SLAB_OBJ_NUM - 1) * TEST_SLAB_OBJ_SIZE));
+    MR_TEST_ASSERT_EQ_INT(mr_slab_ptr2index(&test_slab, last),
+                          TEST_SLAB_OBJ_NUM - 1);
+    MR_TEST_ASSERT_EQ_PTR(mr_slab_index2ptr(&test_slab, -1), MR_NULL);
+    MR_TEST_ASSERT_EQ_PTR(mr_slab_index2ptr(&test_slab, TEST_SLAB_OBJ_NUM),
+                          MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_slab_ptr2index(&test_slab, MR_NULL), -1);
+}
+MR_TEST_EXPORT(slab, index_conversion_boundaries,
+               test_slab_index_conversion_boundaries);
+
+static void test_slab_repeated_free(void) {
+    void *p;
+    void *next;
+
+    slab_reset();
+    p = mr_slab_alloc(&test_slab);
+    MR_TEST_ASSERT_NE_PTR(p, MR_NULL);
+    if (p == MR_NULL) {
+        return;
+    }
+
+    mr_slab_free(&test_slab, p);
+    mr_slab_free(&test_slab, p);
+    next = mr_slab_alloc(&test_slab);
+    MR_TEST_ASSERT_EQ_PTR(next, p);
+    if (next != MR_NULL) {
+        mr_slab_free(&test_slab, next);
+    }
+}
+MR_TEST_EXPORT(slab, repeated_free, test_slab_repeated_free);
 #endif /* defined(MR_USE_TEST) */

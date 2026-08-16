@@ -174,4 +174,51 @@ static void test_list_safe_foreach_del(void) {
     MR_TEST_ASSERT_EQ_INT(ids[1], 3);
 }
 MR_TEST_EXPORT(list, safe_foreach_del, test_list_safe_foreach_del);
+
+static void test_list_single_entry_lifecycle(void) {
+    test_node_t node;
+    mr_list_t head;
+    mr_list_t other;
+
+    mr_list_init(&head);
+    mr_list_init(&other);
+    node.id = 7;
+
+    mr_list_add(&head, &node.link);
+    MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&head), MR_FALSE);
+    MR_TEST_ASSERT_EQ_PTR(head.next, &node.link);
+    MR_TEST_ASSERT_EQ_PTR(head.prev, &node.link);
+
+    mr_list_del(&node.link);
+    MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&head), MR_TRUE);
+    MR_TEST_ASSERT_EQ_PTR(node.link.next, &node.link);
+    MR_TEST_ASSERT_EQ_PTR(node.link.prev, &node.link);
+
+    mr_list_move(&node.link, &other);
+    MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&other), MR_FALSE);
+    MR_TEST_ASSERT_EQ_PTR(other.next, &node.link);
+    mr_list_del(&node.link);
+    MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&other), MR_TRUE);
+}
+MR_TEST_EXPORT(list, single_entry_lifecycle, test_list_single_entry_lifecycle);
+
+static void test_list_replace_single_entry(void) {
+    test_node_t old_node;
+    test_node_t new_node;
+    mr_list_t head;
+
+    mr_list_init(&head);
+    old_node.id = 1;
+    new_node.id = 2;
+    mr_list_add(&head, &old_node.link);
+    mr_list_replace(&new_node.link, &old_node.link);
+
+    MR_TEST_ASSERT_EQ_PTR(head.next, &new_node.link);
+    MR_TEST_ASSERT_EQ_PTR(head.prev, &new_node.link);
+    MR_TEST_ASSERT_EQ_PTR(old_node.link.next, &old_node.link);
+    MR_TEST_ASSERT_EQ_PTR(old_node.link.prev, &old_node.link);
+    mr_list_del(&new_node.link);
+    MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&head), MR_TRUE);
+}
+MR_TEST_EXPORT(list, replace_single_entry, test_list_replace_single_entry);
 #endif /* defined(MR_USE_TEST) */

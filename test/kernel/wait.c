@@ -427,8 +427,8 @@ static void test_wait_delete_during_handle(void) {
     test_wait_reset();
 
     ret = mr_waitable_init(&waitable);
-    dynamic_waiter = mr_waiter_create(test_waiter_delete_cb, MR_NULL,
-                                      MR_WAIT_IN);
+    dynamic_waiter
+        = mr_waiter_create(test_waiter_delete_cb, MR_NULL, MR_WAIT_IN);
     MR_TEST_ASSERT_NE_PTR(dynamic_waiter, MR_NULL);
     ret |= mr_waiter_wait(dynamic_waiter, &waitable);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
@@ -484,5 +484,101 @@ static void test_wait_event_get_set(void) {
     mr_waitable_del(&waitable);
 }
 MR_TEST_EXPORT(wait, event_get_set, test_wait_event_get_set);
+
+static void test_wait_cancel_all_busy(void) {
+    mr_waitable_t waitable;
+    mr_waiter_t waiter_a;
+    mr_waiter_t waiter_b;
+    mr_err_t ret;
+
+    test_wait_reset();
+    ret = mr_waitable_init(&waitable);
+    ret |= mr_waiter_init(&waiter_a, test_waiter_cb, MR_NULL, MR_WAIT_IN);
+    ret |= mr_waiter_init(&waiter_b, test_waiter_cb, MR_NULL, MR_WAIT_OUT);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    ret = mr_waiter_wait(&waiter_a, &waitable);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_waiter_wait(&waiter_a, &waitable);
+    MR_TEST_ASSERT_EQ_INT(ret, -MR_EBUSY);
+    ret = mr_waiter_wait(&waiter_b, &waitable);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_waitable_cancel_all(&waitable);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(MR_WAITER_IS_WAITING(&waiter_a), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(MR_WAITER_IS_WAITING(&waiter_b), MR_FALSE);
+
+    ret = mr_waiter_cancel(&waiter_a);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_waiter_cancel(&waiter_b);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    mr_waiter_del(&waiter_a);
+    mr_waiter_del(&waiter_b);
+    mr_waitable_del(&waitable);
+}
+MR_TEST_EXPORT(wait, cancel_all_busy, test_wait_cancel_all_busy);
+
+static void test_wait_event_mask_and_edge_data(void) {
+    mr_waitable_t waitable;
+    mr_waiter_t waiter;
+    mr_uint32_t data = 0x12345678U;
+    mr_err_t ret;
+
+    test_wait_reset();
+    ret = mr_waitable_init(&waitable);
+    ret |= mr_waiter_init(&waiter, test_waiter_cb, (void *)0x42,
+                          MR_WAIT_EDGE | MR_WAIT_IN);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_waiter_wait(&waiter, &waitable);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    ret = mr_waitable_raise(&waitable, MR_WAIT_IN | 0x00000005U, &data);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(trigger_count, 1);
+    MR_TEST_ASSERT_EQ_UINT(last_event, MR_WAIT_IN | 0x00000005U);
+    MR_TEST_ASSERT_EQ_PTR(last_data, &data);
+    MR_TEST_ASSERT_EQ_PTR(last_param, (void *)0x42);
+
+    ret = mr_waitable_raise(&waitable, MR_WAIT_IN, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(trigger_count, 1);
+    ret = mr_waitable_raise(&waitable, 0, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(trigger_count, 1);
+    ret = mr_waitable_raise(&waitable, MR_WAIT_IN, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(trigger_count, 2);
+
+    mr_waiter_del(&waiter);
+    mr_waitable_del(&waitable);
+}
+MR_TEST_EXPORT(wait, event_mask_edge_data, test_wait_event_mask_and_edge_data);
+
+static void test_wait_dynamic_reference_lifecycle(void) {
+    mr_waitable_t *waitable;
+    mr_waiter_t *waiter;
+    mr_err_t ret;
+
+    test_wait_reset();
+    waitable = mr_waitable_create();
+    waiter = mr_waiter_create(test_waiter_cb, MR_NULL, MR_WAIT_IN);
+    MR_TEST_ASSERT_NE_PTR(waitable, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(waiter, MR_NULL);
+
+    MR_TEST_ASSERT_NE_PTR(mr_waitable_get(waitable), MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_waitable_put(waitable), MR_FALSE);
+    MR_TEST_ASSERT_NE_PTR(mr_waiter_get(waiter), MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_waiter_put(waiter), MR_FALSE);
+
+    ret = mr_waiter_wait(waiter, waitable);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_waitable_del(waitable);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(MR_WAITER_IS_WAITING(waiter), MR_FALSE);
+    ret = mr_waiter_del(waiter);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+MR_TEST_EXPORT(wait, dynamic_reference_lifecycle,
+               test_wait_dynamic_reference_lifecycle);
 #endif /* defined(MR_USE_WAIT) */
 #endif /* defined(MR_USE_TEST) */

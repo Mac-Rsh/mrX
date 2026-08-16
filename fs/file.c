@@ -34,11 +34,11 @@ typedef struct fs_path_split {
     char *parent;
 } fs_path_split_t;
 
-/* Directory-relative path context */
-typedef struct fs_at_context {
+/* Pinned path context */
+typedef struct fs_path_context {
     mr_super_block_t *sb;
     mr_fs_nsp_t nsp;
-} fs_at_context_t;
+} fs_path_context_t;
 
 static mr_ssize_t fs_symlink_readlink(mr_inode_t *inode, char *buf,
                                       mr_size_t size) {
@@ -168,34 +168,34 @@ static void fs_op_exit(mr_super_block_t *sb) {
     mr_super_block_put(sb);
 }
 
-static void fs_at_context_release(fs_at_context_t *context) {
+static void fs_path_context_release(fs_path_context_t *ctx) {
     /* Release the pinned namespace context */
-    if (context->nsp.root) {
-        mr_dentry_put(context->nsp.root);
-        context->nsp.root = MR_NULL;
+    if (ctx->nsp.root) {
+        mr_dentry_put(ctx->nsp.root);
+        ctx->nsp.root = MR_NULL;
     }
-    if (context->nsp.cwd) {
-        mr_dentry_put(context->nsp.cwd);
-        context->nsp.cwd = MR_NULL;
+    if (ctx->nsp.cwd) {
+        mr_dentry_put(ctx->nsp.cwd);
+        ctx->nsp.cwd = MR_NULL;
     }
-    if (context->sb) {
-        fs_op_exit(context->sb);
-        context->sb = MR_NULL;
+    if (ctx->sb) {
+        fs_op_exit(ctx->sb);
+        ctx->sb = MR_NULL;
     }
 }
 
-static mr_err_t fs_at_context_enter(fs_at_context_t *context,
-                                    const mr_file_t *dir, const char *path,
-                                    int flags) {
+static mr_err_t fs_path_context_enter(fs_path_context_t *ctx,
+                                      const mr_file_t *dir, const char *path,
+                                      mr_bool_t in_root) {
     mr_dentry_t *root, *cwd;
     mr_fs_nsp_t *nsp;
     mr_err_t ret;
     int mask;
 
     /* Init context */
-    context->nsp.root = MR_NULL;
-    context->nsp.cwd = MR_NULL;
-    context->sb = MR_NULL;
+    ctx->nsp.root = MR_NULL;
+    ctx->nsp.cwd = MR_NULL;
+    ctx->sb = MR_NULL;
 
     /* Get current file-system namespace */
     nsp = mr_fs_nsp_current();
@@ -204,13 +204,13 @@ static mr_err_t fs_at_context_enter(fs_at_context_t *context,
     }
 
     /* Absolute paths use the current context unless confined by the caller */
-    if ((path[0] == '/') && !(flags & MR_AT_IN_ROOT)) {
+    if ((path[0] == '/') && !in_root) {
         /* Lock */
         mask = mr_fs_nsp_lock();
 
         /* Pin current namespace context */
-        context->nsp.root = nsp->root ? mr_dentry_get(nsp->root) : MR_NULL;
-        context->nsp.cwd = nsp->cwd ? mr_dentry_get(nsp->cwd) : MR_NULL;
+        ctx->nsp.root = nsp->root ? mr_dentry_get(nsp->root) : MR_NULL;
+        ctx->nsp.cwd = nsp->cwd ? mr_dentry_get(nsp->cwd) : MR_NULL;
 
         /* Unlock */
         mr_fs_nsp_unlock(mask);
@@ -224,7 +224,7 @@ static mr_err_t fs_at_context_enter(fs_at_context_t *context,
         }
 
         /* Protect the base directory FS through relative lookup */
-        ret = fs_inode_op_enter(dir->inode, &context->sb);
+        ret = fs_inode_op_enter(dir->inode, &ctx->sb);
         if (ret != 0) {
             return ret;
         }
@@ -241,28 +241,28 @@ static mr_err_t fs_at_context_enter(fs_at_context_t *context,
         }
 
         /* Select the lookup boundary and starting directory */
-        root = (flags & MR_AT_IN_ROOT) ? dir->dentry : nsp->root;
-        while ((flags & MR_AT_IN_ROOT) && root->mounted) {
+        root = in_root ? dir->dentry : nsp->root;
+        while (in_root && root->mounted) {
             root = root->mounted;
         }
         cwd = dir->dentry;
 
         /* Pin directory-relative namespace context */
-        context->nsp.root = root ? mr_dentry_get(root) : MR_NULL;
-        context->nsp.cwd = mr_dentry_get(cwd);
+        ctx->nsp.root = root ? mr_dentry_get(root) : MR_NULL;
+        ctx->nsp.cwd = mr_dentry_get(cwd);
 
         /* Unlock */
         mr_fs_nsp_unlock(mask);
     }
 
     /* Check the pinned context */
-    if ((!context->nsp.root) || (!context->nsp.cwd)) {
+    if ((!ctx->nsp.root) || (!ctx->nsp.cwd)) {
         ret = -MR_ENOENT;
         goto _exit;
     }
     return 0;
 _exit:
-    fs_at_context_release(context);
+    fs_path_context_release(ctx);
     return ret;
 }
 
@@ -914,26 +914,6 @@ mr_err_t mr_fs_mkdir(const char *path) {
     return fs_mkdir(nsp, path);
 }
 
-mr_err_t mr_fs_mkdirat(const mr_file_t *dir, const char *path, int flags) {
-    fs_at_context_t context;
-    mr_err_t ret;
-
-    /* Check parameter */
-    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
-    if (flags & (~MR_AT_IN_ROOT)) {
-        return -MR_EINVAL;
-    }
-
-    /* Create relative to the pinned directory context */
-    ret = fs_at_context_enter(&context, dir, path, flags);
-    if (ret != 0) {
-        return ret;
-    }
-    ret = fs_mkdir(&context.nsp, path);
-    fs_at_context_release(&context);
-    return ret;
-}
-
 static mr_err_t fs_mknod(mr_fs_nsp_t *nsp, const char *path,
                          mr_inode_type_t type, void *priv) {
     mr_dentry_t *parent, *dentry;
@@ -985,30 +965,6 @@ mr_err_t mr_fs_mknod(const char *path, mr_inode_type_t type, void *priv) {
 
     /* Create relative to CWD */
     return fs_mknod(nsp, path, type, priv);
-}
-
-mr_err_t mr_fs_mknodat(const mr_file_t *dir, const char *path,
-                       mr_inode_type_t type, void *priv, int flags) {
-    fs_at_context_t context;
-    mr_err_t ret;
-
-    /* Check parameter */
-    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
-
-    /* Check node type */
-    if (((type <= MR_INODE_NONE) || (type > MR_INODE_LNK))
-        || (flags & (~MR_AT_IN_ROOT))) {
-        return -MR_EINVAL;
-    }
-
-    /* Create relative to the pinned directory context */
-    ret = fs_at_context_enter(&context, dir, path, flags);
-    if (ret != 0) {
-        return ret;
-    }
-    ret = fs_mknod(&context.nsp, path, type, priv);
-    fs_at_context_release(&context);
-    return ret;
 }
 
 static mr_err_t fs_file_close(mr_file_t *file) {
@@ -1099,6 +1055,7 @@ _exit:
 static mr_err_t fs_open(mr_file_t *file, mr_fs_nsp_t *nsp, const char *path,
                         int flags) {
     mr_dentry_t *dentry, *parent;
+    mr_bool_t follow_final;
     fs_path_split_t split;
     mr_super_block_t *sb;
     mr_inode_t *inode;
@@ -1115,8 +1072,8 @@ static mr_err_t fs_open(mr_file_t *file, mr_fs_nsp_t *nsp, const char *path,
     }
 
     /* Try to look up the existing node */
-    ret = fs_lookup(nsp, path, (flags & MR_O_NOFOLLOW) ? MR_FALSE : MR_TRUE,
-                    &dentry);
+    follow_final = (flags & MR_O_NOFOLLOW) ? MR_FALSE : MR_TRUE;
+    ret = fs_lookup(nsp, path, follow_final, &dentry);
     if (ret != 0) {
         if (ret != (-MR_ENOENT)) {
             return ret;
@@ -1211,31 +1168,12 @@ mr_err_t mr_fs_open(mr_file_t *file, const char *path, int flags) {
     }
 
     /* Open relative to CWD */
-    if (flags & MR_O_IN_ROOT) {
+#if defined(MR_USE_FS_AT)
+    if (flags & MR_AT_IN_ROOT) {
         return -MR_EINVAL;
     }
+#endif /* defined(MR_USE_FS_AT) */
     return fs_open(file, nsp, path, flags);
-}
-
-mr_err_t mr_fs_openat(mr_file_t *file, const mr_file_t *dir, const char *path,
-                      int flags) {
-    fs_at_context_t context;
-    mr_err_t ret;
-    int at_flags;
-
-    /* Check parameter */
-    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
-    MR_ASSERT(file != MR_NULL);
-
-    /* Open relative to the pinned directory */
-    at_flags = (flags & MR_O_IN_ROOT) ? MR_AT_IN_ROOT : 0;
-    ret = fs_at_context_enter(&context, dir, path, at_flags);
-    if (ret != 0) {
-        return ret;
-    }
-    ret = fs_open(file, &context.nsp, path, flags & (~MR_O_IN_ROOT));
-    fs_at_context_release(&context);
-    return ret;
 }
 
 mr_err_t mr_fs_close(mr_file_t *file) {
@@ -1339,71 +1277,6 @@ mr_err_t mr_fs_stat(const mr_file_t *file, mr_stat_t *stat) {
 
     /* Fill inode status */
     return fs_stat_inode(file->inode, stat);
-}
-
-static mr_err_t fs_stat_by_path(mr_fs_nsp_t *nsp, const char *path,
-                                mr_stat_t *stat, mr_bool_t follow_final) {
-    mr_super_block_t *sb;
-    mr_dentry_t *dentry;
-    mr_err_t ret;
-
-    /* Look up the path */
-    ret = fs_lookup(nsp, path, follow_final, &dentry);
-    if (ret != 0) {
-        return ret;
-    }
-
-    /* Protect the resolved FS across stat callback */
-    ret = fs_dentry_op_enter(dentry, &sb);
-    if (ret == 0) {
-        ret = fs_stat_inode(dentry->inode, stat);
-        fs_op_exit(sb);
-    }
-    mr_dentry_put(dentry);
-    return ret;
-}
-
-mr_err_t mr_fs_stat_by_path(const char *path, mr_stat_t *stat) {
-    mr_fs_nsp_t *nsp;
-
-    /* Check parameter */
-    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
-    MR_ASSERT(stat != MR_NULL);
-
-    /* Get current file-system namespace */
-    nsp = mr_fs_nsp_current();
-    if (!nsp) {
-        return -MR_EINVAL;
-    }
-
-    /* Follow the final symbolic link */
-    return fs_stat_by_path(nsp, path, stat, MR_TRUE);
-}
-
-mr_err_t mr_fs_statat(const mr_file_t *dir, const char *path, mr_stat_t *stat,
-                      int flags) {
-    fs_at_context_t context;
-    mr_bool_t follow_final;
-    mr_err_t ret;
-
-    /* Check parameter */
-    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
-    MR_ASSERT(stat != MR_NULL);
-
-    /* Check flags */
-    if (flags & (~(MR_AT_IN_ROOT | MR_AT_SYMLINK_NOFOLLOW))) {
-        return -MR_EINVAL;
-    }
-
-    /* Get status relative to the pinned directory context */
-    ret = fs_at_context_enter(&context, dir, path, flags);
-    if (ret != 0) {
-        return ret;
-    }
-    follow_final = (flags & MR_AT_SYMLINK_NOFOLLOW) ? MR_FALSE : MR_TRUE;
-    ret = fs_stat_by_path(&context.nsp, path, stat, follow_final);
-    fs_at_context_release(&context);
-    return ret;
 }
 
 static mr_bool_t fs_dentry_is_mount(mr_dentry_t *dentry) {
@@ -1838,86 +1711,6 @@ mr_err_t mr_fs_rename(mr_file_t *file, const char *new_path) {
     return ret;
 }
 
-static mr_err_t fs_rename_by_path(mr_fs_nsp_t *old_nsp, const char *old_path,
-                                  mr_fs_nsp_t *new_nsp, const char *new_path,
-                                  mr_bool_t protect_root) {
-    mr_super_block_t *sb;
-    mr_dentry_t *dentry;
-    mr_err_t ret;
-
-    /* Look up and rename the path itself */
-    ret = fs_lookup(old_nsp, old_path, MR_FALSE, &dentry);
-    if (ret != 0) {
-        return ret;
-    }
-
-    /* A lookup root can not be renamed through its confined context */
-    if (protect_root && (dentry == old_nsp->root)) {
-        mr_dentry_put(dentry);
-        return -MR_EBUSY;
-    }
-
-    /* Protect source and destination FS across rename commit */
-    ret = fs_dentry_op_enter(dentry, &sb);
-    if (ret == 0) {
-        ret = fs_rename_dentry(dentry, dentry->inode, new_nsp, new_path);
-        fs_op_exit(sb);
-    }
-    mr_dentry_put(dentry);
-    return ret;
-}
-
-mr_err_t mr_fs_rename_by_path(const char *old_path, const char *new_path) {
-    mr_fs_nsp_t *nsp;
-
-    /* Check parameter */
-    MR_ASSERT((old_path != MR_NULL) && (old_path[0] != '\0'));
-    MR_ASSERT((new_path != MR_NULL) && (new_path[0] != '\0'));
-
-    /* Get current file-system namespace */
-    nsp = mr_fs_nsp_current();
-    if (!nsp) {
-        return -MR_EINVAL;
-    }
-
-    /* Rename relative to CWD */
-    return fs_rename_by_path(nsp, old_path, nsp, new_path, MR_FALSE);
-}
-
-mr_err_t mr_fs_renameat(const mr_file_t *old_dir, const char *old_path,
-                        const mr_file_t *new_dir, const char *new_path,
-                        int flags) {
-    fs_at_context_t old_context, new_context;
-    mr_bool_t protect_root;
-    mr_err_t ret;
-
-    /* Check parameter */
-    MR_ASSERT((old_path != MR_NULL) && (old_path[0] != '\0'));
-    MR_ASSERT((new_path != MR_NULL) && (new_path[0] != '\0'));
-    if (flags & (~MR_AT_IN_ROOT)) {
-        return -MR_EINVAL;
-    }
-
-    /* Pin source and destination directory contexts */
-    ret = fs_at_context_enter(&old_context, old_dir, old_path, flags);
-    if (ret != 0) {
-        return ret;
-    }
-    ret = fs_at_context_enter(&new_context, new_dir, new_path, flags);
-    if (ret != 0) {
-        fs_at_context_release(&old_context);
-        return ret;
-    }
-
-    /* Rename between the pinned contexts */
-    protect_root = (flags & MR_AT_IN_ROOT) ? MR_TRUE : MR_FALSE;
-    ret = fs_rename_by_path(&old_context.nsp, old_path, &new_context.nsp,
-                            new_path, protect_root);
-    fs_at_context_release(&new_context);
-    fs_at_context_release(&old_context);
-    return ret;
-}
-
 static mr_err_t fs_unlink_dentry(mr_dentry_t *dentry, mr_inode_t *inode) {
     mr_dentry_t *parent;
 
@@ -1971,68 +1764,6 @@ mr_err_t mr_fs_unlink(mr_file_t *file) {
     ret = fs_unlink_dentry(file->dentry, file->inode);
     fs_op_exit(sb);
     return ret;
-}
-
-mr_err_t mr_fs_unlink_recursive(mr_file_t *file) {
-    /* Check parameter */
-    MR_ASSERT(file != MR_NULL);
-
-    /* File must be open */
-    if (!file->inode) {
-        return -MR_EBADF;
-    }
-
-    /* Non-directories are recursive leaves */
-    if (file->inode->type != MR_INODE_DIR) {
-        return mr_fs_unlink(file);
-    }
-
-    /* Recursively remove the directory through its current dentry */
-    return mr_fs_unlinkat_recursive(file, ".", 0);
-}
-
-static mr_err_t fs_unlink_by_path(mr_fs_nsp_t *nsp, const char *path,
-                                  mr_bool_t protect_root) {
-    mr_super_block_t *sb;
-    mr_dentry_t *dentry;
-    mr_err_t ret;
-
-    /* Look up and unlink the path itself */
-    ret = fs_lookup(nsp, path, MR_FALSE, &dentry);
-    if (ret != 0) {
-        return ret;
-    }
-
-    /* A lookup root can not be removed through its confined context */
-    if (protect_root && (dentry == nsp->root)) {
-        mr_dentry_put(dentry);
-        return -MR_EBUSY;
-    }
-
-    /* Protect the backing FS across unlink commit */
-    ret = fs_dentry_op_enter(dentry, &sb);
-    if (ret == 0) {
-        ret = fs_unlink_dentry(dentry, dentry->inode);
-        fs_op_exit(sb);
-    }
-    mr_dentry_put(dentry);
-    return ret;
-}
-
-mr_err_t mr_fs_unlink_by_path(const char *path) {
-    mr_fs_nsp_t *nsp;
-
-    /* Check parameter */
-    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
-
-    /* Get current file-system namespace */
-    nsp = mr_fs_nsp_current();
-    if (!nsp) {
-        return -MR_EINVAL;
-    }
-
-    /* Unlink relative to CWD */
-    return fs_unlink_by_path(nsp, path, MR_FALSE);
 }
 
 static mr_err_t fs_unlink_dentry_guarded(mr_dentry_t *dentry) {
@@ -2125,9 +1856,9 @@ static mr_err_t fs_unlink_directory_first(mr_dentry_t *dentry,
 }
 
 static mr_err_t fs_unlink_recursive(mr_fs_nsp_t *nsp, const char *path) {
+    mr_dentry_t *root, *current, *child, *parent;
     mr_super_block_t *sb;
     mr_inode_type_t type;
-    mr_dentry_t *root, *current, *child, *parent;
     mr_err_t ret;
     int mask;
 
@@ -2181,10 +1912,15 @@ static mr_err_t fs_unlink_recursive(mr_fs_nsp_t *nsp, const char *path) {
         /* Pin the parent before unlink drops the namespace reference */
         parent = MR_NULL;
         if (current != root) {
+            /* Lock */
             mask = mr_fs_nsp_lock();
+
+            /* Get the parent */
             if (current->upper) {
                 parent = mr_dentry_get(current->upper);
             }
+
+            /* Unlock */
             mr_fs_nsp_unlock(mask);
             if (!parent) {
                 ret = -MR_ENOENT;
@@ -2212,6 +1948,167 @@ static mr_err_t fs_unlink_recursive(mr_fs_nsp_t *nsp, const char *path) {
     return ret;
 }
 
+mr_err_t mr_fs_unlink_recursive(mr_file_t *file) {
+    fs_path_context_t ctx;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT(file != MR_NULL);
+
+    /* File must be open */
+    if (!file->inode) {
+        return -MR_EBADF;
+    }
+
+    /* Non-directories are recursive leaves */
+    if (file->inode->type != MR_INODE_DIR) {
+        return mr_fs_unlink(file);
+    }
+
+    /* Pin the directory as the relative lookup start */
+    ret = fs_path_context_enter(&ctx, file, ".", MR_FALSE);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Recursively remove the directory through its current dentry */
+    ret = fs_unlink_recursive(&ctx.nsp, ".");
+    fs_path_context_release(&ctx);
+    return ret;
+}
+
+#if defined(MR_USE_FS_AT) || defined(MR_USE_FS_BY_PATH)
+static mr_err_t fs_stat_by_path(mr_fs_nsp_t *nsp, const char *path,
+                                mr_stat_t *stat, mr_bool_t follow_final) {
+    mr_super_block_t *sb;
+    mr_dentry_t *dentry;
+    mr_err_t ret;
+
+    /* Look up the path */
+    ret = fs_lookup(nsp, path, follow_final, &dentry);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Protect the resolved FS across stat callback */
+    ret = fs_dentry_op_enter(dentry, &sb);
+    if (ret == 0) {
+        ret = fs_stat_inode(dentry->inode, stat);
+        fs_op_exit(sb);
+    }
+    mr_dentry_put(dentry);
+    return ret;
+}
+
+static mr_err_t fs_rename_by_path(mr_fs_nsp_t *old_nsp, const char *old_path,
+                                  mr_fs_nsp_t *new_nsp, const char *new_path,
+                                  mr_bool_t protect_root) {
+    mr_super_block_t *sb;
+    mr_dentry_t *dentry;
+    mr_err_t ret;
+
+    /* Look up and rename the path itself */
+    ret = fs_lookup(old_nsp, old_path, MR_FALSE, &dentry);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* A lookup root can not be renamed through its confined context */
+    if (protect_root && (dentry == old_nsp->root)) {
+        mr_dentry_put(dentry);
+        return -MR_EBUSY;
+    }
+
+    /* Protect source and destination FS across rename commit */
+    ret = fs_dentry_op_enter(dentry, &sb);
+    if (ret == 0) {
+        ret = fs_rename_dentry(dentry, dentry->inode, new_nsp, new_path);
+        fs_op_exit(sb);
+    }
+    mr_dentry_put(dentry);
+    return ret;
+}
+
+static mr_err_t fs_unlink_by_path(mr_fs_nsp_t *nsp, const char *path,
+                                  mr_bool_t protect_root) {
+    mr_super_block_t *sb;
+    mr_dentry_t *dentry;
+    mr_err_t ret;
+
+    /* Look up and unlink the path itself */
+    ret = fs_lookup(nsp, path, MR_FALSE, &dentry);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* A lookup root can not be removed through its confined context */
+    if (protect_root && (dentry == nsp->root)) {
+        mr_dentry_put(dentry);
+        return -MR_EBUSY;
+    }
+
+    /* Protect the backing FS across unlink commit */
+    ret = fs_dentry_op_enter(dentry, &sb);
+    if (ret == 0) {
+        ret = fs_unlink_dentry(dentry, dentry->inode);
+        fs_op_exit(sb);
+    }
+    mr_dentry_put(dentry);
+    return ret;
+}
+#endif /* defined(MR_USE_FS_AT) || defined(MR_USE_FS_BY_PATH) */
+
+#if defined(MR_USE_FS_BY_PATH)
+mr_err_t mr_fs_stat_by_path(const char *path, mr_stat_t *stat) {
+    mr_fs_nsp_t *nsp;
+
+    /* Check parameter */
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+    MR_ASSERT(stat != MR_NULL);
+
+    /* Get current file-system namespace */
+    nsp = mr_fs_nsp_current();
+    if (!nsp) {
+        return -MR_EINVAL;
+    }
+
+    /* Follow the final symbolic link */
+    return fs_stat_by_path(nsp, path, stat, MR_TRUE);
+}
+
+mr_err_t mr_fs_rename_by_path(const char *old_path, const char *new_path) {
+    mr_fs_nsp_t *nsp;
+
+    /* Check parameter */
+    MR_ASSERT((old_path != MR_NULL) && (old_path[0] != '\0'));
+    MR_ASSERT((new_path != MR_NULL) && (new_path[0] != '\0'));
+
+    /* Get current file-system namespace */
+    nsp = mr_fs_nsp_current();
+    if (!nsp) {
+        return -MR_EINVAL;
+    }
+
+    /* Rename relative to CWD */
+    return fs_rename_by_path(nsp, old_path, nsp, new_path, MR_FALSE);
+}
+
+mr_err_t mr_fs_unlink_by_path(const char *path) {
+    mr_fs_nsp_t *nsp;
+
+    /* Check parameter */
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+
+    /* Get current file-system namespace */
+    nsp = mr_fs_nsp_current();
+    if (!nsp) {
+        return -MR_EINVAL;
+    }
+
+    /* Unlink relative to CWD */
+    return fs_unlink_by_path(nsp, path, MR_FALSE);
+}
+
 mr_err_t mr_fs_unlink_recursive_by_path(const char *path) {
     mr_fs_nsp_t *nsp;
 
@@ -2227,10 +2124,142 @@ mr_err_t mr_fs_unlink_recursive_by_path(const char *path) {
     /* Recursively unlink relative to CWD */
     return fs_unlink_recursive(nsp, path);
 }
+#endif /* defined(MR_USE_FS_BY_PATH) */
+
+#if defined(MR_USE_FS_AT)
+mr_err_t mr_fs_mkdirat(const mr_file_t *dir, const char *path, int flags) {
+    fs_path_context_t ctx;
+    mr_bool_t in_root;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+    if (flags & (~MR_AT_IN_ROOT)) {
+        return -MR_EINVAL;
+    }
+
+    /* Create relative to the pinned directory context */
+    in_root = (flags & MR_AT_IN_ROOT) ? MR_TRUE : MR_FALSE;
+    ret = fs_path_context_enter(&ctx, dir, path, in_root);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = fs_mkdir(&ctx.nsp, path);
+    fs_path_context_release(&ctx);
+    return ret;
+}
+
+mr_err_t mr_fs_mknodat(const mr_file_t *dir, const char *path,
+                       mr_inode_type_t type, void *priv, int flags) {
+    fs_path_context_t ctx;
+    mr_bool_t in_root;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+
+    /* Check node type */
+    if (((type <= MR_INODE_NONE) || (type > MR_INODE_LNK))
+        || (flags & (~MR_AT_IN_ROOT))) {
+        return -MR_EINVAL;
+    }
+
+    /* Create relative to the pinned directory context */
+    in_root = (flags & MR_AT_IN_ROOT) ? MR_TRUE : MR_FALSE;
+    ret = fs_path_context_enter(&ctx, dir, path, in_root);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = fs_mknod(&ctx.nsp, path, type, priv);
+    fs_path_context_release(&ctx);
+    return ret;
+}
+
+mr_err_t mr_fs_openat(mr_file_t *file, const mr_file_t *dir, const char *path,
+                      int flags) {
+    fs_path_context_t ctx;
+    mr_bool_t in_root;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+    MR_ASSERT(file != MR_NULL);
+
+    /* Open relative to the pinned directory */
+    in_root = (flags & MR_AT_IN_ROOT) ? MR_TRUE : MR_FALSE;
+    ret = fs_path_context_enter(&ctx, dir, path, in_root);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = fs_open(file, &ctx.nsp, path, flags & (~MR_AT_IN_ROOT));
+    fs_path_context_release(&ctx);
+    return ret;
+}
+
+mr_err_t mr_fs_statat(const mr_file_t *dir, const char *path, mr_stat_t *stat,
+                      int flags) {
+    mr_bool_t in_root, follow_final;
+    fs_path_context_t ctx;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+    MR_ASSERT(stat != MR_NULL);
+
+    /* Check flags */
+    if (flags & (~(MR_AT_IN_ROOT | MR_AT_SYMLINK_NOFOLLOW))) {
+        return -MR_EINVAL;
+    }
+
+    /* Get status relative to the pinned directory context */
+    in_root = (flags & MR_AT_IN_ROOT) ? MR_TRUE : MR_FALSE;
+    ret = fs_path_context_enter(&ctx, dir, path, in_root);
+    if (ret != 0) {
+        return ret;
+    }
+    follow_final = (flags & MR_AT_SYMLINK_NOFOLLOW) ? MR_FALSE : MR_TRUE;
+    ret = fs_stat_by_path(&ctx.nsp, path, stat, follow_final);
+    fs_path_context_release(&ctx);
+    return ret;
+}
+
+mr_err_t mr_fs_renameat(const mr_file_t *old_dir, const char *old_path,
+                        const mr_file_t *new_dir, const char *new_path,
+                        int flags) {
+    fs_path_context_t old_ctx, new_ctx;
+    mr_bool_t in_root;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT((old_path != MR_NULL) && (old_path[0] != '\0'));
+    MR_ASSERT((new_path != MR_NULL) && (new_path[0] != '\0'));
+    if (flags & (~MR_AT_IN_ROOT)) {
+        return -MR_EINVAL;
+    }
+
+    /* Pin source and destination directory contexts */
+    in_root = (flags & MR_AT_IN_ROOT) ? MR_TRUE : MR_FALSE;
+    ret = fs_path_context_enter(&old_ctx, old_dir, old_path, in_root);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = fs_path_context_enter(&new_ctx, new_dir, new_path, in_root);
+    if (ret != 0) {
+        fs_path_context_release(&old_ctx);
+        return ret;
+    }
+
+    /* Rename between the pinned contexts */
+    ret = fs_rename_by_path(&old_ctx.nsp, old_path, &new_ctx.nsp, new_path,
+                            in_root);
+    fs_path_context_release(&new_ctx);
+    fs_path_context_release(&old_ctx);
+    return ret;
+}
 
 mr_err_t mr_fs_unlinkat(const mr_file_t *dir, const char *path, int flags) {
-    fs_at_context_t context;
-    mr_bool_t protect_root;
+    fs_path_context_t ctx;
+    mr_bool_t in_root;
     mr_err_t ret;
 
     /* Check parameter */
@@ -2240,19 +2269,20 @@ mr_err_t mr_fs_unlinkat(const mr_file_t *dir, const char *path, int flags) {
     }
 
     /* Unlink relative to the pinned directory context */
-    ret = fs_at_context_enter(&context, dir, path, flags);
+    in_root = (flags & MR_AT_IN_ROOT) ? MR_TRUE : MR_FALSE;
+    ret = fs_path_context_enter(&ctx, dir, path, in_root);
     if (ret != 0) {
         return ret;
     }
-    protect_root = (flags & MR_AT_IN_ROOT) ? MR_TRUE : MR_FALSE;
-    ret = fs_unlink_by_path(&context.nsp, path, protect_root);
-    fs_at_context_release(&context);
+    ret = fs_unlink_by_path(&ctx.nsp, path, in_root);
+    fs_path_context_release(&ctx);
     return ret;
 }
 
 mr_err_t mr_fs_unlinkat_recursive(const mr_file_t *dir, const char *path,
                                   int flags) {
-    fs_at_context_t context;
+    fs_path_context_t ctx;
+    mr_bool_t in_root;
     mr_err_t ret;
 
     /* Check parameter */
@@ -2262,14 +2292,16 @@ mr_err_t mr_fs_unlinkat_recursive(const mr_file_t *dir, const char *path,
     }
 
     /* Recursively unlink relative to the pinned directory context */
-    ret = fs_at_context_enter(&context, dir, path, flags);
+    in_root = (flags & MR_AT_IN_ROOT) ? MR_TRUE : MR_FALSE;
+    ret = fs_path_context_enter(&ctx, dir, path, in_root);
     if (ret != 0) {
         return ret;
     }
-    ret = fs_unlink_recursive(&context.nsp, path);
-    fs_at_context_release(&context);
+    ret = fs_unlink_recursive(&ctx.nsp, path);
+    fs_path_context_release(&ctx);
     return ret;
 }
+#endif /* defined(MR_USE_FS_AT) */
 
 mr_ssize_t mr_fs_read(mr_file_t *file, void *buf, mr_size_t size) {
     /* Check parameter */

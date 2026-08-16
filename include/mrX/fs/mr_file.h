@@ -36,11 +36,12 @@ extern "C" {
 #define MR_O_APPEND                     (0x0800)
 #define MR_O_DIRECTORY                  (0x1000)
 #define MR_O_NOFOLLOW                   (0x2000)
-#define MR_O_IN_ROOT                    (0x4000)
 
+#if defined(MR_USE_FS_AT)
 /* Directory-relative path flags */
-#define MR_AT_IN_ROOT                   (0x0001)
-#define MR_AT_SYMLINK_NOFOLLOW          (0x0002)
+#define MR_AT_IN_ROOT                   (0x4000)
+#define MR_AT_SYMLINK_NOFOLLOW          (0x8000)
+#endif /* defined(MR_USE_FS_AT) */
 
 /* File seek whence */
 #define MR_SEEK_SET                     (0)
@@ -130,20 +131,6 @@ mr_err_t mr_fs_umount(const char *path);
 mr_err_t mr_fs_mkdir(const char *path);
 
 /**
- * @brief This function creates a directory relative to a directory handle.
- *
- * @param dir The base directory for path resolution. It is ignored for an
- * absolute path unless MR_AT_IN_ROOT is specified and may be MR_NULL otherwise.
- * @param path The directory path.
- * @param flags The path resolution flags(see MR_AT_*).
- * @return 0 on success, a negative error code on failure.
- *
- * @note For a relative path, dir must be an open directory handle.
- * @note MR_AT_IN_ROOT treats dir as a temporary FS root.
- */
-mr_err_t mr_fs_mkdirat(const mr_file_t *dir, const char *path, int flags);
-
-/**
  * @brief This function creates a file-system-specific node.
  *
  * @param path The node path.
@@ -152,24 +139,6 @@ mr_err_t mr_fs_mkdirat(const mr_file_t *dir, const char *path, int flags);
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_fs_mknod(const char *path, mr_inode_type_t type, void *priv);
-
-/**
- * @brief This function creates a file-system-specific node relative to a
- * directory handle.
- *
- * @param dir The base directory for path resolution. It is ignored for an
- * absolute path unless MR_AT_IN_ROOT is specified and may be MR_NULL otherwise.
- * @param path The node path.
- * @param type The inode type.
- * @param priv The private data passed to the parent mknod callback.
- * @param flags The path resolution flags(see MR_AT_*).
- * @return 0 on success, a negative error code on failure.
- *
- * @note For a relative path, dir must be an open directory handle.
- * @note MR_AT_IN_ROOT treats dir as a temporary FS root.
- */
-mr_err_t mr_fs_mknodat(const mr_file_t *dir, const char *path,
-                       mr_inode_type_t type, void *priv, int flags);
 
 /**
  * @brief This function opens a file by path.
@@ -184,26 +153,6 @@ mr_err_t mr_fs_mknodat(const mr_file_t *dir, const char *path,
  * without reinitializing it.
  */
 mr_err_t mr_fs_open(mr_file_t *file, const char *path, int flags);
-
-/**
- * @brief This function opens a file relative to a directory handle.
- *
- * @param file The file to open.
- * @param dir The base directory for path resolution. It is ignored for an
- * absolute path unless MR_O_IN_ROOT is specified and may be MR_NULL otherwise.
- * @param path The file path.
- * @param flags The open flags(see MR_O_*).
- * @return 0 on success, a negative error code on failure.
- *
- * @note For a relative path, dir must be an open directory handle.
- * @note An absolute path starts at the current FS root and ignores dir.
- * @note MR_O_IN_ROOT treats dir as a temporary FS root. Parent components can
- * not escape above dir, and absolute paths and symbolic links restart at dir.
- * @note The file must be initialized with MR_FILE_INIT(file), mr_file_init(),
- * or all-zero storage before its first use.
- */
-mr_err_t mr_fs_openat(mr_file_t *file, const mr_file_t *dir, const char *path,
-                      int flags);
 
 /**
  * @brief This function closes a file.
@@ -253,33 +202,6 @@ mr_err_t mr_fs_closedir(mr_file_t *file);
  * @note A file-system stat hook may override the generic fields.
  */
 mr_err_t mr_fs_stat(const mr_file_t *file, mr_stat_t *stat);
-
-/**
- * @brief This function gets file status by path.
- *
- * @param path The file path.
- * @param stat The file status to fill.
- * @return 0 on success, a negative error code on failure.
- *
- * @note The final symbolic link is followed.
- */
-mr_err_t mr_fs_stat_by_path(const char *path, mr_stat_t *stat);
-
-/**
- * @brief This function gets file status relative to a directory handle.
- *
- * @param dir The base directory for path resolution. It is ignored for an
- * absolute path unless MR_AT_IN_ROOT is specified and may be MR_NULL otherwise.
- * @param path The file path.
- * @param stat The file status to fill.
- * @param flags The path resolution flags(see MR_AT_*).
- * @return 0 on success, a negative error code on failure.
- *
- * @note MR_AT_IN_ROOT treats dir as a temporary FS root.
- * @note MR_AT_SYMLINK_NOFOLLOW returns the final symbolic link's status.
- */
-mr_err_t mr_fs_statat(const mr_file_t *dir, const char *path, mr_stat_t *stat,
-                      int flags);
 
 /**
  * @brief This function creates a hard link to an open file.
@@ -332,35 +254,6 @@ mr_ssize_t mr_fs_readlink(const mr_file_t *file, char *buf, mr_size_t size);
 mr_err_t mr_fs_rename(mr_file_t *file, const char *new_path);
 
 /**
- * @brief This function renames a file by path.
- *
- * @param old_path The current file path.
- * @param new_path The new file path.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_fs_rename_by_path(const char *old_path, const char *new_path);
-
-/**
- * @brief This function renames a file between directory-relative paths.
- *
- * @param old_dir The base directory for old_path. It is ignored for an
- * absolute old_path unless MR_AT_IN_ROOT is specified.
- * @param old_path The current file path.
- * @param new_dir The base directory for new_path. It is ignored for an
- * absolute new_path unless MR_AT_IN_ROOT is specified.
- * @param new_path The new file path.
- * @param flags The path resolution flags(see MR_AT_*).
- * @return 0 on success, a negative error code on failure.
- *
- * @note Relative paths require their corresponding open directory handles.
- * @note MR_AT_IN_ROOT treats each directory handle as its path's temporary FS
- * root.
- */
-mr_err_t mr_fs_renameat(const mr_file_t *old_dir, const char *old_path,
-                        const mr_file_t *new_dir, const char *new_path,
-                        int flags);
-
-/**
  * @brief This function unlinks the current name of an open file.
  *
  * @param file The file(must be open).
@@ -387,6 +280,27 @@ mr_err_t mr_fs_unlink(mr_file_t *file);
  */
 mr_err_t mr_fs_unlink_recursive(mr_file_t *file);
 
+#if defined(MR_USE_FS_BY_PATH)
+/**
+ * @brief This function gets file status by path.
+ *
+ * @param path The file path.
+ * @param stat The file status to fill.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The final symbolic link is followed.
+ */
+mr_err_t mr_fs_stat_by_path(const char *path, mr_stat_t *stat);
+
+/**
+ * @brief This function renames a file by path.
+ *
+ * @param old_path The current file path.
+ * @param new_path The new file path.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_fs_rename_by_path(const char *old_path, const char *new_path);
+
 /**
  * @brief This function unlinks a file by path.
  *
@@ -407,6 +321,97 @@ mr_err_t mr_fs_unlink_by_path(const char *path);
  * remain removed.
  */
 mr_err_t mr_fs_unlink_recursive_by_path(const char *path);
+#endif /* defined(MR_USE_FS_BY_PATH) */
+
+#if defined(MR_USE_FS_AT)
+/**
+ * @brief This function creates a directory relative to a directory handle.
+ *
+ * @param dir The base directory for path resolution. It is ignored for an
+ * absolute path unless MR_AT_IN_ROOT is specified and may be MR_NULL otherwise.
+ * @param path The directory path.
+ * @param flags The path resolution flags(see MR_AT_*).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note For a relative path, dir must be an open directory handle.
+ * @note MR_AT_IN_ROOT treats dir as a temporary FS root.
+ */
+mr_err_t mr_fs_mkdirat(const mr_file_t *dir, const char *path, int flags);
+
+/**
+ * @brief This function creates a file-system-specific node relative to a
+ * directory handle.
+ *
+ * @param dir The base directory for path resolution. It is ignored for an
+ * absolute path unless MR_AT_IN_ROOT is specified and may be MR_NULL otherwise.
+ * @param path The node path.
+ * @param type The inode type.
+ * @param priv The private data passed to the parent mknod callback.
+ * @param flags The path resolution flags(see MR_AT_*).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note For a relative path, dir must be an open directory handle.
+ * @note MR_AT_IN_ROOT treats dir as a temporary FS root.
+ */
+mr_err_t mr_fs_mknodat(const mr_file_t *dir, const char *path,
+                       mr_inode_type_t type, void *priv, int flags);
+
+/**
+ * @brief This function opens a file relative to a directory handle.
+ *
+ * @param file The file to open.
+ * @param dir The base directory for path resolution. It is ignored for an
+ * absolute path unless MR_AT_IN_ROOT is specified and may be MR_NULL otherwise.
+ * @param path The file path.
+ * @param flags The open and path resolution flags(see MR_O_* and
+ * MR_AT_IN_ROOT).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note For a relative path, dir must be an open directory handle.
+ * @note An absolute path starts at the current FS root and ignores dir.
+ * @note MR_AT_IN_ROOT treats dir as a temporary FS root. Parent components can
+ * not escape above dir, and absolute paths and symbolic links restart at dir.
+ * @note The file must be initialized with MR_FILE_INIT(file), mr_file_init(),
+ * or all-zero storage before its first use.
+ */
+mr_err_t mr_fs_openat(mr_file_t *file, const mr_file_t *dir, const char *path,
+                      int flags);
+
+/**
+ * @brief This function gets file status relative to a directory handle.
+ *
+ * @param dir The base directory for path resolution. It is ignored for an
+ * absolute path unless MR_AT_IN_ROOT is specified and may be MR_NULL otherwise.
+ * @param path The file path.
+ * @param stat The file status to fill.
+ * @param flags The path resolution flags(see MR_AT_*).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note MR_AT_IN_ROOT treats dir as a temporary FS root.
+ * @note MR_AT_SYMLINK_NOFOLLOW returns the final symbolic link's status.
+ */
+mr_err_t mr_fs_statat(const mr_file_t *dir, const char *path, mr_stat_t *stat,
+                      int flags);
+
+/**
+ * @brief This function renames a file between directory-relative paths.
+ *
+ * @param old_dir The base directory for old_path. It is ignored for an
+ * absolute old_path unless MR_AT_IN_ROOT is specified.
+ * @param old_path The current file path.
+ * @param new_dir The base directory for new_path. It is ignored for an
+ * absolute new_path unless MR_AT_IN_ROOT is specified.
+ * @param new_path The new file path.
+ * @param flags The path resolution flags(see MR_AT_*).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note Relative paths require their corresponding open directory handles.
+ * @note MR_AT_IN_ROOT treats each directory handle as its path's temporary FS
+ * root.
+ */
+mr_err_t mr_fs_renameat(const mr_file_t *old_dir, const char *old_path,
+                        const mr_file_t *new_dir, const char *new_path,
+                        int flags);
 
 /**
  * @brief This function unlinks a file relative to a directory handle.
@@ -439,6 +444,7 @@ mr_err_t mr_fs_unlinkat(const mr_file_t *dir, const char *path, int flags);
  */
 mr_err_t mr_fs_unlinkat_recursive(const mr_file_t *dir, const char *path,
                                   int flags);
+#endif /* defined(MR_USE_FS_AT) */
 
 /**
  * @brief This function reads from a file.

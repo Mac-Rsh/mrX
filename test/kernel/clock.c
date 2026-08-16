@@ -84,7 +84,7 @@ MR_TEST_EXPORT(clock, busy_wait, test_clock_busy_wait);
 static void test_clock_hires_tick2timestamp_frequency(void) {
     mr_hires_timestamp_t timestamp;
 
-    timestamp = mr_clock_hires_tick2timestamp(
+    timestamp = mr_hires_tick2timestamp(
         MR_CFG_HIRES_TICK_PER_SECOND, 0);
 
     MR_TEST_ASSERT_EQ_INT(timestamp.year, 1970);

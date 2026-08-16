@@ -8,13 +8,11 @@
 
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#if defined(MR_USE_WORKQUEUE)
-#include <mrX/kernel/mr_workqueue.h>
+#if defined(MR_USE_WORK)
+#include <mrX/kernel/mr_work.h>
 
 static void *last_param = MR_NULL;
 static int work_run_count = 0;
-static const mr_clazz_t test_workqueue_clazz
-    = MR_CLAZZ_INIT("test_workqueue", MR_NULL, MR_CLAZZES_STATIK(workqueue));
 static const mr_clazz_t test_work_clazz
     = MR_CLAZZ_INIT("test_work", MR_NULL, MR_CLAZZES_STATIK(work));
 
@@ -32,10 +30,15 @@ static void test_work_entry(struct mr_work *work, void *param) {
 
 /* Tests */
 static void test_workqueue_derive_init(void) {
-    static mr_workqueue_t queue
-        = MR_WORKQUEUE_DERIVE_INIT(&queue, &test_workqueue_clazz);
+    mr_workqueue_t queue;
+    mr_err_t ret;
 
-    MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&queue), &test_workqueue_clazz);
+    ret = mr_workqueue_init(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&queue),
+                          MR_CLAZZES_STATIK(workqueue));
+    ret = mr_workqueue_del(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
 MR_TEST_EXPORT(workqueue, derive_init, test_workqueue_derive_init);
 
@@ -314,6 +317,154 @@ static void test_workqueue_del_pending_work(void) {
 }
 MR_TEST_EXPORT(workqueue, del_pending_work, test_workqueue_del_pending_work);
 
+static mr_work_t *callback_work = MR_NULL;
+
+static void test_workqueue_chain_entry(struct mr_work *work, void *param) {
+    MR_IGNORE(work);
+    MR_IGNORE(param);
+    work_run_count++;
+
+    if (callback_work != MR_NULL) {
+        mr_work_schedule(callback_work);
+        callback_work = MR_NULL;
+    }
+}
+
+static void test_workqueue_execute_batches(void) {
+    mr_workqueue_t queue;
+    mr_work_t work;
+    mr_work_t next;
+    mr_err_t ret;
+
+    test_workqueue_reset();
+    callback_work = MR_NULL;
+
+    ret = mr_workqueue_init(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_init(&work, test_workqueue_chain_entry, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_init(&next, test_work_entry, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_bind(&work, &queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_bind(&next, &queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    callback_work = &next;
+    ret = mr_workqueue_execute(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(work_run_count, 0);
+
+    ret = mr_work_schedule(&work);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_workqueue_execute(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(work_run_count, 1);
+    MR_TEST_ASSERT_EQ_INT(MR_WORK_IS_RUNNING(&next), MR_TRUE);
+
+    ret = mr_workqueue_execute(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(work_run_count, 2);
+    MR_TEST_ASSERT_EQ_INT(MR_WORK_IS_RUNNING(&next), MR_FALSE);
+
+    ret = mr_work_del(&work);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_del(&next);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_workqueue_del(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+MR_TEST_EXPORT(workqueue, execute_batches, test_workqueue_execute_batches);
+
+static void test_workqueue_delayed_order_and_cancel(void) {
+    mr_workqueue_t queue;
+    mr_work_t late;
+    mr_work_t early;
+    mr_work_t canceled;
+    mr_err_t ret;
+
+    test_workqueue_reset();
+    ret = mr_workqueue_init(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_init(&late, test_work_entry, (void *)0x10);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_init(&early, test_work_entry, (void *)0x20);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_init(&canceled, test_work_entry, (void *)0x30);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_bind(&late, &queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_bind(&early, &queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_bind(&canceled, &queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    ret = mr_work_delayed_schedule(&late, 20);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_delayed_schedule(&early, 5);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_delayed_schedule(&canceled, 3);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_cancel(&canceled);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    mr_clock_increase(4);
+    MR_TEST_ASSERT_EQ_INT(work_run_count, 0);
+    ret = mr_workqueue_execute(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(work_run_count, 0);
+
+    mr_clock_increase(1);
+    ret = mr_workqueue_execute(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(work_run_count, 1);
+    MR_TEST_ASSERT_EQ_PTR(last_param, (void *)0x20);
+
+    mr_clock_increase(15);
+    ret = mr_workqueue_execute(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(work_run_count, 2);
+    MR_TEST_ASSERT_EQ_PTR(last_param, (void *)0x10);
+
+    ret = mr_work_del(&late);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_del(&early);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_del(&canceled);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_workqueue_del(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+MR_TEST_EXPORT(workqueue, delayed_order_cancel,
+               test_workqueue_delayed_order_and_cancel);
+
+static void test_workqueue_dying_rejects_work(void) {
+    mr_workqueue_t queue;
+    mr_work_t work;
+    mr_err_t ret;
+
+    ret = mr_workqueue_init(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_init(&work, test_work_entry, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_work_bind(&work, &queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    mr_atomic_store(&queue.dying, MR_TRUE);
+    ret = mr_workqueue_work(&queue, &work);
+    MR_TEST_ASSERT_EQ_INT(ret, -MR_ENOENT);
+    ret = mr_workqueue_delayed_work(&queue, &work, 1);
+    MR_TEST_ASSERT_EQ_INT(ret, -MR_ENOENT);
+
+    mr_atomic_store(&queue.dying, MR_FALSE);
+    ret = mr_work_del(&work);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_workqueue_del(&queue);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+MR_TEST_EXPORT(workqueue, dying_rejects_work,
+               test_workqueue_dying_rejects_work);
+
 #if defined(MR_USE_WORKQUEUE_HOOK)
 static int hook_suspend_called = 0;
 static int hook_wakeup_called = 0;
@@ -387,5 +538,5 @@ static void test_workqueue_hook(void) {
 }
 MR_TEST_EXPORT(workqueue, hook, test_workqueue_hook);
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
-#endif /* defined(MR_USE_WORKQUEUE) */
+#endif /* defined(MR_USE_WORK) */
 #endif /* defined(MR_USE_TEST) */

@@ -22,6 +22,24 @@ config MR_USE_FS_MULTIUSER
         using one global namespace. When enabled, the platform must provide
         mr_fs_nsp_current() and return the namespace owned by the current task.
 
+config MR_USE_FS_AT
+    depends on MR_USE_FS
+    bool "Use directory-relative file interfaces"
+    default y
+    help
+        Provide the mr_fs_*at() interfaces for resolving paths relative to an
+        open directory handle. This also enables the MR_AT_* path resolution
+        flags.
+
+config MR_USE_FS_BY_PATH
+    depends on MR_USE_FS
+    bool "Use by-path file interfaces"
+    default y
+    help
+        Provide the mr_fs_*_by_path() convenience interfaces. Disable this
+        option when applications use open file handles for stat, rename, and
+        unlink operations.
+
 config MR_CFG_FS_PATH_LEN
     depends on MR_USE_FS
     int "Path length"
