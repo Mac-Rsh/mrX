@@ -18,9 +18,13 @@ from .resolver import SourceResolver
 from .tokens import Token, TokenType
 from .lexer import Lexer
 from .parser import Parser
+from .cpp import CppOptions, CppPreprocessor, PreprocessedUnit
 
 __all__ = [
     "ConditionalState",
+    "CppOptions",
+    "CppPreprocessor",
+    "PreprocessedUnit",
     "Lexer",
     "MacroExpander",
     "Parser",

@@ -25,7 +25,7 @@ class Lexer:
     _FLOAT_PATTERN = re.compile(r"\d+\.\d+")
     _DECIMAL_PATTERN = re.compile(r"\d+")
     _IDENTIFIER_PATTERN = re.compile(
-        r"[A-Za-z_][A-Za-z0-9_-]*(?:,[A-Za-z0-9_-]+)*")
+        r"#?[A-Za-z_][A-Za-z0-9_.+-]*(?:,[A-Za-z0-9_.+-]+)*")
     _OPERATORS = {
         "=": TokenType.ASSIGN,
         "<": TokenType.LT,
@@ -43,8 +43,9 @@ class Lexer:
     }
 
     def __init__(self, source: str, file_path: str,
-                 diagnostics: Diagnostics | None = None) -> None:
-        """Initialize lexer state for a single source file."""
+                 diagnostics: Diagnostics | None = None,
+                 source_map: list[tuple[str, int]] | None = None) -> None:
+        """Initialize lexer state with optional cpp line mapping."""
         self.source = source
         self.file_path = file_path
         self.diagnostics = diagnostics
@@ -52,6 +53,10 @@ class Lexer:
         self.line = 1
         self.column = 1
         self.tokens: list[Token] = []
+        self.source_map = source_map
+        self.source_map_index = 0
+        if source_map:
+            self.file_path, self.line = source_map[0]
 
     def tokenize(self) -> list[Token]:
         """Scan the full source buffer and return the token list."""
@@ -86,6 +91,11 @@ class Lexer:
                 self.tokens.append(
                     Token(self._OPERATORS[char], char, self._span(1)))
                 self._advance()
+                continue
+
+            # Identifier with optional leading '#' (DTS property names)
+            if char == "#":
+                self.tokens.append(self._read_identifier())
                 continue
 
             # Identifier
@@ -234,9 +244,17 @@ class Lexer:
         self.column += width
 
     def _newline(self) -> None:
-        """Advance to the next physical source line."""
+        """Advance to the next physical source line with mapping support."""
         self.pos += 1
-        self.line += 1
+        if self.source_map is not None:
+            self.source_map_index += 1
+            if self.source_map_index < len(self.source_map):
+                self.file_path, self.line = self.source_map[
+                    self.source_map_index]
+            else:
+                self.line += 1
+        else:
+            self.line += 1
         self.column = 1
 
     def _error(self, code: ErrorCode, message: str,

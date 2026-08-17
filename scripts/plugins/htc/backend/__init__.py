@@ -12,5 +12,6 @@ Exposes macro lowering and header rendering helpers.
 """
 
 from .macro import MacroBuilder
+from .names import MacroNames
 
-__all__ = ["MacroBuilder"]
+__all__ = ["MacroBuilder", "MacroNames"]

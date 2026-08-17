@@ -70,22 +70,28 @@ class HTCCommand:
             return 1
         input_path, output_path = paths
 
+        # Report the source file here so the compiler remains quiet.
+        print(f"Parsing: {input_path}")
+
         # Run the compiler pipeline separately from CLI and file output handling
-        result = HTCCompiler().compile(CompileOptions(input_path, output_path))
-        self._print_diagnostics(result.diagnostics)
-        if not result.ok or result.header_text is None:
-            return 1
-
-        # Write the generated header to the final output location
-        if not self._write_output(output_path, result.header_text,
+        result = HTCCompiler().compile(
+            CompileOptions(input_path, output_path,
+                           include_dirs=tuple(
+                               getattr(options, "include_dirs", ())),
+                           use_cpp=not getattr(options, "no_cpp", False),
+                           strict=bool(getattr(options, "strict", False))))
+        if result.ok and result.header_text is not None:
+            # Write the generated header to the final output location
+            if self._write_output(output_path, result.header_text,
                                   result.diagnostics):
-            # File system write errors are reported through diagnostics
-            self._print_diagnostics(result.diagnostics)
-            return 1
+                self._print_diagnostics(result.diagnostics)
+                # Report the generated output file path on success
+                print(f"Build: {output_path}")
+                return 0
 
-        # Report the generated output file path on success
-        print(f"Build: {output_path}")
-        return 0
+        # Compilation or file system errors are reported through diagnostics
+        self._print_diagnostics(result.diagnostics)
+        return 1
 
     @classmethod
     def _build_parser(cls) -> ArgumentParser:
@@ -108,6 +114,23 @@ class HTCCommand:
             "-o",
             "--output",
             help=f"Output '.h' file path (default: {cls.DEFAULT_OUTPUT_PATH})",
+        )
+        parser.add_argument(
+            "-I",
+            dest="include_dirs",
+            action="append",
+            default=[],
+            help="Additional include search path (repeatable)",
+        )
+        parser.add_argument(
+            "--no-cpp",
+            action="store_true",
+            help="Use the built-in preprocessor instead of an external C preprocessor",
+        )
+        parser.add_argument(
+            "--strict",
+            action="store_true",
+            help="Warn on HTC extension syntax that is not valid Linux DTS",
         )
         return parser
 

@@ -21,7 +21,8 @@ class SourceResolver:
 
     INCLUDE_KIND_QUOTE = DirectiveParser.INCLUDE_KIND_QUOTE
 
-    def __init__(self, include_dirs: list[str], diagnostics: Diagnostics) -> None:
+    def __init__(self, include_dirs: list[str],
+                 diagnostics: Diagnostics) -> None:
         self.include_dirs = [Path(directory).resolve() for directory in
                              include_dirs]
         self.diagnostics = diagnostics
@@ -38,15 +39,6 @@ class SourceResolver:
     def resolve_include(self, raw_path: str, current_dir: Path,
                         include_kind: str) -> Path | None:
         """Resolve an include path according to quote or angle search rules."""
-        if raw_path.startswith("/"):
-            self.diagnostics.error(ErrorCode.INCLUDE_ERROR,
-                                   f"absolute includes are not allowed: '{raw_path}'")
-            return None
-        if ".." in Path(raw_path).parts:
-            self.diagnostics.error(ErrorCode.INCLUDE_ERROR,
-                                   f"path traversal detected in include: '{raw_path}'")
-            return None
-
         candidates: list[Path] = []
         if include_kind == self.INCLUDE_KIND_QUOTE:
             candidates.append(current_dir / raw_path)

@@ -33,14 +33,6 @@ class Preprocessor:
 
     NEWLINE_CRLF = "\r\n"
     NEWLINE_LF = "\n"
-    DIRECTIVE_ELIF = DirectiveParser.DIRECTIVE_ELIF
-    DIRECTIVE_ELSE = DirectiveParser.DIRECTIVE_ELSE
-    DIRECTIVE_ENDIF = DirectiveParser.DIRECTIVE_ENDIF
-    DIRECTIVE_IF = DirectiveParser.DIRECTIVE_IF
-    DIRECTIVE_IFDEF = DirectiveParser.DIRECTIVE_IFDEF
-    DIRECTIVE_IFNDEF = DirectiveParser.DIRECTIVE_IFNDEF
-    INCLUDE_KIND_QUOTE = DirectiveParser.INCLUDE_KIND_QUOTE
-    MAX_MACRO_EXPANSION_DEPTH = 16
 
     def __init__(self, include_dirs: list[str],
                  diagnostics: Diagnostics) -> None:
@@ -80,7 +72,6 @@ class Preprocessor:
                                       resolved_path.name, included_from):
             return
 
-        unit.include_graph.setdefault(normalized_path, [])
         if unit.contains(normalized_path):
             return
 
@@ -272,7 +263,6 @@ class Preprocessor:
             included_from=IncludeSite(file_path=file_path, line=line_number,
                                       column=path_column),
         )
-        unit.add_edge(file_path, str(child_path))
 
     def _report_line_error(self, code: ErrorCode, message: str,
                            file_path: str, line_number: int,

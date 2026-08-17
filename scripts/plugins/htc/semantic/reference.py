@@ -11,7 +11,7 @@ Provides one lookup implementation for validation and backend emission.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from .builder import HardTree
+from .model import HardTree
 
 
 class ReferenceResolver:
@@ -31,7 +31,11 @@ class ReferenceResolver:
         if short in tree.nodes_by_path:
             return short
 
-        for node in tree.nodes:
-            if node.name == reference:
-                return node.path
-        return None
+        candidates = ReferenceResolver.find_by_name(tree, reference)
+        return candidates[0] if candidates else None
+
+    @staticmethod
+    def find_by_name(tree: HardTree, name: str) -> list[str]:
+        """Return all canonical paths whose node name equals ``name``."""
+        return [node.path for node in tree.nodes
+                if node.name == name]

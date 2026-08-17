@@ -71,7 +71,7 @@ class DirectiveParser:
     DEFAULT_DEFINE_VALUE = "1"
 
     HTC_INCLUDE_PATTERN = re.compile(
-        r'^/include/"([^"]+)"(?:\s*(?://.*|/\*.*\*/\s*)?)?$')
+        r'^/include/\s*"([^"]+)"(?:\s*(?://.*|/\*.*\*/\s*)?)?$')
     C_INCLUDE_PATTERN = re.compile(
         r'^([<"])([^>"]+)[>"](?:\s*(?://.*|/\*.*\*/\s*)?)?$')
     IDENTIFIER_PATTERN = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')

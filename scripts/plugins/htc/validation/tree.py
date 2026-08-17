@@ -13,9 +13,10 @@ completed, including alias resolution and reference validation.
 """
 
 from ..common import ArrayMode, ArrayValue, Diagnostics, ErrorCode, \
-    ReferenceValue, SourceSpan, STATUS_DISABLED, ValueExpr, NumberValue, \
-    FloatValue
+    ReferenceValue, SourceSpan, STATUS_DISABLED, StringValue, ValueExpr, \
+    NumberValue, FloatValue
 from ..semantic import HardTree, ReferenceResolver
+from ..backend.names import MacroNames
 
 
 class TreeValidator:
@@ -31,6 +32,7 @@ class TreeValidator:
     def validate(self, tree: HardTree) -> None:
         """Run all post-build semantic validation passes on a tree."""
         self._resolve_aliases(tree)
+        self._verify_macro_name_collisions(tree)
         self._verify_references(tree)
         self._verify_array_modes(tree)
 
@@ -42,21 +44,35 @@ class TreeValidator:
             return
 
         for prop in aliases_node.properties:
-            # Alias values must be references
-            if not isinstance(prop.value, ReferenceValue):
+            # Alias values may be DTS path strings or HTC label/path references.
+            if isinstance(prop.value, StringValue):
+                target_path = self._resolve_string_path(
+                    prop.value.value, tree)
+                if target_path is None:
+                    self._error_at(
+                        ErrorCode.UNDEFINED_LABEL,
+                        f"undefined alias path: '{prop.value.value}'",
+                        prop.value.span or prop.span,
+                    )
+                    continue
+            elif isinstance(prop.value, ReferenceValue):
+                target_path, ambiguous = self._lookup_reference_checked(
+                    prop.value, tree)
+                if target_path is None:
+                    if not ambiguous:
+                        self._error_at(
+                            ErrorCode.UNDEFINED_LABEL,
+                            f"undefined reference: &{prop.value.reference}",
+                            prop.value.span or prop.span,
+                        )
+                    continue
+            else:
                 self._warn_at(
                     ErrorCode.INVALID_ALIAS_VALUE,
-                    f"aliases property '{prop.name}' must be a reference",
+                    f"aliases property '{prop.name}' must be a path string or "
+                    "a reference",
                     prop.value.span or prop.span,
                 )
-                continue
-
-            # Alias targets reuse the same reference lookup rules as properties
-            target_path = self._lookup_reference(prop.value, tree)
-            if target_path is None:
-                self._error_at(ErrorCode.UNDEFINED_LABEL,
-                               f"undefined reference: &{prop.value.reference}",
-                               prop.value.span or prop.span)
                 continue
 
             # Alias names must be unique
@@ -71,14 +87,19 @@ class TreeValidator:
     def _verify_references(self, tree: HardTree) -> None:
         """Verify that all references resolve to existing semantic nodes."""
         for node in tree.nodes:
+            if node.path == self.NODE_ALIASES_PATH:
+                continue
             for prop in node.properties:
                 for reference in self._iter_references(prop.value):
                     # References may resolve through a label or a canonical path
-                    target_path = self._lookup_reference(reference, tree)
+                    target_path, ambiguous = self._lookup_reference_checked(
+                        reference, tree)
                     if target_path is None:
-                        self._error_at(ErrorCode.UNDEFINED_LABEL,
-                                       f"undefined reference: &{reference.reference}",
-                                       reference.span)
+                        if not ambiguous:
+                            self._error_at(
+                                ErrorCode.UNDEFINED_LABEL,
+                                f"undefined reference: &{reference.reference}",
+                                reference.span)
                         continue
 
                     # Disabled targets are still resolvable but worth warning on
@@ -96,12 +117,120 @@ class TreeValidator:
             for prop in node.properties:
                 self._check_array_modes(prop.value, prop.name, node.path)
 
-    @staticmethod
-    def _lookup_reference(reference: ReferenceValue,
+    def _verify_macro_name_collisions(self, tree: HardTree) -> None:
+        """Report distinct DTS names that collide after macro normalization."""
+        self._verify_node_name_collisions(tree)
+        self._verify_label_name_collisions(tree)
+        self._verify_property_name_collisions(tree)
+        self._verify_compatible_name_collisions(tree)
+
+    def _verify_node_name_collisions(self, tree: HardTree) -> None:
+        """Report node paths that normalize to the same backend macro name."""
+        seen: dict[str, str] = {}
+        for path, node in tree.nodes_by_path.items():
+            macro_path = MacroNames.normalize_path(path)
+            existing = seen.get(macro_path)
+            if existing is not None and existing != path:
+                self._error_at(
+                    ErrorCode.DUPLICATE_NODE,
+                    f"node paths '{existing}' and '{path}' both normalize to "
+                    f"macro path '{macro_path}'",
+                    node.span,
+                )
+                continue
+            seen[macro_path] = path
+
+    def _verify_label_name_collisions(self, tree: HardTree) -> None:
+        """Report labels that normalize to the same backend label macro."""
+        seen: dict[str, str] = {}
+        for label, path in tree.labels.items():
+            macro_label = MacroNames.normalize_identifier(label)
+            existing = seen.get(macro_label)
+            if existing is not None and existing != label:
+                node = tree.nodes_by_path.get(path)
+                self._error_at(
+                    ErrorCode.DUPLICATE_LABEL,
+                    f"labels '{existing}' and '{label}' both normalize to "
+                    f"macro name '{macro_label}'",
+                    node.span if node is not None else None,
+                )
+                continue
+            seen[macro_label] = label
+
+    def _verify_property_name_collisions(self, tree: HardTree) -> None:
+        """Report properties in one node that normalize to the same macro."""
+        for path, node in tree.nodes_by_path.items():
+            seen: dict[str, str] = {}
+            for prop in node.properties:
+                if prop.name.startswith("#"):
+                    continue
+                macro_prop = MacroNames.normalize_identifier(prop.name)
+                existing = seen.get(macro_prop)
+                if existing is not None and existing != prop.name:
+                    self._error_at(
+                        ErrorCode.INVALID_PROPERTY,
+                        f"properties '{existing}' and '{prop.name}' in node "
+                        f"'{path}' both normalize to macro name '{macro_prop}'",
+                        prop.span,
+                    )
+                    continue
+                seen[macro_prop] = prop.name
+
+    def _verify_compatible_name_collisions(self, tree: HardTree) -> None:
+        """Warn when two compatible strings normalize to the same macro."""
+        seen: dict[str, str] = {}
+        for node in tree.nodes:
+            for compatible in node.compatible:
+                macro_name = MacroNames.normalize_identifier(compatible)
+                existing = seen.get(macro_name)
+                if existing is not None and existing != compatible:
+                    self._warn_at(
+                        ErrorCode.INVALID_COMPATIBLE_VALUE,
+                        f"compatible strings '{existing}' and '{compatible}' "
+                        f"both normalize to macro name '{macro_name}'; "
+                        "prefer the comma form",
+                        node.span,
+                    )
+                    continue
+                seen[macro_name] = compatible
+
+    def _lookup_reference(self, reference: ReferenceValue,
                           tree: HardTree) -> str | None:
         """Resolve a reference value to its canonical semantic path."""
         return ReferenceResolver.resolve(tree, reference.reference,
                                          reference.is_path)
+
+    def _lookup_reference_checked(self, reference: ReferenceValue,
+                                  tree: HardTree) -> tuple[str | None, bool]:
+        """Resolve a reference and report ambiguous name-only lookups.
+
+        Returns ``(target_path, ambiguous)``.  When ``ambiguous`` is true, an
+        error has already been emitted and the caller should not emit a second
+        undefined-reference error.
+        """
+        if not reference.is_path:
+            label_target = tree.labels.get(reference.reference)
+            short_path = f"/{reference.reference}"
+            if label_target is None and short_path not in tree.nodes_by_path:
+                candidates = ReferenceResolver.find_by_name(
+                    tree, reference.reference)
+                if len(candidates) > 1:
+                    self._error_at(
+                        ErrorCode.UNDEFINED_LABEL,
+                        f"ambiguous reference: &{reference.reference} matches "
+                        f"nodes {', '.join(candidates)}; use a label or "
+                        "&{/full/path} instead",
+                        reference.span,
+                    )
+                    return None, True
+        return self._lookup_reference(reference, tree), False
+
+    @staticmethod
+    def _resolve_string_path(path: str, tree: HardTree) -> str | None:
+        """Resolve a DTS alias path string to a canonical node path."""
+        if not path.startswith("/"):
+            path = f"/{path}"
+        return path if path in tree.nodes_by_path else None
 
     def _iter_references(self, value: ValueExpr):
         """Yield nested reference values from a value expression tree."""

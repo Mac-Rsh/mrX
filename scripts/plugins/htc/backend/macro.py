@@ -12,23 +12,37 @@ definitions used by embedded targets.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from ..common import ArrayMode, ArrayValue, EmptyValue, FloatValue, \
-    IdentifierValue, NumberValue, ReferenceValue, STATUS_DEFER, \
-    STATUS_DISABLED, STATUS_EARLY, STATUS_LAST, STATUS_OKAY, STATUS_PRIO, \
-    STATUS_PRIO_PREFIX, STATUS_PRIO_SUFFIX, StringValue, ValueExpr
+from ..common import (
+    ArrayMode,
+    ArrayValue,
+    ByteStringValue,
+    EmptyValue,
+    FloatValue,
+    IdentifierValue,
+    NumberValue,
+    ReferenceValue,
+    STATUS_DEFER,
+    STATUS_DISABLED,
+    STATUS_EARLY,
+    STATUS_LAST,
+    STATUS_OKAY,
+    STATUS_PRIO,
+    STATUS_PRIO_PREFIX,
+    STATUS_PRIO_SUFFIX,
+    StringValue,
+    ValueExpr,
+)
 from ..semantic import HardNode, HardTree, ReferenceResolver
+from .names import MacroNames
 
 
 class MacroBuilder:
     """Lowers a semantic hardware tree into backend macro lines."""
 
-    PREFIX_TAG = "__MR_HT_"
     SECTION_LABEL = "LABEL"
     SECTION_ALIAS = "ALIAS"
     SECTION_INST = "INST"
     SECTION_DRIVER = "DRIVER"
-    NODE_ALIASES = "aliases"
-    SKIP_NODES = {NODE_ALIASES}
     PROPERTY_NAME = "NAME"
     PROPERTY_PATH = "PATH"
     PROPERTY_INIT_LEVEL = "INIT_LEVEL"
@@ -78,62 +92,6 @@ class MacroBuilder:
     def _iter_enabled_nodes(self, tree: HardTree) -> list[HardNode]:
         """Return nodes that should participate in backend emission."""
         return [node for node in tree.nodes if self._should_emit_node(node)]
-
-    def _should_emit_node(self, node: HardNode) -> bool:
-        """Return True when a hardware node should be emitted."""
-        return node.name not in self.SKIP_NODES and node.effective_status != self.STATUS_DISABLED
-
-    def _emit_node(self, lines: list[str], tree: HardTree,
-                   node: HardNode) -> None:
-        """Emit all macros associated with one hardware node."""
-        # Section header
-        node_macro = self._path_to_macro(node.path)
-        lines.append(self._section_header(node.path))
-
-        # EXIST
-        self._define_exist(lines, node_macro)
-
-        # NAME
-        self._define_property(lines, node_macro, self.PROPERTY_NAME,
-                              self._normalize(node.name))
-
-        # PATH
-        self._define_property(lines, node_macro, self.PROPERTY_PATH,
-                              f'"{node.path}"')
-
-        # INIT_LEVEL
-        self._define_property(lines, node_macro, self.PROPERTY_INIT_LEVEL,
-                              self._map_status(node.effective_status))
-
-        # PARENT
-        if node.parent_path is not None:
-            self._define_property(lines, node_macro, self.PROPERTY_PARENT,
-                                  self._path_to_macro(node.parent_path))
-
-        # ADDR
-        if node.address is not None:
-            self._define_property(lines, node_macro, self.PROPERTY_ADDR,
-                                  self._format_address(node.address))
-
-        # Properties
-        for prop in node.properties:
-            self._emit_property(lines, tree, node_macro, prop.name, prop.value)
-        lines.append("")
-
-    def _emit_property(self, lines: list[str], tree: HardTree,
-                       node_macro: str, prop_name: str,
-                       value: ValueExpr) -> None:
-        """Emit macros for one node property value."""
-        base = f"{node_macro}_P_{self._normalize(prop_name)}"
-        self._define_exist(lines, base)
-
-        # Expanded arrays
-        if isinstance(value, ArrayValue) and value.mode == ArrayMode.EXPANDED:
-            self._emit_expanded_array(lines, tree, base, value)
-            return
-
-        # Simple values
-        self._define(lines, base, self._format_value(tree, value))
 
     def _emit_expanded_array(self, lines: list[str], tree: HardTree,
                              base: str, value: ArrayValue) -> None:
@@ -191,9 +149,10 @@ class MacroBuilder:
     def _emit_inst(self, lines: list[str],
                    enabled_nodes: list[HardNode]) -> None:
         """Emit driver instance index groups for enabled hardware nodes."""
+        driver_nodes = [node for node in enabled_nodes if node.compatible]
         self._emit_inst_group(lines,
                               f"/{self.SECTION_INST}/{self.SECTION_DRIVER}",
-                              enabled_nodes)
+                              driver_nodes)
         groups: dict[str, list[HardNode]] = {}
         for node in enabled_nodes:
             for compatible in node.compatible:
@@ -213,37 +172,6 @@ class MacroBuilder:
             self._define(lines, f"{prefix}_S_{index}",
                          self._path_to_macro(node.path))
         lines.append("")
-
-    def _format_value(self, tree: HardTree, value: ValueExpr) -> str:
-        """Format a semantic value expression as backend macro text."""
-        # Bare properties map to flag-style macros with value 1
-        if isinstance(value, EmptyValue):
-            return self.DEFAULT_FLAG_VALUE
-
-        # Strings preserve original quoting at render time
-        if isinstance(value, StringValue):
-            return f'"{self._escape_c_string(value.value)}"'
-
-        # Numeric and identifier values are emitted as written
-        if isinstance(value, NumberValue):
-            return value.original
-        if isinstance(value, FloatValue):
-            return value.original
-        if isinstance(value, IdentifierValue):
-            return value.name
-
-        # References are already validated, resolve through label, path, then name
-        if isinstance(value, ReferenceValue):
-            target = ReferenceResolver.resolve(tree, value.reference,
-                                               value.is_path)
-            return self._path_to_macro(target or f"/{value.reference}")
-
-        # Inline arrays render as direct brace-enclosed values
-        if isinstance(value, ArrayValue):
-            if value.mode == ArrayMode.INLINE:
-                return self._format_inline_array(tree, value)
-            return self.DEFAULT_ARRAY_VALUE
-        return str(value)
 
     def _format_inline_array(self, tree: HardTree,
                              value: ArrayValue) -> str:
@@ -282,29 +210,11 @@ class MacroBuilder:
         return self.STATUS_TO_INIT_LEVEL.get(status, self.DEFAULT_INIT_LEVEL)
 
     @staticmethod
-    def _format_address(address: str) -> str:
-        """Normalize node address text into backend hex form."""
-        if address.startswith("0x"):
-            return address
-        return f"{address}"
-
-    @staticmethod
     def _section_header(title: str) -> str:
         """Build a banner comment for one logical output section."""
         fixed = 32
         adaptive = max(1, 80 - 9 - fixed - len(title))
         return f"/* {'=' * fixed} {title} {'=' * adaptive} */"
-
-    def _path_to_macro(self, path: str) -> str:
-        """Convert a canonical node path into an HTC macro prefix."""
-        if path == "/":
-            return f"{self.PREFIX_TAG}N"
-        return f"{self.PREFIX_TAG}N{self._normalize_path(path)}"
-
-    @classmethod
-    def _normalize_path(cls, path: str) -> str:
-        """Normalize a canonical path into macro-safe text."""
-        return path.replace("/", "_S_").replace("-", "_")
 
     @staticmethod
     def _escape_c_string(value: str) -> str:
@@ -317,11 +227,6 @@ class MacroBuilder:
             "\t": "\\t",
         }
         return "".join(escapes.get(char, char) for char in value)
-
-    @staticmethod
-    def _normalize(identifier: str) -> str:
-        """Normalize user-facing names into macro-safe fragments."""
-        return identifier.replace('-', '_').replace(',', '_')
 
     @staticmethod
     def render(lines: list[str]) -> str:
@@ -344,3 +249,153 @@ class MacroBuilder:
         prop_macro = f"{node_macro}_P_{prop_name}"
         self._define_exist(lines, prop_macro)
         self._define(lines, prop_macro, value)
+
+    def _should_emit_node(self, node: HardNode) -> bool:
+        """Return True when a hardware node should be emitted."""
+        return node.path != "/aliases" and node.effective_status != self.STATUS_DISABLED
+
+    def _path_to_macro(self, path: str) -> str:
+        """Convert a canonical DTS path into an HTC macro prefix."""
+        return MacroNames.node_macro(path)
+
+    @staticmethod
+    def _normalize(identifier: str) -> str:
+        """Normalize user-facing names into macro-safe fragments."""
+        return MacroNames.normalize_identifier(identifier)
+
+    def _emit_property(self, lines: list[str], tree: HardTree,
+                       node_macro: str, prop_name: str,
+                       value: ValueExpr) -> None:
+        """Emit macros for one node property value."""
+        base = f"{node_macro}_P_{self._normalize(prop_name)}"
+        self._define_exist(lines, base)
+
+        # DTS bytestring: aggregate plus indexed bytes
+        if isinstance(value, ByteStringValue):
+            self._emit_byte_string(lines, base, value)
+            return
+
+        # Expanded arrays: grouped element macros plus a scalar length macro
+        if isinstance(value, ArrayValue) and value.mode == ArrayMode.EXPANDED:
+            self._emit_expanded_array(lines, tree, base, value)
+            self._define(lines, f"{base}_LEN", str(len(value.elements)))
+            if len(value.elements) == 1:
+                self._define(lines, base,
+                             self._format_expanded_element(tree, value.elements[0]))
+            return
+
+        # Inline arrays: one aggregate macro plus a scalar length macro
+        if isinstance(value, ArrayValue) and value.mode == ArrayMode.INLINE:
+            self._define(lines, base, self._format_value(tree, value))
+            self._define(lines, f"{base}_LEN", str(len(value.elements)))
+            for index, element in enumerate(value.elements):
+                element_macro = f"{base}_E_0_I_{index}"
+                self._define_exist(lines, element_macro)
+                self._define(lines, element_macro,
+                             self._format_value(tree, element))
+            return
+
+        # Simple values
+        self._define(lines, base, self._format_value(tree, value))
+
+    def _emit_byte_string(self, lines: list[str], base: str,
+                          value: ByteStringValue) -> None:
+        """Emit a DTS bytestring as an aggregate and indexed byte macros."""
+        rendered = ", ".join(f"0x{byte:02x}" for byte in value.values)
+        self._define(lines, base, "{" + rendered + "}")
+        self._define(lines, f"{base}_LEN", str(len(value.values)))
+        for index, byte in enumerate(value.values):
+            element_macro = f"{base}_E_0_I_{index}"
+            self._define_exist(lines, element_macro)
+            self._define(lines, element_macro, f"0x{byte:02x}")
+
+    def _format_value(self, tree: HardTree, value: ValueExpr) -> str:
+        """Format a semantic value expression as backend macro text."""
+        # Bare properties map to flag-style macros with value 1
+        if isinstance(value, EmptyValue):
+            return self.DEFAULT_FLAG_VALUE
+
+        # Strings preserve original quoting at render time
+        if isinstance(value, StringValue):
+            return f'"{self._escape_c_string(value.value)}"'
+
+        # Numeric and identifier values are emitted as written
+        if isinstance(value, NumberValue):
+            return value.original
+        if isinstance(value, FloatValue):
+            return value.original
+        if isinstance(value, IdentifierValue):
+            return value.name
+
+        # References are resolved through label, path, then name
+        if isinstance(value, ReferenceValue):
+            target = ReferenceResolver.resolve(tree, value.reference,
+                                               value.is_path)
+            return self._path_to_macro(target or f"/{value.reference}")
+
+        # DTS bytestrings render as C brace-enclosed values
+        if isinstance(value, ByteStringValue):
+            rendered = ", ".join(f"0x{byte:02x}" for byte in value.values)
+            return "{" + rendered + "}"
+
+        # Inline arrays render as direct brace-enclosed values
+        if isinstance(value, ArrayValue):
+            if value.mode == ArrayMode.INLINE:
+                return self._format_inline_array(tree, value)
+            return self.DEFAULT_ARRAY_VALUE
+        return str(value)
+
+    @staticmethod
+    def _format_address(address: str) -> str:
+        """Normalize node address text into backend hex form."""
+        if address is None:
+            return "0"
+        parts = []
+        for part in address.split(","):
+            lowered = part.strip().lower()
+            if lowered.startswith("0x"):
+                parts.append(lowered)
+            elif lowered:
+                parts.append(f"0x{lowered}")
+            else:
+                parts.append("0x0")
+        return ", ".join(parts)
+
+    def _emit_node(self, lines: list[str], tree: HardTree,
+                   node: HardNode) -> None:
+        """Emit node macros, skipping DTS bus metadata properties."""
+        # Section header
+        node_macro = self._path_to_macro(node.path)
+        lines.append(self._section_header(node.path))
+
+        # EXIST
+        self._define_exist(lines, node_macro)
+
+        # NAME
+        self._define_property(lines, node_macro, self.PROPERTY_NAME,
+                              self._normalize(node.name))
+
+        # PATH
+        self._define_property(lines, node_macro, self.PROPERTY_PATH,
+                              f'"{node.path}"')
+
+        # INIT_LEVEL
+        self._define_property(lines, node_macro, self.PROPERTY_INIT_LEVEL,
+                              self._map_status(node.effective_status))
+
+        # PARENT
+        if node.parent_path is not None:
+            self._define_property(lines, node_macro, self.PROPERTY_PARENT,
+                                  self._path_to_macro(node.parent_path))
+
+        # ADDR
+        if node.address is not None:
+            self._define_property(lines, node_macro, self.PROPERTY_ADDR,
+                                  self._format_address(node.address))
+
+        # Properties
+        for prop in node.properties:
+            if prop.name.startswith("#"):
+                continue
+            self._emit_property(lines, tree, node_macro, prop.name, prop.value)
+        lines.append("")

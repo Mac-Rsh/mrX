@@ -73,6 +73,46 @@ class ReferenceValue(ValueExpr):
     span: SourceSpan | None = None
 
 
+@dataclass(frozen=True)
+class ByteStringValue(ValueExpr):
+    """Represents a DTS byte string value such as `[00 11 ff]`."""
+
+    values: list[int]
+    original: str = ""
+    span: SourceSpan | None = None
+
+
+@dataclass(frozen=True)
+class DtsV1Tag:
+    """Represents the optional `/dts-v1/;` document tag."""
+
+    span: SourceSpan | None = None
+
+
+@dataclass(frozen=True)
+class MemreserveDecl:
+    """Represents a `/memreserve/` declaration."""
+
+    values: list[ValueExpr]
+    span: SourceSpan | None = None
+
+
+@dataclass(frozen=True)
+class DeleteNodeDecl:
+    """Represents a `/delete-node/ name;` directive."""
+
+    name: str
+    span: SourceSpan | None = None
+
+
+@dataclass(frozen=True)
+class DeletePropertyDecl:
+    """Represents a `/delete-property/ prop;` directive."""
+
+    name: str
+    span: SourceSpan | None = None
+
+
 class ArrayMode(Enum):
     """Controls how an array value is interpreted by later stages."""
 
@@ -107,6 +147,7 @@ class NodeDecl:
     address: str | None = None
     properties: list[PropertyDecl] = field(default_factory=list)
     children: list["NodeDecl"] = field(default_factory=list)
+    deleted_properties: list[DeletePropertyDecl] = field(default_factory=list)
     span: SourceSpan | None = None
 
     def get_property(self, name: str) -> PropertyDecl | None:
@@ -130,5 +171,17 @@ class RootNode:
     """Represents the parsed root of a single source file."""
 
     properties: list[PropertyDecl] = field(default_factory=list)
+    deleted_properties: list[DeletePropertyDecl] = field(default_factory=list)
     children: list[NodeDecl] = field(default_factory=list)
+    span: SourceSpan | None = None
+
+
+@dataclass(frozen=True)
+class Document:
+    """Represents one parsed DTS source document."""
+
+    dts_v1: bool = False
+    memreserves: list[MemreserveDecl] = field(default_factory=list)
+    roots: list[RootNode] = field(default_factory=list)
+    delete_nodes: list[DeleteNodeDecl] = field(default_factory=list)
     span: SourceSpan | None = None

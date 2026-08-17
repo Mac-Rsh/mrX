@@ -443,7 +443,8 @@ class PlatformCommand:
         if changed and not force:
             for path in changed:
                 print(f"Skip: changed installed file: {path}")
-            raise ValueError("Use `--force` to uninstall changed installed files.")
+            raise ValueError(
+                "Use `--force` to uninstall changed installed files.")
 
         cls._restore_old_state(output_root, old_dir, force=True)
         manifest_path.unlink(missing_ok=True)
@@ -553,7 +554,8 @@ class PlatformCommand:
         return changed
 
     @classmethod
-    def _copy_files(cls, entries: list[CopyEntry], output_root: Path) -> list[dict]:
+    def _copy_files(cls, entries: list[CopyEntry], output_root: Path) -> list[
+        dict]:
         """Copy all resolved platform files into the output directory."""
         copied_files: list[dict] = []
         for entry in entries:
@@ -581,8 +583,10 @@ class PlatformCommand:
     def _print_install_plan(cls, result: PlatformResult) -> None:
         """Print the resolved platform install plan."""
         print(f"Platform: {result.name}")
-        print(f"Source dir: {cls._format_display_path(result.directory.source)}")
-        print(f"Output dir: {cls._format_display_path(result.directory.output)}")
+        print(
+            f"Source dir: {cls._format_display_path(result.directory.source)}")
+        print(
+            f"Output dir: {cls._format_display_path(result.directory.output)}")
         state_dir = cls._state_dir(result.directory.output)
         print(f"State dir: {cls._format_display_path(state_dir)}")
         for entry in result.entries:
@@ -681,7 +685,8 @@ class PlatformCommand:
         return path.name not in ("", ".") and path.suffix != ""
 
     @staticmethod
-    def _resolve_single_file_target(target_root: Path, source_path: Path) -> Path:
+    def _resolve_single_file_target(target_root: Path,
+                                    source_path: Path) -> Path:
         """Resolve a single source file target path."""
         if target_root.exists() and target_root.is_dir():
             return (target_root / source_path.name).resolve()
@@ -764,7 +769,8 @@ class PlatformCommand:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except OSError as exc:
-            raise ValueError(f"Failed to read JSON file: {path} ({exc})") from exc
+            raise ValueError(
+                f"Failed to read JSON file: {path} ({exc})") from exc
         except json.JSONDecodeError as exc:
             raise ValueError(f"Invalid JSON file: {path} ({exc})") from exc
         if not isinstance(data, dict):

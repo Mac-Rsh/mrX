@@ -12,14 +12,15 @@ semantic building, validation, and macro backend emission.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from .common import CompilationUnit, Diagnostics, RootNode
-from .frontend import Lexer, Parser, Preprocessor
-from .semantic import HardTree, SemanticBuilder
-from .validation import TreeValidator
-from .backend import MacroBuilder
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+
+from .backend import MacroBuilder
+from .common import CompilationUnit, Diagnostics, Document
+from .frontend import CppOptions, CppPreprocessor, Lexer, Parser, Preprocessor
+from .semantic import HardTree, SemanticBuilder
+from .validation import TreeValidator
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,9 @@ class CompileOptions:
 
     input_path: Path
     output_path: Path
+    include_dirs: tuple[str, ...] = ()
+    use_cpp: bool = True
+    strict: bool = False
 
 
 @dataclass(frozen=True)
@@ -51,15 +55,16 @@ class HTCCompiler:
     def compile(self, options: CompileOptions) -> CompileResult:
         """Compile one input source into a generated header text."""
         diagnostics = Diagnostics()
-        unit = self._preprocess(options.input_path, diagnostics)
+        unit = self._preprocess(options, diagnostics)
         if unit is None:
             return CompileResult(diagnostics=diagnostics)
 
-        roots = self._parse_roots(unit, diagnostics)
-        if roots is None:
+        document = self._parse_document(unit, diagnostics,
+                                        strict=options.strict)
+        if document is None:
             return CompileResult(diagnostics=diagnostics, unit=unit)
 
-        tree = SemanticBuilder(diagnostics).build(roots)
+        tree = SemanticBuilder(diagnostics).build(document)
         TreeValidator(diagnostics).validate(tree)
         if diagnostics.has_errors():
             return CompileResult(diagnostics=diagnostics, unit=unit, tree=tree)
@@ -70,29 +75,63 @@ class HTCCompiler:
                              unit=unit, tree=tree)
 
     @staticmethod
-    def _preprocess(input_path: Path,
+    def _parse_document(unit: CompilationUnit,
+                        diagnostics: Diagnostics,
+                        strict: bool = False) -> Document | None:
+        """Parse all preprocessed source files into one DTS document."""
+        dts_v1 = False
+        roots = []
+        memreserves = []
+        delete_nodes = []
+        for source_file in unit.files:
+            lexer = Lexer(source_file.text, source_file.path, diagnostics,
+                          source_map=source_file.line_map)
+            tokens = lexer.tokenize()
+            parser = Parser(tokens, diagnostics, strict=strict)
+            parsed = parser.parse()
+            dts_v1 = dts_v1 or parsed.dts_v1
+            roots.extend(parsed.roots)
+            memreserves.extend(parsed.memreserves)
+            delete_nodes.extend(parsed.delete_nodes)
+        if diagnostics.has_errors():
+            return None
+        return Document(dts_v1=dts_v1, roots=roots,
+                        memreserves=memreserves, delete_nodes=delete_nodes)
+
+    @staticmethod
+    def _preprocess(options: CompileOptions,
                     diagnostics: Diagnostics) -> CompilationUnit | None:
         """Preprocess one HTC source file into a compilation unit."""
-        preprocessor = Preprocessor([str(input_path.parent)], diagnostics)
-        unit = preprocessor.process(str(input_path))
+        if options.use_cpp:
+            adapter = CppPreprocessor(diagnostics)
+            cpp_options = CppOptions(include_dirs=options.include_dirs)
+            unit = adapter.preprocess(str(options.input_path), cpp_options)
+            if unit is not None:
+                return CompilationUnit(
+                    entry_path=str(options.input_path),
+                    files=[unit.source_file],
+                )
+            if diagnostics.has_errors():
+                return None
+
+        # Fallback to the built-in limited preprocessor
+        preprocessor = Preprocessor(
+            [str(options.input_path.parent), *options.include_dirs],
+            diagnostics,
+        )
+        unit = preprocessor.process(str(options.input_path))
         if diagnostics.has_errors():
             return None
         return unit
 
     @staticmethod
-    def _parse_roots(unit: CompilationUnit,
-                     diagnostics: Diagnostics) -> list[RootNode] | None:
-        """Parse all source files from a compilation unit."""
-        roots: list[RootNode] = []
-        for source_file in unit.files:
-            print(f"Parsing: {source_file.path}")
-            lexer = Lexer(source_file.text, source_file.path, diagnostics)
-            tokens = lexer.tokenize()
-            parser = Parser(tokens, diagnostics)
-            roots.append(parser.parse())
-        if diagnostics.has_errors():
-            return None
-        return roots
+    def build_header_guard(output_path: Path) -> str:
+        """Build an include guard macro name from the output file name."""
+        name = output_path.name.upper()
+        guard = []
+        for char in name:
+            guard.append(char if char.isalnum() else "_")
+        return f"__{''.join(guard)}__"
 
     @classmethod
     def wrap_output(cls, output_path: Path, header_text: str) -> str:
@@ -124,12 +163,3 @@ class HTCCompiler:
             "",
         ])
         return "\n".join(lines)
-
-    @staticmethod
-    def build_header_guard(output_path: Path) -> str:
-        """Build an include guard macro name from the output file name."""
-        name = output_path.name.upper()
-        guard = []
-        for char in name:
-            guard.append(char if char.isalnum() else "_")
-        return f"__{''.join(guard)}__"
