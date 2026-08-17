@@ -438,38 +438,12 @@ _exit:
     return ret;
 }
 
-mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
-                     int flags, void *data) {
-    mr_super_block_t *sb, *guard;
-    mr_super_block_t *existing;
-    mr_dentry_t *mnt, *root;
-    mr_file_system_t *fs;
+static mr_err_t fs_mount_dentry(const char *source, mr_dentry_t *mnt,
+                                mr_file_system_t *fs, int flags, void *data) {
+    mr_super_block_t *sb, *guard, *existing;
     mr_bool_t root_mount;
-    mr_fs_nsp_t *nsp;
+    mr_dentry_t *root;
     mr_err_t ret;
-
-    /* Check parameter */
-    MR_ASSERT((fstype != MR_NULL) && (fstype[0] != '\0'));
-    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
-
-    /* Get current file-system namespace */
-    nsp = mr_fs_nsp_current();
-    if (!nsp) {
-        return -MR_EINVAL;
-    }
-
-    /* Find FS */
-    fs = mr_file_system_find(fstype);
-    if (!fs) {
-        return -MR_ENOENT;
-    }
-
-    /* Resolve the mount-point. Mount never creates namespace paths; treefs or
-     * the mounted parent file-system provides the directory structure */
-    ret = fs_lookup(nsp, path, MR_TRUE, &mnt);
-    if (ret != 0) {
-        return ret;
-    }
 
     /* Protect the covered super-block while attaching a child mount. The
      * initial global ROOT has no super-block to protect */
@@ -552,6 +526,60 @@ _exit:
     }
     mr_dentry_put(mnt);
     return ret;
+}
+
+mr_err_t mr_fs_mount_root(const char *source, const char *fstype, int flags,
+                          void *data) {
+    mr_dentry_t *root;
+    mr_file_system_t *fs;
+
+    /* Check parameter */
+    MR_ASSERT((fstype != MR_NULL) && (fstype[0] != '\0'));
+
+    /* Find FS */
+    fs = mr_file_system_find(fstype);
+    if (!fs) {
+        return -MR_ENOENT;
+    }
+
+    /* Get global FS ROOT */
+    root = mr_dentry_get(mr_fs_nsp_root());
+    if (!root) {
+        return -MR_EINVAL;
+    }
+    return fs_mount_dentry(source, root, fs, flags, data);
+}
+
+mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
+                     int flags, void *data) {
+    mr_dentry_t *mnt;
+    mr_file_system_t *fs;
+    mr_fs_nsp_t *nsp;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT((fstype != MR_NULL) && (fstype[0] != '\0'));
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+
+    /* Get current file-system namespace */
+    nsp = mr_fs_nsp_current();
+    if (!nsp) {
+        return -MR_EINVAL;
+    }
+
+    /* Find FS */
+    fs = mr_file_system_find(fstype);
+    if (!fs) {
+        return -MR_ENOENT;
+    }
+
+    /* Resolve the mount-point. Mount never creates namespace paths; rootfs or
+     * the mounted parent file-system provides the directory structure */
+    ret = fs_lookup(nsp, path, MR_TRUE, &mnt);
+    if (ret != 0) {
+        return ret;
+    }
+    return fs_mount_dentry(source, mnt, fs, flags, data);
 }
 
 static void fs_purge_children(mr_dentry_t *dentry) {

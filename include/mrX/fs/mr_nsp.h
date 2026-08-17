@@ -29,6 +29,13 @@ typedef struct mr_fs_nsp {
 } mr_fs_nsp_t;
 
 /**
+ * @brief This function gets the global file-system ROOT dentry.
+ *
+ * @return The global file-system ROOT dentry.
+ */
+struct mr_dentry *mr_fs_nsp_root(void);
+
+/**
  * @brief This function initializes a file-system namespace.
  *
  * @param nsp The file-system namespace.

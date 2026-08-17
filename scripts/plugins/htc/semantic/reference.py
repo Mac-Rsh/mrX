@@ -12,6 +12,7 @@ Provides one lookup implementation for validation and backend emission.
 """
 
 from .model import HardTree
+from .paths import normalize_node_path
 
 
 class ReferenceResolver:
@@ -21,7 +22,8 @@ class ReferenceResolver:
     def resolve(tree: HardTree, reference: str, is_path: bool) -> str | None:
         """Resolve a reference through path, label, root shorthand, then name."""
         if is_path:
-            return reference if reference in tree.nodes_by_path else None
+            path = normalize_node_path(reference)
+            return path if path in tree.nodes_by_path else None
 
         target = tree.labels.get(reference)
         if target is not None:

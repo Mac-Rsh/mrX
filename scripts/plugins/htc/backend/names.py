@@ -39,6 +39,12 @@ class MacroNames:
         return "_S_".join(normalized_parts)
 
     @classmethod
+    def node_identifier(cls, name: str, address: str | None) -> str:
+        """Build a unique C identifier from one DTS full node name."""
+        full_name = name if address is None else f"{name}@{address}"
+        return cls.normalize_identifier(full_name)
+
+    @classmethod
     def node_macro(cls, path: str) -> str:
         """Build the full node macro name for a canonical DTS path."""
         if path == "/":

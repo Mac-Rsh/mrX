@@ -41,6 +41,9 @@ class CppPreprocessor:
     """Runs an external C preprocessor and returns a single preprocessed text."""
 
     _CPP_CANDIDATES = ("gcc", "clang", "cpp")
+    _DTS_V1_PATTERN = re.compile(r"^\s*/\s*dts-v1\s*/\s*;\s*$")
+    _LINE_MARKER_PATTERN = re.compile(
+        r'^\s*#\s+(\d+)\s+"([^"]+)"(?:\s+(.*))?$')
 
     def __init__(self, diagnostics: Diagnostics) -> None:
         """Initialize the adapter with a shared diagnostic sink."""
@@ -175,25 +178,54 @@ class CppPreprocessor:
     def _parse_linemarkers(text: str,
                            fallback_path: str,
                            alias_path: str | None = None) -> tuple[
-        str, list[tuple[str, int]]]:
+            str, list[tuple[str, int]]]:
         """Strip GNU cpp linemarkers and build an output line map."""
         clean_lines: list[str] = []
         line_map: list[tuple[str, int]] = []
         current_file = fallback_path
         current_line = 1
+        fallback_key = CppPreprocessor._path_key(fallback_path)
+        alias_key = CppPreprocessor._path_key(alias_path) \
+            if alias_path is not None else None
+        seen_paths = {fallback_key}
+        # Each frame represents one active CPP include.  The emit flag lets a
+        # repeated include suppress its complete expansion, including nested
+        # includes, until CPP returns to the including file.
+        include_frames: list[bool] = [True]
 
         for line in text.splitlines():
-            marker = re.match(
-                r'^\s*#\s+(\d+)\s+"([^"]+)"', line)
+            marker = CppPreprocessor._LINE_MARKER_PATTERN.match(line)
             if marker is not None:
                 current_line = int(marker.group(1))
                 current_file = marker.group(2)
-                if alias_path is not None \
-                        and Path(current_file) == Path(alias_path):
+                if alias_key is not None \
+                        and CppPreprocessor._path_key(current_file) == alias_key:
                     current_file = fallback_path
+                flags = set((marker.group(3) or "").split())
+                if "1" in flags:
+                    path_key = CppPreprocessor._path_key(current_file)
+                    emit_file = include_frames[-1] \
+                        and path_key not in seen_paths
+                    if emit_file:
+                        seen_paths.add(path_key)
+                    include_frames.append(emit_file)
+                elif "2" in flags and len(include_frames) > 1:
+                    include_frames.pop()
                 continue
-            clean_lines.append(line)
-            line_map.append((current_file, current_line))
+            # Included sources may be valid standalone HTC documents and carry
+            # their own version tag; CPP flattens those tags into the entry
+            # document, where only the entry source tag is meaningful
+            is_included_version_tag = \
+                CppPreprocessor._DTS_V1_PATTERN.fullmatch(line) is not None \
+                and CppPreprocessor._path_key(current_file) != fallback_key
+            if include_frames[-1]:
+                clean_lines.append("" if is_included_version_tag else line)
+                line_map.append((current_file, current_line))
             current_line += 1
 
         return "\n".join(clean_lines) + "\n", line_map
+
+    @staticmethod
+    def _path_key(path: str) -> str:
+        """Return a normalized key for comparing physical source paths."""
+        return os.path.normcase(str(Path(path).resolve()))

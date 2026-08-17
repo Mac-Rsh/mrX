@@ -80,9 +80,8 @@ class HTCCompiler:
                         strict: bool = False) -> Document | None:
         """Parse all preprocessed source files into one DTS document."""
         dts_v1 = False
-        roots = []
         memreserves = []
-        delete_nodes = []
+        operations = []
         for source_file in unit.files:
             lexer = Lexer(source_file.text, source_file.path, diagnostics,
                           source_map=source_file.line_map)
@@ -90,13 +89,14 @@ class HTCCompiler:
             parser = Parser(tokens, diagnostics, strict=strict)
             parsed = parser.parse()
             dts_v1 = dts_v1 or parsed.dts_v1
-            roots.extend(parsed.roots)
             memreserves.extend(parsed.memreserves)
-            delete_nodes.extend(parsed.delete_nodes)
+            operations.extend(parsed.operations)
         if diagnostics.has_errors():
             return None
-        return Document(dts_v1=dts_v1, roots=roots,
-                        memreserves=memreserves, delete_nodes=delete_nodes)
+        document = Document(dts_v1=dts_v1, memreserves=memreserves)
+        for operation in operations:
+            document.add_operation(operation)
+        return document
 
     @staticmethod
     def _preprocess(options: CompileOptions,

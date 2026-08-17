@@ -13,6 +13,9 @@ Exposes semantic tree models and semantic builder entry points.
 
 from .builder import HardNode, HardTree, NodeProperty, SemanticBuilder
 from .reference import ReferenceResolver
+from .paths import child_path, node_segment, normalize_node_path, \
+    normalize_unit_address
 
 __all__ = ["HardNode", "HardTree", "NodeProperty", "ReferenceResolver",
-           "SemanticBuilder"]
+           "SemanticBuilder", "child_path", "node_segment",
+           "normalize_node_path", "normalize_unit_address"]

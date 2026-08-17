@@ -12,6 +12,7 @@ the parsing stage rather than the lexer.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
+from dataclasses import dataclass, field
 from .tokens import Token, TokenType
 from ..common import (
     ArrayMode,
@@ -27,6 +28,7 @@ from ..common import (
     IdentifierValue,
     MemreserveDecl,
     NodeDecl,
+    NodeOverrideDecl,
     NumberValue,
     PropertyDecl,
     ReferenceValue,
@@ -39,6 +41,16 @@ from ..common import (
     StringValue,
     ValueExpr,
 )
+
+
+@dataclass
+class _ParsedNodeBody:
+    """Collect declarations shared by roots, nodes, and modifications."""
+
+    properties: list[PropertyDecl] = field(default_factory=list)
+    deleted_properties: list[DeletePropertyDecl] = field(default_factory=list)
+    deleted_nodes: list[DeleteNodeDecl] = field(default_factory=list)
+    children: list[NodeDecl] = field(default_factory=list)
 
 
 class Parser:
@@ -84,12 +96,18 @@ class Parser:
                              "expected ';' after '/dts-v1/'")
                 document = Document(dts_v1=True, span=next_token.span)
 
-        # Top-level roots, memreserves, and delete-node directives
+        # Top-level roots, modifications, memreserves, and delete directives
         while not self._check(TokenType.EOF):
+            if self._check(TokenType.AMPERSAND):
+                override = self._parse_node_override()
+                if override is not None:
+                    document.add_operation(override)
+                continue
+
             if not self._check(TokenType.SLASH):
                 token = self._peek()
                 self._error(ErrorCode.INVALID_NODE_DECL,
-                            "expected '/', '/memreserve/', or '/delete-node/' at top level",
+                            "expected '/', '&label', or '&{/path}' at top level",
                             token.span if token else None)
                 self._sync()
                 continue
@@ -113,7 +131,9 @@ class Parser:
                     self._parse_memreserve(name, document)
                     continue
                 if name.value == "delete-node":
-                    self._parse_delete_node(name, document)
+                    deletion = self._parse_delete_node_after_name(name)
+                    if deletion is not None:
+                        document.add_operation(deletion)
                     continue
                 self._error(ErrorCode.INVALID_NODE_DECL,
                             f"unsupported top-level directive: /{name.value}/",
@@ -126,45 +146,16 @@ class Parser:
     def _parse_root_contents(self, document: Document) -> None:
         """Parse the inside of a `/ { ... }` root and append it to the document."""
         slash_span = self.tokens[self.pos - 2].span if self.pos >= 2 else None
-        properties: list[PropertyDecl] = []
-        deleted_properties: list[DeletePropertyDecl] = []
-        children: list[NodeDecl] = []
-        while not self._check(TokenType.RBRACE, TokenType.EOF):
-            if self._starts_delete_property():
-                deletion = self._parse_delete_property()
-                if deletion is not None:
-                    deleted_properties.append(deletion)
-                continue
-
-            if not self._check(TokenType.IDENTIFIER):
-                token = self._peek()
-                self._error(ErrorCode.INVALID_NODE_DECL,
-                            "expected property or child node in root",
-                            token.span if token else slash_span)
-                if token is not None:
-                    self._error(ErrorCode.EXPECTED_IDENTIFIER,
-                                f"unexpected token '{token.value}' ({token.type.value})",
-                                token.span)
-                self._sync()
-                continue
-
-            if self._starts_property():
-                prop = self._parse_property()
-                if prop is not None:
-                    properties.append(prop)
-                continue
-
-            node = self._parse_node()
-            if node is not None:
-                children.append(node)
+        body = self._parse_node_body("root", slash_span)
         self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
                      "expected '}' to close root node")
         self._match(TokenType.SEMICOLON)
-        document.roots.append(
-            RootNode(properties=properties,
-                     deleted_properties=deleted_properties,
-                     children=children,
-                     span=slash_span))
+        root = RootNode(properties=body.properties,
+                        deleted_properties=body.deleted_properties,
+                        deleted_nodes=body.deleted_nodes,
+                        children=body.children,
+                        span=slash_span)
+        document.add_operation(root)
 
     def _parse_memreserve(self, name: Token,
                           document: Document) -> None:
@@ -194,16 +185,82 @@ class Parser:
             values.append(value)
         return values
 
-    def _parse_delete_node(self, name: Token, document: Document) -> None:
-        """Parse a `/delete-node/ name;` directive."""
-        target = self._expect(TokenType.IDENTIFIER,
-                              ErrorCode.EXPECTED_IDENTIFIER,
-                              "expected node name after '/delete-node/'")
+    def _parse_delete_node(self) -> DeleteNodeDecl | None:
+        """Parse a complete `/delete-node/ target;` directive."""
+        slash = self._expect(TokenType.SLASH, ErrorCode.EXPECTED_SLASH,
+                             "expected '/' before 'delete-node'")
+        name = self._expect(TokenType.IDENTIFIER,
+                            ErrorCode.EXPECTED_IDENTIFIER,
+                            "expected 'delete-node' after '/'")
+        self._expect(TokenType.SLASH, ErrorCode.EXPECTED_SLASH,
+                     "expected '/' after 'delete-node'")
+        if name is None or name.value != "delete-node":
+            self._error(ErrorCode.INVALID_NODE_DECL,
+                        "expected '/delete-node/' directive",
+                        name.span if name is not None else None)
+            return None
+        return self._parse_delete_node_target(slash or name)
+
+    def _parse_delete_node_after_name(
+            self, name: Token) -> DeleteNodeDecl | None:
+        """Parse a delete-node target after its directive name."""
+        return self._parse_delete_node_target(name)
+
+    def _parse_delete_node_target(
+            self, directive: Token) -> DeleteNodeDecl | None:
+        """Parse a name, reference, or absolute-path deletion target."""
+        target: str | None = None
+        is_reference = False
+        is_path = False
+
+        if self._check(TokenType.AMPERSAND):
+            reference = self._parse_reference()
+            if reference is not None:
+                target = reference.reference
+                is_reference = True
+                is_path = reference.is_path
+        elif self._check(TokenType.SLASH):
+            target = self._parse_absolute_path()
+            is_path = True
+        elif self._check(TokenType.IDENTIFIER):
+            identifier = self._advance()
+            target = self._finish_reference_segment(identifier)
+        else:
+            token = self._peek()
+            self._error(ErrorCode.EXPECTED_IDENTIFIER,
+                        "expected node name or reference after '/delete-node/'",
+                        token.span if token is not None else directive.span)
+
         self._expect(TokenType.SEMICOLON, ErrorCode.EXPECTED_SEMICOLON,
                      "expected ';' after '/delete-node/'")
-        if target is not None:
-            document.delete_nodes.append(
-                DeleteNodeDecl(name=target.value, span=name.span))
+        if target is None:
+            return None
+        return DeleteNodeDecl(target=target, is_reference=is_reference,
+                              is_path=is_path, span=directive.span)
+
+    def _parse_absolute_path(self) -> str | None:
+        """Parse an absolute node path used as a deletion target."""
+        self._expect(TokenType.SLASH, ErrorCode.EXPECTED_SLASH,
+                     "expected '/' to start absolute path")
+        parts = [""]
+        while not self._check(TokenType.SEMICOLON, TokenType.EOF):
+            segment = self._parse_reference_segment(
+                "expected node name in absolute path")
+            if segment is None:
+                return None
+            parts.append(segment)
+            if not self._match(TokenType.SLASH):
+                break
+        return "/" if len(parts) == 1 else "/".join(parts)
+
+    def _starts_delete_node(self) -> bool:
+        """Return True when the current tokens start `/delete-node/`."""
+        return self._check(TokenType.SLASH) \
+            and self._peek(1) is not None \
+            and self._peek(1).type == TokenType.IDENTIFIER \
+            and self._peek(1).value == "delete-node" \
+            and self._peek(2) is not None \
+            and self._peek(2).type == TokenType.SLASH
 
     def _starts_delete_property(self) -> bool:
         """Return True when the current tokens start `/delete-property/ prop;`."""
@@ -271,62 +328,26 @@ class Parser:
             self._sync()
             return None
 
-        # Unit address: `@hex[,hex]*`; legacy `@0x...` accepted and kept as-is
+        # DTS unit address: one or more hexadecimal components without `0x`
         address_parts: list[str] = []
         if self._match(TokenType.AT):
-            address_token = self._expect(TokenType.NUMBER,
-                                         ErrorCode.EXPECTED_NUMBER,
-                                         "expected address after '@'")
-            if address_token is None:
-                address_parts = []
-            else:
-                address_parts.append(address_token.value)
+            address = self._parse_unit_address(
+                "expected hexadecimal address after '@'")
+            if address is not None:
+                address_parts.append(address)
                 while self._match(TokenType.COMMA):
-                    part_token = self._expect(TokenType.NUMBER,
-                                              ErrorCode.EXPECTED_NUMBER,
-                                              "expected address after ',' in unit address")
-                    if part_token is not None:
-                        address_parts.append(part_token.value)
+                    part = self._parse_unit_address(
+                        "expected hexadecimal address after ',' in unit address")
+                    if part is not None:
+                        address_parts.append(part)
         address = ",".join(address_parts) if address_parts else None
 
         # Expect '{'
         self._expect(TokenType.LBRACE, ErrorCode.EXPECTED_LBRACE,
                      f"expected '{{' after node '{name_token.value}'")
 
-        # Properties, child nodes, and delete-property directives
-        properties: list[PropertyDecl] = []
-        deleted_properties: list[DeletePropertyDecl] = []
-        children: list[NodeDecl] = []
-        while not self._check(TokenType.RBRACE, TokenType.EOF):
-            if self._starts_delete_property():
-                deletion = self._parse_delete_property()
-                if deletion is not None:
-                    deleted_properties.append(deletion)
-                continue
-
-            if not self._check(TokenType.IDENTIFIER):
-                token = self._peek()
-                self._error(ErrorCode.INVALID_NODE_DECL,
-                            f"expected property or child node in '{name_token.value}'",
-                            token.span if token else name_token.span)
-                if token is not None:
-                    self._error(ErrorCode.EXPECTED_IDENTIFIER,
-                                f"unexpected token '{token.value}' ({token.type.value})",
-                                token.span)
-                self._sync()
-                continue
-
-            # Property
-            if self._starts_property():
-                prop = self._parse_property()
-                if prop is not None:
-                    properties.append(prop)
-                continue
-
-            # Child node
-            child = self._parse_node()
-            if child is not None:
-                children.append(child)
+        body = self._parse_node_body(
+            f"node '{name_token.value}'", name_token.span)
 
         # Expect '}' and accept optional trailing ';'
         self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
@@ -342,11 +363,88 @@ class Parser:
             name=name_token.value,
             label=label,
             address=address,
-            properties=properties,
-            deleted_properties=deleted_properties,
-            children=children,
+            properties=body.properties,
+            deleted_properties=body.deleted_properties,
+            deleted_nodes=body.deleted_nodes,
+            children=body.children,
             span=name_token.span,
         )
+
+    def _parse_node_override(self) -> NodeOverrideDecl | None:
+        """Parse a top-level `&label { ... };` node modification."""
+        target = self._parse_reference()
+        if target is None:
+            self._sync()
+            return None
+        if self._expect(TokenType.LBRACE, ErrorCode.EXPECTED_LBRACE,
+                        "expected '{' after node reference") is None:
+            self._sync()
+            return None
+
+        body = self._parse_node_body("node modification", target.span)
+
+        self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
+                     "expected '}' to close node modification")
+        has_semicolon = self._match(TokenType.SEMICOLON)
+        if self.strict and not has_semicolon:
+            self._warn(
+                ErrorCode.INVALID_NODE_DECL,
+                "strict: node modification should end with '};'",
+                target.span,
+            )
+        return NodeOverrideDecl(
+            target=target,
+            properties=body.properties,
+            deleted_properties=body.deleted_properties,
+            deleted_nodes=body.deleted_nodes,
+            children=body.children,
+            span=target.span,
+        )
+
+    def _parse_node_body(
+            self,
+            context: str,
+            fallback_span: SourceSpan | None,
+    ) -> _ParsedNodeBody:
+        """Parse declarations shared by roots, nodes, and modifications."""
+        body = _ParsedNodeBody()
+        while not self._check(TokenType.RBRACE, TokenType.EOF):
+            if self._starts_delete_property():
+                deletion = self._parse_delete_property()
+                if deletion is not None:
+                    body.deleted_properties.append(deletion)
+                continue
+            if self._starts_delete_node():
+                deletion = self._parse_delete_node()
+                if deletion is not None:
+                    body.deleted_nodes.append(deletion)
+                continue
+            if not self._check(TokenType.IDENTIFIER):
+                token = self._peek()
+                self._error(
+                    ErrorCode.INVALID_NODE_DECL,
+                    f"expected property, child node, or delete directive in "
+                    f"{context}",
+                    token.span if token is not None else fallback_span,
+                )
+                if token is not None:
+                    self._error(
+                        ErrorCode.EXPECTED_IDENTIFIER,
+                        f"unexpected token '{token.value}' "
+                        f"({token.type.value})",
+                        token.span,
+                    )
+                self._sync()
+                continue
+            if self._starts_property():
+                prop = self._parse_property()
+                if prop is not None:
+                    body.properties.append(prop)
+                continue
+            child = self._parse_node()
+            if child is not None:
+                body.children.append(child)
+        return body
 
     def _parse_property(self) -> PropertyDecl | None:
         """Parse a property declaration with optional strict-mode warnings."""
@@ -566,11 +664,59 @@ class Parser:
         """Append an optional unit address to a parsed reference segment."""
         if not self._match(TokenType.AT):
             return identifier.value
-        address = self._expect(TokenType.NUMBER, ErrorCode.EXPECTED_NUMBER,
-                               "expected address after '@' in reference")
+        address = self._parse_unit_address(
+            "expected hexadecimal address after '@' in reference")
         if address is None:
             return identifier.value
-        return f"{identifier.value}@{address.value}"
+        address_parts = [address]
+        while self._match(TokenType.COMMA):
+            part = self._parse_unit_address(
+                "expected hexadecimal address after ',' in unit address")
+            if part is not None:
+                address_parts.append(part)
+        return f"{identifier.value}@{','.join(address_parts)}"
+
+    def _parse_unit_address(self, message: str) -> str | None:
+        """Parse one bare hexadecimal DTS unit-address component."""
+        token = self._peek()
+        address_types = {
+            TokenType.IDENTIFIER,
+            TokenType.NUMBER,
+            TokenType.FLOAT,
+        }
+        if token is None or token.type not in address_types:
+            self._error(ErrorCode.EXPECTED_NUMBER, message,
+                        token.span if token is not None else None)
+            return None
+
+        tokens = [self._advance()]
+        while self._check(*address_types):
+            next_token = self._peek()
+            if next_token is None \
+                    or not self._tokens_are_adjacent(tokens[-1], next_token):
+                break
+            tokens.append(self._advance())
+
+        raw = "".join(part.value for part in tokens)
+        if not raw or not all(char in "0123456789abcdefABCDEF"
+                              for char in raw):
+            self._error(
+                ErrorCode.INVALID_NUMBER,
+                f"invalid unit address '{raw}'; expected hexadecimal digits "
+                "without a prefix",
+                tokens[0].span,
+            )
+            return None
+        return raw
+
+    @staticmethod
+    def _tokens_are_adjacent(left: Token, right: Token) -> bool:
+        """Return True when two tokens touch in the original source."""
+        end = left.span.end
+        return end is not None \
+            and end.file_path == right.span.file_path \
+            and end.line == right.span.line \
+            and end.column == right.span.column
 
     def _parse_number_value(self, token: Token) -> NumberValue | None:
         """Decode an integer literal token into a parsed number value."""

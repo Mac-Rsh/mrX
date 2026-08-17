@@ -99,10 +99,12 @@ class MemreserveDecl:
 
 @dataclass(frozen=True)
 class DeleteNodeDecl:
-    """Represents a `/delete-node/ name;` directive."""
+    """Represents a `/delete-node/ target;` directive."""
 
-    name: str
+    target: str
     span: SourceSpan | None = None
+    is_reference: bool = False
+    is_path: bool = False
 
 
 @dataclass(frozen=True)
@@ -149,6 +151,7 @@ class NodeDecl:
     children: list["NodeDecl"] = field(default_factory=list)
     deleted_properties: list[DeletePropertyDecl] = field(default_factory=list)
     span: SourceSpan | None = None
+    deleted_nodes: list[DeleteNodeDecl] = field(default_factory=list)
 
     def get_property(self, name: str) -> PropertyDecl | None:
         """
@@ -174,6 +177,22 @@ class RootNode:
     deleted_properties: list[DeletePropertyDecl] = field(default_factory=list)
     children: list[NodeDecl] = field(default_factory=list)
     span: SourceSpan | None = None
+    deleted_nodes: list[DeleteNodeDecl] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class NodeOverrideDecl:
+    """Represents a top-level `&target { ... };` node modification."""
+
+    target: ReferenceValue
+    properties: list[PropertyDecl] = field(default_factory=list)
+    deleted_properties: list[DeletePropertyDecl] = field(default_factory=list)
+    deleted_nodes: list[DeleteNodeDecl] = field(default_factory=list)
+    children: list[NodeDecl] = field(default_factory=list)
+    span: SourceSpan | None = None
+
+
+DocumentOperation = RootNode | DeleteNodeDecl | NodeOverrideDecl
 
 
 @dataclass(frozen=True)
@@ -185,3 +204,29 @@ class Document:
     roots: list[RootNode] = field(default_factory=list)
     delete_nodes: list[DeleteNodeDecl] = field(default_factory=list)
     span: SourceSpan | None = None
+    overrides: list[NodeOverrideDecl] = field(default_factory=list)
+    operations: list[DocumentOperation] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        """Index operations supplied through direct construction."""
+        for operation in self.operations:
+            self._index_operation(operation)
+
+    def add_operation(self, operation: DocumentOperation) -> None:
+        """Append one operation and update its compatibility index."""
+        self.operations.append(operation)
+        self._index_operation(operation)
+
+    def _index_operation(self, operation: DocumentOperation) -> None:
+        """Add one operation to its typed compatibility index."""
+        if isinstance(operation, RootNode):
+            if not any(item is operation for item in self.roots):
+                self.roots.append(operation)
+            return
+        if isinstance(operation, DeleteNodeDecl):
+            if not any(item is operation for item in self.delete_nodes):
+                self.delete_nodes.append(operation)
+            return
+        if isinstance(operation, NodeOverrideDecl) \
+                and not any(item is operation for item in self.overrides):
+            self.overrides.append(operation)

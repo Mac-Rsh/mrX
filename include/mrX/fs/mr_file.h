@@ -94,6 +94,20 @@ MR_INLINE void mr_file_init(mr_file_t *file) {
 }
 
 /**
+ * @brief This function mounts a file-system at the global FS ROOT.
+ *
+ * @param source The mount source.
+ * @param fstype The file-system name(must be registered).
+ * @param flags The mount flags.
+ * @param data The mount private data(passed to the fs mount callback).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note This function does not access the current file-system namespace.
+ */
+mr_err_t mr_fs_mount_root(const char *source, const char *fstype, int flags,
+                          void *data);
+
+/**
  * @brief This function mounts a file-system at a path.
  *
  * @param source The mount source.

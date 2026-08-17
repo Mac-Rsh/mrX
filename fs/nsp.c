@@ -20,6 +20,11 @@ static mr_spinlock_t __fs_nsp_lock = MR_SPINLOCK_INIT();
 static mr_fs_nsp_t __fs_nsp;
 #endif /* !defined(MR_USE_FS_MULTIUSER) */
 
+struct mr_dentry *mr_fs_nsp_root(void) {
+    /* Return ROOT */
+    return (struct mr_dentry *)&__fs_root;
+}
+
 mr_err_t mr_fs_nsp_init(mr_fs_nsp_t *nsp) {
     MR_ASSERT(nsp != MR_NULL);
 

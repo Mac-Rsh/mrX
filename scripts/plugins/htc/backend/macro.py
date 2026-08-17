@@ -73,24 +73,25 @@ class MacroBuilder:
         lines: list[str] = []
 
         # Skip disabled nodes and synthetic helper nodes
-        enabled_nodes = self._iter_enabled_nodes(tree)
-        for node in enabled_nodes:
+        emitted_nodes = self._iter_emitted_nodes(tree)
+        for node in emitted_nodes:
             # Emit all node-local macros first
             self._emit_node(lines, tree, node)
 
         # Emit global symbol tables next, but only for emitted targets.
-        emitted_paths = {node.path for node in enabled_nodes}
+        emitted_paths = {node.path for node in emitted_nodes}
         self._emit_symbols(lines, tree.labels, self.SECTION_LABEL,
                            emitted_paths)
         self._emit_symbols(lines, tree.aliases, self.SECTION_ALIAS,
                            emitted_paths)
 
-        # Emit instance indexes after the full node set is known
-        self._emit_inst(lines, enabled_nodes)
+        # Only compatible nodes participate in driver instance indexes
+        instance_nodes = [node for node in emitted_nodes if node.compatible]
+        self._emit_inst(lines, instance_nodes)
         return lines
 
-    def _iter_enabled_nodes(self, tree: HardTree) -> list[HardNode]:
-        """Return nodes that should participate in backend emission."""
+    def _iter_emitted_nodes(self, tree: HardTree) -> list[HardNode]:
+        """Return enabled nodes that should receive node-local macros."""
         return [node for node in tree.nodes if self._should_emit_node(node)]
 
     def _emit_expanded_array(self, lines: list[str], tree: HardTree,
@@ -147,14 +148,13 @@ class MacroBuilder:
         lines.append("")
 
     def _emit_inst(self, lines: list[str],
-                   enabled_nodes: list[HardNode]) -> None:
-        """Emit driver instance index groups for enabled hardware nodes."""
-        driver_nodes = [node for node in enabled_nodes if node.compatible]
+                   instance_nodes: list[HardNode]) -> None:
+        """Emit indexes for enabled nodes that declare compatible values."""
         self._emit_inst_group(lines,
                               f"/{self.SECTION_INST}/{self.SECTION_DRIVER}",
-                              driver_nodes)
+                              instance_nodes)
         groups: dict[str, list[HardNode]] = {}
-        for node in enabled_nodes:
+        for node in instance_nodes:
             for compatible in node.compatible:
                 groups.setdefault(self._normalize(compatible), []).append(node)
         for compatible, nodes in sorted(groups.items()):
@@ -350,16 +350,7 @@ class MacroBuilder:
         """Normalize node address text into backend hex form."""
         if address is None:
             return "0"
-        parts = []
-        for part in address.split(","):
-            lowered = part.strip().lower()
-            if lowered.startswith("0x"):
-                parts.append(lowered)
-            elif lowered:
-                parts.append(f"0x{lowered}")
-            else:
-                parts.append("0x0")
-        return ", ".join(parts)
+        return ", ".join(f"0x{part}" for part in address.split(","))
 
     def _emit_node(self, lines: list[str], tree: HardTree,
                    node: HardNode) -> None:
@@ -373,7 +364,8 @@ class MacroBuilder:
 
         # NAME
         self._define_property(lines, node_macro, self.PROPERTY_NAME,
-                              self._normalize(node.name))
+                              MacroNames.node_identifier(node.name,
+                                                         node.address))
 
         # PATH
         self._define_property(lines, node_macro, self.PROPERTY_PATH,
