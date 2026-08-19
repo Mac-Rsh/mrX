@@ -12,7 +12,7 @@
 #include <mrX/kernel/mr_finder.h>
 
 /* Tests */
-static void test_finder_init_del(void) {
+MR_TEST(finder, init_del) {
     mr_finder_t finder;
     mr_err_t ret;
 
@@ -29,9 +29,8 @@ static void test_finder_init_del(void) {
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_INT(MR_OBJECT_IS_INITED(&finder), MR_FALSE);
 }
-MR_TEST_EXPORT(finder, init_del, test_finder_init_del);
 
-static void test_finder_add_remove(void) {
+MR_TEST(finder, add_remove) {
     mr_bool_t root_inited = MR_FALSE;
     mr_bool_t child_inited = MR_FALSE;
     mr_bool_t child_added = MR_FALSE;
@@ -94,9 +93,8 @@ _exit:
         MR_TEST_EXPECT_EQ_INT(ret, 0);
     }
 }
-MR_TEST_EXPORT(finder, add_remove, test_finder_add_remove);
 
-static void test_finder_create_del(void) {
+MR_TEST(finder, create_del) {
     mr_finder_t *finder;
 
     finder = mr_finder_create("dynamic");
@@ -111,9 +109,8 @@ static void test_finder_create_del(void) {
     mr_finder_del(finder);
     MR_TEST_EXPECT_EQ_INT(MR_OBJECT_IS_INITED(finder), MR_FALSE);
 }
-MR_TEST_EXPORT(finder, create_del, test_finder_create_del);
 
-static void test_finder_mkdir(void) {
+MR_TEST(finder, mkdir) {
     mr_finder_t root;
     mr_finder_t *found;
     mr_err_t ret;
@@ -139,9 +136,8 @@ static void test_finder_mkdir(void) {
 
     mr_finder_del(&root);
 }
-MR_TEST_EXPORT(finder, mkdir, test_finder_mkdir);
 
-static void test_finder_mkdir_add(void) {
+MR_TEST(finder, mkdir_add) {
     mr_finder_t root;
     mr_finder_t child;
     mr_finder_t *found;
@@ -170,9 +166,8 @@ static void test_finder_mkdir_add(void) {
     mr_finder_del(&child);
     mr_finder_del(&root);
 }
-MR_TEST_EXPORT(finder, mkdir_add, test_finder_mkdir_add);
 
-static void test_finder_lookup_dot(void) {
+MR_TEST(finder, lookup_dot) {
     mr_finder_t root;
     mr_finder_t child;
     mr_finder_t *found;
@@ -215,9 +210,8 @@ static void test_finder_lookup_dot(void) {
     mr_finder_del(&child);
     mr_finder_del(&root);
 }
-MR_TEST_EXPORT(finder, lookup_dot, test_finder_lookup_dot);
 
-static void test_finder_lookup_limit(void) {
+MR_TEST(finder, lookup_limit) {
     mr_finder_t root;
     mr_finder_t child;
     mr_finder_t grandchild;
@@ -228,46 +222,61 @@ static void test_finder_lookup_limit(void) {
 
     ret = mr_finder_init(&root, "root");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { goto _exit; }
+    if (ret != 0) {
+        goto _exit;
+    }
 
     ret = mr_finder_init(&child, "child");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { goto _exit; }
+    if (ret != 0) {
+        goto _exit;
+    }
 
     ret = mr_finder_init(&grandchild, "gc");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { goto _exit; }
+    if (ret != 0) {
+        goto _exit;
+    }
 
     ret = mr_finder_add(&child, &root);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { goto _exit; }
+    if (ret != 0) {
+        goto _exit;
+    }
     child_added = MR_TRUE;
 
     ret = mr_finder_add(&grandchild, &child);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { goto _exit; }
+    if (ret != 0) {
+        goto _exit;
+    }
     grandchild_added = MR_TRUE;
 
     found = mr_finder_lookup(&grandchild, &child, "..");
     MR_TEST_EXPECT_EQ_PTR(found, &child);
 
 _exit:
-    if (grandchild_added == MR_TRUE) { mr_finder_remove(&grandchild); }
-    if (child_added == MR_TRUE) { mr_finder_remove(&child); }
+    if (grandchild_added == MR_TRUE) {
+        mr_finder_remove(&grandchild);
+    }
+    if (child_added == MR_TRUE) {
+        mr_finder_remove(&child);
+    }
     mr_finder_del(&grandchild);
     mr_finder_del(&child);
     mr_finder_del(&root);
 }
-MR_TEST_EXPORT(finder, lookup_limit, test_finder_lookup_limit);
 
-static void test_finder_lookup_nonexist(void) {
+MR_TEST(finder, lookup_nonexist) {
     mr_finder_t root;
     mr_finder_t *found;
     mr_err_t ret;
 
     ret = mr_finder_init(&root, "root");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { return; }
+    if (ret != 0) {
+        return;
+    }
 
     found = mr_finder_lookup(&root, MR_NULL, "nope");
     MR_TEST_EXPECT_EQ_PTR(found, MR_NULL);
@@ -277,33 +286,32 @@ static void test_finder_lookup_nonexist(void) {
 
     mr_finder_del(&root);
 }
-MR_TEST_EXPORT(finder, lookup_nonexist, test_finder_lookup_nonexist);
 
-static void test_finder_lookup_null_start(void) {
+MR_TEST(finder, lookup_null_start) {
     mr_finder_t *found;
 
     found = mr_finder_lookup(MR_NULL, MR_NULL, "test");
     MR_TEST_EXPECT_EQ_PTR(found, MR_NULL);
 }
-MR_TEST_EXPORT(finder, lookup_null_start, test_finder_lookup_null_start);
 
-static void test_finder_lookup_empty(void) {
+MR_TEST(finder, lookup_empty) {
     mr_finder_t root;
     mr_finder_t *found;
     mr_err_t ret;
 
     ret = mr_finder_init(&root, "root");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { return; }
+    if (ret != 0) {
+        return;
+    }
 
     found = mr_finder_lookup(&root, MR_NULL, "");
     MR_TEST_EXPECT_EQ_PTR(found, MR_NULL);
 
     mr_finder_del(&root);
 }
-MR_TEST_EXPORT(finder, lookup_empty, test_finder_lookup_empty);
 
-static void test_finder_add_dup(void) {
+MR_TEST(finder, add_dup) {
     mr_finder_t root;
     mr_finder_t child1, child2;
     mr_bool_t c1_added = MR_FALSE;
@@ -311,33 +319,45 @@ static void test_finder_add_dup(void) {
 
     ret = mr_finder_init(&root, "root");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { return; }
+    if (ret != 0) {
+        return;
+    }
 
     ret = mr_finder_init(&child1, "same");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { mr_finder_del(&root); return; }
+    if (ret != 0) {
+        mr_finder_del(&root);
+        return;
+    }
 
     ret = mr_finder_init(&child2, "same");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { mr_finder_del(&child1); mr_finder_del(&root); return; }
+    if (ret != 0) {
+        mr_finder_del(&child1);
+        mr_finder_del(&root);
+        return;
+    }
 
     ret = mr_finder_add(&child1, &root);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { goto _exit; }
+    if (ret != 0) {
+        goto _exit;
+    }
     c1_added = MR_TRUE;
 
     ret = mr_finder_add(&child2, &root);
     MR_TEST_EXPECT_EQ_INT(ret, -MR_EEXIST);
 
 _exit:
-    if (c1_added == MR_TRUE) { mr_finder_remove(&child1); }
+    if (c1_added == MR_TRUE) {
+        mr_finder_remove(&child1);
+    }
     mr_finder_del(&child1);
     mr_finder_del(&child2);
     mr_finder_del(&root);
 }
-MR_TEST_EXPORT(finder, add_dup, test_finder_add_dup);
 
-static void test_finder_add_busy(void) {
+MR_TEST(finder, add_busy) {
     mr_finder_t root1, root2;
     mr_finder_t child;
     mr_bool_t child_added = MR_FALSE;
@@ -345,33 +365,45 @@ static void test_finder_add_busy(void) {
 
     ret = mr_finder_init(&root1, "root1");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { return; }
+    if (ret != 0) {
+        return;
+    }
 
     ret = mr_finder_init(&root2, "root2");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { mr_finder_del(&root1); return; }
+    if (ret != 0) {
+        mr_finder_del(&root1);
+        return;
+    }
 
     ret = mr_finder_init(&child, "child");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { mr_finder_del(&root2); mr_finder_del(&root1); return; }
+    if (ret != 0) {
+        mr_finder_del(&root2);
+        mr_finder_del(&root1);
+        return;
+    }
 
     ret = mr_finder_add(&child, &root1);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { goto _exit; }
+    if (ret != 0) {
+        goto _exit;
+    }
     child_added = MR_TRUE;
 
     ret = mr_finder_add(&child, &root2);
     MR_TEST_EXPECT_EQ_INT(ret, -MR_EBUSY);
 
 _exit:
-    if (child_added == MR_TRUE) { mr_finder_remove(&child); }
+    if (child_added == MR_TRUE) {
+        mr_finder_remove(&child);
+    }
     mr_finder_del(&child);
     mr_finder_del(&root2);
     mr_finder_del(&root1);
 }
-MR_TEST_EXPORT(finder, add_busy, test_finder_add_busy);
 
-static void test_finder_add_recursion(void) {
+MR_TEST(finder, add_recursion) {
     mr_finder_t root;
     mr_finder_t child;
     mr_bool_t child_added = MR_FALSE;
@@ -379,49 +411,58 @@ static void test_finder_add_recursion(void) {
 
     ret = mr_finder_init(&root, "root");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { return; }
+    if (ret != 0) {
+        return;
+    }
 
     ret = mr_finder_init(&child, "child");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { mr_finder_del(&root); return; }
+    if (ret != 0) {
+        mr_finder_del(&root);
+        return;
+    }
 
     ret = mr_finder_add(&child, &root);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { goto _exit; }
+    if (ret != 0) {
+        goto _exit;
+    }
     child_added = MR_TRUE;
 
     ret = mr_finder_add(&root, &child);
     MR_TEST_EXPECT_EQ_INT(ret, -MR_EPERM);
 
 _exit:
-    if (child_added == MR_TRUE) { mr_finder_remove(&child); }
+    if (child_added == MR_TRUE) {
+        mr_finder_remove(&child);
+    }
     mr_finder_del(&child);
     mr_finder_del(&root);
 }
-MR_TEST_EXPORT(finder, add_recursion, test_finder_add_recursion);
 
-static void test_finder_long_name(void) {
+MR_TEST(finder, long_name) {
     mr_finder_t finder;
     mr_err_t ret;
 
     ret = mr_finder_init(&finder, "longname");
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    if (ret != 0) { return; }
+    if (ret != 0) {
+        return;
+    }
 
     MR_TEST_EXPECT_EQ_UINT(MR_FINDER_NAME_LEN(&finder), 8);
     MR_TEST_EXPECT_NE_PTR(MR_FINDER_NAME(&finder), MR_NULL);
 
     mr_finder_del(&finder);
 }
-MR_TEST_EXPORT(finder, long_name, test_finder_long_name);
 
-static void test_finder_name_slash(void) {
+MR_TEST(finder, name_slash) {
     mr_finder_t finder;
     mr_err_t ret;
 
     ret = mr_finder_init(&finder, "foo/bar");
     MR_TEST_EXPECT_EQ_INT(ret, -MR_EINVAL);
 }
-MR_TEST_EXPORT(finder, name_slash, test_finder_name_slash);
+
 #endif /* defined(MR_USE_FINDER) */
 #endif /* defined(MR_USE_TEST) */

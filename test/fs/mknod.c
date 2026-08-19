@@ -49,35 +49,34 @@ static const mr_file_ops_t __mknod_fs_file_ops;
 static mr_file_system_t __mknod_fs
     = MR_FILE_SYSTEM_INIT("mknodfs", mknod_fs_mount, MR_NULL, MR_NULL);
 
-static int mknod_fs_expect(const char *name, mr_int64_t actual,
-                           mr_int64_t expected) {
+static void mknod_fs_expect(volatile mr_uint32_t *__test_status,
+                            const char *name, mr_int64_t actual,
+                            mr_int64_t expected) {
     MR_IGNORE(name);
 
     MR_TEST_EXPECT_EQ_INT(actual, expected);
-    return (actual == expected) ? 0 : 1;
 }
 
-static int mknod_fs_size_expect(const char *name, mr_size_t actual,
-                                mr_size_t expected) {
+static void mknod_fs_size_expect(volatile mr_uint32_t *__test_status,
+                                 const char *name, mr_size_t actual,
+                                 mr_size_t expected) {
     MR_IGNORE(name);
 
     MR_TEST_EXPECT_EQ_UINT(actual, expected);
-    return (actual == expected) ? 0 : 1;
 }
 
-static int mknod_fs_stat_expect(const char *path, mr_err_t expected,
-                                mr_inode_type_t type) {
+static void mknod_fs_stat_expect(volatile mr_uint32_t *__test_status,
+                                 const char *path, mr_err_t expected,
+                                 mr_inode_type_t type) {
     mr_stat_t stat;
     mr_err_t ret;
-    int failures;
 
     ret = fs_test_stat(path, &stat);
-    failures = mknod_fs_expect(path, ret, expected);
+    mknod_fs_expect(__test_status, path, ret, expected);
     if ((ret == 0) && (stat.type != type)) {
         MR_TEST_EXPECT_EQ_INT(stat.type, type);
-        failures++;
     }
-    return failures;
+    return;
 }
 
 static mr_err_t mknod_fs_inode_create(mr_inode_t *dir, const char *name,
@@ -157,130 +156,124 @@ static mr_err_t mknod_fs_mount(mr_super_block_t *sb, const char *source,
     return 0;
 }
 
-static int fs_mknod_test(void) {
+static void fs_mknod_test(volatile mr_uint32_t *__test_status) {
     mknod_fs_context_t context = {0};
     mr_file_t fallback_file = MR_FILE_INIT(fallback_file);
     mr_heap_info_t heap_before;
     mr_heap_info_t heap_after;
     int object;
-    int failures = 0;
     mr_err_t ret;
 
     /* Register test filesystem */
-    failures += mknod_fs_expect("register mknodfs",
-                                mr_file_system_register(&__mknod_fs), 0);
-    if (failures != 0) {
-        return failures;
-    }
+    ret = mr_file_system_register(&__mknod_fs);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
 
     /* Record heap state */
     heap_before = mr_heap_information(MR_TRUE);
 
     /* Fall back to create when mknod is not implemented */
-    ret = mr_fs_mount(MR_NULL, "/", "ramfs", 0, MR_NULL);
-    failures += mknod_fs_expect("mknod mount ramfs", ret, 0);
+    ret = fs_test_mount_root("ramfs", 0, MR_NULL);
+    mknod_fs_expect(__test_status, "mknod mount ramfs", ret, 0);
     if (ret == 0) {
         ret = mr_fs_mknod("/fallback", MR_INODE_CHR, &object);
-        failures += mknod_fs_expect("fallback mknod to create", ret, 0);
+        mknod_fs_expect(__test_status, "fallback mknod to create", ret, 0);
         if (ret == 0) {
-            failures += mknod_fs_stat_expect("/fallback", 0, MR_INODE_CHR);
+            mknod_fs_stat_expect(__test_status, "/fallback", 0, MR_INODE_CHR);
             ret = mr_fs_open(&fallback_file, "/fallback", MR_O_RDONLY);
-            failures += mknod_fs_expect("open fallback node", ret, 0);
+            mknod_fs_expect(__test_status, "open fallback node", ret, 0);
             if (ret == 0) {
-                failures += mknod_fs_expect(
-                    "fallback ignored private data",
-                    fallback_file.inode->priv != &object, MR_TRUE);
-                failures += mknod_fs_expect("close fallback node",
-                                             mr_fs_close(&fallback_file), 0);
+                mknod_fs_expect(__test_status, "fallback ignored private data",
+                                fallback_file.inode->priv != &object, MR_TRUE);
+                mknod_fs_expect(__test_status, "close fallback node",
+                                mr_fs_close(&fallback_file), 0);
             }
-            failures += mknod_fs_expect("unlink fallback node",
-                                         fs_test_unlink("/fallback"), 0);
+            mknod_fs_expect(__test_status, "unlink fallback node",
+                            fs_test_unlink("/fallback"), 0);
         }
-        failures += mknod_fs_expect("mknod umount ramfs", mr_fs_umount("/"), 0);
+        mknod_fs_expect(__test_status, "mknod umount ramfs", mr_fs_umount("/"),
+                        0);
     }
 
     /* Mount test filesystem */
-    ret = mr_fs_mount(MR_NULL, "/", "mknodfs", 0, &context);
-    failures += mknod_fs_expect("mount mknodfs", ret, 0);
+    ret = fs_test_mount_root("mknodfs", 0, &context);
+    mknod_fs_expect(__test_status, "mount mknodfs", ret, 0);
     if (ret != 0) {
-        return failures;
+        return;
     }
 
     /* Reject requests before invoking the filesystem */
-    failures += mknod_fs_expect("reject invalid mknod type",
-                                mr_fs_mknod("/invalid", MR_INODE_NONE, &object),
-                                -MR_EINVAL);
-    failures += mknod_fs_expect(
-        "reject missing mknod parent",
-        mr_fs_mknod("/missing/node", MR_INODE_CHR, &object), -MR_ENOENT);
-    failures += mknod_fs_size_expect("mknod callback not called",
-                                     context.mknod_calls, 0);
-    failures += mknod_fs_size_expect("create callback not called",
-                                     context.create_calls, 0);
+    mknod_fs_expect(__test_status, "reject invalid mknod type",
+                    mr_fs_mknod("/invalid", MR_INODE_NONE, &object),
+                    -MR_EINVAL);
+    mknod_fs_expect(__test_status, "reject missing mknod parent",
+                    mr_fs_mknod("/missing/node", MR_INODE_CHR, &object),
+                    -MR_ENOENT);
+    mknod_fs_size_expect(__test_status, "mknod callback not called",
+                         context.mknod_calls, 0);
+    mknod_fs_size_expect(__test_status, "create callback not called",
+                         context.create_calls, 0);
 
     /* Roll back callback failure */
     context.mknod_error = MR_TRUE;
     ret = mr_fs_mknod("/failed", MR_INODE_CHR, &object);
     context.mknod_error = MR_FALSE;
-    failures += mknod_fs_expect("propagate mknod error", ret, -MR_EIO);
-    failures += mknod_fs_stat_expect("/failed", -MR_ENOENT, MR_INODE_NONE);
-    failures += mknod_fs_size_expect("failed mknod callback count",
-                                     context.mknod_calls, 1);
-    failures += mknod_fs_size_expect("failed mknod did not fall back",
-                                     context.create_calls, 0);
+    mknod_fs_expect(__test_status, "propagate mknod error", ret, -MR_EIO);
+    mknod_fs_stat_expect(__test_status, "/failed", -MR_ENOENT, MR_INODE_NONE);
+    mknod_fs_size_expect(__test_status, "failed mknod callback count",
+                         context.mknod_calls, 1);
+    mknod_fs_size_expect(__test_status, "failed mknod did not fall back",
+                         context.create_calls, 0);
 
     /* Publish a node */
     ret = mr_fs_mknod("/node", MR_INODE_CHR, &object);
-    failures += mknod_fs_expect("create mknod node", ret, 0);
-    failures
-        += mknod_fs_size_expect("mknod callback count", context.mknod_calls, 2);
-    failures += mknod_fs_expect("mknod private data",
-                                context.last_priv == &object, MR_TRUE);
-    failures
-        += mknod_fs_expect("mknod inode type", context.last_type, MR_INODE_CHR);
-    failures += mknod_fs_expect(
-        "mknod inode private data",
-        context.last_inode && (context.last_inode->priv == &object), MR_TRUE);
-    failures += mknod_fs_expect(
-        "mknod inode super-block",
-        context.last_inode && (context.last_inode->sb != MR_NULL), MR_TRUE);
+    mknod_fs_expect(__test_status, "create mknod node", ret, 0);
+    mknod_fs_size_expect(__test_status, "mknod callback count",
+                         context.mknod_calls, 2);
+    mknod_fs_expect(__test_status, "mknod private data",
+                    context.last_priv == &object, MR_TRUE);
+    mknod_fs_expect(__test_status, "mknod inode type", context.last_type,
+                    MR_INODE_CHR);
+    mknod_fs_expect(__test_status, "mknod inode private data",
+                    context.last_inode && (context.last_inode->priv == &object),
+                    MR_TRUE);
+    mknod_fs_expect(__test_status, "mknod inode super-block",
+                    context.last_inode && (context.last_inode->sb != MR_NULL),
+                    MR_TRUE);
     if (mr_strcmp(context.last_name, "node") != 0) {
         MR_TEST_EXPECT_EQ_INT(mr_strcmp(context.last_name, "node"), 0);
-        failures++;
     }
-    failures += mknod_fs_stat_expect("/node", 0, MR_INODE_CHR);
+    mknod_fs_stat_expect(__test_status, "/node", 0, MR_INODE_CHR);
 
     /* Reject duplicate names before invoking the filesystem */
-    failures += mknod_fs_expect("reject duplicate mknod",
-                                mr_fs_mknod("/node", MR_INODE_BLK, MR_NULL),
-                                -MR_EEXIST);
-    failures += mknod_fs_size_expect("duplicate mknod callback count",
-                                     context.mknod_calls, 2);
+    mknod_fs_expect(__test_status, "reject duplicate mknod",
+                    mr_fs_mknod("/node", MR_INODE_BLK, MR_NULL), -MR_EEXIST);
+    mknod_fs_size_expect(__test_status, "duplicate mknod callback count",
+                         context.mknod_calls, 2);
 
     /* Rename and remove without optional filesystem callbacks */
-    failures += mknod_fs_expect("rename mknod node",
-                                 fs_test_rename("/node", "/renamed"), 0);
-    failures += mknod_fs_stat_expect("/node", -MR_ENOENT, MR_INODE_NONE);
-    failures += mknod_fs_stat_expect("/renamed", 0, MR_INODE_CHR);
-    failures
-        += mknod_fs_expect("unlink mknod node", fs_test_unlink("/renamed"), 0);
-    failures += mknod_fs_stat_expect("/renamed", -MR_ENOENT, MR_INODE_NONE);
-    failures += mknod_fs_size_expect("destroy mknod inode",
-                                     context.destroy_calls, 1);
-    failures += mknod_fs_expect("clear mknod inode",
-                                context.last_inode == MR_NULL, MR_TRUE);
+    mknod_fs_expect(__test_status, "rename mknod node",
+                    fs_test_rename("/node", "/renamed"), 0);
+    mknod_fs_stat_expect(__test_status, "/node", -MR_ENOENT, MR_INODE_NONE);
+    mknod_fs_stat_expect(__test_status, "/renamed", 0, MR_INODE_CHR);
+    mknod_fs_expect(__test_status, "unlink mknod node",
+                    fs_test_unlink("/renamed"), 0);
+    mknod_fs_stat_expect(__test_status, "/renamed", -MR_ENOENT, MR_INODE_NONE);
+    mknod_fs_size_expect(__test_status, "destroy mknod inode",
+                         context.destroy_calls, 1);
+    mknod_fs_expect(__test_status, "clear mknod inode",
+                    context.last_inode == MR_NULL, MR_TRUE);
 
     /* Unmount test filesystem */
-    failures += mknod_fs_expect("umount mknodfs", mr_fs_umount("/"), 0);
+    mknod_fs_expect(__test_status, "umount mknodfs", mr_fs_umount("/"), 0);
     __mknod_fs_context = MR_NULL;
     heap_after = mr_heap_information(MR_TRUE);
-    failures += mknod_fs_size_expect(
-        "mknod heap restored", heap_after.used_bytes, heap_before.used_bytes);
-    return failures;
+    mknod_fs_size_expect(__test_status, "mknod heap restored",
+                         heap_after.used_bytes, heap_before.used_bytes);
+    return;
 }
 
-static void mknod(void) {
-    MR_TEST_EXPECT_EQ_INT(fs_mknod_test(), 0);
+MR_TEST(fs, mknod) {
+    fs_mknod_test(__test_status);
 }
-MR_TEST_EXPORT(fs, mknod, mknod);
+
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

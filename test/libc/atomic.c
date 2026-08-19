@@ -12,27 +12,25 @@
 
 /* -------------------------------------------------------------------------- */
 /* Test: static init                                                          */
-static void test_atomic_static_init(void) {
+MR_TEST(atomic, static_init) {
     mr_atomic_t v = MR_ATOMIC_INIT(12345);
 
     MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 12345);
 }
-MR_TEST_EXPORT(atomic, static_init, test_atomic_static_init);
 
 /* -------------------------------------------------------------------------- */
 /* Test: load/store                                                           */
-static void test_atomic_load_store(void) {
+MR_TEST(atomic, load_store) {
     mr_atomic_t v;
 
     mr_atomic_init(&v, 0);
     mr_atomic_store(&v, 42);
     MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 42);
 }
-MR_TEST_EXPORT(atomic, load_store, test_atomic_load_store);
 
 /* -------------------------------------------------------------------------- */
 /* Test: exchange                                                             */
-static void test_atomic_exchange(void) {
+MR_TEST(atomic, exchange) {
     mr_atomic_t v, old;
 
     mr_atomic_init(&v, 5);
@@ -40,11 +38,10 @@ static void test_atomic_exchange(void) {
     MR_TEST_ASSERT_EQ_INT(old, 5);
     MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 7);
 }
-MR_TEST_EXPORT(atomic, exchange, test_atomic_exchange);
 
 /* -------------------------------------------------------------------------- */
 /* Test: compare-exchange success/fail                                        */
-static void test_atomic_compare_exchange(void) {
+MR_TEST(atomic, compare_exchange) {
     mr_atomic_t v, expect;
 
     mr_atomic_init(&v, 3);
@@ -56,33 +53,30 @@ static void test_atomic_compare_exchange(void) {
     MR_TEST_ASSERT_EQ_INT(mr_atomic_compare_exchange(&v, &expect, 1), MR_FALSE);
     MR_TEST_ASSERT_EQ_INT(expect, 9);
 }
-MR_TEST_EXPORT(atomic, compare_exchange, test_atomic_compare_exchange);
 
 /* -------------------------------------------------------------------------- */
 /* Test: fetch-add                                                            */
-static void test_atomic_fetch_add(void) {
+MR_TEST(atomic, fetch_add) {
     mr_atomic_t v;
 
     mr_atomic_init(&v, 10);
     MR_TEST_ASSERT_EQ_INT(mr_atomic_fetch_add(&v, 5), 10);
     MR_TEST_ASSERT_EQ_INT(v, 15);
 }
-MR_TEST_EXPORT(atomic, fetch_add, test_atomic_fetch_add);
 
 /* -------------------------------------------------------------------------- */
 /* Test: fetch-sub                                                            */
-static void test_atomic_fetch_sub(void) {
+MR_TEST(atomic, fetch_sub) {
     mr_atomic_t v;
 
     mr_atomic_init(&v, 20);
     MR_TEST_ASSERT_EQ_INT(mr_atomic_fetch_sub(&v, 8), 20);
     MR_TEST_ASSERT_EQ_INT(v, 12);
 }
-MR_TEST_EXPORT(atomic, fetch_sub, test_atomic_fetch_sub);
 
 /* -------------------------------------------------------------------------- */
 /* Test: bitwise fetch-and/or/xor                                             */
-static void test_atomic_bitwise(void) {
+MR_TEST(atomic, bitwise) {
     mr_atomic_t v;
 
     mr_atomic_init(&v, 0x0F);
@@ -95,11 +89,10 @@ static void test_atomic_bitwise(void) {
     MR_TEST_ASSERT_EQ_INT(mr_atomic_fetch_xor(&v, 0x0F), 0x0F);
     MR_TEST_ASSERT_EQ_INT(v, 0x00);
 }
-MR_TEST_EXPORT(atomic, bitwise, test_atomic_bitwise);
 
 /* -------------------------------------------------------------------------- */
 /* Test: zero and negative values                                             */
-static void test_atomic_boundary_values(void) {
+MR_TEST(atomic, boundary_values) {
     mr_atomic_t v;
     mr_atomic_t old;
 
@@ -114,11 +107,10 @@ static void test_atomic_boundary_values(void) {
     MR_TEST_ASSERT_EQ_INT(mr_atomic_fetch_add(&v, -0xAA), 0x55AA);
     MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 0x5500);
 }
-MR_TEST_EXPORT(atomic, boundary_values, test_atomic_boundary_values);
 
 /* -------------------------------------------------------------------------- */
 /* Test: compare-exchange updates the expected value on mismatch              */
-static void test_atomic_compare_exchange_mismatch(void) {
+MR_TEST(atomic, compare_exchange_mismatch) {
     mr_atomic_t v;
     mr_atomic_t expect;
 
@@ -133,6 +125,116 @@ static void test_atomic_compare_exchange_mismatch(void) {
                           MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 0x9999);
 }
-MR_TEST_EXPORT(atomic, compare_exchange_mismatch,
-               test_atomic_compare_exchange_mismatch);
+
+#if defined(MR_USE_TEST_PTHREAD)
+#include <pthread.h>
+
+#define ATOMIC_MT_THREADS (4)
+#define ATOMIC_MT_ITERS   (20000)
+
+typedef struct atomic_mt_ctx {
+    mr_atomic_t *value;
+    int iters;
+} atomic_mt_ctx_t;
+
+static void *atomic_mt_worker(void *arg) {
+    atomic_mt_ctx_t *ctx = arg;
+    int i;
+
+    for (i = 0; i < ctx->iters; i++) {
+        mr_atomic_fetch_add(ctx->value, 1);
+    }
+    return MR_NULL;
+}
+
+MR_TEST(atomic, concurrent_fetch_add) {
+    pthread_t threads[ATOMIC_MT_THREADS];
+    atomic_mt_ctx_t ctx;
+    mr_atomic_t value;
+    int i;
+    int ret;
+
+    mr_atomic_init(&value, 0);
+    ctx.value = &value;
+    ctx.iters = ATOMIC_MT_ITERS;
+
+    for (i = 0; i < ATOMIC_MT_THREADS; i++) {
+        ret = pthread_create(&threads[i], MR_NULL, atomic_mt_worker, &ctx);
+        MR_TEST_ASSERT_EQ_INT(ret, 0);
+    }
+    for (i = 0; i < ATOMIC_MT_THREADS; i++) {
+        MR_TEST_EXPECT_EQ_INT(pthread_join(threads[i], MR_NULL), 0);
+    }
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&value),
+                          ATOMIC_MT_THREADS * ATOMIC_MT_ITERS);
+}
+
+static void *atomic_mt_cas_worker(void *arg) {
+    atomic_mt_ctx_t *ctx = arg;
+    mr_atomic_t expect;
+    int i;
+
+    for (i = 0; i < ctx->iters; i++) {
+        expect = mr_atomic_load(ctx->value);
+        while (mr_atomic_compare_exchange(ctx->value, &expect, expect + 1)
+               == MR_FALSE) {
+        }
+    }
+    return MR_NULL;
+}
+
+MR_TEST(atomic, concurrent_compare_exchange) {
+    pthread_t threads[ATOMIC_MT_THREADS];
+    atomic_mt_ctx_t ctx;
+    mr_atomic_t value;
+    int i;
+    int ret;
+
+    mr_atomic_init(&value, 0);
+    ctx.value = &value;
+    ctx.iters = ATOMIC_MT_ITERS;
+
+    for (i = 0; i < ATOMIC_MT_THREADS; i++) {
+        ret = pthread_create(&threads[i], MR_NULL, atomic_mt_cas_worker, &ctx);
+        MR_TEST_ASSERT_EQ_INT(ret, 0);
+    }
+    for (i = 0; i < ATOMIC_MT_THREADS; i++) {
+        MR_TEST_EXPECT_EQ_INT(pthread_join(threads[i], MR_NULL), 0);
+    }
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&value),
+                          ATOMIC_MT_THREADS * ATOMIC_MT_ITERS);
+}
+
+static void *atomic_mt_xor_worker(void *arg) {
+    atomic_mt_ctx_t *ctx = arg;
+    int i;
+
+    for (i = 0; i < ctx->iters; i++) {
+        mr_atomic_fetch_xor(ctx->value, 1);
+    }
+    return MR_NULL;
+}
+
+MR_TEST(atomic, concurrent_fetch_xor) {
+    pthread_t threads[ATOMIC_MT_THREADS];
+    atomic_mt_ctx_t ctx;
+    mr_atomic_t value;
+    int i;
+    int ret;
+
+    mr_atomic_init(&value, 0);
+    ctx.value = &value;
+    ctx.iters = ATOMIC_MT_ITERS;
+
+    for (i = 0; i < ATOMIC_MT_THREADS; i++) {
+        ret = pthread_create(&threads[i], MR_NULL, atomic_mt_xor_worker, &ctx);
+        MR_TEST_ASSERT_EQ_INT(ret, 0);
+    }
+    for (i = 0; i < ATOMIC_MT_THREADS; i++) {
+        MR_TEST_EXPECT_EQ_INT(pthread_join(threads[i], MR_NULL), 0);
+    }
+    MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&value), 0);
+}
+#endif /* defined(MR_USE_TEST_PTHREAD) */
+
 #endif /* defined(MR_USE_TEST) */

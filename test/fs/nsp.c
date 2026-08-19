@@ -11,7 +11,7 @@
 #include <mrX/fs/mr_dentry.h>
 #include <mrX/fs/mr_nsp.h>
 
-static void test_fs_nsp_init_root_get_failure(void) {
+MR_TEST(fs, nsp_init_root_get_failure) {
     mr_fs_nsp_t *current;
     mr_fs_nsp_t nsp;
     mr_atomic_t saved;
@@ -33,6 +33,36 @@ static void test_fs_nsp_init_root_get_failure(void) {
     /* Restore the active namespace root reference */
     mr_atomic_store(&current->root->parent.magic_ref, saved);
 }
-MR_TEST_EXPORT(fs, nsp_init_root_get_failure,
-               test_fs_nsp_init_root_get_failure);
+
+MR_TEST(fs, nsp_root_lock_and_init) {
+    mr_dentry_t *root;
+    mr_fs_nsp_t *current;
+    mr_fs_nsp_t nsp;
+    mr_err_t ret;
+    int mask;
+
+    root = mr_fs_nsp_root();
+    MR_TEST_ASSERT_NE_PTR(root, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_fs_nsp_is_root(root), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(mr_fs_nsp_is_root(MR_NULL), MR_FALSE);
+
+    current = mr_fs_nsp_current();
+    MR_TEST_ASSERT_NE_PTR(current, MR_NULL);
+    MR_TEST_ASSERT_EQ_PTR(current->root, root);
+
+    mask = mr_fs_nsp_lock();
+    mr_fs_nsp_unlock(mask);
+
+    ret = mr_fs_nsp_init(&nsp);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_PTR(nsp.root, root);
+    MR_TEST_ASSERT_EQ_PTR(nsp.cwd, root);
+    if (nsp.root != MR_NULL) {
+        mr_dentry_put(nsp.root);
+    }
+    if (nsp.cwd != MR_NULL) {
+        mr_dentry_put(nsp.cwd);
+    }
+}
+
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

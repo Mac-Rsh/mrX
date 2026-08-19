@@ -139,7 +139,7 @@ static void adc_waiter_entry(mr_waiter_t *waiter, void *param,
     (*count)++;
 }
 
-static void test_adc_lifecycle_and_reference(void) {
+MR_TEST(adc, lifecycle_and_reference) {
     mr_driver_t *drv;
 
     adc_test_reset();
@@ -150,9 +150,8 @@ static void test_adc_lifecycle_and_reference(void) {
     MR_TEST_ASSERT_EQ_INT(mr_adc_ref_internal(drv), 1200);
     MR_TEST_ASSERT_EQ_INT(mr_adc_del(drv), 0);
 }
-MR_TEST_EXPORT(adc, lifecycle_and_reference, test_adc_lifecycle_and_reference);
 
-static void test_adc_channel_configuration_paths(void) {
+MR_TEST(adc, channel_configuration_paths) {
     mr_driver_t *drv;
     mr_adc_config_t config = {
         .diff = MR_ADC_DIFF_DIFF,
@@ -185,10 +184,8 @@ static void test_adc_channel_configuration_paths(void) {
     MR_TEST_ASSERT_EQ_INT(mr_adc_configuration(drv, 30, &saved), -MR_EINVAL);
     MR_TEST_ASSERT_EQ_INT(mr_adc_del(drv), 0);
 }
-MR_TEST_EXPORT(adc, channel_configuration_paths,
-               test_adc_channel_configuration_paths);
 
-static void test_adc_read_and_conversion(void) {
+MR_TEST(adc, read_and_conversion) {
     mr_driver_t *drv;
     mr_uint16_t samples[2] = {100, 200};
     mr_adc_seq_t seq = {
@@ -221,10 +218,9 @@ static void test_adc_read_and_conversion(void) {
         mr_adc_raw2volt(3300, MR_ADC_GAIN_1, 12, 4095) > 3.29f, MR_TRUE);
     mr_adc_del(drv);
 }
-MR_TEST_EXPORT(adc, read_and_conversion, test_adc_read_and_conversion);
 
 #if defined(MR_USE_DRIVER_ADC_STREAM)
-static void test_adc_stream_paths(void) {
+MR_TEST(adc, stream_paths) {
     mr_driver_t *drv;
     mr_uint16_t buffer[4] = {0};
     mr_adc_seq_t seq = {
@@ -260,9 +256,8 @@ static void test_adc_stream_paths(void) {
     MR_TEST_ASSERT_EQ_INT(adc_stream_stop_count, 2);
     mr_adc_del(drv);
 }
-MR_TEST_EXPORT(adc, stream_paths, test_adc_stream_paths);
 
-static void test_adc_event_paths(void) {
+MR_TEST(adc, event_paths) {
     mr_driver_t *drv;
     mr_waiter_t waiter;
     int event_count = 0;
@@ -280,6 +275,6 @@ static void test_adc_event_paths(void) {
     MR_TEST_ASSERT_EQ_INT(mr_waiter_del(&waiter), 0);
     mr_adc_del(drv);
 }
-MR_TEST_EXPORT(adc, event_paths, test_adc_event_paths);
+
 #endif
 #endif

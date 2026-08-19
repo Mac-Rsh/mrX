@@ -108,7 +108,7 @@ static mr_driver_t *gpio_create(mr_uint32_t exist, mr_uint32_t invert) {
     return mr_gpio_create(data, MR_NULL, (mr_gpio_ops_t *)&gpio_ops);
 }
 
-static void test_gpio_configure_paths(void) {
+MR_TEST(gpio, configure_paths) {
     mr_driver_t *drv;
     mr_gpio_config_t config = {.mode = MR_GPIO_MODE_INPUT};
     mr_err_t ret;
@@ -142,9 +142,8 @@ static void test_gpio_configure_paths(void) {
     MR_TEST_ASSERT_EQ_INT(gpio_last_value, 1);
     mr_gpio_del(drv);
 }
-MR_TEST_EXPORT(gpio, configure_paths, test_gpio_configure_paths);
 
-static void test_gpio_configuration_and_io(void) {
+MR_TEST(gpio, configuration_and_io) {
     mr_driver_t *drv;
     mr_gpio_config_t saved;
     mr_uint8_t value;
@@ -176,9 +175,8 @@ static void test_gpio_configuration_and_io(void) {
     MR_TEST_ASSERT_EQ_INT(mr_gpio_port_toggle(drv), 0);
     mr_gpio_del(drv);
 }
-MR_TEST_EXPORT(gpio, configuration_and_io, test_gpio_configuration_and_io);
 
-static void test_gpio_event_attach_and_reference(void) {
+MR_TEST(gpio, event_attach_and_reference) {
     mr_driver_t *drv;
     mr_waiter_t waiter;
 
@@ -193,6 +191,5 @@ static void test_gpio_event_attach_and_reference(void) {
     mr_waiter_del(&waiter);
     mr_gpio_del(drv);
 }
-MR_TEST_EXPORT(gpio, event_attach_and_reference,
-               test_gpio_event_attach_and_reference);
+
 #endif

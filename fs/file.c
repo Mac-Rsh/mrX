@@ -21,15 +21,15 @@ static const mr_inode_ops_t __fs_symlink_ops = {
     .destroy = fs_symlink_destroy,
 };
 
-/* FS node creation operation */
-typedef enum fs_node_create_op {
+/* FS node operation definition */
+typedef enum fs_node_op {
     FS_NODE_OP_CREATE,
     FS_NODE_OP_MKNOD,
-} fs_node_create_op_t;
+} fs_node_op_t;
 
 /* FS path split type */
 typedef struct fs_path_split {
-    char ipath[MR_CFG_FS_DENTRY_NAME_LEN * 2];
+    char ipath[MR_CFG_FS_DENTRY_INLINE_NAME_LEN * 2];
     const char *leaf;
     char *parent;
 } fs_path_split_t;
@@ -758,9 +758,8 @@ static void fs_split_path_free(fs_path_split_t *split) {
 }
 
 static mr_err_t fs_create_node_impl(mr_dentry_t *parent, const char *name,
-                                    mr_inode_type_t type,
-                                    fs_node_create_op_t op, void *priv,
-                                    mr_dentry_t **dentry) {
+                                    mr_inode_type_t type, fs_node_op_t op,
+                                    void *priv, mr_dentry_t **dentry) {
     mr_dentry_t *child, *existing;
     mr_super_block_t *sb;
     mr_inode_t *inode;
@@ -881,7 +880,7 @@ _exit:
 }
 
 static mr_err_t fs_create_node(mr_dentry_t *parent, const char *name,
-                               mr_inode_type_t type, fs_node_create_op_t op,
+                               mr_inode_type_t type, fs_node_op_t op,
                                void *priv, mr_dentry_t **dentry) {
     mr_super_block_t *sb;
     mr_err_t ret;
@@ -981,7 +980,7 @@ mr_err_t mr_fs_mknod(const char *path, mr_inode_type_t type, void *priv) {
     MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
 
     /* Check node type */
-    if ((type <= MR_INODE_NONE) || (type > MR_INODE_LNK)) {
+    if ((type <= MR_INODE_NONE) || (type >= MR_INODE_MAX)) {
         return -MR_EINVAL;
     }
 
@@ -1611,6 +1610,7 @@ _exit_free:
 
 mr_ssize_t mr_fs_readlink(const mr_file_t *file, char *buf, mr_size_t size) {
     mr_inode_t *inode;
+    mr_ssize_t ret;
 
     /* Check parameter */
     MR_ASSERT(file != MR_NULL);
@@ -1632,7 +1632,11 @@ mr_ssize_t mr_fs_readlink(const mr_file_t *file, char *buf, mr_size_t size) {
     }
 
     /* Read target */
-    return inode->ops->readlink(inode, buf, size);
+    ret = inode->ops->readlink(inode, buf, size);
+    if ((ret >= 0) && ((mr_size_t)ret < size)) {
+        buf[ret] = '\0';
+    }
+    return ret;
 }
 
 static mr_err_t fs_rename_dentry(mr_dentry_t *old_dentry, mr_inode_t *inode,
@@ -1792,6 +1796,56 @@ mr_err_t mr_fs_unlink(mr_file_t *file) {
     ret = fs_unlink_dentry(file->dentry, file->inode);
     fs_op_exit(sb);
     return ret;
+}
+
+static mr_err_t fs_rmdir(mr_fs_nsp_t *nsp, const char *path,
+                         mr_bool_t protect_root) {
+    mr_super_block_t *sb;
+    mr_dentry_t *dentry;
+    mr_err_t ret;
+
+    /* Look up the directory itself */
+    ret = fs_lookup(nsp, path, MR_FALSE, &dentry);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* A lookup root can not be removed through its confined context */
+    if (protect_root && (dentry == nsp->root)) {
+        mr_dentry_put(dentry);
+        return -MR_EBUSY;
+    }
+
+    /* Only directories can be removed by rmdir */
+    if ((!dentry->inode) || (dentry->inode->type != MR_INODE_DIR)) {
+        mr_dentry_put(dentry);
+        return -MR_ENOTDIR;
+    }
+
+    /* Protect the backing FS across unlink commit */
+    ret = fs_dentry_op_enter(dentry, &sb);
+    if (ret == 0) {
+        ret = fs_unlink_dentry(dentry, dentry->inode);
+        fs_op_exit(sb);
+    }
+    mr_dentry_put(dentry);
+    return ret;
+}
+
+mr_err_t mr_fs_rmdir(const char *path) {
+    mr_fs_nsp_t *nsp;
+
+    /* Check parameter */
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+
+    /* Get current file-system namespace */
+    nsp = mr_fs_nsp_current();
+    if (!nsp) {
+        return -MR_EINVAL;
+    }
+
+    /* Remove relative to CWD */
+    return fs_rmdir(nsp, path, MR_FALSE);
 }
 
 static mr_err_t fs_unlink_dentry_guarded(mr_dentry_t *dentry) {
@@ -2005,7 +2059,7 @@ mr_err_t mr_fs_unlink_recursive(mr_file_t *file) {
     return ret;
 }
 
-#if defined(MR_USE_FS_AT) || defined(MR_USE_FS_BY_PATH)
+#if defined(MR_USE_FS_BY_PATH)
 static mr_err_t fs_stat_by_path(mr_fs_nsp_t *nsp, const char *path,
                                 mr_stat_t *stat, mr_bool_t follow_final) {
     mr_super_block_t *sb;
@@ -2084,7 +2138,7 @@ static mr_err_t fs_unlink_by_path(mr_fs_nsp_t *nsp, const char *path,
     mr_dentry_put(dentry);
     return ret;
 }
-#endif /* defined(MR_USE_FS_AT) || defined(MR_USE_FS_BY_PATH) */
+#endif /* defined(MR_USE_FS_BY_PATH) */
 
 #if defined(MR_USE_FS_BY_PATH)
 mr_err_t mr_fs_stat_by_path(const char *path, mr_stat_t *stat) {
@@ -2177,6 +2231,28 @@ mr_err_t mr_fs_mkdirat(const mr_file_t *dir, const char *path, int flags) {
     return ret;
 }
 
+mr_err_t mr_fs_rmdirat(const mr_file_t *dir, const char *path, int flags) {
+    fs_path_context_t ctx;
+    mr_bool_t in_root;
+    mr_err_t ret;
+
+    /* Check parameter */
+    MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
+    if (flags & (~MR_AT_IN_ROOT)) {
+        return -MR_EINVAL;
+    }
+
+    /* Remove relative to the pinned directory context */
+    in_root = (flags & MR_AT_IN_ROOT) ? MR_TRUE : MR_FALSE;
+    ret = fs_path_context_enter(&ctx, dir, path, in_root);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = fs_rmdir(&ctx.nsp, path, in_root);
+    fs_path_context_release(&ctx);
+    return ret;
+}
+
 mr_err_t mr_fs_mknodat(const mr_file_t *dir, const char *path,
                        mr_inode_type_t type, void *priv, int flags) {
     fs_path_context_t ctx;
@@ -2187,7 +2263,7 @@ mr_err_t mr_fs_mknodat(const mr_file_t *dir, const char *path,
     MR_ASSERT((path != MR_NULL) && (path[0] != '\0'));
 
     /* Check node type */
-    if (((type <= MR_INODE_NONE) || (type > MR_INODE_LNK))
+    if (((type <= MR_INODE_NONE) || (type >= MR_INODE_MAX))
         || (flags & (~MR_AT_IN_ROOT))) {
         return -MR_EINVAL;
     }
@@ -2223,9 +2299,11 @@ mr_err_t mr_fs_openat(mr_file_t *file, const mr_file_t *dir, const char *path,
     fs_path_context_release(&ctx);
     return ret;
 }
+#endif /* defined(MR_USE_FS_AT) */
 
-mr_err_t mr_fs_statat(const mr_file_t *dir, const char *path, mr_stat_t *stat,
-                      int flags) {
+#if defined(MR_USE_FS_AT) && defined(MR_USE_FS_BY_PATH)
+mr_err_t mr_fs_statat_by_path(const mr_file_t *dir, const char *path,
+                              mr_stat_t *stat, int flags) {
     mr_bool_t in_root, follow_final;
     fs_path_context_t ctx;
     mr_err_t ret;
@@ -2251,9 +2329,10 @@ mr_err_t mr_fs_statat(const mr_file_t *dir, const char *path, mr_stat_t *stat,
     return ret;
 }
 
-mr_err_t mr_fs_renameat(const mr_file_t *old_dir, const char *old_path,
-                        const mr_file_t *new_dir, const char *new_path,
-                        int flags) {
+mr_err_t mr_fs_renameat_by_path(const mr_file_t *old_dir,
+                                const char *old_path,
+                                const mr_file_t *new_dir,
+                                const char *new_path, int flags) {
     fs_path_context_t old_ctx, new_ctx;
     mr_bool_t in_root;
     mr_err_t ret;
@@ -2285,7 +2364,8 @@ mr_err_t mr_fs_renameat(const mr_file_t *old_dir, const char *old_path,
     return ret;
 }
 
-mr_err_t mr_fs_unlinkat(const mr_file_t *dir, const char *path, int flags) {
+mr_err_t mr_fs_unlinkat_by_path(const mr_file_t *dir, const char *path,
+                                int flags) {
     fs_path_context_t ctx;
     mr_bool_t in_root;
     mr_err_t ret;
@@ -2307,8 +2387,8 @@ mr_err_t mr_fs_unlinkat(const mr_file_t *dir, const char *path, int flags) {
     return ret;
 }
 
-mr_err_t mr_fs_unlinkat_recursive(const mr_file_t *dir, const char *path,
-                                  int flags) {
+mr_err_t mr_fs_unlinkat_recursive_by_path(const mr_file_t *dir,
+                                          const char *path, int flags) {
     fs_path_context_t ctx;
     mr_bool_t in_root;
     mr_err_t ret;
@@ -2329,7 +2409,7 @@ mr_err_t mr_fs_unlinkat_recursive(const mr_file_t *dir, const char *path,
     fs_path_context_release(&ctx);
     return ret;
 }
-#endif /* defined(MR_USE_FS_AT) */
+#endif /* defined(MR_USE_FS_AT) && defined(MR_USE_FS_BY_PATH) */
 
 mr_ssize_t mr_fs_read(mr_file_t *file, void *buf, mr_size_t size) {
     /* Check parameter */

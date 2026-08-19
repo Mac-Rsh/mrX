@@ -24,8 +24,7 @@ typedef struct mock_error_context {
 static mock_error_context_t *__mock_ctx;
 
 static mr_err_t mock_error_inode_create(mr_inode_t *dir, const char *name,
-                                        mr_inode_type_t type,
-                                        mr_inode_t **out);
+                                        mr_inode_type_t type, mr_inode_t **out);
 static mr_err_t mock_error_inode_lookup(mr_inode_t *dir, const char *name,
                                         mr_inode_t **out);
 static mr_err_t mock_error_inode_stat(mr_inode_t *inode, mr_stat_t *stat);
@@ -55,12 +54,12 @@ static const mr_file_ops_t __mock_error_file_ops = {
 static mr_file_system_t __mock_error_fs
     = MR_FILE_SYSTEM_INIT("errfs", mock_error_mount, MR_NULL, MR_NULL);
 
-static int mock_error_expect(const char *name, mr_int64_t actual,
-                             mr_int64_t expected) {
+static void mock_error_expect(volatile mr_uint32_t *__test_status,
+                              const char *name, mr_int64_t actual,
+                              mr_int64_t expected) {
     MR_IGNORE(name);
 
     MR_TEST_EXPECT_EQ_INT(actual, expected);
-    return (actual == expected) ? 0 : 1;
 }
 
 static mr_err_t mock_error_inode_create(mr_inode_t *dir, const char *name,
@@ -185,110 +184,106 @@ static mr_err_t mock_error_mount(mr_super_block_t *sb, const char *source,
     return 0;
 }
 
-static int fs_mock_error_test(void) {
+static void fs_mock_error_test(volatile mr_uint32_t *__test_status) {
     mr_file_t file = MR_FILE_INIT(file);
     mock_error_context_t *context;
     char buffer[8];
     mr_stat_t stat;
-    int failures = 0;
     mr_err_t ret;
 
     /* Register the mock FS */
-    failures += mock_error_expect("register errfs",
-                                  mr_file_system_register(&__mock_error_fs),
-                                  0);
+    mock_error_expect(__test_status, "register errfs",
+                      mr_file_system_register(&__mock_error_fs), 0);
 
     /* Mount the mock FS */
-    ret = mr_fs_mount(MR_NULL, "/", "errfs", 0, MR_NULL);
-    failures += mock_error_expect("mount errfs", ret, 0);
+    ret = fs_test_mount_root("errfs", 0, MR_NULL);
+    mock_error_expect(__test_status, "mount errfs", ret, 0);
     if (ret != 0) {
-        return failures;
+        return;
     }
     context = __mock_ctx;
 
     /* A cache miss is filled by the lookup callback */
-    failures += mock_error_expect("stat ghost", fs_test_stat("/ghost", &stat),
-                                  0);
-    failures += mock_error_expect("ghost lookup calls",
-                                  (mr_int64_t)context->lookup_calls, 1);
-    failures += mock_error_expect("destroy calls",
-                                  (mr_int64_t)context->destroy_calls, 0);
+    mock_error_expect(__test_status, "stat ghost",
+                      fs_test_stat("/ghost", &stat), 0);
+    mock_error_expect(__test_status, "ghost lookup calls",
+                      (mr_int64_t)context->lookup_calls, 1);
+    mock_error_expect(__test_status, "destroy calls",
+                      (mr_int64_t)context->destroy_calls, 0);
 
     /* Read/write through the mock op layers, incl. stat callback */
     ret = mr_fs_open(&file, "/data", MR_O_RDWR | MR_O_CREAT);
-    failures += mock_error_expect("open errfs data", ret, 0);
+    mock_error_expect(__test_status, "open errfs data", ret, 0);
     if (ret == 0) {
-        failures += mock_error_expect("write errfs data",
-                                      mr_fs_write(&file, "abc", 3), 3);
-        failures += mock_error_expect("truncate errfs data 4",
-                                      mr_fs_truncate(&file, 4), 0);
-        failures += mock_error_expect("read errfs data",
-                                      mr_fs_read(&file, buffer, 0), 0);
+        mock_error_expect(__test_status, "write errfs data",
+                          mr_fs_write(&file, "abc", 3), 3);
+        mock_error_expect(__test_status, "truncate errfs data 4",
+                          mr_fs_truncate(&file, 4), 0);
+        mock_error_expect(__test_status, "read errfs data",
+                          mr_fs_read(&file, buffer, 0), 0);
         ret = mr_fs_stat(&file, &stat);
-        failures += mock_error_expect("stat errfs data", ret, 0);
+        mock_error_expect(__test_status, "stat errfs data", ret, 0);
         if (ret == 0) {
-            failures += mock_error_expect("errfs data size", stat.size, 4);
+            mock_error_expect(__test_status, "errfs data size", stat.size, 4);
         }
-        failures += mock_error_expect("close errfs data",
-                                      mr_fs_close(&file), 0);
+        mock_error_expect(__test_status, "close errfs data", mr_fs_close(&file),
+                          0);
     }
 
     /* O_TRUNC failure after open must not leave the handle open */
     context->trunc_error = MR_TRUE;
     ret = mr_fs_open(&file, "/data", MR_O_RDWR | MR_O_TRUNC);
     context->trunc_error = MR_FALSE;
-    failures += mock_error_expect("open trunc fail", ret, -MR_EIO);
-    failures += mock_error_expect("trunc fail handle closed",
-                                  file.inode == MR_NULL, MR_TRUE);
-    failures += mock_error_expect("stat after trunc fail",
-                                  fs_test_stat("/data", &stat), 0);
-    failures += mock_error_expect("size after trunc fail", stat.size, 4);
+    mock_error_expect(__test_status, "open trunc fail", ret, -MR_EIO);
+    mock_error_expect(__test_status, "trunc fail handle closed",
+                      file.inode == MR_NULL, MR_TRUE);
+    mock_error_expect(__test_status, "stat after trunc fail",
+                      fs_test_stat("/data", &stat), 0);
+    mock_error_expect(__test_status, "size after trunc fail", stat.size, 4);
 
     /* Rename/unlink stay within the dentry namespace layer */
-    failures += mock_error_expect("mkdir errfs dir", mr_fs_mkdir("/dir"), 0);
-    failures += mock_error_expect("rename dir",
-                                  fs_test_rename("/dir", "/dir2"), 0);
-    failures += mock_error_expect("unlink dir2",
-                                  fs_test_unlink("/dir2"), 0);
-    failures += mock_error_expect("umount errfs", mr_fs_umount("/"), 0);
+    mock_error_expect(__test_status, "mkdir errfs dir", mr_fs_mkdir("/dir"), 0);
+    mock_error_expect(__test_status, "rename dir",
+                      fs_test_rename("/dir", "/dir2"), 0);
+    mock_error_expect(__test_status, "unlink dir2", fs_test_unlink("/dir2"), 0);
+    mock_error_expect(__test_status, "umount errfs", mr_fs_umount("/"), 0);
 
     /* A create callback returning the wrong inode type -> -MR_EINVAL */
-    ret = mr_fs_mount(MR_NULL, "/", "errfs", 0, MR_NULL);
-    failures += mock_error_expect("mount wrong-type", ret, 0);
+    ret = fs_test_mount_root("errfs", 0, MR_NULL);
+    mock_error_expect(__test_status, "mount wrong-type", ret, 0);
     if (ret == 0) {
         context = __mock_ctx;
         context->create_wrong_type = MR_TRUE;
-        failures += mock_error_expect("create wrong type",
-                                      mr_fs_mkdir("/bad"), -MR_EINVAL);
-        failures += mock_error_expect("wrong type umount",
-                                      mr_fs_umount("/"), 0);
+        mock_error_expect(__test_status, "create wrong type",
+                          mr_fs_mkdir("/bad"), -MR_EINVAL);
+        mock_error_expect(__test_status, "wrong type umount", mr_fs_umount("/"),
+                          0);
     }
 
     /* A lookup callback returning a NULL inode -> -MR_EINVAL */
-    ret = mr_fs_mount(MR_NULL, "/", "errfs", 0, MR_NULL);
-    failures += mock_error_expect("mount bad-lookup", ret, 0);
+    ret = fs_test_mount_root("errfs", 0, MR_NULL);
+    mock_error_expect(__test_status, "mount bad-lookup", ret, 0);
     if (ret == 0) {
         context = __mock_ctx;
         context->lookup_null = MR_TRUE;
-        failures += mock_error_expect("open bad lookup",
-                                      fs_test_stat("/ghost", &stat),
-                                      -MR_EINVAL);
-        failures += mock_error_expect("bad lookup umount",
-                                      mr_fs_umount("/"), 0);
+        mock_error_expect(__test_status, "open bad lookup",
+                          fs_test_stat("/ghost", &stat), -MR_EINVAL);
+        mock_error_expect(__test_status, "bad lookup umount", mr_fs_umount("/"),
+                          0);
     }
 
     /* Final mount/umount round */
-    ret = mr_fs_mount(MR_NULL, "/", "errfs", 0, MR_NULL);
-    failures += mock_error_expect("remount errfs final", ret, 0);
+    ret = fs_test_mount_root("errfs", 0, MR_NULL);
+    mock_error_expect(__test_status, "remount errfs final", ret, 0);
     if (ret == 0) {
-        failures += mock_error_expect("errfs final umount",
-                                      mr_fs_umount("/"), 0);
+        mock_error_expect(__test_status, "errfs final umount",
+                          mr_fs_umount("/"), 0);
     }
-    return failures;
+    return;
 }
 
-static void mock_errors(void) {
-    MR_TEST_EXPECT_EQ_INT(fs_mock_error_test(), 0);
+MR_TEST(fs, mock_errors) {
+    fs_mock_error_test(__test_status);
 }
-MR_TEST_EXPORT(fs, mock_errors, mock_errors);
+
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

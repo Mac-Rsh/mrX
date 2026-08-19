@@ -49,10 +49,8 @@ typedef struct mr_file_system {
  *
  * @param _name The file-system name.
  * @param _mount The mount callback.
- *
  * @param _unmount The unmount prepare callback(maybe MR_NULL).
- * @param
- * _kill_sb The super-block destroy callback.
+ * @param _kill_sb The super-block destroy callback.
  */
 #define MR_FILE_SYSTEM_INIT(_name, _mount, _unmount, _kill_sb)                 \
     {                                                                          \

@@ -42,15 +42,16 @@ static mr_err_t test_xvm_prepare(mr_xvm_t *xvm, mr_uint8_t *data,
     }
 
     /* Set entry program counter */
-    return mr_xvm_reg_store(xvm, "pc", 0);
+    return mr_xvm_reg_store(xvm, 32, 0);
 }
 
-static const mr_xvm_ops_t test_xvm_empty_ops = {0};
+static const mr_xvm_isa_ops_t test_xvm_empty_ops = {0};
 
-static void test_xvm_invalid_lifecycle_and_isa_registry(void) {
+MR_TEST(xvm, invalid_lifecycle_and_isa_registry) {
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_xvm_t xvm;
-    mr_xvm_isa_t isa = MR_XVM_ISA_INIT("test-empty", &test_xvm_empty_ops);
+    mr_xvm_isa_t isa
+        = MR_XVM_ISA_INIT("test-empty", &test_xvm_empty_ops, MR_NULL);
     mr_xvm_isa_t *found;
     mr_err_t ret;
 
@@ -78,12 +79,10 @@ static void test_xvm_invalid_lifecycle_and_isa_registry(void) {
     ret = mr_xvm_isa_del(&isa);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(xvm, invalid_lifecycle_and_isa_registry,
-               test_xvm_invalid_lifecycle_and_isa_registry);
 
 /* Tests */
 
-static void test_xvm_lifecycle_and_registers(void) {
+MR_TEST(xvm, lifecycle_and_registers) {
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_uint8_t image[4] = {0};
     mr_xvm_t xvm;
@@ -94,27 +93,26 @@ static void test_xvm_lifecycle_and_registers(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_status(&xvm), MR_XVM_STATUS_RUNNING);
 
-    ret = mr_xvm_reg_store(&xvm, "x0", 0x1234);
+    ret = mr_xvm_reg_store(&xvm, 0, 0x1234);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
-    ret = mr_xvm_reg_load(&xvm, "x0", &value);
+    ret = mr_xvm_reg_load(&xvm, 0, &value);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0);
 
-    ret = mr_xvm_reg_store(&xvm, "x1", 0x12345678U);
+    ret = mr_xvm_reg_store(&xvm, 1, 0x12345678U);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
-    ret = mr_xvm_reg_load(&xvm, "x1", &value);
+    ret = mr_xvm_reg_load(&xvm, 1, &value);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0x12345678U);
 
-    ret = mr_xvm_reg_load(&xvm, "unknown", &value);
+    ret = mr_xvm_reg_load(&xvm, 0xFFFFFFFFU, &value);
     MR_TEST_ASSERT_EQ_INT(ret, -MR_EINVAL);
 
     ret = mr_xvm_del(&xvm);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(xvm, lifecycle_and_registers, test_xvm_lifecycle_and_registers);
 
-static void test_xvm_execute_arithmetic_and_syscall(void) {
+MR_TEST(xvm, execute_arithmetic_and_syscall) {
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_uint8_t image[12] = {0};
     mr_xvm_event_t event = {0};
@@ -130,14 +128,14 @@ static void test_xvm_execute_arithmetic_and_syscall(void) {
     ret = test_xvm_prepare(&xvm, data, image, sizeof(image));
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 
-    ret = mr_xvm_reg_store(&xvm, "x17", 1);
+    ret = mr_xvm_reg_store(&xvm, 17, 1);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
-    ret = mr_xvm_reg_store(&xvm, "x10", 9);
+    ret = mr_xvm_reg_store(&xvm, 10, 9);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 2), MR_XVM_NONE);
     MR_TEST_ASSERT_EQ_UINT(event.none.step, 2);
-    ret = mr_xvm_reg_load(&xvm, "x2", &value);
+    ret = mr_xvm_reg_load(&xvm, 2, &value);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_UINT(value, 12);
 
@@ -151,17 +149,15 @@ static void test_xvm_execute_arithmetic_and_syscall(void) {
     ret = mr_xvm_resume(&xvm);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     (void)mr_xvm_execute(&xvm, &event, 0);
-    ret = mr_xvm_reg_load(&xvm, "x10", &value);
+    ret = mr_xvm_reg_load(&xvm, 10, &value);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_UINT(value, 42);
 
     ret = mr_xvm_del(&xvm);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(xvm, execute_arithmetic_and_syscall,
-               test_xvm_execute_arithmetic_and_syscall);
 
-static void test_xvm_memory_permissions_and_bounds(void) {
+MR_TEST(xvm, memory_permissions_and_bounds) {
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_uint8_t image[4] = {0x13, 0x00, 0x00, 0x00};
     mr_uint8_t source[8] = {1, 2, 3, 4, 5, 6, 7, 8};
@@ -190,10 +186,8 @@ static void test_xvm_memory_permissions_and_bounds(void) {
     ret = mr_xvm_del(&xvm);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(xvm, memory_permissions_and_bounds,
-               test_xvm_memory_permissions_and_bounds);
 
-static void test_xvm_exception_pause_resume_and_interrupt(void) {
+MR_TEST(xvm, exception_pause_resume_and_interrupt) {
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_uint8_t image[4] = {0xff, 0xff, 0xff, 0xff};
     mr_xvm_event_t event = {0};
@@ -223,8 +217,6 @@ static void test_xvm_exception_pause_resume_and_interrupt(void) {
     ret = mr_xvm_del(&xvm);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(xvm, exception_pause_resume_and_interrupt,
-               test_xvm_exception_pause_resume_and_interrupt);
 
 /* Instruction encoders */
 
@@ -266,7 +258,7 @@ static mr_uint32_t test_xvm_j(mr_uint32_t imm, mr_uint32_t rd) {
          | (rd << 7) | 0x6fU;
 }
 
-static void test_xvm_riscv32_integer_and_control_flow(void) {
+MR_TEST(xvm, riscv32_integer_and_control_flow) {
     mr_uint8_t image[52] = {0};
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_xvm_event_t event = {0};
@@ -292,24 +284,22 @@ static void test_xvm_riscv32_integer_and_control_flow(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 12), MR_XVM_NONE);
 
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x3", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 3, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 8);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x4", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 4, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 2);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x5", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 5, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 1);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x6", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 6, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 7);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x10", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 10, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 7);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x11", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 11, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0x12345000U);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 }
-MR_TEST_EXPORT(xvm, riscv32_integer_and_control_flow,
-               test_xvm_riscv32_integer_and_control_flow);
 
-static void test_xvm_riscv32_load_store_and_faults(void) {
+MR_TEST(xvm, riscv32_load_store_and_faults) {
     mr_uint8_t image[44] = {0};
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_xvm_event_t event = {0};
@@ -333,15 +323,15 @@ static void test_xvm_riscv32_load_store_and_faults(void) {
     ret = test_xvm_prepare(&xvm, data, image, sizeof(image));
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 11), MR_XVM_NONE);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x3", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 3, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0xffffff80U);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x4", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 4, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0x80U);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x5", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 5, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0xffffff80U);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x6", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 6, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0xff80U);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x7", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 7, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0xffffff80U);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 
@@ -354,11 +344,9 @@ static void test_xvm_riscv32_load_store_and_faults(void) {
     MR_TEST_ASSERT_EQ_UINT(event.except.nr, MR_XVM_EXCEPT_NR_ALIGN);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 }
-MR_TEST_EXPORT(xvm, riscv32_load_store_and_faults,
-               test_xvm_riscv32_load_store_and_faults);
 
-static void test_xvm_riscv32_csr_counter_and_mret(void) {
-    mr_uint8_t image[24] = {0};
+MR_TEST(xvm, riscv32_csr_counter_and_mret) {
+    mr_uint8_t image[56] = {0};
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_xvm_event_t event = {0};
     mr_xvm_t xvm;
@@ -376,29 +364,38 @@ static void test_xvm_riscv32_csr_counter_and_mret(void) {
     ret = test_xvm_prepare(&xvm, data, image, 24);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 5), MR_XVM_NONE);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x2", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 2, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x3", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 3, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 8);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x4", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 4, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 8);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "mcycle", &value), 0);
-    MR_TEST_ASSERT_EQ_UINT(value, 5);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 5, &value), 0);
+    MR_TEST_ASSERT_EQ_UINT(value, 4);
 
-    ret = mr_xvm_reg_store(&xvm, "mepc", 0x20);
+    /* CSR numbers are not in the target register table; write them in-code */
+    test_xvm_image_word(image, 5, test_xvm_i(0x30, 0, 0, 6, 0x13));
+    test_xvm_image_word(image, 6, test_xvm_i(REG_CSR_MEPC, 6, 1, 0, 0x73));
+    test_xvm_image_word(image, 7, test_xvm_i(REG_MSTATUS_MPIE, 0, 0, 6, 0x13));
+    test_xvm_image_word(image, 8, test_xvm_i(REG_CSR_MSTATUS, 6, 1, 0, 0x73));
+    test_xvm_image_word(image, 9, 0x30200073U);
+    test_xvm_image_word(image, 10, 0x00000013U);
+    test_xvm_image_word(image, 11, 0x00000013U);
+    test_xvm_image_word(image, 12, test_xvm_i(0x5a, 0, 0, 7, 0x13));
+    ret = mr_xvm_load(&xvm, image, sizeof(image), TEST_XVM_ENTRY);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
-    ret = mr_xvm_reg_store(&xvm, "mstatus", REG_MSTATUS_MPIE);
+    ret = mr_xvm_reg_store(&xvm, 32, 20);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 1), MR_XVM_NONE);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "pc", &value), 0);
-    MR_TEST_ASSERT_EQ_UINT(value, 0x20);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 6), MR_XVM_NONE);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 32, &value), 0);
+    MR_TEST_ASSERT_EQ_UINT(value, 0x34);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 7, &value), 0);
+    MR_TEST_ASSERT_EQ_UINT(value, 0x5a);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 }
-MR_TEST_EXPORT(xvm, riscv32_csr_counter_and_mret,
-               test_xvm_riscv32_csr_counter_and_mret);
 
-static void test_xvm_riscv32_jump_and_external_interrupt(void) {
-    mr_uint8_t image[20] = {0};
+MR_TEST(xvm, riscv32_jump_and_external_interrupt) {
+    mr_uint8_t image[80] = {0};
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_xvm_event_t event = {0};
     mr_xvm_t xvm;
@@ -412,38 +409,49 @@ static void test_xvm_riscv32_jump_and_external_interrupt(void) {
     ret = test_xvm_prepare(&xvm, data, image, sizeof(image));
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 2), MR_XVM_NONE);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x1", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 1, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 4);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x2", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 2, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x3", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 3, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 7);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 
     /* An enabled external interrupt enters the machine trap vector. */
-    test_xvm_image_word(image, 0, test_xvm_u(CORE_MMIO_BASE, 1, 0x37));
-    test_xvm_image_word(image, 1, test_xvm_i(REG_MIE_MEIE, 0, 0, 2, 0x13));
-    test_xvm_image_word(image, 2, test_xvm_s(4, 2, 1, 2));
-    test_xvm_image_word(image, 3, 0x00000013U);
+    test_xvm_image_word(image, 0, test_xvm_i(0x21, 0, 0, 6, 0x13));
+    test_xvm_image_word(image, 1, test_xvm_i(REG_CSR_MTVEC, 6, 1, 0, 0x73));
+    test_xvm_image_word(image, 2, test_xvm_i(REG_MSTATUS_MIE, 0, 0, 6, 0x13));
+    test_xvm_image_word(image, 3, test_xvm_i(REG_CSR_MSTATUS, 6, 1, 0, 0x73));
+    test_xvm_image_word(image, 4, test_xvm_i(REG_MIE_MEIE, 0, 0, 6, 0x13));
+    test_xvm_image_word(image, 5, test_xvm_i(REG_CSR_MIE, 6, 1, 0, 0x73));
+    test_xvm_image_word(image, 6, test_xvm_u(CORE_MMIO_BASE, 1, 0x37));
+    test_xvm_image_word(image, 7, test_xvm_i(REG_MIE_MEIE, 0, 0, 2, 0x13));
+    test_xvm_image_word(image, 8, test_xvm_s(4, 2, 1, 2));
+    test_xvm_image_word(image, 9, 0x00000013U);
+    test_xvm_image_word(image, 10, 0x00000013U);
+    test_xvm_image_word(image, 11, 0x00000013U);
+    test_xvm_image_word(image, 12, 0x00000013U);
+    test_xvm_image_word(image, 13, 0x00000013U);
+    test_xvm_image_word(image, 14, 0x00000013U);
+    test_xvm_image_word(image, 15, 0x00000013U);
+    test_xvm_image_word(image, 16, 0x00000013U);
+    test_xvm_image_word(image, 17, 0x00000013U);
+    test_xvm_image_word(image, 18, 0x00000013U);
+    test_xvm_image_word(image, 19, test_xvm_i(REG_CSR_MCAUSE, 0, 2, 5, 0x73));
     ret = test_xvm_prepare(&xvm, data, image, sizeof(image));
     MR_TEST_ASSERT_EQ_INT(ret, 0);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_store(&xvm, "mtvec", 0x21), 0);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_store(&xvm, "mstatus", REG_MSTATUS_MIE),
-                          0);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_store(&xvm, "mie", REG_MIE_MEIE), 0);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 3), MR_XVM_NONE);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 9), MR_XVM_NONE);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_interrupt(&xvm, 11, MR_TRUE), 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 1), MR_XVM_NONE);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "pc", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 32, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0x4c);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "mcause", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 1), MR_XVM_NONE);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 5, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, REG_MCAUSE_MEI_INTR);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 }
-MR_TEST_EXPORT(xvm, riscv32_jump_and_external_interrupt,
-               test_xvm_riscv32_jump_and_external_interrupt);
 
-static void test_xvm_riscv32_mul_div_and_system(void) {
+MR_TEST(xvm, riscv32_mul_div_and_system) {
     mr_uint8_t image[68] = {0};
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_xvm_event_t event = {0};
@@ -473,22 +481,20 @@ static void test_xvm_riscv32_mul_div_and_system(void) {
     ret = test_xvm_prepare(&xvm, data, image, 68);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 17), MR_XVM_NONE);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x3", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 3, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 60);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x7", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 7, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 6);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x11", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 11, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0xffffffffU);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x13", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 13, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 20);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x14", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 14, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 20);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 }
-MR_TEST_EXPORT(xvm, riscv32_mul_div_and_system,
-               test_xvm_riscv32_mul_div_and_system);
 
-static void test_xvm_riscv32_upper_immediate_and_jalr(void) {
+MR_TEST(xvm, riscv32_upper_immediate_and_jalr) {
     mr_uint8_t image[40] = {0};
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_xvm_event_t event = {0};
@@ -507,18 +513,16 @@ static void test_xvm_riscv32_upper_immediate_and_jalr(void) {
     ret = test_xvm_prepare(&xvm, data, image, 28);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 6), MR_XVM_EXCEPT);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x1", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 1, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0x12345000U);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x2", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 2, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0x12004U);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x5", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 5, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 }
-MR_TEST_EXPORT(xvm, riscv32_upper_immediate_and_jalr,
-               test_xvm_riscv32_upper_immediate_and_jalr);
 
-static void test_xvm_riscv32_integer_variants_and_branches(void) {
+MR_TEST(xvm, riscv32_integer_variants_and_branches) {
     mr_uint8_t image[80] = {0};
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_xvm_event_t event = {0};
@@ -553,9 +557,9 @@ static void test_xvm_riscv32_integer_variants_and_branches(void) {
     ret = test_xvm_prepare(&xvm, data, image, 80);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 20), MR_XVM_EXIT);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x3", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 3, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0x5aU);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, "x8", &value), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 8, &value), 0);
     MR_TEST_ASSERT_EQ_UINT(value, 0U);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 
@@ -572,29 +576,16 @@ static void test_xvm_riscv32_integer_variants_and_branches(void) {
         test_xvm_image_word(image, 2, test_xvm_i(9, 0, 0, 3, 0x13));
         ret = test_xvm_prepare(&xvm, data, image, 12);
         MR_TEST_ASSERT_EQ_INT(ret, 0);
-        ret = mr_xvm_reg_store(&xvm, "x1", (i & 1U) ? 1 : 2);
+        ret = mr_xvm_reg_store(&xvm, 1, (i & 1U) ? 1 : 2);
         MR_TEST_ASSERT_EQ_INT(ret, 0);
-        ret = mr_xvm_reg_store(&xvm, "x2", 2);
+        ret = mr_xvm_reg_store(&xvm, 2, 2);
         MR_TEST_ASSERT_EQ_INT(ret, 0);
         MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 2), MR_XVM_NONE);
         MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
     }
 }
-MR_TEST_EXPORT(xvm, riscv32_integer_variants_and_branches,
-               test_xvm_riscv32_integer_variants_and_branches);
 
-static void test_xvm_riscv32_csr_register_matrix(void) {
-    static const char *const writable[] = {
-        "mstatus",  "misa",    "mie",       "mtvec", "mscratch",
-        "mepc",     "mcause",  "mtval",     "mip",   "mcycle",
-        "minstret", "mcycleh", "minstreth",
-    };
-    static const char *const readonly[] = {
-        "mvendorid",
-        "marchid",
-        "mimpid",
-        "mhartid",
-    };
+MR_TEST(xvm, riscv32_csr_register_matrix) {
     mr_uint8_t image[80] = {0};
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_xvm_event_t event = {0};
@@ -620,26 +611,19 @@ static void test_xvm_riscv32_csr_register_matrix(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 18), MR_XVM_EXIT);
 
-    for (i = 0; i < (sizeof(writable) / sizeof(writable[0])); i++) {
-        ret = mr_xvm_reg_store(&xvm, writable[i], i + 1U);
-        MR_TEST_EXPECT_EQ_INT(ret, 0);
-        ret = mr_xvm_reg_load(&xvm, writable[i], &value);
-        MR_TEST_EXPECT_EQ_INT(ret, 0);
-    }
-    for (i = 0; i < (sizeof(readonly) / sizeof(readonly[0])); i++) {
-        ret = mr_xvm_reg_load(&xvm, readonly[i], &value);
-        MR_TEST_EXPECT_EQ_INT(ret, 0);
-    }
-    ret = mr_xvm_reg_load(&xvm, "invalid-csr", &value);
+    /* Target register numbers are 0-32; CSR addresses are rejected */
+    ret = mr_xvm_reg_load(&xvm, REG_CSR_MSTATUS, &value);
     MR_TEST_ASSERT_EQ_INT(ret, -MR_EINVAL);
-    ret = mr_xvm_reg_store(&xvm, "invalid-csr", 0);
+    ret = mr_xvm_reg_store(&xvm, REG_CSR_MSTATUS, 1);
+    MR_TEST_ASSERT_EQ_INT(ret, -MR_EINVAL);
+    ret = mr_xvm_reg_load(&xvm, 0xFFFFFFFFU, &value);
+    MR_TEST_ASSERT_EQ_INT(ret, -MR_EINVAL);
+    ret = mr_xvm_reg_store(&xvm, 0xFFFFFFFFU, 0);
     MR_TEST_ASSERT_EQ_INT(ret, -MR_EINVAL);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 }
-MR_TEST_EXPORT(xvm, riscv32_csr_register_matrix,
-               test_xvm_riscv32_csr_register_matrix);
 
-static void test_xvm_riscv32_mmio_interrupt_registers(void) {
+MR_TEST(xvm, riscv32_mmio_interrupt_registers) {
     mr_uint8_t image[24] = {0};
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
     mr_xvm_event_t event = {0};
@@ -661,7 +645,7 @@ static void test_xvm_riscv32_mmio_interrupt_registers(void) {
     ret = mr_xvm_interrupt(&xvm, 3, MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 7), MR_XVM_EXCEPT);
-    ret = mr_xvm_reg_load(&xvm, "x3", &value);
+    ret = mr_xvm_reg_load(&xvm, 3, &value);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_UINT(value, 0U);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
@@ -684,6 +668,5 @@ static void test_xvm_riscv32_mmio_interrupt_registers(void) {
     MR_TEST_ASSERT_EQ_INT(mr_xvm_execute(&xvm, &event, 3), MR_XVM_EXCEPT);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 }
-MR_TEST_EXPORT(xvm, riscv32_mmio_interrupt_registers,
-               test_xvm_riscv32_mmio_interrupt_registers);
+
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_MODULE_XVM_RISCV32) */

@@ -7,136 +7,109 @@
  */
 
 #include <mrX/test/mr_test.h>
-#if defined(MR_USE_TEST) && defined(MR_USE_FS)                              \
-    && defined(MR_USE_TEST_PTHREAD)
+#if defined(MR_USE_TEST) && defined(MR_USE_FS) && defined(MR_USE_TEST_PTHREAD)
 #include <mrX.h>
 #include <pthread.h>
 #include "fs_test.h"
 
 /* Concurrent namespace test limits */
-#define FS_CONCURRENT_THREADS          (4)
-#define FS_CONCURRENT_FILES            (16)
-#define FS_CONCURRENT_SWITCHES         (128)
+#define FS_CONCURRENT_THREADS  (4)
+#define FS_CONCURRENT_FILES    (16)
+#define FS_CONCURRENT_SWITCHES (128)
 
 /* Concurrent worker context */
 typedef struct fs_concurrent_context {
+    volatile mr_uint32_t *__test_status;
     int index;
-    int failures;
 } fs_concurrent_context_t;
 
-static int fs_concurrent_expect(const char *name, mr_err_t actual,
-                                mr_err_t expected) {
-    MR_IGNORE(name);
-
-    return (actual == expected) ? 0 : 1;
-}
-
-static void *fs_concurrent_worker(void *arg) {
-    fs_concurrent_context_t *context = arg;
+static void fs_concurrent_worker_run(volatile mr_uint32_t *__test_status,
+                                     int index) {
     mr_file_t file = MR_FILE_INIT(file);
     char cwd[32];
     char path[32];
-    int index;
+    int i;
     mr_err_t ret;
 
     /* Create and reopen unique namespace entries */
-    for (index = 0; index < FS_CONCURRENT_FILES; index++) {
-        mr_snprintf(path, sizeof(path), "/concurrent/t%d-%d", context->index,
-                    index);
+    for (i = 0; i < FS_CONCURRENT_FILES; i++) {
+        mr_snprintf(path, sizeof(path), "/concurrent/t%d-%d", index, i);
         ret = mr_fs_open(&file, path, MR_O_RDWR | MR_O_CREAT | MR_O_EXCL);
-        context->failures += fs_concurrent_expect("concurrent create", ret, 0);
+        MR_TEST_EXPECT_EQ_INT(ret, 0);
         if (ret != 0) {
             continue;
         }
-        context->failures
-            += fs_concurrent_expect("concurrent close", mr_fs_close(&file), 0);
+        MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
 
         ret = mr_fs_open(&file, path, MR_O_RDONLY);
-        context->failures += fs_concurrent_expect("concurrent reopen", ret, 0);
+        MR_TEST_EXPECT_EQ_INT(ret, 0);
         if (ret == 0) {
-            context->failures += fs_concurrent_expect("concurrent reclose",
-                                                      mr_fs_close(&file), 0);
+            MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
         }
     }
 
     /* Race namespace context switches with getcwd snapshots */
-    for (index = 0; index < FS_CONCURRENT_SWITCHES; index++) {
-        ret = mr_fs_chdir((index & 1) ? "/concurrent/a" : "/concurrent/b");
-        context->failures += fs_concurrent_expect("concurrent chdir", ret, 0);
+    for (i = 0; i < FS_CONCURRENT_SWITCHES; i++) {
+        ret = mr_fs_chdir((i & 1) ? "/concurrent/a" : "/concurrent/b");
+        MR_TEST_EXPECT_EQ_INT(ret, 0);
         ret = (mr_err_t)mr_fs_getcwd(cwd, sizeof(cwd));
-        context->failures
-            += fs_concurrent_expect("concurrent getcwd", ret, 13);
-        if ((ret == 13) && (mr_strcmp(cwd, "/concurrent/a") != 0)
-            && (mr_strcmp(cwd, "/concurrent/b") != 0)) {
-            context->failures++;
+        MR_TEST_EXPECT_EQ_INT(ret, 13);
+        if (ret == 13) {
+            MR_TEST_EXPECT_EQ_INT((mr_strcmp(cwd, "/concurrent/a") == 0)
+                                      || (mr_strcmp(cwd, "/concurrent/b") == 0),
+                                  MR_TRUE);
         }
     }
+}
+
+static void *fs_concurrent_worker(void *arg) {
+    fs_concurrent_context_t *context = arg;
+
+    fs_concurrent_worker_run(context->__test_status, context->index);
     return MR_NULL;
 }
 
-static int fs_concurrency_test(void) {
+MR_TEST(fs, concurrency) {
     fs_concurrent_context_t contexts[FS_CONCURRENT_THREADS];
     pthread_t threads[FS_CONCURRENT_THREADS];
     mr_stat_t stat;
     char path[32];
-    int failures = 0;
     int index, file;
     mr_err_t ret;
 
     /* Mount RamFS */
-    ret = mr_fs_mount(MR_NULL, "/", "ramfs", 0, MR_NULL);
-    failures += fs_concurrent_expect("concurrent mount ramfs", ret, 0);
-    if (ret != 0) {
-        return failures;
-    }
-    failures += fs_concurrent_expect("mkdir concurrent",
-                                     mr_fs_mkdir("/concurrent"), 0);
-    failures += fs_concurrent_expect("mkdir concurrent a",
-                                     mr_fs_mkdir("/concurrent/a"), 0);
-    failures += fs_concurrent_expect("mkdir concurrent b",
-                                     mr_fs_mkdir("/concurrent/b"), 0);
+    ret = fs_test_mount_root("ramfs", 0, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(mr_fs_mkdir("/concurrent"), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_fs_mkdir("/concurrent/a"), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_fs_mkdir("/concurrent/b"), 0);
 
     /* Start workers */
     for (index = 0; index < FS_CONCURRENT_THREADS; index++) {
+        contexts[index].__test_status = __test_status;
         contexts[index].index = index;
-        contexts[index].failures = 0;
         ret = pthread_create(&threads[index], MR_NULL, fs_concurrent_worker,
                              &contexts[index]);
-        failures += fs_concurrent_expect("create concurrent thread", ret, 0);
-        if (ret != 0) {
-            threads[index] = (pthread_t)0;
-        }
+        MR_TEST_ASSERT_EQ_INT(ret, 0);
     }
 
     /* Join workers */
     for (index = 0; index < FS_CONCURRENT_THREADS; index++) {
-        if (threads[index]) {
-            ret = pthread_join(threads[index], MR_NULL);
-            failures += fs_concurrent_expect("join concurrent thread", ret, 0);
-        }
-        failures += contexts[index].failures;
+        MR_TEST_EXPECT_EQ_INT(pthread_join(threads[index], MR_NULL), 0);
     }
 
     /* Verify every namespace entry */
     for (index = 0; index < FS_CONCURRENT_THREADS; index++) {
         for (file = 0; file < FS_CONCURRENT_FILES; file++) {
             mr_snprintf(path, sizeof(path), "/concurrent/t%d-%d", index, file);
-            failures += fs_concurrent_expect("verify concurrent file",
-                                             fs_test_stat(path, &stat), 0);
+            MR_TEST_EXPECT_EQ_INT(fs_test_stat(path, &stat), 0);
         }
     }
 
     /* Unmount RamFS */
-    failures += fs_concurrent_expect("restore concurrent cwd",
-                                     mr_fs_chdir("/"), 0);
-    failures += fs_concurrent_expect("concurrent umount ramfs",
-                                     mr_fs_umount("/"), 0);
-    return failures;
+    MR_TEST_EXPECT_EQ_INT(mr_fs_chdir("/"), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_fs_umount("/"), 0);
 }
 
-static void concurrency(void) {
-    MR_TEST_EXPECT_EQ_INT(fs_concurrency_test(), 0);
-}
-MR_TEST_EXPORT(fs, concurrency, concurrency);
-#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS)
+#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS)                           \
         * && defined(MR_USE_TEST_PTHREAD) */

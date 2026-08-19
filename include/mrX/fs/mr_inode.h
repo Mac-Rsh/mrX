@@ -37,6 +37,8 @@ typedef enum mr_inode_type {
     MR_INODE_CHR = 3,
     MR_INODE_BLK = 4,
     MR_INODE_LNK = 5,
+    MR_INODE_FIFO = 6,
+    MR_INODE_MAX,
 } mr_inode_type_t;
 
 /* Directory entry type */

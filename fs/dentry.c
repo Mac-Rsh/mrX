@@ -29,7 +29,7 @@ MR_CLAZZES_DEFINE(dentry, dentry_statik_release, dentry_dynamic_release,
 
 /* Prepared dentry move type */
 typedef struct dentry_move {
-    char iname[MR_CFG_FS_DENTRY_NAME_LEN];
+    char iname[MR_CFG_FS_DENTRY_INLINE_NAME_LEN];
     mr_dentry_t *dentry;
     mr_dentry_t *upper;
     mr_dentry_t *reservation;
@@ -159,7 +159,7 @@ static void dentry_name_free(mr_dentry_t *dentry) {
 static mr_err_t dentry_init(mr_dentry_t *dentry, const mr_clazz_t *clazz,
                             const mr_dentry_ops_t *ops, const char *fmt,
                             mr_va_list args) {
-    char istr[MR_CFG_FS_DENTRY_NAME_LEN * 2];
+    char istr[MR_CFG_FS_DENTRY_INLINE_NAME_LEN * 2];
     const char *str;
     mr_err_t ret;
 
@@ -473,7 +473,7 @@ static mr_err_t dentry_move_prepare(mr_dentry_t *dentry, mr_dentry_t *upper,
     newlen = mr_strlen(name);
 
     /* Pre-allocate dynamic name */
-    if (newlen >= MR_CFG_FS_DENTRY_NAME_LEN) {
+    if (newlen >= MR_CFG_FS_DENTRY_INLINE_NAME_LEN) {
         /* Use dynamic name */
         newbuf = mr_malloc(newlen + 1);
         if (!newbuf) {
@@ -968,7 +968,7 @@ static mr_dentry_t *dentry_path_lookup(mr_dentry_t **last, const char **path,
 
 static mr_err_t dentry_fs_lookup(mr_dentry_t *parent, const char *name,
                                  mr_uint32_t len, mr_dentry_t **result) {
-    char istr[MR_CFG_FS_DENTRY_NAME_LEN * 2];
+    char istr[MR_CFG_FS_DENTRY_INLINE_NAME_LEN * 2];
     mr_dentry_t *existing, *child;
     mr_inode_t *dir_inode, *inode;
     mr_dentry_name_t lookup;

@@ -12,12 +12,11 @@
 #include <mrX/kernel/mr_log.h>
 
 /* Tests */
-static void test_log_mask_default(void) {
+MR_TEST(log, mask_default) {
     MR_TEST_ASSERT_EQ_UINT(mr_log_mask(), 0xffffffffU);
 }
-MR_TEST_EXPORT(log, mask_default, test_log_mask_default);
 
-static void test_log_mask_set_get(void) {
+MR_TEST(log, mask_set_get) {
     mr_log_mask_set(0U);
     MR_TEST_EXPECT_EQ_UINT(mr_log_mask(), 0U);
 
@@ -30,9 +29,8 @@ static void test_log_mask_set_get(void) {
     mr_log_mask_set(0xffffffffU);
     MR_TEST_ASSERT_EQ_UINT(mr_log_mask(), 0xffffffffU);
 }
-MR_TEST_EXPORT(log, mask_set_get, test_log_mask_set_get);
 
-static void test_log_invalid_level(void) {
+MR_TEST(log, invalid_level) {
     mr_uint32_t saved = mr_log_mask();
     mr_log_mask_set(0xffffffffU);
 
@@ -43,9 +41,8 @@ static void test_log_invalid_level(void) {
     mr_log_mask_set(saved);
     MR_TEST_ASSERT_EQ_UINT(mr_log_mask(), saved);
 }
-MR_TEST_EXPORT(log, invalid_level, test_log_invalid_level);
 
-static void test_log_null_fmt(void) {
+MR_TEST(log, null_fmt) {
     mr_uint32_t saved = mr_log_mask();
     mr_log_mask_set(0xffffffffU);
 
@@ -54,9 +51,8 @@ static void test_log_null_fmt(void) {
     mr_log_mask_set(saved);
     MR_TEST_ASSERT_EQ_UINT(mr_log_mask(), saved);
 }
-MR_TEST_EXPORT(log, null_fmt, test_log_null_fmt);
 
-static void test_log_empty_fmt(void) {
+MR_TEST(log, empty_fmt) {
     mr_uint32_t saved = mr_log_mask();
     mr_log_mask_set(0xffffffffU);
 
@@ -65,9 +61,8 @@ static void test_log_empty_fmt(void) {
     mr_log_mask_set(saved);
     MR_TEST_ASSERT_EQ_UINT(mr_log_mask(), saved);
 }
-MR_TEST_EXPORT(log, empty_fmt, test_log_empty_fmt);
 
-static void test_log_mask_filter(void) {
+MR_TEST(log, mask_filter) {
     mr_uint32_t saved = mr_log_mask();
 
     mr_log_mask_set(0U);
@@ -82,17 +77,30 @@ static void test_log_mask_filter(void) {
     mr_log(MR_LOG_LEVEL_WRN, "all_enabled %s\n", "test");
     MR_TEST_EXPECT_EQ_UINT(mr_log_mask(), 0xffffffffU);
 
-    mr_log_mask_set(MR_LOG_MASK(MR_LOG_LEVEL_INF) | MR_LOG_MASK(MR_LOG_LEVEL_DBG));
+    mr_log_mask_set(MR_LOG_MASK(MR_LOG_LEVEL_INF)
+                    | MR_LOG_MASK(MR_LOG_LEVEL_DBG));
     mr_log(MR_LOG_LEVEL_TRC, "trc_disabled");
     mr_log(MR_LOG_LEVEL_INF, "inf_enabled %x\n", 0x1234);
     mr_log(MR_LOG_LEVEL_DBG, "dbg_enabled %u\n", 42U);
-    MR_TEST_EXPECT_EQ_UINT(mr_log_mask(),
-                           MR_LOG_MASK(MR_LOG_LEVEL_INF) | MR_LOG_MASK(MR_LOG_LEVEL_DBG));
+    MR_TEST_EXPECT_EQ_UINT(mr_log_mask(), MR_LOG_MASK(MR_LOG_LEVEL_INF)
+                                              | MR_LOG_MASK(MR_LOG_LEVEL_DBG));
 
     mr_log_mask_set(saved);
     MR_TEST_ASSERT_EQ_UINT(mr_log_mask(), saved);
 }
-MR_TEST_EXPORT(log, mask_filter, test_log_mask_filter);
+
+MR_TEST(log, all_levels) {
+    mr_uint32_t saved = mr_log_mask();
+
+    mr_log_mask_set(0xffffffffU);
+    mr_log(MR_LOG_LEVEL_ERR, "err %d", 1);
+    mr_log(MR_LOG_LEVEL_WRN, "wrn %s", "w");
+    mr_log(MR_LOG_LEVEL_INF, "inf %u", 2U);
+    mr_log(MR_LOG_LEVEL_DBG, "dbg %x", 0xab);
+    mr_log(MR_LOG_LEVEL_TRC, "trc");
+    mr_log_mask_set(saved);
+    MR_TEST_ASSERT_EQ_UINT(mr_log_mask(), saved);
+}
 
 #endif /* defined(MR_USE_LOG) */
 #endif /* defined(MR_USE_TEST) */

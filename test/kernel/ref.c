@@ -16,24 +16,22 @@ static void test_ref_stub_release(mr_ref_t *ref) {
 }
 
 /* Tests */
-static void test_ref_static_init(void) {
+MR_TEST(ref, static_init) {
     static mr_ref_t r = MR_REF_INIT();
 
     MR_TEST_ASSERT_EQ_INT(MR_REF_IS_INITED(r), MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(MR_REF_COUNT(r), 1);
 }
-MR_TEST_EXPORT(ref, static_init, test_ref_static_init);
 
-static void test_ref_init(void) {
+MR_TEST(ref, init) {
     mr_ref_t r;
 
     mr_ref_init(&r);
     MR_TEST_ASSERT_EQ_INT(MR_REF_IS_INITED(r), MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(MR_REF_COUNT(r), 1);
 }
-MR_TEST_EXPORT(ref, init, test_ref_init);
 
-static void test_ref_get(void) {
+MR_TEST(ref, get) {
     mr_ref_t r;
 
     mr_ref_init(&r);
@@ -42,9 +40,8 @@ static void test_ref_get(void) {
     MR_TEST_ASSERT_EQ_INT(mr_ref_get(&r), MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(MR_REF_COUNT(r), 3);
 }
-MR_TEST_EXPORT(ref, get, test_ref_get);
 
-static void test_ref_put(void) {
+MR_TEST(ref, put) {
     mr_ref_t r;
 
     mr_ref_init(&r);
@@ -53,14 +50,67 @@ static void test_ref_put(void) {
     MR_TEST_ASSERT_EQ_INT(mr_ref_put(&r, test_ref_stub_release), MR_FALSE);
     MR_TEST_ASSERT_EQ_INT(r & 0xffffffff, 0xdeadbeef - 1);
 }
-MR_TEST_EXPORT(ref, put, test_ref_put);
 
-static void test_ref_get_fail(void) {
+MR_TEST(ref, get_fail) {
     mr_ref_t r;
 
     mr_ref_init(&r);
     mr_ref_put(&r, test_ref_stub_release);
     MR_TEST_ASSERT_EQ_INT(mr_ref_get(&r), MR_FALSE);
 }
-MR_TEST_EXPORT(ref, get_fail, test_ref_get_fail);
+
+MR_TEST(ref, put_not_last) {
+    mr_ref_t r;
+
+    mr_ref_init(&r);
+    MR_TEST_ASSERT_EQ_INT(mr_ref_get(&r), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(MR_REF_COUNT(r), 2);
+    MR_TEST_ASSERT_EQ_INT(mr_ref_put(&r, test_ref_stub_release), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(MR_REF_IS_INITED(r), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(MR_REF_COUNT(r), 1);
+    MR_TEST_ASSERT_EQ_INT(mr_ref_get(&r), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(mr_ref_put(&r, MR_NULL), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(mr_ref_put(&r, test_ref_stub_release), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(MR_REF_IS_INITED(r), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(mr_ref_get(&r), MR_FALSE);
+}
+
+#if defined(MR_USE_TEST_PTHREAD)
+#include <pthread.h>
+
+#define REF_MT_THREADS (4)
+#define REF_MT_ITERS   (20000)
+
+static void *ref_mt_worker(void *arg) {
+    mr_ref_t *ref = arg;
+    int i;
+
+    for (i = 0; i < REF_MT_ITERS; i++) {
+        if (mr_ref_get(ref) == MR_TRUE) {
+            mr_ref_put(ref, MR_NULL);
+        }
+    }
+    return MR_NULL;
+}
+
+MR_TEST(ref, concurrent_get_put) {
+    pthread_t threads[REF_MT_THREADS];
+    mr_ref_t r;
+    int i;
+    int ret;
+
+    mr_ref_init(&r);
+    for (i = 0; i < REF_MT_THREADS; i++) {
+        ret = pthread_create(&threads[i], MR_NULL, ref_mt_worker, (void *)&r);
+        MR_TEST_ASSERT_EQ_INT(ret, 0);
+    }
+    for (i = 0; i < REF_MT_THREADS; i++) {
+        MR_TEST_EXPECT_EQ_INT(pthread_join(threads[i], MR_NULL), 0);
+    }
+    MR_TEST_ASSERT_EQ_INT(MR_REF_IS_INITED(r), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(MR_REF_COUNT(r), 1);
+    MR_TEST_ASSERT_EQ_INT(mr_ref_put(&r, test_ref_stub_release), MR_TRUE);
+}
+#endif /* defined(MR_USE_TEST_PTHREAD) */
+
 #endif /* defined(MR_USE_TEST) */

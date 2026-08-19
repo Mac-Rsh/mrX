@@ -19,24 +19,22 @@ typedef struct test_node {
 
 /* Tests */
 
-static void test_list_static_init(void) {
+MR_TEST(list, static_init) {
     static mr_list_t head = MR_LIST_INIT(&head);
 
     MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&head), MR_TRUE);
     MR_TEST_ASSERT_EQ_PTR(head.next, &head);
     MR_TEST_ASSERT_EQ_PTR(head.prev, &head);
 }
-MR_TEST_EXPORT(list, static_init, test_list_static_init);
 
-static void test_list_init_empty(void) {
+MR_TEST(list, init_empty) {
     mr_list_t head;
 
     mr_list_init(&head);
     MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&head), MR_TRUE);
 }
-MR_TEST_EXPORT(list, init_empty, test_list_init_empty);
 
-static void test_list_add(void) {
+MR_TEST(list, add) {
     test_node_t n1, n2, n3;
     int ids[3], idx;
     test_node_t *n;
@@ -60,9 +58,8 @@ static void test_list_add(void) {
     MR_TEST_ASSERT_EQ_INT(ids[1], 2);
     MR_TEST_ASSERT_EQ_INT(ids[2], 3);
 }
-MR_TEST_EXPORT(list, add, test_list_add);
 
-static void test_list_insert(void) {
+MR_TEST(list, insert) {
     test_node_t n1, n2;
     test_node_t *n;
     mr_list_t head;
@@ -81,9 +78,8 @@ static void test_list_insert(void) {
     n = MR_LIST_ENTRY(pos, test_node_t, link);
     MR_TEST_ASSERT_EQ_INT(n->id, 1);
 }
-MR_TEST_EXPORT(list, insert, test_list_insert);
 
-static void test_list_del(void) {
+MR_TEST(list, del) {
     test_node_t n1, n2;
     test_node_t *n;
     mr_list_t head;
@@ -99,9 +95,8 @@ static void test_list_del(void) {
     MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&head), 0);
     MR_TEST_ASSERT_EQ_INT(n->id, 2);
 }
-MR_TEST_EXPORT(list, del, test_list_del);
 
-static void test_list_replace(void) {
+MR_TEST(list, replace) {
     test_node_t n1, n2, n3;
     test_node_t *n;
     mr_list_t head;
@@ -123,9 +118,8 @@ static void test_list_replace(void) {
     n = MR_LIST_ENTRY(pos, test_node_t, link);
     MR_TEST_ASSERT_EQ_INT(n->id, 2);
 }
-MR_TEST_EXPORT(list, replace, test_list_replace);
 
-static void test_list_move(void) {
+MR_TEST(list, move) {
     mr_list_t head1, head2;
     test_node_t n1;
     test_node_t *n;
@@ -141,9 +135,8 @@ static void test_list_move(void) {
     MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&head2), 0);
     MR_TEST_ASSERT_EQ_INT(n->id, 42);
 }
-MR_TEST_EXPORT(list, move, test_list_move);
 
-static void test_list_safe_foreach_del(void) {
+MR_TEST(list, safe_foreach_del) {
     test_node_t nodes[4];
     test_node_t *node;
     mr_list_t *pos, *l;
@@ -173,9 +166,8 @@ static void test_list_safe_foreach_del(void) {
     MR_TEST_ASSERT_EQ_INT(ids[0], 1);
     MR_TEST_ASSERT_EQ_INT(ids[1], 3);
 }
-MR_TEST_EXPORT(list, safe_foreach_del, test_list_safe_foreach_del);
 
-static void test_list_single_entry_lifecycle(void) {
+MR_TEST(list, single_entry_lifecycle) {
     test_node_t node;
     mr_list_t head;
     mr_list_t other;
@@ -200,9 +192,8 @@ static void test_list_single_entry_lifecycle(void) {
     mr_list_del(&node.link);
     MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&other), MR_TRUE);
 }
-MR_TEST_EXPORT(list, single_entry_lifecycle, test_list_single_entry_lifecycle);
 
-static void test_list_replace_single_entry(void) {
+MR_TEST(list, replace_single_entry) {
     test_node_t old_node;
     test_node_t new_node;
     mr_list_t head;
@@ -220,5 +211,72 @@ static void test_list_replace_single_entry(void) {
     mr_list_del(&new_node.link);
     MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&head), MR_TRUE);
 }
-MR_TEST_EXPORT(list, replace_single_entry, test_list_replace_single_entry);
+
+MR_TEST(list, array_init) {
+    mr_list_t lists[4] = MR_LISTS_INIT(lists, 4);
+    mr_size_t i;
+
+    for (i = 0; i < MR_ARRAY_SIZE(lists); i++) {
+        MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&lists[i]), MR_TRUE);
+        MR_TEST_ASSERT_EQ_PTR(lists[i].next, &lists[i]);
+        MR_TEST_ASSERT_EQ_PTR(lists[i].prev, &lists[i]);
+    }
+}
+
+MR_TEST(list, add_insert_order) {
+    test_node_t n1, n2, n3;
+    test_node_t *n;
+    mr_list_t head;
+    mr_list_t *pos;
+    int ids[3];
+    int idx;
+
+    mr_list_init(&head);
+    n1.id = 1;
+    n2.id = 2;
+    n3.id = 3;
+    mr_list_add(&head, &n1.link);
+    mr_list_insert(&head, &n2.link);
+    mr_list_add(&head, &n3.link);
+
+    idx = 0;
+    MR_LIST_FOR_EACH(pos, &head) {
+        n = MR_LIST_ENTRY(pos, test_node_t, link);
+        ids[idx++] = n->id;
+    }
+    MR_TEST_ASSERT_EQ_INT(idx, 3);
+    MR_TEST_ASSERT_EQ_INT(ids[0], 2);
+    MR_TEST_ASSERT_EQ_INT(ids[1], 1);
+    MR_TEST_ASSERT_EQ_INT(ids[2], 3);
+}
+
+MR_TEST(list, empty_foreach) {
+    mr_list_t head;
+    mr_list_t *pos;
+    int count;
+
+    mr_list_init(&head);
+    count = 0;
+    MR_LIST_FOR_EACH(pos, &head) {
+        count++;
+    }
+    MR_TEST_ASSERT_EQ_INT(count, 0);
+}
+
+MR_TEST(list, del_all) {
+    test_node_t n1, n2;
+    mr_list_t head;
+
+    mr_list_init(&head);
+    n1.id = 1;
+    n2.id = 2;
+    mr_list_add(&head, &n1.link);
+    mr_list_add(&head, &n2.link);
+    mr_list_del(&n1.link);
+    mr_list_del(&n2.link);
+    MR_TEST_ASSERT_EQ_INT(mr_list_is_empty(&head), MR_TRUE);
+    MR_TEST_ASSERT_EQ_PTR(head.next, &head);
+    MR_TEST_ASSERT_EQ_PTR(head.prev, &head);
+}
+
 #endif /* defined(MR_USE_TEST) */

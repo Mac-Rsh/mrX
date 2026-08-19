@@ -57,7 +57,8 @@ static void test_object_reset(void) {
     test_sub_object_dynamic_release_called = 0;
 }
 
-static void test_object_expect_put(mr_object_t *obj, int *refs_held,
+static void test_object_expect_put(volatile mr_uint32_t *__test_status,
+                                   mr_object_t *obj, int *refs_held,
                                    mr_bool_t expected) {
     mr_bool_t ret;
 
@@ -85,7 +86,7 @@ static void test_object_cleanup_refs(mr_object_t *obj, int *refs_held) {
 }
 
 /* Tests */
-static void test_object_init_normal(void) {
+MR_TEST(object, init_normal) {
     mr_object_t obj;
     mr_err_t ret;
 
@@ -101,18 +102,16 @@ static void test_object_init_normal(void) {
         mr_object_del(&obj);
     }
 }
-MR_TEST_EXPORT(object, init_normal, test_object_init_normal);
 
-static void test_object_init_null_obj(void) {
+MR_TEST(object, init_null_obj) {
     mr_err_t ret;
 
     test_object_reset();
     ret = mr_object_init(MR_NULL, MR_CLAZZES_STATIK(test_object));
     MR_TEST_ASSERT_EQ_INT(ret, -MR_EINVAL);
 }
-MR_TEST_EXPORT(object, init_null_obj, test_object_init_null_obj);
 
-static void test_object_init_null_clazz(void) {
+MR_TEST(object, init_null_clazz) {
     mr_object_t obj;
     mr_err_t ret;
 
@@ -130,9 +129,8 @@ static void test_object_init_null_clazz(void) {
     mr_object_del(&obj);
     MR_TEST_EXPECT_EQ_INT(test_object_statik_release_called, 0);
 }
-MR_TEST_EXPORT(object, init_null_clazz, test_object_init_null_clazz);
 
-static void test_object_init_already_inited(void) {
+MR_TEST(object, init_already_inited) {
     mr_object_t obj;
     mr_err_t ret;
 
@@ -147,9 +145,8 @@ static void test_object_init_already_inited(void) {
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     mr_object_del(&obj);
 }
-MR_TEST_EXPORT(object, init_already_inited, test_object_init_already_inited);
 
-static void test_object_del_normal(void) {
+MR_TEST(object, del_normal) {
     mr_object_t obj;
     mr_err_t ret;
 
@@ -163,17 +160,15 @@ static void test_object_del_normal(void) {
     mr_object_del(&obj);
     MR_TEST_EXPECT_EQ_INT(test_object_dynamic_release_called, 1);
 }
-MR_TEST_EXPORT(object, del_normal, test_object_del_normal);
 
-static void test_object_del_null(void) {
+MR_TEST(object, del_null) {
     test_object_reset();
     mr_object_del(MR_NULL);
     MR_TEST_ASSERT_EQ_INT(test_object_statik_release_called, 0);
     MR_TEST_ASSERT_EQ_INT(test_object_dynamic_release_called, 0);
 }
-MR_TEST_EXPORT(object, del_null, test_object_del_null);
 
-static void test_object_del_uninit(void) {
+MR_TEST(object, del_uninit) {
     mr_object_t obj;
 
     test_object_reset();
@@ -183,9 +178,8 @@ static void test_object_del_uninit(void) {
     MR_TEST_ASSERT_EQ_INT(test_object_statik_release_called, 0);
     MR_TEST_ASSERT_EQ_INT(test_object_dynamic_release_called, 0);
 }
-MR_TEST_EXPORT(object, del_uninit, test_object_del_uninit);
 
-static void test_object_get_put_refcount(void) {
+MR_TEST(object, get_put_refcount) {
     mr_object_t obj;
     mr_object_t *ret_obj;
     int refs_held;
@@ -211,29 +205,27 @@ static void test_object_get_put_refcount(void) {
     }
     MR_TEST_EXPECT_EQ_PTR(ret_obj, &obj);
 
-    test_object_expect_put(&obj, &refs_held, MR_FALSE);
+    test_object_expect_put(__test_status, &obj, &refs_held, MR_FALSE);
     MR_TEST_EXPECT_EQ_INT(test_object_statik_release_called, 0);
 
-    test_object_expect_put(&obj, &refs_held, MR_FALSE);
+    test_object_expect_put(__test_status, &obj, &refs_held, MR_FALSE);
     MR_TEST_EXPECT_EQ_INT(test_object_statik_release_called, 0);
 
-    test_object_expect_put(&obj, &refs_held, MR_TRUE);
+    test_object_expect_put(__test_status, &obj, &refs_held, MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(test_object_statik_release_called, 1);
 
     test_object_cleanup_refs(&obj, &refs_held);
 }
-MR_TEST_EXPORT(object, get_put_refcount, test_object_get_put_refcount);
 
-static void test_object_get_null(void) {
+MR_TEST(object, get_null) {
     mr_object_t *ret_obj;
 
     test_object_reset();
     ret_obj = mr_object_get(MR_NULL);
     MR_TEST_ASSERT_EQ_PTR(ret_obj, MR_NULL);
 }
-MR_TEST_EXPORT(object, get_null, test_object_get_null);
 
-static void test_object_get_uninit(void) {
+MR_TEST(object, get_uninit) {
     mr_object_t obj;
     mr_object_t *ret_obj;
 
@@ -242,18 +234,16 @@ static void test_object_get_uninit(void) {
     ret_obj = mr_object_get(&obj);
     MR_TEST_ASSERT_EQ_PTR(ret_obj, MR_NULL);
 }
-MR_TEST_EXPORT(object, get_uninit, test_object_get_uninit);
 
-static void test_object_put_null(void) {
+MR_TEST(object, put_null) {
     mr_bool_t ret_bool;
 
     test_object_reset();
     ret_bool = mr_object_put(MR_NULL);
     MR_TEST_ASSERT_EQ_INT(ret_bool, MR_TRUE);
 }
-MR_TEST_EXPORT(object, put_null, test_object_put_null);
 
-static void test_object_put_uninit(void) {
+MR_TEST(object, put_uninit) {
     mr_object_t obj;
     mr_bool_t ret_bool;
 
@@ -262,9 +252,8 @@ static void test_object_put_uninit(void) {
     ret_bool = mr_object_put(&obj);
     MR_TEST_ASSERT_EQ_INT(ret_bool, MR_TRUE);
 }
-MR_TEST_EXPORT(object, put_uninit, test_object_put_uninit);
 
-static void test_object_is_clazzes(void) {
+MR_TEST(object, is_clazzes) {
     mr_object_t obj;
     mr_err_t ret;
 
@@ -278,9 +267,8 @@ static void test_object_is_clazzes(void) {
     MR_TEST_EXPECT_EQ_INT(MR_OBJECT_IS_CLAZZES(&obj, test_object), MR_TRUE);
     mr_object_del(&obj);
 }
-MR_TEST_EXPORT(object, is_clazzes, test_object_is_clazzes);
 
-static void test_object_lifecycle(void) {
+MR_TEST(object, lifecycle) {
     mr_object_t obj;
     mr_object_t *obj1, *obj2, *obj3;
     int refs_held;
@@ -311,18 +299,17 @@ static void test_object_lifecycle(void) {
     MR_TEST_EXPECT_EQ_PTR(obj2, &obj);
     MR_TEST_EXPECT_EQ_PTR(obj3, &obj);
 
-    test_object_expect_put(&obj, &refs_held, MR_FALSE);
-    test_object_expect_put(&obj, &refs_held, MR_FALSE);
-    test_object_expect_put(&obj, &refs_held, MR_FALSE);
-    test_object_expect_put(&obj, &refs_held, MR_TRUE);
+    test_object_expect_put(__test_status, &obj, &refs_held, MR_FALSE);
+    test_object_expect_put(__test_status, &obj, &refs_held, MR_FALSE);
+    test_object_expect_put(__test_status, &obj, &refs_held, MR_FALSE);
+    test_object_expect_put(__test_status, &obj, &refs_held, MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(test_object_dynamic_release_called, 1);
 
     test_object_cleanup_refs(&obj, &refs_held);
 }
-MR_TEST_EXPORT(object, lifecycle, test_object_lifecycle);
 
 /* mr_object_derive tests */
-static void test_object_derive_normal(void) {
+MR_TEST(object, derive_normal) {
     mr_object_t obj;
     mr_err_t ret;
 
@@ -343,18 +330,16 @@ static void test_object_derive_normal(void) {
                           MR_CLAZZES_STATIK(test_sub_object));
     mr_object_del(&obj);
 }
-MR_TEST_EXPORT(object, derive_normal, test_object_derive_normal);
 
-static void test_object_derive_null_obj(void) {
+MR_TEST(object, derive_null_obj) {
     mr_err_t ret;
 
     test_object_reset();
     ret = mr_object_derive(MR_NULL, MR_CLAZZES_STATIK(test_object));
     MR_TEST_ASSERT_EQ_INT(ret, -MR_EINVAL);
 }
-MR_TEST_EXPORT(object, derive_null_obj, test_object_derive_null_obj);
 
-static void test_object_derive_null_clazz(void) {
+MR_TEST(object, derive_null_clazz) {
     mr_object_t obj;
     mr_err_t ret;
 
@@ -369,9 +354,8 @@ static void test_object_derive_null_clazz(void) {
     MR_TEST_ASSERT_EQ_INT(ret, -MR_EINVAL);
     mr_object_del(&obj);
 }
-MR_TEST_EXPORT(object, derive_null_clazz, test_object_derive_null_clazz);
 
-static void test_object_derive_uninit(void) {
+MR_TEST(object, derive_uninit) {
     mr_object_t obj;
     mr_err_t ret;
 
@@ -380,9 +364,8 @@ static void test_object_derive_uninit(void) {
     ret = mr_object_derive(&obj, MR_CLAZZES_STATIK(test_sub_object));
     MR_TEST_ASSERT_EQ_INT(ret, -MR_EINVAL);
 }
-MR_TEST_EXPORT(object, derive_uninit, test_object_derive_uninit);
 
-static void test_object_derive_not_subclass(void) {
+MR_TEST(object, derive_not_subclass) {
     mr_object_t obj;
     mr_err_t ret;
 
@@ -397,9 +380,8 @@ static void test_object_derive_not_subclass(void) {
     MR_TEST_ASSERT_EQ_INT(ret, -MR_EPERM);
     mr_object_del(&obj);
 }
-MR_TEST_EXPORT(object, derive_not_subclass, test_object_derive_not_subclass);
 
-static void test_object_derive_same_clazz(void) {
+MR_TEST(object, derive_same_clazz) {
     mr_object_t obj;
     mr_err_t ret;
 
@@ -414,9 +396,8 @@ static void test_object_derive_same_clazz(void) {
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     mr_object_del(&obj);
 }
-MR_TEST_EXPORT(object, derive_same_clazz, test_object_derive_same_clazz);
 
-static void test_object_derive_del_release(void) {
+MR_TEST(object, derive_del_release) {
     mr_object_t obj;
     mr_err_t ret;
 
@@ -438,9 +419,8 @@ static void test_object_derive_del_release(void) {
     MR_TEST_EXPECT_EQ_INT(test_object_statik_release_called, 1);
     MR_TEST_EXPECT_EQ_INT(test_sub_object_dynamic_release_called, 1);
 }
-MR_TEST_EXPORT(object, derive_del_release, test_object_derive_del_release);
 
-static void test_object_derive_get_after(void) {
+MR_TEST(object, derive_get_after) {
     mr_object_t obj;
     mr_object_t *ret_obj;
     mr_err_t ret;
@@ -466,48 +446,39 @@ static void test_object_derive_get_after(void) {
     }
     mr_object_del(&obj);
 }
-MR_TEST_EXPORT(object, derive_get_after, test_object_derive_get_after);
 
 /* mr_clazz_is_kind_of inline tests */
-static void test_object_clazz_is_kind_of_self(void) {
+MR_TEST(object, clazz_is_kind_of_self) {
     test_object_reset();
     MR_TEST_EXPECT_EQ_INT(mr_clazz_is_kind_of(MR_CLAZZES_STATIK(test_object),
                                               MR_CLAZZES_STATIK(test_object)),
                           MR_TRUE);
 }
-MR_TEST_EXPORT(object, clazz_is_kind_of_self,
-               test_object_clazz_is_kind_of_self);
 
-static void test_object_clazz_is_kind_of_chain(void) {
+MR_TEST(object, clazz_is_kind_of_chain) {
     test_object_reset();
     MR_TEST_EXPECT_EQ_INT(
         mr_clazz_is_kind_of(MR_CLAZZES_STATIK(test_sub_object),
                             MR_CLAZZES_STATIK(test_object)),
         MR_TRUE);
 }
-MR_TEST_EXPORT(object, clazz_is_kind_of_chain,
-               test_object_clazz_is_kind_of_chain);
 
-static void test_object_clazz_is_kind_of_unrelated(void) {
+MR_TEST(object, clazz_is_kind_of_unrelated) {
     test_object_reset();
     MR_TEST_EXPECT_EQ_INT(
         mr_clazz_is_kind_of(MR_CLAZZES_STATIK(test_object),
                             MR_CLAZZES_STATIK(test_sub_object)),
         MR_FALSE);
 }
-MR_TEST_EXPORT(object, clazz_is_kind_of_unrelated,
-               test_object_clazz_is_kind_of_unrelated);
 
-static void test_object_clazz_is_kind_of_null(void) {
+MR_TEST(object, clazz_is_kind_of_null) {
     test_object_reset();
     MR_TEST_EXPECT_EQ_INT(
         mr_clazz_is_kind_of(MR_NULL, MR_CLAZZES_STATIK(test_object)), MR_FALSE);
 }
-MR_TEST_EXPORT(object, clazz_is_kind_of_null,
-               test_object_clazz_is_kind_of_null);
 
 /* mr_clazz_init runtime test */
-static void test_object_clazz_init_runtime(void) {
+MR_TEST(object, clazz_init_runtime) {
     mr_clazz_t runtime_clazz;
     mr_object_t obj;
     mr_err_t ret;
@@ -525,10 +496,9 @@ static void test_object_clazz_init_runtime(void) {
     mr_object_del(&obj);
     MR_TEST_EXPECT_EQ_INT(test_object_statik_release_called, 1);
 }
-MR_TEST_EXPORT(object, clazz_init_runtime, test_object_clazz_init_runtime);
 
 /* Post-del edge case tests */
-static void test_object_get_after_del(void) {
+MR_TEST(object, get_after_del) {
     mr_object_t obj;
     mr_object_t *ret_obj;
     mr_err_t ret;
@@ -544,9 +514,8 @@ static void test_object_get_after_del(void) {
     ret_obj = mr_object_get(&obj);
     MR_TEST_ASSERT_EQ_PTR(ret_obj, MR_NULL);
 }
-MR_TEST_EXPORT(object, get_after_del, test_object_get_after_del);
 
-static void test_object_put_after_del(void) {
+MR_TEST(object, put_after_del) {
     mr_object_t obj;
     mr_bool_t ret_bool;
     mr_err_t ret;
@@ -562,9 +531,8 @@ static void test_object_put_after_del(void) {
     ret_bool = mr_object_put(&obj);
     MR_TEST_ASSERT_EQ_INT(ret_bool, MR_TRUE);
 }
-MR_TEST_EXPORT(object, put_after_del, test_object_put_after_del);
 
-static void test_object_release_chain_with_null_release(void) {
+MR_TEST(object, release_chain_null_release) {
     mr_clazz_t parent;
     mr_clazz_t child;
     mr_object_t obj;
@@ -582,6 +550,5 @@ static void test_object_release_chain_with_null_release(void) {
     mr_object_del(&obj);
     MR_TEST_EXPECT_EQ_INT(test_object_dynamic_release_called, 1);
 }
-MR_TEST_EXPORT(object, release_chain_null_release,
-               test_object_release_chain_with_null_release);
+
 #endif /* defined(MR_USE_TEST) */

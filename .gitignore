@@ -49,6 +49,9 @@ htmlcov/
 .config
 
 # mrX generated files
+mr_config.h
+mr_hardgen.h
+platform/
 include/mrX/mr_config.h
 include/mrX/mr_hardgen.h
 include/mrX/platform/

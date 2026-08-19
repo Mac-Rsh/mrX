@@ -45,10 +45,10 @@ typedef struct mr_dentry_ops {
 MR_CLAZZES_EXPORT(dentry);
 typedef struct mr_dentry {
     mr_object_t parent;
-#if !defined(MR_CFG_FS_DENTRY_NAME_LEN)
-#define MR_CFG_FS_DENTRY_NAME_LEN       (4)
-#endif /* defined(MR_CFG_FS_DENTRY_NAME_LEN) */
-    char iname[MR_CFG_FS_DENTRY_NAME_LEN];
+#if !defined(MR_CFG_FS_DENTRY_INLINE_NAME_LEN)
+#define MR_CFG_FS_DENTRY_INLINE_NAME_LEN       (4)
+#endif /* defined(MR_CFG_FS_DENTRY_INLINE_NAME_LEN) */
+    char iname[MR_CFG_FS_DENTRY_INLINE_NAME_LEN];
     mr_dentry_name_t name;
     struct mr_dentry *mounted;
     struct mr_dentry *upper;

@@ -128,7 +128,7 @@ static mr_driver_t *dac_create(mr_uint32_t exist_mask) {
     return mr_dac_create(data, MR_NULL, (mr_dac_ops_t *)&dac_ops);
 }
 
-static void test_dac_configuration_and_reference(void) {
+MR_TEST(dac, configuration_and_reference) {
     mr_driver_t *drv;
     mr_dac_config_t config = {.ref = MR_DAC_REF_VDD_1};
     mr_dac_config_t saved = {0};
@@ -151,10 +151,8 @@ static void test_dac_configuration_and_reference(void) {
     MR_TEST_ASSERT_EQ_INT(mr_dac_configuration(drv, 3, &saved), -MR_EIO);
     mr_dac_del(drv);
 }
-MR_TEST_EXPORT(dac, configuration_and_reference,
-               test_dac_configuration_and_reference);
 
-static void test_dac_write_and_stream(void) {
+MR_TEST(dac, write_and_stream) {
     mr_driver_t *drv;
     mr_uint16_t samples[] = {1, 2, 3, 4};
     mr_dac_seq_t seq = {
@@ -185,9 +183,8 @@ static void test_dac_write_and_stream(void) {
     MR_TEST_ASSERT_EQ_INT(dac_stream_stop_count, 1);
     mr_dac_del(drv);
 }
-MR_TEST_EXPORT(dac, write_and_stream, test_dac_write_and_stream);
 
-static void test_dac_stream_errors_and_conversions(void) {
+MR_TEST(dac, stream_errors_and_conversions) {
     mr_driver_t *drv;
     mr_dac_ops_t empty_ops = dac_ops;
     mr_dac_seq_t seq = {.resolution = 8, .buf = MR_NULL, .size = 0};
@@ -216,6 +213,5 @@ static void test_dac_stream_errors_and_conversions(void) {
     MR_TEST_ASSERT_EQ_INT(mr_dac_volt2raw(3300, 12, 3.3f), 4095);
     mr_dac_del(drv);
 }
-MR_TEST_EXPORT(dac, stream_errors_and_conversions,
-               test_dac_stream_errors_and_conversions);
+
 #endif

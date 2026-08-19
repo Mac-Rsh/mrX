@@ -23,17 +23,15 @@ static int vprintf_wrapper(const char *fmt, ...) {
 }
 
 /* Tests */
-static void test_printf_null_fmt(void) {
+MR_TEST(printf, null_fmt) {
     MR_TEST_ASSERT_EQ_INT(mr_printf(MR_NULL), -MR_EINVAL);
 }
-MR_TEST_EXPORT(printf, null_fmt, test_printf_null_fmt);
 
-static void test_printf_empty_fmt(void) {
+MR_TEST(printf, empty_fmt) {
     MR_TEST_ASSERT_EQ_INT(mr_printf(""), -MR_EINVAL);
 }
-MR_TEST_EXPORT(printf, empty_fmt, test_printf_empty_fmt);
 
-static void test_printf_basic(void) {
+MR_TEST(printf, basic) {
     int ret;
 
     ret = mr_printf("simple string\n");
@@ -42,19 +40,16 @@ static void test_printf_basic(void) {
     ret = mr_printf("int: %d, hex: %x, str: %s\n", 42, 0xff, "hello");
     MR_TEST_ASSERT_GT_INT(ret, 0);
 }
-MR_TEST_EXPORT(printf, basic, test_printf_basic);
 
-static void test_vprintf_null_fmt(void) {
+MR_TEST(printf, vprintf_null_fmt) {
     MR_TEST_ASSERT_EQ_INT(vprintf_wrapper(MR_NULL), -MR_EINVAL);
 }
-MR_TEST_EXPORT(printf, vprintf_null_fmt, test_vprintf_null_fmt);
 
-static void test_vprintf_empty_fmt(void) {
+MR_TEST(printf, vprintf_empty_fmt) {
     MR_TEST_ASSERT_EQ_INT(vprintf_wrapper(""), -MR_EINVAL);
 }
-MR_TEST_EXPORT(printf, vprintf_empty_fmt, test_vprintf_empty_fmt);
 
-static void test_vprintf_basic(void) {
+MR_TEST(printf, vprintf_basic) {
     int ret;
 
     ret = vprintf_wrapper("simple string\n");
@@ -66,9 +61,8 @@ static void test_vprintf_basic(void) {
     ret = vprintf_wrapper("%x %04u %c\n", 0xab, 42, 'Z');
     MR_TEST_ASSERT_GT_INT(ret, 0);
 }
-MR_TEST_EXPORT(printf, vprintf_basic, test_vprintf_basic);
 
-static void test_vprintf_long_format(void) {
+MR_TEST(printf, vprintf_long_format) {
     int ret;
 
     ret = vprintf_wrapper(
@@ -76,7 +70,6 @@ static void test_vprintf_long_format(void) {
         "done");
     MR_TEST_ASSERT_GT_INT(ret, 0);
 }
-MR_TEST_EXPORT(printf, vprintf_long_format, test_vprintf_long_format);
 
 #endif /* defined(MR_USE_PRINTF) */
 #endif /* defined(MR_USE_TEST) */

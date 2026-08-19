@@ -247,7 +247,10 @@ static mr_tick_t timer_timeout_check(void) {
         }
 
         /* Tick is periodic */
-        if (timer->itick & MR_TIMER_PERIODIC) {
+        if (!(timer->itick & MR_TIMER_PERIODIC)) {
+            /* Drop the oneshot timer from the operation list */
+            mr_list_del(&timer->list);
+        } else {
             /* Restart timer */
             timer_insert(timer);
         }

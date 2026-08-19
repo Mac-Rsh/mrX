@@ -25,9 +25,6 @@ extern "C" {
  */
 
 #if defined(MR_USE_TEST)
-/* External test status */
-extern volatile mr_uint32_t __mr_test_status;
-
 /* Test pass magic number definition */
 #define __MR_TEST_MAGIC_PASS            (0x70617373U)
 
@@ -52,7 +49,7 @@ extern volatile mr_uint32_t __mr_test_status;
         if (!(__a _cond __b)) {                                                \
             __MR_TEST_PRINTF(MR_STR(_a) " " MR_STR(_cond) " " MR_STR(_b),      \
                              MR_STR(_a), __a, MR_STR(_b), __b, _fmt);          \
-            __mr_test_status = ~__MR_TEST_MAGIC_PASS;                          \
+            *__test_status = ~__MR_TEST_MAGIC_PASS;                            \
         }                                                                      \
     } while (0)
 #define __MR_TEST_CHECK_NEAR(_a, _b, _e, _type, _fmt)                          \
@@ -65,7 +62,7 @@ extern volatile mr_uint32_t __mr_test_status;
             __MR_TEST_PRINTF(                                                  \
                 "| " MR_STR(_a) " - " MR_STR(_b) " | <= " MR_STR(_e),          \
                 MR_STR(_a), __a, MR_STR(_b), __b, _fmt);                       \
-            __mr_test_status = ~__MR_TEST_MAGIC_PASS;                          \
+            *__test_status = ~__MR_TEST_MAGIC_PASS;                            \
         }                                                                      \
     } while (0)
 
@@ -103,13 +100,13 @@ extern volatile mr_uint32_t __mr_test_status;
 #define __MR_TEST_EXPECT(_check)        _check
 #define __MR_TEST_ASSERT(_check)                                               \
     do {                                                                       \
-        mr_uint32_t __s = __mr_test_status;                                    \
-        __mr_test_status = __MR_TEST_MAGIC_PASS;                               \
+        mr_uint32_t __s = *__test_status;                                      \
+        *__test_status = __MR_TEST_MAGIC_PASS;                                 \
         _check;                                                                \
-        if (__mr_test_status == (~__MR_TEST_MAGIC_PASS)) {                     \
+        if (*__test_status == (~__MR_TEST_MAGIC_PASS)) {                       \
             return;                                                            \
         }                                                                      \
-        __mr_test_status = __s;                                                \
+        *__test_status = __s;                                                  \
     } while (0)
 #endif /* defined(MR_USE_TEST) */
 

@@ -68,21 +68,12 @@
 #if defined(MR_USE_DRIVER_GPIO)
 #include <mrX/drivers/gpio/mr_gpio.h>
 #endif /* defined(MR_USE_DRIVER_GPIO) */
-#if defined(MR_USE_DRIVER_UART)
-#include <mrX/drivers/uart/mr_uart.h>
-#endif /* defined(MR_USE_DRIVER_UART) */
-#if defined(MR_USE_DRIVER_I2C)
-#include <mrX/drivers/i2c/mr_i2c.h>
-#endif /* defined(MR_USE_DRIVER_I2C) */
 #if defined(MR_USE_DRIVER_ADC)
 #include <mrX/drivers/adc/mr_adc.h>
 #endif /* defined(MR_USE_DRIVER_ADC) */
 #if defined(MR_USE_DRIVER_DAC)
 #include <mrX/drivers/dac/mr_dac.h>
 #endif /* defined(MR_USE_DRIVER_DAC) */
-#if defined(MR_USE_DRIVER_DMA)
-#include <mrX/drivers/dma/mr_dma.h>
-#endif /* defined(MR_USE_DRIVER_DMA) */
 #endif /* defined(MR_USE_DRIVER) */
 
 /** @} */
@@ -106,6 +97,10 @@
  */
 
 #if defined(MR_USE_MODULE)
+#if defined(MR_USE_MODULE_XVM)
+#include <mrX/modules/xvm/mr_xvm.h>
+#include <mrX/modules/xvm/mr_xvm_gdb.h>
+#endif /* defined(MR_USE_MODULE_XVM) */
 #endif /* defined(MR_USE_MODULE) */
 
 /** @} */

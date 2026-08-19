@@ -70,7 +70,7 @@ static void test_slab_free_unique(void **mem, mr_size_t count) {
 
 /* Tests */
 
-static void test_slab_basic(void) {
+MR_TEST(slab, basic) {
     void *p = MR_NULL;
 
     slab_reset();
@@ -89,9 +89,8 @@ _exit:
         mr_slab_free(&test_slab, p);
     }
 }
-MR_TEST_EXPORT(slab, basic, test_slab_basic);
 
-static void test_slab_multi_alloc(void) {
+MR_TEST(slab, multi_alloc) {
     void *arr[TEST_SLAB_OBJ_NUM] = {MR_NULL};
     int i;
 
@@ -127,9 +126,8 @@ _exit:
         }
     }
 }
-MR_TEST_EXPORT(slab, multi_alloc, test_slab_multi_alloc);
 
-static void test_slab_interleave(void) {
+MR_TEST(slab, interleave) {
     void *arr[TEST_SLAB_OBJ_NUM] = {MR_NULL};
     int i;
 
@@ -164,9 +162,8 @@ _exit:
         }
     }
 }
-MR_TEST_EXPORT(slab, interleave, test_slab_interleave);
 
-static void test_slab_invalid_free(void) {
+MR_TEST(slab, invalid_free) {
     mr_uint8_t invalid_buf[TEST_SLAB_OBJ_SIZE];
     void *p = MR_NULL;
 
@@ -186,9 +183,8 @@ _exit:
         mr_slab_free(&test_slab, p);
     }
 }
-MR_TEST_EXPORT(slab, invalid_free, test_slab_invalid_free);
 
-static void test_slab_init_map_size_limit(void) {
+MR_TEST(slab, init_map_size_limit) {
     mr_atomic_t map[1] = {0};
     mr_uint8_t buf[64 * 64];
     mr_slab_t slab;
@@ -198,9 +194,8 @@ static void test_slab_init_map_size_limit(void) {
     MR_TEST_ASSERT_EQ_UINT(num, MR_SLAB_MAP_BITS);
     MR_TEST_ASSERT_EQ_UINT(slab.num, MR_SLAB_MAP_BITS);
 }
-MR_TEST_EXPORT(slab, init_map_size_limit, test_slab_init_map_size_limit);
 
-static void test_slab_unaligned_free(void) {
+MR_TEST(slab, unaligned_free) {
     void *allocated[4] = {MR_NULL};
     int p2_index;
 
@@ -230,9 +225,8 @@ static void test_slab_unaligned_free(void) {
 _exit:
     test_slab_free_unique(allocated, MR_ARRAY_SIZE(allocated));
 }
-MR_TEST_EXPORT(slab, unaligned_free, test_slab_unaligned_free);
 
-static void test_slab_index_conversion_boundaries(void) {
+MR_TEST(slab, index_conversion_boundaries) {
     void *first;
     void *last;
 
@@ -251,10 +245,8 @@ static void test_slab_index_conversion_boundaries(void) {
                           MR_NULL);
     MR_TEST_ASSERT_EQ_INT(mr_slab_ptr2index(&test_slab, MR_NULL), -1);
 }
-MR_TEST_EXPORT(slab, index_conversion_boundaries,
-               test_slab_index_conversion_boundaries);
 
-static void test_slab_repeated_free(void) {
+MR_TEST(slab, repeated_free) {
     void *p;
     void *next;
 
@@ -273,5 +265,91 @@ static void test_slab_repeated_free(void) {
         mr_slab_free(&test_slab, next);
     }
 }
-MR_TEST_EXPORT(slab, repeated_free, test_slab_repeated_free);
+
+MR_TEST(slab, unaligned_map) {
+    mr_uint8_t raw[sizeof(mr_atomic_t) * 2U + 1U];
+    mr_uint8_t buf[64];
+    mr_slab_t slab;
+    mr_uint32_t num;
+
+    num = mr_slab_init(&slab, raw + 1, sizeof(mr_atomic_t) * 2U, buf, 8, 8);
+    MR_TEST_ASSERT_EQ_UINT(num, 0);
+}
+
+MR_TEST(slab, alloc_free_cycle) {
+    void *first;
+    void *again;
+
+    slab_reset();
+    first = mr_slab_alloc(&test_slab);
+    MR_TEST_ASSERT_NE_PTR(first, MR_NULL);
+    if (first == MR_NULL) {
+        return;
+    }
+    mr_slab_free(&test_slab, first);
+    again = mr_slab_alloc(&test_slab);
+    MR_TEST_ASSERT_EQ_PTR(again, first);
+    if (again != MR_NULL) {
+        mr_slab_free(&test_slab, again);
+    }
+}
+
+#if defined(MR_USE_TEST_PTHREAD)
+#include <pthread.h>
+
+#define SLAB_MT_THREADS (4)
+#define SLAB_MT_ITERS   (2000)
+
+typedef struct slab_mt_ctx {
+    mr_slab_t *slab;
+    int iters;
+} slab_mt_ctx_t;
+
+static void *slab_mt_worker(void *arg) {
+    slab_mt_ctx_t *ctx = arg;
+    void *p;
+    int i;
+
+    for (i = 0; i < ctx->iters; i++) {
+        p = mr_slab_alloc(ctx->slab);
+        if (p != MR_NULL) {
+            mr_memset(p, (int)i, TEST_SLAB_OBJ_SIZE);
+            mr_slab_free(ctx->slab, p);
+        }
+    }
+    return MR_NULL;
+}
+
+MR_TEST(slab, concurrent_alloc_free) {
+    pthread_t threads[SLAB_MT_THREADS];
+    slab_mt_ctx_t ctx;
+    void *held[TEST_SLAB_OBJ_NUM];
+    int i;
+    int ret;
+
+    slab_reset();
+    ctx.slab = &test_slab;
+    ctx.iters = SLAB_MT_ITERS;
+
+    for (i = 0; i < SLAB_MT_THREADS; i++) {
+        ret = pthread_create(&threads[i], MR_NULL, slab_mt_worker, &ctx);
+        MR_TEST_ASSERT_EQ_INT(ret, 0);
+    }
+    for (i = 0; i < SLAB_MT_THREADS; i++) {
+        MR_TEST_EXPECT_EQ_INT(pthread_join(threads[i], MR_NULL), 0);
+    }
+
+    for (i = 0; i < TEST_SLAB_OBJ_NUM; i++) {
+        held[i] = mr_slab_alloc(&test_slab);
+        MR_TEST_ASSERT_NE_PTR(held[i], MR_NULL);
+    }
+    MR_TEST_ASSERT_EQ_PTR(mr_slab_alloc(&test_slab), MR_NULL);
+    for (i = 0; i < TEST_SLAB_OBJ_NUM; i++) {
+        if (held[i] != MR_NULL) {
+            mr_slab_free(&test_slab, held[i]);
+        }
+    }
+}
+#endif /* defined(MR_USE_TEST_PTHREAD) */
+
 #endif /* defined(MR_USE_TEST) */

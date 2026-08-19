@@ -10,33 +10,33 @@
 #if defined(MR_USE_TEST)
 #if defined(MR_USE_TIMER)
 #include <mrX/kernel/mr_timer.h>
+#include <mrX/kernel/mr_clock.h>
 
-static mr_timer_t *last_timer = MR_NULL;
-static void *last_param = MR_NULL;
+typedef struct test_timer_ctx {
+    mr_timer_t *last_timer;
+} test_timer_ctx_t;
+
 static const mr_clazz_t test_timer_clazz
     = MR_CLAZZ_INIT("test_timer", MR_NULL, MR_CLAZZES_STATIK(timer));
 
-/* Helpers */
-static void test_timer_reset(void) {
-    last_timer = MR_NULL;
-    last_param = MR_NULL;
-}
-
 static void test_timer_entry(mr_timer_t *timer, void *param) {
-    last_timer = timer;
-    last_param = param;
+    test_timer_ctx_t *ctx = param;
+
+    if (ctx == MR_NULL) {
+        return;
+    }
+    ctx->last_timer = timer;
 }
 
 /* Tests */
-static void test_timer_derive_init(void) {
+MR_TEST(timer, derive_init) {
     static mr_timer_t timer = MR_TIMER_DERIVE_INIT(
         &timer, &test_timer_clazz, test_timer_entry, MR_NULL, 1);
 
     MR_TEST_ASSERT_EQ_PTR(MR_OBJECT_CLAZZ(&timer), &test_timer_clazz);
 }
-MR_TEST_EXPORT(timer, derive_init, test_timer_derive_init);
 
-static void test_timer_init_del(void) {
+MR_TEST(timer, init_del) {
     mr_timer_t timer;
     mr_err_t ret;
 
@@ -49,9 +49,8 @@ static void test_timer_init_del(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(&timer), MR_FALSE);
 }
-MR_TEST_EXPORT(timer, init_del, test_timer_init_del);
 
-static void test_timer_create_del(void) {
+MR_TEST(timer, create_del) {
     mr_timer_t *timer;
     mr_err_t ret;
 
@@ -63,20 +62,19 @@ static void test_timer_create_del(void) {
     ret = mr_timer_del(timer);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(timer, create_del, test_timer_create_del);
 
-static void test_timer_start_stop(void) {
+MR_TEST(timer, start_stop) {
     mr_timer_t timer;
     mr_timer_t timer1;
+    test_timer_ctx_t ctx = {0};
     mr_err_t ret;
     int timer_inited;
     int timer1_inited;
 
-    test_timer_reset();
     timer_inited = MR_FALSE;
     timer1_inited = MR_FALSE;
 
-    ret = mr_timer_init(&timer, test_timer_entry, MR_NULL, 2);
+    ret = mr_timer_init(&timer, test_timer_entry, &ctx, 2);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     timer_inited = MR_TRUE;
 
@@ -86,7 +84,7 @@ static void test_timer_start_stop(void) {
         goto _exit;
     }
 
-    ret = mr_timer_init(&timer1, test_timer_entry, MR_NULL, 2);
+    ret = mr_timer_init(&timer1, test_timer_entry, &ctx, 2);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     if (ret != 0) {
         goto _exit;
@@ -98,7 +96,7 @@ static void test_timer_start_stop(void) {
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     timer1_inited = MR_FALSE;
 
-    ret = mr_timer_init(&timer1, test_timer_entry, MR_NULL, 1);
+    ret = mr_timer_init(&timer1, test_timer_entry, &ctx, 1);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     if (ret != 0) {
         goto _exit;
@@ -110,9 +108,9 @@ static void test_timer_start_stop(void) {
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     timer1_inited = MR_FALSE;
 
-    test_timer_reset();
+    ctx.last_timer = MR_NULL;
     mr_clock_increase(2);
-    MR_TEST_EXPECT_EQ_PTR(last_timer, &timer);
+    MR_TEST_EXPECT_EQ_PTR(ctx.last_timer, &timer);
 
     ret = mr_timer_stop(&timer);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
@@ -127,9 +125,8 @@ _exit:
         MR_TEST_EXPECT_EQ_INT(ret, 0);
     }
 }
-MR_TEST_EXPORT(timer, start_stop, test_timer_start_stop);
 
-static void test_timer_tick_get_set(void) {
+MR_TEST(timer, tick_get_set) {
     mr_timer_t timer;
     mr_err_t ret;
     mr_tick_t tick;
@@ -149,19 +146,17 @@ static void test_timer_tick_get_set(void) {
     ret = mr_timer_del(&timer);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(timer, tick_get_set, test_timer_tick_get_set);
 
-static void test_timer_periodic(void) {
+MR_TEST(timer, periodic) {
     mr_timer_t timer;
+    test_timer_ctx_t ctx = {0};
     mr_err_t ret;
     int timer_inited;
     int i;
 
-    test_timer_reset();
     timer_inited = MR_FALSE;
 
-    ret = mr_timer_init(&timer, test_timer_entry, (void *)0x1111,
-                        1 | MR_TIMER_PERIODIC);
+    ret = mr_timer_init(&timer, test_timer_entry, &ctx, 1 | MR_TIMER_PERIODIC);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     timer_inited = MR_TRUE;
 
@@ -172,10 +167,9 @@ static void test_timer_periodic(void) {
     }
 
     for (i = 0; i < 10; i++) {
-        test_timer_reset();
+        ctx.last_timer = MR_NULL;
         mr_clock_increase(1);
-        MR_TEST_EXPECT_EQ_PTR(last_timer, &timer);
-        MR_TEST_EXPECT_EQ_PTR(last_param, (void *)0x1111);
+        MR_TEST_EXPECT_EQ_PTR(ctx.last_timer, &timer);
     }
 
     ret = mr_timer_stop(&timer);
@@ -187,6 +181,95 @@ _exit:
         MR_TEST_EXPECT_EQ_INT(ret, 0);
     }
 }
-MR_TEST_EXPORT(timer, periodic, test_timer_periodic);
+
+MR_TEST(timer, oneshot_does_not_repeat) {
+    mr_timer_t timer;
+    test_timer_ctx_t ctx = {0};
+    mr_err_t ret;
+
+    ret = mr_timer_init(&timer, test_timer_entry, &ctx, 1);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    ret = mr_timer_start(&timer);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(MR_TIMER_IS_TIMING(&timer), MR_TRUE);
+
+    ctx.last_timer = MR_NULL;
+    mr_clock_increase(1);
+    MR_TEST_EXPECT_EQ_PTR(ctx.last_timer, &timer);
+    MR_TEST_EXPECT_EQ_INT(MR_TIMER_IS_TIMING(&timer), MR_FALSE);
+
+    ctx.last_timer = MR_NULL;
+    mr_clock_increase(1);
+    MR_TEST_EXPECT_EQ_PTR(ctx.last_timer, MR_NULL);
+
+    ret = mr_timer_del(&timer);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+
+MR_TEST(timer, restart) {
+    mr_timer_t timer;
+    test_timer_ctx_t ctx = {0};
+    mr_err_t ret;
+
+    ret = mr_timer_init(&timer, test_timer_entry, &ctx, 5);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_timer_start(&timer);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+
+    mr_clock_increase(2);
+    ret = mr_timer_start(&timer);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+
+    ctx.last_timer = MR_NULL;
+    mr_clock_increase(2);
+    MR_TEST_EXPECT_EQ_PTR(ctx.last_timer, MR_NULL);
+
+    ctx.last_timer = MR_NULL;
+    mr_clock_increase(3);
+    MR_TEST_EXPECT_EQ_PTR(ctx.last_timer, &timer);
+
+    ret = mr_timer_del(&timer);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+
+MR_TEST(timer, stop_idle_and_tick_set) {
+    mr_timer_t timer;
+    test_timer_ctx_t ctx = {0};
+    mr_err_t ret;
+
+    ret = mr_timer_init(&timer, test_timer_entry, &ctx, 3);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = mr_timer_stop(&timer);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(MR_TIMER_IS_TIMING(&timer), MR_FALSE);
+
+    ret = mr_timer_start(&timer);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    ret = mr_timer_tick_set(&timer, 7);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_UINT(mr_timer_tick(&timer), 7);
+    MR_TEST_ASSERT_EQ_INT(MR_TIMER_IS_TIMING(&timer), MR_FALSE);
+
+    ctx.last_timer = MR_NULL;
+    mr_clock_increase(7);
+    MR_TEST_EXPECT_EQ_PTR(ctx.last_timer, MR_NULL);
+
+    ret = mr_timer_del(&timer);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+
+MR_TEST(timer, get_put) {
+    mr_timer_t *timer;
+    mr_err_t ret;
+
+    timer = mr_timer_create(test_timer_entry, MR_NULL, 4);
+    MR_TEST_ASSERT_NE_PTR(timer, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(mr_timer_get(timer), MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_timer_put(timer), MR_FALSE);
+    ret = mr_timer_del(timer);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+
 #endif /* defined(MR_USE_TIMER) */
 #endif /* defined(MR_USE_TEST) */

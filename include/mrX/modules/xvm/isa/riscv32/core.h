@@ -64,13 +64,6 @@ extern "C" {
 #define REG_MCAUSE_MEI                  (11u)
 #define REG_MCAUSE_MEI_INTR             (REG_MCAUSE_INTR | REG_MCAUSE_MEI)
 
-/* RISCV32 core registers type */
-typedef enum reg_type {
-    REG_TYPE_CSR,
-    REG_TYPE_PC,
-    REG_TYPE_X,
-} reg_type_t;
-
 /* RISCV32 trap type */
 typedef enum trap_type {
     TRAP_TYPE_NONE,
@@ -119,12 +112,6 @@ typedef struct core {
     mr_size_t mem_size;
     mr_uint8_t mem[];
 } core_t;
-
-/* RISCV32 core name to address map type */
-typedef struct name_addr_name {
-    const char *name;
-    mr_uint32_t addr;
-} name_addr_map_t;
 
 /* RISCV32 core registers macro function definition */
 #define CORE_REG(_core)                 ((_core)->regs)

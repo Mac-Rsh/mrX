@@ -76,7 +76,7 @@ static mr_driver_t *ram_create(const mr_ram_ops_t *ops) {
     return mr_ram_create(data, MR_NULL, (mr_ram_ops_t *)ops);
 }
 
-static void test_ram_lifecycle(void) {
+MR_TEST(ram, lifecycle) {
     mr_driver_t *drv;
 
     ram_test_reset();
@@ -90,9 +90,8 @@ static void test_ram_lifecycle(void) {
     MR_TEST_ASSERT_EQ_INT(ram_unmount_count, 1);
     mr_driver_del(drv);
 }
-MR_TEST_EXPORT(ram, lifecycle, test_ram_lifecycle);
 
-static void test_ram_mount_unmount_errors(void) {
+MR_TEST(ram, mount_unmount_errors) {
     mr_driver_t *drv;
 
     ram_test_reset();
@@ -113,9 +112,8 @@ static void test_ram_mount_unmount_errors(void) {
     MR_TEST_ASSERT_EQ_INT(ram_unmount_count, 1);
     mr_ram_del(drv);
 }
-MR_TEST_EXPORT(ram, mount_unmount_errors, test_ram_mount_unmount_errors);
 
-static void test_ram_io_and_unsupported(void) {
+MR_TEST(ram, io_and_unsupported) {
     mr_driver_t *drv;
     mr_driver_t *empty;
     mr_uint8_t input = 0x11;
@@ -143,5 +141,5 @@ static void test_ram_io_and_unsupported(void) {
     mr_driver_del(drv);
     mr_driver_del(empty);
 }
-MR_TEST_EXPORT(ram, io_and_unsupported, test_ram_io_and_unsupported);
+
 #endif

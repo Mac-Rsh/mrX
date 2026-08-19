@@ -94,6 +94,19 @@ MR_INLINE void mr_file_init(mr_file_t *file) {
 }
 
 /**
+ * @brief This function checks whether a file handle is open.
+ *
+ * @param file The file handle.
+ * @return MR_TRUE if the file handle is open, otherwise MR_FALSE.
+ */
+MR_INLINE mr_bool_t mr_file_is_open(const mr_file_t *file) {
+    /* Check parameter */
+    MR_ASSERT(file != MR_NULL);
+
+    return file->inode ? MR_TRUE : MR_FALSE;
+}
+
+/**
  * @brief This function mounts a file-system at the global FS ROOT.
  *
  * @param source The mount source.
@@ -103,6 +116,8 @@ MR_INLINE void mr_file_init(mr_file_t *file) {
  * @return 0 on success, a negative error code on failure.
  *
  * @note This function does not access the current file-system namespace.
+ * Use it to install or replace the global FS ROOT. After a namespace is
+ * live, attach a file-system at a path with mr_fs_mount().
  */
 mr_err_t mr_fs_mount_root(const char *source, const char *fstype, int flags,
                           void *data);
@@ -118,6 +133,8 @@ mr_err_t mr_fs_mount_root(const char *source, const char *fstype, int flags,
  * @return 0 on success, a negative error code on failure.
  *
  * @note A non-root mount-point must already exist and be a directory.
+ * @note Path is resolved in the current namespace. Use mr_fs_mount_root() to
+ * set or replace the global FS ROOT.
  */
 mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
                      int flags, void *data);
@@ -143,6 +160,19 @@ mr_err_t mr_fs_umount(const char *path);
  * @note An existing leaf is rejected with -MR_EEXIST.
  */
 mr_err_t mr_fs_mkdir(const char *path);
+
+/**
+ * @brief This function removes an empty directory at the given path.
+ *
+ * @param path The directory path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The node must be a directory(-MR_ENOTDIR).
+ * @note A non-empty directory is rejected with -MR_ENOTEMPTY.
+ * @note A mount-point directory can not be removed(-MR_EBUSY).
+ * @note The final symbolic link is not followed.
+ */
+mr_err_t mr_fs_rmdir(const char *path);
 
 /**
  * @brief This function creates a file-system-specific node.
@@ -173,6 +203,10 @@ mr_err_t mr_fs_open(mr_file_t *file, const char *path, int flags);
  *
  * @param file The file.
  * @return 0 on success, a negative error code on failure.
+ *
+ * @note The handle is invalidated regardless of the return value. A close
+ * error only reports a flush or finalize failure and is not retryable.
+ * Closing an already-closed handle returns -MR_EBADF.
  */
 mr_err_t mr_fs_close(mr_file_t *file);
 
@@ -194,6 +228,9 @@ mr_err_t mr_fs_opendir(mr_file_t *file, const char *path);
  * @param dirent The directory entry to fill.
  * @return 1 if an entry was read, 0 at end-of-directory, or a negative error
  * code on failure.
+ *
+ * @note 0 means end-of-directory, not success. Iterate while the return value
+ * is greater than 0; treat 0 as EOF and a negative value as an error.
  */
 mr_err_t mr_fs_readdir(mr_file_t *file, mr_dirent_t *dirent);
 
@@ -202,6 +239,8 @@ mr_err_t mr_fs_readdir(mr_file_t *file, mr_dirent_t *dirent);
  *
  * @param file The file.
  * @return 0 on success, a negative error code on failure.
+ *
+ * @note This function has the same close contract as mr_fs_close().
  */
 mr_err_t mr_fs_closedir(mr_file_t *file);
 
@@ -250,7 +289,10 @@ mr_err_t mr_fs_symlink(const char *target, const char *link_path);
  * @param size The buffer size.
  * @return The target length on success, a negative error code on failure.
  *
- * @note The returned target is not null-terminated.
+ * @note The return value is the target length and does not include a
+ * terminator. If the buffer is larger than the target, a null terminator is
+ * written after it. If the buffer is not larger, the target is not
+ * null-terminated.
  */
 mr_ssize_t mr_fs_readlink(const mr_file_t *file, char *buf, mr_size_t size);
 
@@ -353,6 +395,23 @@ mr_err_t mr_fs_unlink_recursive_by_path(const char *path);
 mr_err_t mr_fs_mkdirat(const mr_file_t *dir, const char *path, int flags);
 
 /**
+ * @brief This function removes an empty directory relative to a directory
+ * handle.
+ *
+ * @param dir The base directory for path resolution. It is ignored for an
+ * absolute path unless MR_AT_IN_ROOT is specified and may be MR_NULL otherwise.
+ * @param path The directory path.
+ * @param flags The path resolution flags(see MR_AT_*).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note For a relative path, dir must be an open directory handle.
+ * @note MR_AT_IN_ROOT treats dir as a temporary FS root.
+ * @note The node must be a directory(-MR_ENOTDIR).
+ * @note The final symbolic link is not followed.
+ */
+mr_err_t mr_fs_rmdirat(const mr_file_t *dir, const char *path, int flags);
+
+/**
  * @brief This function creates a file-system-specific node relative to a
  * directory handle.
  *
@@ -390,7 +449,9 @@ mr_err_t mr_fs_mknodat(const mr_file_t *dir, const char *path,
  */
 mr_err_t mr_fs_openat(mr_file_t *file, const mr_file_t *dir, const char *path,
                       int flags);
+#endif /* defined(MR_USE_FS_AT) */
 
+#if defined(MR_USE_FS_AT) && defined(MR_USE_FS_BY_PATH)
 /**
  * @brief This function gets file status relative to a directory handle.
  *
@@ -404,8 +465,8 @@ mr_err_t mr_fs_openat(mr_file_t *file, const mr_file_t *dir, const char *path,
  * @note MR_AT_IN_ROOT treats dir as a temporary FS root.
  * @note MR_AT_SYMLINK_NOFOLLOW returns the final symbolic link's status.
  */
-mr_err_t mr_fs_statat(const mr_file_t *dir, const char *path, mr_stat_t *stat,
-                      int flags);
+mr_err_t mr_fs_statat_by_path(const mr_file_t *dir, const char *path,
+                              mr_stat_t *stat, int flags);
 
 /**
  * @brief This function renames a file between directory-relative paths.
@@ -423,9 +484,10 @@ mr_err_t mr_fs_statat(const mr_file_t *dir, const char *path, mr_stat_t *stat,
  * @note MR_AT_IN_ROOT treats each directory handle as its path's temporary FS
  * root.
  */
-mr_err_t mr_fs_renameat(const mr_file_t *old_dir, const char *old_path,
-                        const mr_file_t *new_dir, const char *new_path,
-                        int flags);
+mr_err_t mr_fs_renameat_by_path(const mr_file_t *old_dir,
+                                const char *old_path,
+                                const mr_file_t *new_dir,
+                                const char *new_path, int flags);
 
 /**
  * @brief This function unlinks a file relative to a directory handle.
@@ -439,7 +501,8 @@ mr_err_t mr_fs_renameat(const mr_file_t *old_dir, const char *old_path,
  * @note For a relative path, dir must be an open directory handle.
  * @note MR_AT_IN_ROOT treats dir as a temporary FS root.
  */
-mr_err_t mr_fs_unlinkat(const mr_file_t *dir, const char *path, int flags);
+mr_err_t mr_fs_unlinkat_by_path(const mr_file_t *dir, const char *path,
+                                int flags);
 
 /**
  * @brief This function recursively unlinks a file or directory relative to a
@@ -456,9 +519,9 @@ mr_err_t mr_fs_unlinkat(const mr_file_t *dir, const char *path, int flags);
  * @note The operation is not atomic. Entries removed before a later failure
  * remain removed.
  */
-mr_err_t mr_fs_unlinkat_recursive(const mr_file_t *dir, const char *path,
-                                  int flags);
-#endif /* defined(MR_USE_FS_AT) */
+mr_err_t mr_fs_unlinkat_recursive_by_path(const mr_file_t *dir,
+                                          const char *path, int flags);
+#endif /* defined(MR_USE_FS_AT) && defined(MR_USE_FS_BY_PATH) */
 
 /**
  * @brief This function reads from a file.
@@ -493,6 +556,7 @@ mr_ssize_t mr_fs_write(mr_file_t *file, const void *buf, mr_size_t size);
  * @param whence The seek base(see MR_SEEK_*).
  * @return The new position on success, a negative error code on failure.
  *
+ * @note A negative result is clamped to 0.
  * @note The default seek returns -MR_ERANGE without changing the position if
  * the requested position cannot be represented by mr_int64_t.
  */

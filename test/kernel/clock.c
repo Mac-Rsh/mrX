@@ -22,16 +22,15 @@ static mr_tick_t clock_test_hook(void) {
 }
 
 /* Tests */
-static void test_clock_increase(void) {
+MR_TEST(clock, increase) {
     mr_tick_t base;
 
     base = mr_clock_tick();
     mr_clock_increase(1);
     MR_TEST_ASSERT_NEAR(mr_clock_tick(), base, 5);
 }
-MR_TEST_EXPORT(clock, increase, test_clock_increase);
 
-static void test_clock_tickless(void) {
+MR_TEST(clock, tickless) {
     mr_tick_t less;
     mr_err_t ret;
 
@@ -48,9 +47,8 @@ static void test_clock_tickless(void) {
     less = mr_clock_tickless();
     MR_TEST_ASSERT_EQ_INT(less, 7);
 }
-MR_TEST_EXPORT(clock, tickless, test_clock_tickless);
 
-static void test_clock_tick_convert(void) {
+MR_TEST(clock, tick_convert) {
     MR_TEST_ASSERT_EQ_INT(
         MR_TICK_MSEC(1),
         (mr_tick_t)(((mr_uint64_t)1 * MR_CFG_TICK_PER_SECOND) / 1000ULL));
@@ -60,9 +58,8 @@ static void test_clock_tick_convert(void) {
         (mr_tick_t)(((mr_uint64_t)1 * MR_CFG_TICK_PER_SECOND) / 1000000ULL));
     MR_TEST_ASSERT_EQ_INT(MR_TICK_USEC(1000000), MR_CFG_TICK_PER_SECOND);
 }
-MR_TEST_EXPORT(clock, tick_convert, test_clock_tick_convert);
 
-static void test_clock_uptime(void) {
+MR_TEST(clock, uptime) {
     mr_uptime_t base;
     mr_uptime_t uptime;
 
@@ -72,20 +69,25 @@ static void test_clock_uptime(void) {
 
     MR_TEST_ASSERT_EQ_UINT(uptime - base, 1000);
 }
-MR_TEST_EXPORT(clock, uptime, test_clock_uptime);
 
-static void test_clock_busy_wait(void) {
+MR_TEST(clock, busy_wait) {
     mr_clock_busy_wait(0);
     mr_clock_busy_wait(1);
 }
-MR_TEST_EXPORT(clock, busy_wait, test_clock_busy_wait);
+
+MR_TEST(clock, increase_zero) {
+    mr_tick_t base;
+
+    base = mr_clock_tick();
+    mr_clock_increase(0);
+    MR_TEST_ASSERT_EQ_UINT(mr_clock_tick(), base);
+}
 
 #if defined(MR_USE_CLOCK_HIRES)
-static void test_clock_hires_tick2timestamp_frequency(void) {
+MR_TEST(clock, hires_tick2timestamp_frequency) {
     mr_hires_timestamp_t timestamp;
 
-    timestamp = mr_hires_tick2timestamp(
-        MR_CFG_HIRES_TICK_PER_SECOND, 0);
+    timestamp = mr_hires_tick2timestamp(MR_CFG_HIRES_TICK_PER_SECOND, 0);
 
     MR_TEST_ASSERT_EQ_INT(timestamp.year, 1970);
     MR_TEST_ASSERT_EQ_INT(timestamp.month, 1);
@@ -96,10 +98,8 @@ static void test_clock_hires_tick2timestamp_frequency(void) {
     MR_TEST_ASSERT_EQ_INT(timestamp.millisecond, 0);
     MR_TEST_ASSERT_EQ_INT(timestamp.microsecond, 0);
 }
-MR_TEST_EXPORT(clock, hires_tick2timestamp_frequency,
-               test_clock_hires_tick2timestamp_frequency);
 
-static void test_clock_hires_tick2timestamp(void) {
+MR_TEST(clock, hires_tick2timestamp) {
     const mr_hires_tick_t test_tick = 1725580800000000ULL;
     mr_hires_timestamp_t timestamp;
     const mr_uint8_t time_zone = 8;
@@ -112,9 +112,8 @@ static void test_clock_hires_tick2timestamp(void) {
     MR_TEST_ASSERT_EQ_INT(timestamp.minute, 0);
     MR_TEST_ASSERT_EQ_INT(timestamp.second, 0);
 }
-MR_TEST_EXPORT(clock, hires_tick2timestamp, test_clock_hires_tick2timestamp);
 
-static void test_clock_hires_tick2timestamp_subsecond(void) {
+MR_TEST(clock, hires_tick2timestamp_subsecond) {
     const mr_hires_tick_t test_tick = 1234567ULL;
     mr_hires_timestamp_t timestamp;
 
@@ -128,10 +127,8 @@ static void test_clock_hires_tick2timestamp_subsecond(void) {
     MR_TEST_ASSERT_EQ_INT(timestamp.millisecond, 234);
     MR_TEST_ASSERT_EQ_INT(timestamp.microsecond, 567);
 }
-MR_TEST_EXPORT(clock, hires_tick2timestamp_subsecond,
-               test_clock_hires_tick2timestamp_subsecond);
 
-static void test_clock_hires_tick2timestamp_leap_year(void) {
+MR_TEST(clock, hires_tick2timestamp_leap_year) {
     const mr_hires_tick_t test_tick = 1709164800000000ULL;
     mr_hires_timestamp_t timestamp;
 
@@ -143,10 +140,8 @@ static void test_clock_hires_tick2timestamp_leap_year(void) {
     MR_TEST_ASSERT_EQ_INT(timestamp.minute, 0);
     MR_TEST_ASSERT_EQ_INT(timestamp.second, 0);
 }
-MR_TEST_EXPORT(clock, hires_tick2timestamp_leap_year,
-               test_clock_hires_tick2timestamp_leap_year);
 
-static void test_clock_hires_tick2timestamp_negative_timezone(void) {
+MR_TEST(clock, hires_tick2timestamp_negative_timezone) {
     const mr_hires_tick_t test_tick = 1725580800000000ULL;
     mr_hires_timestamp_t timestamp;
 
@@ -158,10 +153,8 @@ static void test_clock_hires_tick2timestamp_negative_timezone(void) {
     MR_TEST_ASSERT_EQ_INT(timestamp.minute, 0);
     MR_TEST_ASSERT_EQ_INT(timestamp.second, 0);
 }
-MR_TEST_EXPORT(clock, hires_tick2timestamp_negative_timezone,
-               test_clock_hires_tick2timestamp_negative_timezone);
 
-static void test_clock_hires_tick2timestamp_timezone_limit(void) {
+MR_TEST(clock, hires_tick2timestamp_timezone_limit) {
     mr_hires_timestamp_t timestamp;
 
     timestamp = mr_hires_tick2timestamp(0, 13);
@@ -180,7 +173,6 @@ static void test_clock_hires_tick2timestamp_timezone_limit(void) {
     MR_TEST_ASSERT_EQ_INT(timestamp.minute, 0);
     MR_TEST_ASSERT_EQ_INT(timestamp.second, 0);
 }
-MR_TEST_EXPORT(clock, hires_tick2timestamp_timezone_limit,
-               test_clock_hires_tick2timestamp_timezone_limit);
+
 #endif /* defined(MR_USE_CLOCK_HIRES) */
 #endif /* defined(MR_USE_TEST) */

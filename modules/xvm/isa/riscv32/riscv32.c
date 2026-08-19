@@ -17,13 +17,13 @@ static mr_xvm_return_t xvm_riscv32_execute(mr_xvm_t *xvm, mr_xvm_event_t *event,
                                            mr_uint32_t step);
 static mr_ssize_t xvm_riscv32_mem_map(mr_xvm_t *xvm, mr_uint64_t addr,
                                       void **memory, mr_bool_t *writable);
-static mr_err_t xvm_riscv32_reg_load(mr_xvm_t *xvm, const char *name,
+static mr_err_t xvm_riscv32_reg_load(mr_xvm_t *xvm, mr_uint32_t nr,
                                      mr_uint64_t *val);
-static mr_err_t xvm_riscv32_reg_store(mr_xvm_t *xvm, const char *name,
+static mr_err_t xvm_riscv32_reg_store(mr_xvm_t *xvm, mr_uint32_t nr,
                                       mr_uint64_t val);
 static mr_err_t xvm_riscv32_interrupt(mr_xvm_t *xvm, mr_uint32_t irq,
                                       mr_bool_t active);
-static const mr_xvm_ops_t __xvm_riscv32_ops = {
+static const mr_xvm_isa_ops_t __xvm_riscv32_ops = {
     .load = xvm_riscv32_load,
     .execute = xvm_riscv32_execute,
     .mem_map = xvm_riscv32_mem_map,
@@ -31,29 +31,55 @@ static const mr_xvm_ops_t __xvm_riscv32_ops = {
     .reg_store = xvm_riscv32_reg_store,
     .interrupt = xvm_riscv32_interrupt,
 };
-static mr_xvm_isa_t __xvm_riscv32_isa
-    = MR_XVM_ISA_INIT("riscv32", &__xvm_riscv32_ops);
-
-/* RISCV32 core CSR map table */
-static const name_addr_map_t csr_map_table[] = {
-    {  "mstatus",   REG_CSR_MSTATUS},
-    {     "misa",      REG_CSR_MISA},
-    {      "mie",       REG_CSR_MIE},
-    {    "mtvec",     REG_CSR_MTVEC},
-    { "mscratch",  REG_CSR_MSCRATCH},
-    {     "mepc",      REG_CSR_MEPC},
-    {   "mcause",    REG_CSR_MCAUSE},
-    {    "mtval",     REG_CSR_MTVAL},
-    {      "mip",       REG_CSR_MIP},
-    {   "mcycle",    REG_CSR_MCYCLE},
-    {  "mcycleh",   REG_CSR_MCYCLEH},
-    { "minstret",  REG_CSR_MINSTRET},
-    {"minstreth", REG_CSR_MINSTRETH},
-    {"mvendorid", REG_CSR_MVENDORID},
-    {  "marchid",   REG_CSR_MARCHID},
-    {   "mimpid",    REG_CSR_MIMPID},
-    {  "mhartid",   REG_CSR_MHARTID},
+#if defined(MR_USE_MODULE_XVM_DEBUG)
+/* XVM RISCV32 target */
+static mr_xvm_isa_regdesc_t __xvm_riscv32_regs[] = {
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x0"},
+    {.type = MR_XVM_ISA_REG_CODE, .bit_size = 32,  .name = "x1"},
+    {.type = MR_XVM_ISA_REG_DATA, .bit_size = 32,  .name = "x2"},
+    {.type = MR_XVM_ISA_REG_DATA, .bit_size = 32,  .name = "x3"},
+    {.type = MR_XVM_ISA_REG_DATA, .bit_size = 32,  .name = "x4"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x5"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x6"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x7"},
+    {.type = MR_XVM_ISA_REG_DATA, .bit_size = 32,  .name = "x8"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x9"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x10"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x11"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x12"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x13"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x14"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x15"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x16"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x17"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x18"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x19"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x20"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x21"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x22"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x23"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x24"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x25"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x26"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x27"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x28"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x29"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x30"},
+    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x31"},
+    {.type = MR_XVM_ISA_REG_CODE, .bit_size = 32,  .name = "pc"},
 };
+static mr_xvm_isa_target_t __xvm_riscv32_target = {
+    .feature = "org.gnu.gdb.riscv.cpu",
+    .arch = "riscv:rv32",
+    .regs = __xvm_riscv32_regs,
+    .regs_num = sizeof(__xvm_riscv32_regs) / sizeof(__xvm_riscv32_regs[0]),
+};
+#define XVM_RISCV32_TARGET              (&__xvm_riscv32_target)
+#else
+#define XVM_RISCV32_TARGET              (MR_NULL)
+#endif /* defined(MR_USE_MODULE_XVM_DEBUG) */
+static mr_xvm_isa_t __xvm_riscv32_isa
+    = MR_XVM_ISA_INIT("riscv32", &__xvm_riscv32_ops, XVM_RISCV32_TARGET);
 
 MR_INLINE mr_uint32_t core_load(const void *memory, mr_size_t size) {
     mr_uint32_t value = 0;
@@ -1260,6 +1286,14 @@ static mr_xvm_return_t xvm_riscv32_execute(mr_xvm_t *xvm, mr_xvm_event_t *event,
             continue;
         }
 
+#if defined(MR_USE_MODULE_XVM_DEBUG)
+        /* Hit an address-compare breakpoint before fetch */
+        if (mr_xvm_dbg_break_hit(xvm, CORE_REG_PC(core))) {
+            event->except.nr = MR_XVM_EXCEPT_NR_BREAK;
+            return MR_XVM_EXCEPT;
+        }
+#endif /* defined(MR_USE_MODULE_XVM_DEBUG) */
+
         /* Fetch instruction */
         trap = instr_fetch(core, CORE_REG_PC(core), &instr.raw);
         if (trap != 0) {
@@ -1347,108 +1381,54 @@ static mr_ssize_t xvm_riscv32_mem_map(mr_xvm_t *xvm, mr_uint64_t addr,
     return -MR_EINVAL;
 }
 
-static mr_bool_t reg_find(const char *name, reg_type_t *type, mr_uint32_t *id) {
-    mr_uint32_t idx;
-    mr_size_t i;
-
-    /* General purpose register: x0..x31 */
-    if (name[0] == 'x') {
-        /* Get register index */
-        for (idx = 0, i = 1; (name[i] >= '0') && (name[i] <= '9'); i++) {
-            idx = idx * 10 + (mr_uint32_t)(name[i] - '0');
-            if (idx > 31) {
-                break;
-            }
-        }
-        if ((i > 1) && (name[i] == '\0') && (idx <= 31)) {
-            *type = REG_TYPE_X;
-            *id = idx;
-            return MR_TRUE;
-        }
-    }
-
-    /* Program counter */
-    if (mr_strcmp(name, "pc") == 0) {
-        *type = REG_TYPE_PC;
-        return MR_TRUE;
-    }
-
-    /* CSR */
-    for (i = 0; i < MR_ARRAY_SIZE(csr_map_table); i++) {
-        if (mr_strcmp(name, csr_map_table[i].name) == 0) {
-            *id = csr_map_table[i].addr;
-            *type = REG_TYPE_CSR;
-            return MR_TRUE;
-        }
-    }
-    return MR_FALSE;
-}
-
-static mr_err_t xvm_riscv32_reg_load(mr_xvm_t *xvm, const char *name,
+static mr_err_t xvm_riscv32_reg_load(mr_xvm_t *xvm, mr_uint32_t nr,
                                      mr_uint64_t *val) {
     mr_xvm_datamem_t *datamem;
-    mr_uint32_t id, reg_val;
-    reg_type_t type;
     core_t *core;
 
     /* Get XVM data memory and RISCV32 core */
     datamem = MR_XVM_DATAMEM(xvm);
     core = (core_t *)datamem->data;
 
-    /* Find register */
-    if (!reg_find(name, &type, &id)) {
-        return -MR_EINVAL;
+    /* Load general purpose register */
+    if (nr <= 31) {
+        /* 'x0' is always 0 */
+        *val = (nr == 0) ? 0 : (mr_uint64_t)CORE_REG_X(core, nr);
+        return 0;
     }
 
-    /* Load register */
-    if (type == REG_TYPE_X) {
-        /* 'x0' is always 0 */
-        reg_val = (id == 0) ? 0 : CORE_REG_X(core, id);
-    } else if (type == REG_TYPE_PC) {
-        /* Program counter */
-        reg_val = CORE_REG_PC(core);
-    } else {
-        /* CSR */
-        if (csr_load(core, id, &reg_val) != 0) {
-            return -MR_EINVAL;
-        }
+    /* Load program counter */
+    if (nr == 32) {
+        *val = (mr_uint64_t)CORE_REG_PC(core);
+        return 0;
     }
-    *val = (mr_uint64_t)reg_val;
-    return 0;
+    return -MR_EINVAL;
 }
 
-static mr_err_t xvm_riscv32_reg_store(mr_xvm_t *xvm, const char *name,
+static mr_err_t xvm_riscv32_reg_store(mr_xvm_t *xvm, mr_uint32_t nr,
                                       mr_uint64_t val) {
     mr_xvm_datamem_t *datamem;
-    reg_type_t type;
-    mr_uint32_t id;
     core_t *core;
 
     /* Get XVM data memory and RISCV32 core */
     datamem = MR_XVM_DATAMEM(xvm);
     core = (core_t *)datamem->data;
 
-    /* Find register */
-    if (!reg_find(name, &type, &id)) {
-        return -MR_EINVAL;
+    /* Store general purpose register */
+    if (nr <= 31) {
+        /* 'x0' is always 0 */
+        if (nr != 0) {
+            CORE_REG_X(core, nr) = (mr_uint32_t)val;
+        }
+        return 0;
     }
 
-    /* Store register */
-    if (type == REG_TYPE_X) {
-        /* 'x0' is always 0 */
-        if (id != 0) {
-            CORE_REG_X(core, id) = (mr_uint32_t)val;
-        }
-    } else if (type == REG_TYPE_PC) {
-        /* Program counter */
+    /* Store program counter */
+    if (nr == 32) {
         CORE_REG_PC(core) = (mr_uint32_t)val;
-    } else {
-        /* CSR */
-        if (csr_store(core, id, (mr_uint32_t)val) != 0) {
-            return -MR_EINVAL;
-        }
+        return 0;
     }
-    return 0;
+    return -MR_EINVAL;
 }
 
 static mr_err_t xvm_riscv32_interrupt(mr_xvm_t *xvm, mr_uint32_t irq,

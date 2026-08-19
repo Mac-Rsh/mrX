@@ -12,34 +12,32 @@
 #include <mrX/libc/mr_assert.h>
 #include <mrX/libc/mr_string.h>
 
-/* Test status */
-volatile mr_uint32_t __mr_test_status = __MR_TEST_MAGIC_PASS;
-
-static void start(void) {
+static void start(volatile mr_uint32_t *__test_status) {
+    MR_IGNORE(__test_status);
     /* User test start */
 }
 __MR_TEST_EXPORT(sys, start, start, "0.end");
 
-static void end(void) {
+static void end(volatile mr_uint32_t *__test_status) {
+    MR_IGNORE(__test_status);
     /* User test end */
 }
 __MR_TEST_EXPORT(sys, end, end, "1.end");
 
 static mr_bool_t testcase_run(const mr_testcase_t *cs) {
+    volatile mr_uint32_t status = __MR_TEST_MAGIC_PASS;
+
     /* Check parameter */
     MR_ASSERT(cs->entry != MR_NULL);
 
     /* Test case begin */
     mr_printf("[ RUN      ] %s.%s\r\n", cs->suite, cs->name);
 
-    /* Reset test status */
-    __mr_test_status = __MR_TEST_MAGIC_PASS;
-
     /* Call test entry */
-    cs->entry();
+    cs->entry(&status);
 
     /* Test case end */
-    if (__mr_test_status == __MR_TEST_MAGIC_PASS) {
+    if (status == __MR_TEST_MAGIC_PASS) {
         mr_printf("[       " MR_COLOR(MR_COLOR_GREEN, "OK") " ] %s.%s\r\n",
                   cs->suite, cs->name);
         return MR_TRUE;

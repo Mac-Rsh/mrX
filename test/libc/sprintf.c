@@ -14,7 +14,7 @@
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf basic integer formatting                                     */
-static void test_sprintf_basic_int(void) {
+MR_TEST(sprintf, basic_int) {
     char buf[64];
     int ret;
 
@@ -30,11 +30,10 @@ static void test_sprintf_basic_int(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 2);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "ab"), 0);
 }
-MR_TEST_EXPORT(sprintf, basic_int, test_sprintf_basic_int);
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf string formatting                                            */
-static void test_sprintf_string(void) {
+MR_TEST(sprintf, string) {
     char buf[64];
     int ret;
 
@@ -46,11 +45,10 @@ static void test_sprintf_string(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 10);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "      test"), 0);
 }
-MR_TEST_EXPORT(sprintf, string, test_sprintf_string);
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf mixed formatting                                             */
-static void test_sprintf_mixed(void) {
+MR_TEST(sprintf, mixed) {
     char buf[128];
     int ret;
 
@@ -58,11 +56,10 @@ static void test_sprintf_mixed(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 28);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "Val: 42, Str: world, Hex: ff"), 0);
 }
-MR_TEST_EXPORT(sprintf, mixed, test_sprintf_mixed);
 
 /* -------------------------------------------------------------------------- */
 /* Test: snprintf with buffer size limit                                      */
-static void test_sprintf_snprintf_limit(void) {
+MR_TEST(sprintf, snprintf_limit) {
     char buf[10];
     int ret;
 
@@ -70,11 +67,10 @@ static void test_sprintf_snprintf_limit(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 10);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "123456789"), 0);
 }
-MR_TEST_EXPORT(sprintf, snprintf_limit, test_sprintf_snprintf_limit);
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf pointer formatting                                          */
-static void test_sprintf_pointer(void) {
+MR_TEST(sprintf, pointer) {
     const void *ptr = (void *)0x12345678;
     char buf[32];
     int ret;
@@ -83,11 +79,10 @@ static void test_sprintf_pointer(void) {
     MR_TEST_ASSERT_GT_INT(ret, 0);
     MR_TEST_ASSERT_NE_PTR(mr_memchr(buf, '1', (mr_size_t)ret), MR_NULL);
 }
-MR_TEST_EXPORT(sprintf, pointer, test_sprintf_pointer);
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf edge cases                                                  */
-static void test_sprintf_edge_cases(void) {
+MR_TEST(sprintf, edge_cases) {
     char buf[64];
     int ret;
 
@@ -103,11 +98,10 @@ static void test_sprintf_edge_cases(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 5);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "42   "), 0);
 }
-MR_TEST_EXPORT(sprintf, edge_cases, test_sprintf_edge_cases);
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf char width formatting                                        */
-static void test_sprintf_char_width(void) {
+MR_TEST(sprintf, char_width) {
     char buf[16];
     int ret;
 
@@ -123,11 +117,10 @@ static void test_sprintf_char_width(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 3);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "A  "), 0);
 }
-MR_TEST_EXPORT(sprintf, char_width, test_sprintf_char_width);
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf hh length modifier                                           */
-static void test_sprintf_hh_modifier(void) {
+MR_TEST(sprintf, hh_modifier) {
     char buf[32];
     int ret;
 
@@ -139,11 +132,10 @@ static void test_sprintf_hh_modifier(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 3);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "255"), 0);
 }
-MR_TEST_EXPORT(sprintf, hh_modifier, test_sprintf_hh_modifier);
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf signed minimum values                                        */
-static void test_sprintf_signed_min(void) {
+MR_TEST(sprintf, signed_min) {
     const long long int64_min = LLONG_MIN;
     char buf[32];
     int ret;
@@ -156,11 +148,10 @@ static void test_sprintf_signed_min(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 20);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "-9223372036854775808"), 0);
 }
-MR_TEST_EXPORT(sprintf, signed_min, test_sprintf_signed_min);
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf exact integer argument types */
-static void test_sprintf_integer_arguments(void) {
+MR_TEST(sprintf, integer_arguments) {
 #if LONG_MAX == 2147483647L
     const char expected[]
         = "-2147483648|4294967295|-128|255|-32768|65535|-2147483648|"
@@ -200,21 +191,19 @@ static void test_sprintf_integer_arguments(void) {
     MR_TEST_ASSERT_EQ_INT(
         mr_strcmp(buf, "-7|18446744073709551615|-123|123456|250|-99|ab"), 0);
 }
-MR_TEST_EXPORT(sprintf, integer_arguments, test_sprintf_integer_arguments);
 
 /* -------------------------------------------------------------------------- */
 /* Test: snprintf NULL buffer with zero size                                  */
-static void test_sprintf_snprintf_null_zero(void) {
+MR_TEST(sprintf, snprintf_null_zero) {
     int ret;
 
     ret = mr_snprintf(MR_NULL, 0, "%d-%s", 123, "abc");
     MR_TEST_ASSERT_EQ_INT(ret, 7);
 }
-MR_TEST_EXPORT(sprintf, snprintf_null_zero, test_sprintf_snprintf_null_zero);
 
 /* -------------------------------------------------------------------------- */
 /* Test: sprintf with NULL string */
-static void test_sprintf_null_string(void) {
+MR_TEST(sprintf, null_string) {
     char buf[32];
     int ret;
 
@@ -222,11 +211,10 @@ static void test_sprintf_null_string(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 6);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "(null)"), 0);
 }
-MR_TEST_EXPORT(sprintf, null_string, test_sprintf_null_string);
 
 /* -------------------------------------------------------------------------- */
 /* Test: unsigned, octal, binary, percent */
-static void test_sprintf_unsigned_octal_bin(void) {
+MR_TEST(sprintf, unsigned_octal_bin) {
     char buf[64];
     int ret;
 
@@ -246,11 +234,10 @@ static void test_sprintf_unsigned_octal_bin(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 7);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "%% 50%%"), 0);
 }
-MR_TEST_EXPORT(sprintf, unsigned_octal_bin, test_sprintf_unsigned_octal_bin);
 
 /* -------------------------------------------------------------------------- */
 /* Test: uppercase hex */
-static void test_sprintf_hex_upper(void) {
+MR_TEST(sprintf, hex_upper) {
     char buf[32];
     int ret;
 
@@ -262,11 +249,10 @@ static void test_sprintf_hex_upper(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 8);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "000000FF"), 0);
 }
-MR_TEST_EXPORT(sprintf, hex_upper, test_sprintf_hex_upper);
 
 /* -------------------------------------------------------------------------- */
 /* Test: sign flags (+ and space) */
-static void test_sprintf_sign_flags(void) {
+MR_TEST(sprintf, sign_flags) {
     char buf[32];
     int ret;
 
@@ -282,11 +268,10 @@ static void test_sprintf_sign_flags(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 3);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, " 42"), 0);
 }
-MR_TEST_EXPORT(sprintf, sign_flags, test_sprintf_sign_flags);
 
 /* -------------------------------------------------------------------------- */
 /* Test: special prefix (#) for hex, octal, binary */
-static void test_sprintf_special_prefix(void) {
+MR_TEST(sprintf, special_prefix) {
     char buf[32];
     int ret;
 
@@ -306,11 +291,10 @@ static void test_sprintf_special_prefix(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 6);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "0b1010"), 0);
 }
-MR_TEST_EXPORT(sprintf, special_prefix, test_sprintf_special_prefix);
 
 /* -------------------------------------------------------------------------- */
 /* Test: precision for integer and string */
-static void test_sprintf_precision(void) {
+MR_TEST(sprintf, precision) {
     char buf[32];
     int ret;
 
@@ -322,11 +306,10 @@ static void test_sprintf_precision(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 3);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "hel"), 0);
 }
-MR_TEST_EXPORT(sprintf, precision, test_sprintf_precision);
 
 /* -------------------------------------------------------------------------- */
 /* Test: asterisk width (positive and negative) */
-static void test_sprintf_asterisk_width(void) {
+MR_TEST(sprintf, asterisk_width) {
     char buf[32];
     int ret;
 
@@ -338,11 +321,10 @@ static void test_sprintf_asterisk_width(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 8);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "123     "), 0);
 }
-MR_TEST_EXPORT(sprintf, asterisk_width, test_sprintf_asterisk_width);
 
 /* -------------------------------------------------------------------------- */
 /* Test: long modifier (l) */
-static void test_sprintf_long_modifier(void) {
+MR_TEST(sprintf, long_modifier) {
     char buf[32];
     int ret;
 
@@ -354,11 +336,10 @@ static void test_sprintf_long_modifier(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 6);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "abcdef"), 0);
 }
-MR_TEST_EXPORT(sprintf, long_modifier, test_sprintf_long_modifier);
 
 /* -------------------------------------------------------------------------- */
 /* Test: short modifier (h) */
-static void test_sprintf_short_modifier(void) {
+MR_TEST(sprintf, short_modifier) {
     char buf[32];
     int ret;
 
@@ -370,18 +351,16 @@ static void test_sprintf_short_modifier(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 5);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "43981"), 0);
 }
-MR_TEST_EXPORT(sprintf, short_modifier, test_sprintf_short_modifier);
 
 /* -------------------------------------------------------------------------- */
 /* Test: mr_snprintf with NULL format */
-static void test_sprintf_snprintf_null_fmt(void) {
+MR_TEST(sprintf, snprintf_null_fmt) {
     char buf[32];
     int ret;
 
     ret = mr_snprintf(buf, sizeof(buf), MR_NULL);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(sprintf, snprintf_null_fmt, test_sprintf_snprintf_null_fmt);
 
 /* -------------------------------------------------------------------------- */
 /* Test: mr_vsprintf via wrapper helper */
@@ -395,7 +374,7 @@ static int vsprintf_wrapper(char *buf, const char *fmt, ...) {
     return ret;
 }
 
-static void test_sprintf_vsprintf(void) {
+MR_TEST(sprintf, vsprintf) {
     char buf[64];
     int ret;
 
@@ -403,11 +382,10 @@ static void test_sprintf_vsprintf(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 10);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "42_test_ff"), 0);
 }
-MR_TEST_EXPORT(sprintf, vsprintf, test_sprintf_vsprintf);
 
 /* -------------------------------------------------------------------------- */
 /* Test: snprintf with size=1 (only null terminator) */
-static void test_sprintf_snprintf_size1(void) {
+MR_TEST(sprintf, snprintf_size1) {
     char buf[1];
     int ret;
 
@@ -415,5 +393,5 @@ static void test_sprintf_snprintf_size1(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 3);
     MR_TEST_ASSERT_EQ_INT(buf[0], '\0');
 }
-MR_TEST_EXPORT(sprintf, snprintf_size1, test_sprintf_snprintf_size1);
+
 #endif /* defined(MR_USE_TEST) */

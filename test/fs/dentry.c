@@ -10,7 +10,7 @@
 #if defined(MR_USE_TEST) && defined(MR_USE_FS)
 #include <mrX.h>
 
-static void dentry(void) {
+MR_TEST(fs, dentry) {
     mr_dentry_t *dentry;
 
     /* Reject names that path lookup treats specially */
@@ -32,5 +32,23 @@ static void dentry(void) {
         mr_dentry_del(dentry);
     }
 }
-MR_TEST_EXPORT(fs, dentry, dentry);
+
+MR_TEST(fs, dentry_name_and_empty) {
+    mr_dentry_t *dentry;
+
+    dentry = mr_dentry_create(MR_NULL, "file%d", 3);
+    MR_TEST_ASSERT_NE_PTR(dentry, MR_NULL);
+    if (dentry == MR_NULL) {
+        return;
+    }
+
+    MR_TEST_EXPECT_EQ_INT(mr_strcmp(MR_DENTRY_NAME(dentry), "file3"), 0);
+    MR_TEST_EXPECT_EQ_UINT(MR_DENTRY_NAME_LEN(dentry), 5);
+    MR_TEST_EXPECT_EQ_INT(mr_dentry_is_empty(dentry), MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(MR_DENTRY_IS_ADDED(dentry), MR_FALSE);
+    MR_TEST_EXPECT_NE_PTR(mr_dentry_get(dentry), MR_NULL);
+    MR_TEST_EXPECT_EQ_INT(mr_dentry_put(dentry), MR_FALSE);
+    mr_dentry_del(dentry);
+}
+
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

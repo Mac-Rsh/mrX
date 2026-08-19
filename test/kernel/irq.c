@@ -76,7 +76,7 @@ static mr_irq_return_t test_irq_handler(mr_uint32_t irq, void *owner) {
 }
 
 /* Tests */
-static void test_irq_init_del(void) {
+MR_TEST(irq, init_del) {
     mr_irq_t irq;
     mr_err_t ret;
 
@@ -90,9 +90,8 @@ static void test_irq_init_del(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(MR_OBJECT_IS_INITED(&irq), MR_FALSE);
 }
-MR_TEST_EXPORT(irq, init_del, test_irq_init_del);
 
-static void test_irq_create_del(void) {
+MR_TEST(irq, create_del) {
     mr_irq_t *irq;
     mr_err_t ret;
 
@@ -105,9 +104,8 @@ static void test_irq_create_del(void) {
     ret = mr_irq_del(irq);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(irq, create_del, test_irq_create_del);
 
-static void test_irq_request_free(void) {
+MR_TEST(irq, request_free) {
     mr_irq_t irq;
     mr_err_t ret;
 
@@ -141,9 +139,8 @@ static void test_irq_request_free(void) {
     ret = mr_irq_del(&irq);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(irq, request_free, test_irq_request_free);
 
-static void test_irq_priority_set_get(void) {
+MR_TEST(irq, priority_set_get) {
     mr_irq_t irq;
     mr_err_t ret;
     int priority;
@@ -163,9 +160,8 @@ static void test_irq_priority_set_get(void) {
     ret = mr_irq_del(&irq);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(irq, priority_set_get, test_irq_priority_set_get);
 
-static void test_irq_type_get(void) {
+MR_TEST(irq, type_get) {
     mr_irq_t irq;
     mr_err_t ret;
     int type;
@@ -185,9 +181,8 @@ static void test_irq_type_get(void) {
     ret = mr_irq_del(&irq);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(irq, type_get, test_irq_type_get);
 
-static void test_irq_enable_disable(void) {
+MR_TEST(irq, enable_disable) {
     mr_irq_t irq;
     mr_err_t ret;
 
@@ -213,9 +208,8 @@ static void test_irq_enable_disable(void) {
     ret = mr_irq_del(&irq);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(irq, enable_disable, test_irq_enable_disable);
 
-static void test_irq_handle(void) {
+MR_TEST(irq, handle) {
     mr_irq_t irq;
     mr_err_t ret;
     mr_irq_return_t result;
@@ -237,7 +231,6 @@ static void test_irq_handle(void) {
     ret = mr_irq_del(&irq);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(irq, handle, test_irq_handle);
 
 static mr_irq_return_t test_shared_handler1(mr_uint32_t irq, void *owner) {
     mr_irq_free(irq, owner);
@@ -249,7 +242,7 @@ static mr_irq_return_t test_shared_handler2(mr_uint32_t irq, void *owner) {
     return MR_IRQ_HANDLED;
 }
 
-static void test_irq_shared(void) {
+MR_TEST(irq, shared) {
     mr_irq_t irq;
     mr_err_t ret;
 
@@ -300,9 +293,8 @@ static void test_irq_shared(void) {
     ret = mr_irq_del(&irq);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(irq, shared, test_irq_shared);
 
-static void test_irq_error_cases(void) {
+MR_TEST(irq, error_cases) {
     mr_irq_t irq;
     mr_irq_t irq1;
     mr_err_t ret;
@@ -334,7 +326,19 @@ static void test_irq_error_cases(void) {
     ret = mr_irq_del(&irq);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(irq, error_cases, test_irq_error_cases);
+
+MR_TEST(irq, get_put) {
+    mr_irq_t irq;
+    mr_err_t ret;
+
+    test_irq_reset();
+    ret = mr_irq_init(&irq, 8, 8, &mock_irq_ops, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_NE_PTR(mr_irq_get(&irq), MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_irq_put(&irq), MR_FALSE);
+    ret = mr_irq_del(&irq);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
 
 #if defined(MR_USE_IRQ_DEFER)
 #if defined(MR_USE_IRQ_DEFER_HOOK)
@@ -388,7 +392,7 @@ static mr_irq_return_t test_defer_complete_entry(mr_uint32_t irq, void *owner) {
     return MR_IRQ_HANDLED;
 }
 
-static void test_irq_defer_request(void) {
+MR_TEST(irq, defer_request) {
     mr_irq_t irq;
     mr_err_t ret;
 
@@ -423,9 +427,8 @@ static void test_irq_defer_request(void) {
     ret = mr_irq_del(&irq);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(irq, defer_request, test_irq_defer_request);
 
-static void test_irq_defer_free_before_execute(void) {
+MR_TEST(irq, defer_free_before_execute) {
     mr_irq_t irq;
     mr_err_t ret;
 
@@ -454,10 +457,8 @@ static void test_irq_defer_free_before_execute(void) {
     ret = mr_irq_del(&irq);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-MR_TEST_EXPORT(irq, defer_free_before_execute,
-               test_irq_defer_free_before_execute);
 
-static void test_irq_defer_del_before_execute(void) {
+MR_TEST(irq, defer_del_before_execute) {
     mr_irq_t irq;
     mr_err_t ret;
 
@@ -483,8 +484,7 @@ static void test_irq_defer_del_before_execute(void) {
     MR_TEST_ASSERT_EQ_INT(irq_hook_status, 0);
 #endif /* defined(MR_USE_IRQ_DEFER_HOOK) */
 }
-MR_TEST_EXPORT(irq, defer_del_before_execute,
-               test_irq_defer_del_before_execute);
+
 #endif /* defined(MR_USE_IRQ_DEFER) */
 #endif /* defined(MR_USE_IRQ) */
 #endif /* defined(MR_USE_TEST) */

@@ -21,7 +21,7 @@ static test_elem_t big_buf[1024];
 
 /* Tests */
 
-static void test_fifo_init(void) {
+MR_TEST(fifo, init) {
     mr_uint8_t buf[128];
     mr_uint32_t cap;
     mr_fifo_t fifo;
@@ -32,9 +32,8 @@ static void test_fifo_init(void) {
     MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(mr_fifo_is_full(&fifo), MR_FALSE);
 }
-MR_TEST_EXPORT(fifo, init, test_fifo_init);
 
-static void test_fifo_alloc_free(void) {
+MR_TEST(fifo, alloc_free) {
     mr_uint32_t cap;
     mr_fifo_t fifo = {0};
 
@@ -59,9 +58,8 @@ static void test_fifo_alloc_free(void) {
 
     mr_fifo_free(&fifo);
 }
-MR_TEST_EXPORT(fifo, alloc_free, test_fifo_alloc_free);
 
-static void test_fifo_boundary_init_alloc(void) {
+MR_TEST(fifo, boundary_init_alloc) {
     mr_uint8_t buf[8];
     test_elem_t elem = {.id = 1};
     test_elem_t out;
@@ -104,9 +102,8 @@ static void test_fifo_boundary_init_alloc(void) {
     MR_TEST_ASSERT_EQ_INT(cap, 0);
 #endif /* defined(MR_USE_MALLOC) */
 }
-MR_TEST_EXPORT(fifo, boundary_init_alloc, test_fifo_boundary_init_alloc);
 
-static void test_fifo_push_pop(void) {
+MR_TEST(fifo, push_pop) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
     test_elem_t in;
@@ -125,9 +122,8 @@ static void test_fifo_push_pop(void) {
     MR_TEST_ASSERT_EQ_INT(out.id, 42);
     MR_TEST_ASSERT_EQ_INT(mr_fifo_len(&fifo), 0);
 }
-MR_TEST_EXPORT(fifo, push_pop, test_fifo_push_pop);
 
-static void test_fifo_fill_empty(void) {
+MR_TEST(fifo, fill_empty) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
     mr_uint32_t cap;
@@ -152,9 +148,8 @@ static void test_fifo_fill_empty(void) {
     MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(mr_fifo_pop(&fifo, &e), 0);
 }
-MR_TEST_EXPORT(fifo, fill_empty, test_fifo_fill_empty);
 
-static void test_fifo_write_read(void) {
+MR_TEST(fifo, write_read) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
     test_elem_t src[4];
@@ -182,9 +177,8 @@ static void test_fifo_write_read(void) {
     MR_TEST_ASSERT_EQ_INT(mr_fifo_write(&fifo, big_buf, 1024),
                           sizeof(buf) / sizeof(test_elem_t));
 }
-MR_TEST_EXPORT(fifo, write_read, test_fifo_write_read);
 
-static void test_fifo_peek(void) {
+MR_TEST(fifo, peek) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
     test_elem_t in;
@@ -208,9 +202,8 @@ static void test_fifo_peek(void) {
     MR_TEST_ASSERT_EQ_INT(mr_fifo_peek(&fifo, MR_NULL, 0), 0);
     MR_TEST_ASSERT_EQ_INT(mr_fifo_peek(&fifo, big_buf, 1024), 0);
 }
-MR_TEST_EXPORT(fifo, peek, test_fifo_peek);
 
-static void test_fifo_skip(void) {
+MR_TEST(fifo, skip) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
     test_elem_t e[3];
@@ -232,9 +225,8 @@ static void test_fifo_skip(void) {
     MR_TEST_ASSERT_EQ_INT(ret, 1);
     MR_TEST_ASSERT_EQ_INT(rem.id, 3);
 }
-MR_TEST_EXPORT(fifo, skip, test_fifo_skip);
 
-static void test_fifo_overwrite(void) {
+MR_TEST(fifo, overwrite) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
     test_elem_t src[4];
@@ -261,9 +253,8 @@ static void test_fifo_overwrite(void) {
 
     MR_TEST_ASSERT_EQ_INT(mr_fifo_overwrite(&fifo, big_buf, 1024), 32);
 }
-MR_TEST_EXPORT(fifo, overwrite, test_fifo_overwrite);
 
-static void test_fifo_reset(void) {
+MR_TEST(fifo, reset) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
     test_elem_t e;
@@ -276,9 +267,8 @@ static void test_fifo_reset(void) {
     MR_TEST_ASSERT_EQ_INT(mr_fifo_len(&fifo), 0);
     MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
 }
-MR_TEST_EXPORT(fifo, reset, test_fifo_reset);
 
-static void test_fifo_empty_full(void) {
+MR_TEST(fifo, empty_full) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
     test_elem_t e;
@@ -298,9 +288,8 @@ static void test_fifo_empty_full(void) {
     }
     MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
 }
-MR_TEST_EXPORT(fifo, empty_full, test_fifo_empty_full);
 
-static void test_fifo_avail_len(void) {
+MR_TEST(fifo, avail_len) {
     mr_uint8_t buf[128];
     mr_fifo_t fifo;
     test_elem_t e;
@@ -316,9 +305,8 @@ static void test_fifo_avail_len(void) {
         MR_TEST_ASSERT_EQ_INT(mr_fifo_avail(&fifo), cap - i - 1);
     }
 }
-MR_TEST_EXPORT(fifo, avail_len, test_fifo_avail_len);
 
-static void test_fifo_claim_finish(void) {
+MR_TEST(fifo, claim_finish) {
     mr_uint8_t buf[128];
     mr_uint32_t cap;
     mr_uint32_t ret;
@@ -356,5 +344,155 @@ static void test_fifo_claim_finish(void) {
     ret = mr_fifo_overwrite_claim(&fifo, 0, (void **)&p, cap);
     MR_TEST_ASSERT_EQ_UINT(ret, cap / 2);
 }
-MR_TEST_EXPORT(fifo, claim_finish, test_fifo_claim_finish);
+
+MR_TEST(fifo, wrap) {
+    mr_uint8_t buf[32];
+    mr_fifo_t fifo;
+    test_elem_t elem;
+    mr_uint32_t cap;
+    mr_uint32_t i;
+
+    cap = mr_fifo_init(&fifo, buf, sizeof(buf), sizeof(test_elem_t));
+    MR_TEST_ASSERT_GE_UINT(cap, 4);
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_size(&fifo), cap);
+
+    for (i = 0; i < cap; i++) {
+        elem.id = (int)i;
+        MR_TEST_ASSERT_EQ_UINT(mr_fifo_push(&fifo, &elem), 1);
+    }
+    for (i = 0; i < (cap / 2); i++) {
+        MR_TEST_ASSERT_EQ_UINT(mr_fifo_pop(&fifo, &elem), 1);
+        MR_TEST_ASSERT_EQ_INT(elem.id, (int)i);
+    }
+    for (i = cap; i < (cap + (cap / 2)); i++) {
+        elem.id = (int)i;
+        MR_TEST_ASSERT_EQ_UINT(mr_fifo_push(&fifo, &elem), 1);
+    }
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_len(&fifo), cap);
+    for (i = cap / 2; i < (cap + (cap / 2)); i++) {
+        MR_TEST_ASSERT_EQ_UINT(mr_fifo_pop(&fifo, &elem), 1);
+        MR_TEST_ASSERT_EQ_INT(elem.id, (int)i);
+    }
+    MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
+}
+
+MR_TEST(fifo, write_limited_and_skip) {
+    mr_uint8_t buf[32];
+    mr_fifo_t fifo;
+    test_elem_t src[4];
+    test_elem_t elem;
+    mr_uint32_t cap;
+    mr_uint32_t i;
+
+    cap = mr_fifo_init(&fifo, buf, sizeof(buf), sizeof(test_elem_t));
+    for (i = 0; i < cap; i++) {
+        elem.id = (int)i;
+        mr_fifo_push(&fifo, &elem);
+    }
+    src[0].id = 90;
+    src[1].id = 91;
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_write(&fifo, src, 2), 0);
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_skip(&fifo, cap + 8), cap);
+    MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_skip(&fifo, 1), 0);
+}
+
+MR_TEST(fifo, overwrite_finish) {
+    mr_uint8_t buf[32];
+    mr_fifo_t fifo;
+    test_elem_t *p;
+    test_elem_t out[2];
+    mr_uint32_t cap;
+    mr_uint32_t ret;
+    mr_uint32_t i;
+    test_elem_t elem;
+
+    cap = mr_fifo_init(&fifo, buf, sizeof(buf), sizeof(test_elem_t));
+    for (i = 0; i < cap; i++) {
+        elem.id = (int)i;
+        mr_fifo_push(&fifo, &elem);
+    }
+
+    ret = mr_fifo_overwrite_claim(&fifo, 0, (void **)&p, 2);
+    MR_TEST_ASSERT_EQ_UINT(ret, 2);
+    p[0].id = 200;
+    p[1].id = 201;
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_overwrite_finish(&fifo, 2), 2);
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_len(&fifo), cap);
+
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_skip(&fifo, cap - 2), cap - 2);
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_read(&fifo, out, 2), 2);
+    MR_TEST_ASSERT_EQ_INT(out[0].id, 200);
+    MR_TEST_ASSERT_EQ_INT(out[1].id, 201);
+}
+
+#if defined(MR_USE_TEST_PTHREAD)
+#include <pthread.h>
+
+#define FIFO_MT_COUNT (4096)
+
+typedef struct fifo_mt_ctx {
+    volatile mr_uint32_t *__test_status;
+    mr_fifo_t *fifo;
+    int count;
+} fifo_mt_ctx_t;
+
+static void fifo_mt_producer_run(fifo_mt_ctx_t *ctx) {
+    test_elem_t elem;
+    int i;
+
+    for (i = 0; i < ctx->count; i++) {
+        elem.id = i;
+        while (mr_fifo_push(ctx->fifo, &elem) != 1) {
+        }
+    }
+}
+
+static void fifo_mt_consumer_run(fifo_mt_ctx_t *ctx) {
+    volatile mr_uint32_t *__test_status = ctx->__test_status;
+    test_elem_t elem;
+    int got = 0;
+
+    while (got < ctx->count) {
+        if (mr_fifo_pop(ctx->fifo, &elem) == 1) {
+            MR_TEST_EXPECT_EQ_INT(elem.id, got);
+            got++;
+        }
+    }
+}
+
+static void *fifo_mt_producer(void *arg) {
+    fifo_mt_producer_run(arg);
+    return MR_NULL;
+}
+
+static void *fifo_mt_consumer(void *arg) {
+    fifo_mt_consumer_run(arg);
+    return MR_NULL;
+}
+
+MR_TEST(fifo, concurrent_spsc) {
+    pthread_t producer;
+    pthread_t consumer;
+    fifo_mt_ctx_t ctx;
+    mr_uint8_t buf[1024];
+    mr_fifo_t fifo;
+    int ret;
+
+    MR_TEST_ASSERT_NE_UINT(
+        mr_fifo_init(&fifo, buf, sizeof(buf), sizeof(test_elem_t)), 0);
+    ctx.__test_status = __test_status;
+    ctx.fifo = &fifo;
+    ctx.count = FIFO_MT_COUNT;
+
+    ret = pthread_create(&producer, MR_NULL, fifo_mt_producer, &ctx);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    ret = pthread_create(&consumer, MR_NULL, fifo_mt_consumer, &ctx);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(pthread_join(producer, MR_NULL), 0);
+    MR_TEST_EXPECT_EQ_INT(pthread_join(consumer, MR_NULL), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
+}
+#endif /* defined(MR_USE_TEST_PTHREAD) */
+
 #endif /* defined(MR_USE_TEST) */

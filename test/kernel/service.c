@@ -9,6 +9,7 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
 #include <mrX/kernel/mr_service.h>
+#include <mrX/libc/mr_string.h>
 
 typedef struct {
     int a;
@@ -16,7 +17,7 @@ typedef struct {
 } test_container_t;
 
 /* Tests */
-static void test_service_container_of(void) {
+MR_TEST(service, container_of) {
     test_container_t *out;
     test_container_t obj;
     char *p;
@@ -29,16 +30,14 @@ static void test_service_container_of(void) {
     MR_TEST_ASSERT_EQ_INT(out->a, 123);
     MR_TEST_ASSERT_EQ_INT(out->b, 'x');
 }
-MR_TEST_EXPORT(service, container_of, test_service_container_of);
 
-static void test_service_array_size(void) {
+MR_TEST(service, array_size) {
     int arr[10];
 
     MR_TEST_ASSERT_EQ_INT(MR_ARRAY_SIZE(arr), 10);
 }
-MR_TEST_EXPORT(service, array_size, test_service_array_size);
 
-static void test_service_make_local(void) {
+MR_TEST(service, make_local) {
     test_container_t *obj;
     int *p;
 
@@ -49,23 +48,39 @@ static void test_service_make_local(void) {
     p = MR_MAKE_LOCAL(int, 99);
     MR_TEST_ASSERT_EQ_INT(*p, 99);
 }
-MR_TEST_EXPORT(service, make_local, test_service_make_local);
 
-static void test_service_min_max(void) {
+MR_TEST(service, min_max) {
     MR_TEST_ASSERT_EQ_INT(MR_MIN(3, 7), 3);
     MR_TEST_ASSERT_EQ_INT(MR_MAX(3, 7), 7);
+    MR_TEST_ASSERT_EQ_INT(MR_MIN(3, 3), 3);
+    MR_TEST_ASSERT_EQ_INT(MR_MAX(-1, -5), -1);
 }
-MR_TEST_EXPORT(service, min_max, test_service_min_max);
 
-static void test_service_align(void) {
+MR_TEST(service, align) {
     MR_TEST_ASSERT_EQ_INT(MR_ALIGN_UP(5, 8), 8);
     MR_TEST_ASSERT_EQ_INT(MR_ALIGN_UP(8, 8), 8);
+    MR_TEST_ASSERT_EQ_INT(MR_ALIGN_UP(0, 8), 0);
+    MR_TEST_ASSERT_EQ_INT(MR_ALIGN_UP(9, 8), 16);
     MR_TEST_ASSERT_EQ_INT(MR_ALIGN_DOWN(5, 8), 0);
     MR_TEST_ASSERT_EQ_INT(MR_ALIGN_DOWN(8, 8), 8);
+    MR_TEST_ASSERT_EQ_INT(MR_ALIGN_DOWN(15, 8), 8);
 }
-MR_TEST_EXPORT(service, align, test_service_align);
 
-static void test_service_parity(void) {
+MR_TEST(service, round_div) {
+    MR_TEST_ASSERT_EQ_INT(MR_ROUND_DIV(5, 2), 3);
+    MR_TEST_ASSERT_EQ_INT(MR_ROUND_DIV(4, 2), 2);
+    MR_TEST_ASSERT_EQ_INT(MR_ROUND_DIV(1, 2), 1);
+    MR_TEST_ASSERT_EQ_INT(MR_ROUND_DIV(0, 2), 0);
+}
+
+MR_TEST(service, str_cat_va) {
+    MR_TEST_ASSERT_EQ_INT(mr_strcmp(MR_STR(hello), "hello"), 0);
+    MR_TEST_ASSERT_EQ_INT(MR_CAT(12, 34), 1234);
+    MR_TEST_ASSERT_EQ_INT(MR_VA_ARGS_NUM(a), 1);
+    MR_TEST_ASSERT_EQ_INT(MR_VA_ARGS_NUM(a, b, c), 3);
+}
+
+MR_TEST(service, parity) {
     mr_uint16_t i, tmp;
     mr_uint8_t odd, j;
 
@@ -79,5 +94,5 @@ static void test_service_parity(void) {
         MR_TEST_ASSERT_EQ_INT(mr_parity_odd(&i, sizeof(i)), odd);
     }
 }
-MR_TEST_EXPORT(service, parity, test_service_parity);
+
 #endif /* defined(MR_USE_TEST) */

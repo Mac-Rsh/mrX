@@ -26,6 +26,63 @@ config MR_CFG_XVM_SYSCALL_PARAM_NUM
         needs to pass more arguments in a single syscall event.
 
 # ==================================
+# DEBUG
+# ==================================
+config MR_USE_MODULE_XVM_DEBUG
+    depends on MR_USE_MODULE_XVM
+    bool "Use XVM debug"
+    default n
+    help
+        Enable the XVM debug breakpoint table. The ISA can call
+        mr_xvm_break_hit() with the current program counter before fetch.
+        Disable this option to omit the table from mr_xvm_t.
+
+config MR_CFG_XVM_BREAKPOINT_NUM
+    depends on MR_USE_MODULE_XVM_DEBUG
+    int "Breakpoint table size"
+    default 16
+    range 1 64
+    help
+        Number of address-compare breakpoint slots in an XVM. An empty table
+        keeps the existing execute fast path.
+
+# ==================================
+# GDB
+# ==================================
+config MR_USE_MODULE_XVM_GDB
+    depends on MR_USE_MODULE_XVM_DEBUG
+    bool "Use XVM GDB"
+    default n
+    help
+        Enable the GDB Remote Serial Protocol adapter for XVM. The host
+        supplies byte I/O; the adapter maps RSP packets onto XVM debug
+        and execution interfaces.
+
+config MR_CFG_XVM_GDB_PACKET_SIZE
+    depends on MR_USE_MODULE_XVM_GDB
+    int "GDB receive packet size"
+    default 512
+    range 272 8192
+    help
+        Receive buffer size, in bytes, for one GDB RSP packet payload. GDB
+        advertises this as PacketSize. The floor is 272 because the first
+        qSupported query from GDB is about 200 bytes, and the RV32 g/G
+        all-register packets need 265 bytes. XML and memory transfers are
+        sliced to this size. Prefer 512 unless RAM is tight.
+
+config MR_CFG_XVM_GDB_REPLY_SIZE
+    depends on MR_USE_MODULE_XVM_GDB
+    int "GDB send reply size"
+    default 512
+    range 272 8192
+    help
+        Send buffer size, in bytes, for one GDB RSP reply, including packet
+        framing. Target XML is generated in slices, so this buffer does not
+        need to hold the full document. The floor is 272 because an RV32
+        g-packet is 264 hex bytes plus four framing bytes. Prefer 512 unless
+        RAM is tight.
+
+# ==================================
 # RSOURCE
 # ==================================
 rsource '*/*/Kconfig'

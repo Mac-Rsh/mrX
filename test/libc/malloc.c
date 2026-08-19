@@ -35,7 +35,7 @@ static int canary_verify(void *p, mr_size_t usable) {
 
 /* -------------------------------------------------------------------------- */
 /* Test: allocate, write pattern, verify, free                                */
-static void test_malloc_free_basic(void) {
+MR_TEST(malloc, free_basic) {
     mr_size_t alloc_usable;
     mr_size_t usable;
     void *p = MR_NULL;
@@ -85,11 +85,10 @@ static void test_malloc_free_basic(void) {
 _exit:
     mr_free(p);
 }
-MR_TEST_EXPORT(malloc, free_basic, test_malloc_free_basic);
 
 /* -------------------------------------------------------------------------- */
 /* Test: memory must be zero-filled                                           */
-static void test_calloc_zero(void) {
+MR_TEST(malloc, calloc_zero) {
     const mr_size_t n = 16, sz = 32;
     mr_size_t usable, i;
     void *p = MR_NULL;
@@ -134,11 +133,10 @@ static void test_calloc_zero(void) {
 _exit:
     mr_free(p);
 }
-MR_TEST_EXPORT(malloc, calloc_zero, test_calloc_zero);
 
 /* -------------------------------------------------------------------------- */
 /* Test: resize buffer and retain original data                               */
-static void test_realloc_resize(void) {
+MR_TEST(malloc, realloc_resize) {
     void *p1 = MR_NULL, *p2 = MR_NULL, *p3 = MR_NULL;
 
     p1 = mr_malloc(64);
@@ -179,24 +177,23 @@ _exit:
     mr_free(p2);
     mr_free(p3);
 }
-MR_TEST_EXPORT(malloc, realloc_resize, test_realloc_resize);
 
 #if defined(MR_USE_MALLOC)
 /* -------------------------------------------------------------------------- */
 /* Test: Zero-size malloc should return NULL                                  */
-static void test_malloc_zero(void) {
+MR_TEST(malloc, malloc_zero) {
     void *p;
 
     p = mr_malloc(0);
     MR_TEST_EXPECT_EQ_PTR(p, MR_NULL);
     mr_free(p);
 }
-MR_TEST_EXPORT(malloc, malloc_zero, test_malloc_zero);
+
 #endif /* defined(MR_USE_MALLOC) */
 
 /* -------------------------------------------------------------------------- */
 /* Test: allocate, free, re-allocate                                          */
-static void test_frag_merge(void) {
+MR_TEST(malloc, frag_merge) {
     enum {
         NUM = 16,
         SZ = 128
@@ -238,11 +235,10 @@ _exit:
         mr_free(arr[i]);
     }
 }
-MR_TEST_EXPORT(malloc, frag_merge, test_frag_merge);
 
 /* -------------------------------------------------------------------------- */
 /* Test: may fail gracefully if heap too small                                */
-static void test_malloc_max(void) {
+MR_TEST(malloc, malloc_max) {
     const mr_size_t huge = 3 * 1024;
     mr_size_t usable;
     void *p = MR_NULL;
@@ -272,11 +268,10 @@ static void test_malloc_max(void) {
 _exit:
     mr_free(p);
 }
-MR_TEST_EXPORT(malloc, malloc_max, test_malloc_max);
 
 /* -------------------------------------------------------------------------- */
 /* Test: add memory region                                                    */
-static void test_malloc_region(void) {
+MR_TEST(malloc, malloc_region) {
     static mr_uint8_t test_mem1[128];
     static mr_uint8_t test_mem2[256];
     const mr_heap_region_t regions[] = {
@@ -286,6 +281,75 @@ static void test_malloc_region(void) {
     };
 
     mr_heap_region_add(regions);
+    MR_IGNORE(__test_status);
 }
-MR_TEST_EXPORT(malloc, malloc_region, test_malloc_region);
+
+/* -------------------------------------------------------------------------- */
+/* Test: realloc(NULL, size) behaves like malloc                              */
+MR_TEST(malloc, realloc_null) {
+    void *p = MR_NULL;
+
+    p = mr_realloc(MR_NULL, 64);
+    if (p == MR_NULL) {
+        MR_TEST_EXPECT_NE_PTR(p, MR_NULL);
+        return;
+    }
+    canary_fill(p, 64);
+    MR_TEST_EXPECT_EQ_INT(canary_verify(p, 64), 1);
+    mr_free(p);
+}
+
+#if defined(MR_USE_MALLOC)
+/* -------------------------------------------------------------------------- */
+/* Test: heap information tracks used and free bytes                          */
+MR_TEST(malloc, heap_information) {
+    mr_heap_info_t before;
+    mr_heap_info_t after;
+    mr_heap_info_t restored;
+    void *p = MR_NULL;
+
+    before = mr_heap_information(MR_FALSE);
+    MR_TEST_ASSERT_GE_UINT(before.total_bytes, before.free_bytes);
+    MR_TEST_ASSERT_GE_UINT(before.free_bytes, before.max_free_bytes);
+
+    p = mr_malloc(256);
+    if (p == MR_NULL) {
+        MR_TEST_EXPECT_NE_PTR(p, MR_NULL);
+        return;
+    }
+
+    after = mr_heap_information(MR_TRUE);
+    MR_TEST_EXPECT_GT_UINT(after.used_bytes, before.used_bytes);
+    MR_TEST_EXPECT_LT_UINT(after.free_bytes, before.free_bytes);
+    MR_TEST_EXPECT_EQ_UINT(after.total_bytes, before.total_bytes);
+
+    mr_free(p);
+    restored = mr_heap_information(MR_TRUE);
+    MR_TEST_EXPECT_EQ_UINT(restored.used_bytes, before.used_bytes);
+    MR_TEST_EXPECT_EQ_UINT(restored.free_bytes, before.free_bytes);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Test: realloc of a live block keeps identity of the data prefix            */
+MR_TEST(malloc, realloc_same_size) {
+    void *p1 = MR_NULL;
+    void *p2 = MR_NULL;
+
+    p1 = mr_malloc(48);
+    if (p1 == MR_NULL) {
+        MR_TEST_EXPECT_NE_PTR(p1, MR_NULL);
+        return;
+    }
+    canary_fill(p1, 48);
+
+    p2 = mr_realloc(p1, 48);
+    if (p2 == MR_NULL) {
+        MR_TEST_EXPECT_NE_PTR(p2, MR_NULL);
+        mr_free(p1);
+        return;
+    }
+    MR_TEST_EXPECT_EQ_INT(canary_verify(p2, 48), 1);
+    mr_free(p2);
+}
+#endif /* defined(MR_USE_MALLOC) */
 #endif /* defined(MR_USE_TEST) */

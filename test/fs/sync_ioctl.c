@@ -9,6 +9,7 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST) && defined(MR_USE_FS)
 #include <mrX.h>
+#include "fs_test.h"
 
 /* Mock FS with sync/ioctl hooks */
 static mr_size_t __sync_calls;
@@ -35,12 +36,12 @@ static const mr_file_ops_t __syncfs_file_ops = {
 static mr_file_system_t __syncfs
     = MR_FILE_SYSTEM_INIT("syncfs", syncfs_mount, MR_NULL, MR_NULL);
 
-static int sync_ioctl_expect(const char *name, mr_int64_t actual,
-                             mr_int64_t expected) {
+static void sync_ioctl_expect(volatile mr_uint32_t *__test_status,
+                              const char *name, mr_int64_t actual,
+                              mr_int64_t expected) {
     MR_IGNORE(name);
 
     MR_TEST_EXPECT_EQ_INT(actual, expected);
-    return (actual == expected) ? 0 : 1;
 }
 
 static mr_err_t syncfs_inode_create(mr_inode_t *dir, const char *name,
@@ -80,41 +81,40 @@ static mr_err_t syncfs_mount(mr_super_block_t *sb, const char *source,
     return sb->root ? 0 : -MR_ENOMEM;
 }
 
-static int fs_sync_ioctl_test(void) {
+static void fs_sync_ioctl_test(volatile mr_uint32_t *__test_status) {
     mr_file_t file = MR_FILE_INIT(file);
     int arg = 7;
-    int failures = 0;
     mr_err_t ret;
 
     /* RamFS has no sync/ioctl hooks */
-    ret = mr_fs_mount(MR_NULL, "/", "ramfs", 0, MR_NULL);
-    failures += sync_ioctl_expect("mount ramfs", ret, 0);
+    ret = fs_test_mount_root("ramfs", 0, MR_NULL);
+    sync_ioctl_expect(__test_status, "mount ramfs", ret, 0);
     if (ret != 0) {
-        return failures;
+        return;
     }
 
     ret = mr_fs_open(&file, "/nosync", MR_O_RDWR | MR_O_CREAT);
-    failures += sync_ioctl_expect("create nosync", ret, 0);
+    sync_ioctl_expect(__test_status, "create nosync", ret, 0);
     if (ret == 0) {
-        failures += sync_ioctl_expect("ramfs sync", mr_fs_sync(&file),
-                                      -MR_ENOSYS);
-        failures += sync_ioctl_expect("ramfs ioctl",
-                                      mr_fs_ioctl(&file, 1, MR_NULL),
-                                      -MR_ENOSYS);
-        failures += sync_ioctl_expect("close nosync", mr_fs_close(&file), 0);
+        sync_ioctl_expect(__test_status, "ramfs sync", mr_fs_sync(&file),
+                          -MR_ENOSYS);
+        sync_ioctl_expect(__test_status, "ramfs ioctl",
+                          mr_fs_ioctl(&file, 1, MR_NULL), -MR_ENOSYS);
+        sync_ioctl_expect(__test_status, "close nosync", mr_fs_close(&file), 0);
     }
-    failures += sync_ioctl_expect("umount ramfs", mr_fs_umount("/"), 0);
+    sync_ioctl_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
 
     /* Closed-handle rejection */
-    failures += sync_ioctl_expect("sync closed", mr_fs_sync(&file), -MR_EBADF);
-    failures += sync_ioctl_expect("ioctl closed",
-                                  mr_fs_ioctl(&file, 1, MR_NULL), -MR_EBADF);
+    sync_ioctl_expect(__test_status, "sync closed", mr_fs_sync(&file),
+                      -MR_EBADF);
+    sync_ioctl_expect(__test_status, "ioctl closed",
+                      mr_fs_ioctl(&file, 1, MR_NULL), -MR_EBADF);
 
     /* Register and exercise a FS that implements both hooks */
     ret = mr_file_system_register(&__syncfs);
     if ((ret != 0) && (ret != -MR_EEXIST)) {
-        failures += sync_ioctl_expect("register syncfs", ret, 0);
-        return failures;
+        sync_ioctl_expect(__test_status, "register syncfs", ret, 0);
+        return;
     }
 
     __sync_calls = 0;
@@ -122,39 +122,37 @@ static int fs_sync_ioctl_test(void) {
     __last_ioctl_cmd = 0;
     __last_ioctl_arg = MR_NULL;
 
-    ret = mr_fs_mount(MR_NULL, "/", "syncfs", 0, MR_NULL);
-    failures += sync_ioctl_expect("mount syncfs", ret, 0);
+    ret = fs_test_mount_root("syncfs", 0, MR_NULL);
+    sync_ioctl_expect(__test_status, "mount syncfs", ret, 0);
     if (ret != 0) {
-        return failures;
+        return;
     }
 
     ret = mr_fs_open(&file, "/hooked", MR_O_RDWR | MR_O_CREAT);
-    failures += sync_ioctl_expect("create hooked", ret, 0);
+    sync_ioctl_expect(__test_status, "create hooked", ret, 0);
     if (ret == 0) {
-        failures += sync_ioctl_expect("sync hooked", mr_fs_sync(&file), 0);
-        failures += sync_ioctl_expect("sync call count",
-                                      (mr_int64_t)__sync_calls, 1);
-        failures += sync_ioctl_expect("ioctl good",
-                                      mr_fs_ioctl(&file, 0x55, &arg), 0);
-        failures += sync_ioctl_expect("ioctl call count",
-                                      (mr_int64_t)__ioctl_calls, 1);
-        failures += sync_ioctl_expect("ioctl cmd", __last_ioctl_cmd, 0x55);
+        sync_ioctl_expect(__test_status, "sync hooked", mr_fs_sync(&file), 0);
+        sync_ioctl_expect(__test_status, "sync call count",
+                          (mr_int64_t)__sync_calls, 1);
+        sync_ioctl_expect(__test_status, "ioctl good",
+                          mr_fs_ioctl(&file, 0x55, &arg), 0);
+        sync_ioctl_expect(__test_status, "ioctl call count",
+                          (mr_int64_t)__ioctl_calls, 1);
+        sync_ioctl_expect(__test_status, "ioctl cmd", __last_ioctl_cmd, 0x55);
         if (__last_ioctl_arg != &arg) {
             MR_TEST_EXPECT_EQ_PTR(__last_ioctl_arg, &arg);
-            failures++;
         }
-        failures += sync_ioctl_expect("ioctl bad cmd",
-                                      mr_fs_ioctl(&file, 0, MR_NULL),
-                                      -MR_EINVAL);
-        failures += sync_ioctl_expect("close hooked", mr_fs_close(&file), 0);
+        sync_ioctl_expect(__test_status, "ioctl bad cmd",
+                          mr_fs_ioctl(&file, 0, MR_NULL), -MR_EINVAL);
+        sync_ioctl_expect(__test_status, "close hooked", mr_fs_close(&file), 0);
     }
 
-    failures += sync_ioctl_expect("umount syncfs", mr_fs_umount("/"), 0);
-    return failures;
+    sync_ioctl_expect(__test_status, "umount syncfs", mr_fs_umount("/"), 0);
+    return;
 }
 
-static void sync_ioctl(void) {
-    MR_TEST_EXPECT_EQ_INT(fs_sync_ioctl_test(), 0);
+MR_TEST(fs, sync_ioctl) {
+    fs_sync_ioctl_test(__test_status);
 }
-MR_TEST_EXPORT(fs, sync_ioctl, sync_ioctl);
+
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

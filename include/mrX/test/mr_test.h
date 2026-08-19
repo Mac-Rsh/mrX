@@ -163,7 +163,7 @@ extern "C" {
     __MR_TEST_ASSERT(__MR_TEST_COND_NEAR(_a, _b, _e))
 
 /* Testcase entry type */
-typedef void(mr_testcase_entry)(void);
+typedef void(mr_testcase_entry)(volatile mr_uint32_t *__test_status);
 
 /* Testcase type */
 typedef struct mr_testcase {
@@ -179,14 +179,20 @@ typedef struct mr_testcase {
         = {.suite = MR_STR(_suite), .name = MR_STR(_name), .entry = (_entry)}
 
 /**
- * @brief This macro function exports a testcase.
+ * @brief This macro function defines and exports a testcase.
  *
  * @param _suite The testcase suite name.
  * @param _name The testcase name.
- * @param _entry The testcase function.
+ *
+ * @note The test function receives a hidden `__test_status` argument.
  */
-#define MR_TEST_EXPORT(_suite, _name, _entry)                                  \
-    __MR_TEST_EXPORT(_suite, _name, _entry, "1")
+#define MR_TEST(_suite, _name)                                                 \
+    static void MR_CAT(__mr_test_, _suite, _,                                  \
+                       _name)(volatile mr_uint32_t * __test_status);           \
+    __MR_TEST_EXPORT(_suite, _name, MR_CAT(__mr_test_, _suite, _, _name),      \
+                     "1");                                                     \
+    static void MR_CAT(__mr_test_, _suite, _,                                  \
+                       _name)(MR_UNUSED volatile mr_uint32_t * __test_status)
 
 /**
  * @brief This function runs a testcase.
