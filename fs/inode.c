@@ -21,7 +21,7 @@ static mr_err_t inode_init(mr_inode_t *inode, const mr_clazz_t *clazz,
                            const mr_file_ops_t *fops, void *priv) {
     /* Check parameter */
     MR_ASSERT((inode != MR_NULL) && (clazz != MR_NULL));
-    MR_ASSERT((type != MR_INODE_NONE) && (type <= MR_INODE_LNK));
+    MR_ASSERT((type != MR_INODE_NONE) && (type < MR_INODE_MAX));
 
     /* Init inode */
     inode->type = type;
@@ -44,7 +44,7 @@ mr_err_t mr_inode_init(mr_inode_t *inode, mr_inode_type_t type,
 
     /* Check parameter */
     MR_ASSERT(inode != MR_NULL);
-    MR_ASSERT((type != MR_INODE_NONE) && (type <= MR_INODE_LNK));
+    MR_ASSERT((type != MR_INODE_NONE) && (type < MR_INODE_MAX));
 
     /* Init inode */
     return inode_init(inode, clazz, type, ops, fops, priv);
@@ -57,7 +57,7 @@ mr_inode_t *mr_inode_create(mr_inode_type_t type, const mr_inode_ops_t *i_op,
     mr_err_t ret;
 
     /* Check parameter */
-    MR_ASSERT((type != MR_INODE_NONE) && (type <= MR_INODE_LNK));
+    MR_ASSERT((type != MR_INODE_NONE) && (type < MR_INODE_MAX));
 
     /* Create inode */
     inode = mr_malloc(sizeof(mr_inode_t));

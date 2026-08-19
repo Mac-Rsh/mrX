@@ -35,9 +35,20 @@ static void mknod_fs_inode_destroy(mr_inode_t *inode);
 static mr_err_t mknod_fs_mount(mr_super_block_t *sb, const char *source,
                                int flags, void *data);
 
+static mr_err_t mknod_fs_inode_create_only(mr_inode_t *dir, const char *name,
+                                           mr_inode_type_t type,
+                                           mr_inode_t **out);
+static mr_err_t mknod_fs_create_only_mount(mr_super_block_t *sb,
+                                           const char *source, int flags,
+                                           void *data);
+
 static const mr_inode_ops_t __mknod_fs_root_inode_ops = {
     .create = mknod_fs_inode_create,
     .mknod = mknod_fs_inode_mknod,
+};
+
+static const mr_inode_ops_t __mknod_fs_create_only_root_ops = {
+    .create = mknod_fs_inode_create_only,
 };
 
 static const mr_inode_ops_t __mknod_fs_node_inode_ops = {
@@ -48,6 +59,9 @@ static const mr_file_ops_t __mknod_fs_file_ops;
 
 static mr_file_system_t __mknod_fs
     = MR_FILE_SYSTEM_INIT("mknodfs", mknod_fs_mount, MR_NULL, MR_NULL);
+static mr_file_system_t __mknod_create_only_fs
+    = MR_FILE_SYSTEM_INIT("mknodcreatefs", mknod_fs_create_only_mount, MR_NULL,
+                          MR_NULL);
 
 static void mknod_fs_expect(volatile mr_uint32_t *__test_status,
                             const char *name, mr_int64_t actual,
@@ -90,6 +104,30 @@ static mr_err_t mknod_fs_inode_create(mr_inode_t *dir, const char *name,
     context->create_calls++;
     *out = MR_NULL;
     return -MR_ENOSYS;
+}
+
+static mr_err_t mknod_fs_inode_create_only(mr_inode_t *dir, const char *name,
+                                           mr_inode_type_t type,
+                                           mr_inode_t **out) {
+    mknod_fs_context_t *context = dir->sb->priv;
+    mr_inode_t *inode;
+
+    /* Record that VFS fell back to create */
+    *out = MR_NULL;
+    context->create_calls++;
+    context->last_type = type;
+    mr_strncpy(context->last_name, name, sizeof(context->last_name) - 1);
+    context->last_name[sizeof(context->last_name) - 1] = '\0';
+
+    /* Create does not receive priv, so the inode cannot borrow it */
+    inode = mr_inode_create(type, &__mknod_fs_node_inode_ops,
+                            &__mknod_fs_file_ops, MR_NULL);
+    if (!inode) {
+        return -MR_ENOMEM;
+    }
+    context->last_inode = inode;
+    *out = inode;
+    return 0;
 }
 
 static mr_err_t mknod_fs_inode_mknod(mr_inode_t *dir, const char *name,
@@ -156,7 +194,34 @@ static mr_err_t mknod_fs_mount(mr_super_block_t *sb, const char *source,
     return 0;
 }
 
+static mr_err_t mknod_fs_create_only_mount(mr_super_block_t *sb,
+                                           const char *source, int flags,
+                                           void *data) {
+    mknod_fs_context_t *context = data;
+    mr_inode_t *root;
+
+    MR_IGNORE(source);
+    MR_IGNORE(flags);
+
+    /* Check mount data */
+    if (!context) {
+        return -MR_EINVAL;
+    }
+
+    /* Create root inode without a mknod callback */
+    root = mr_inode_create(MR_INODE_DIR, &__mknod_fs_create_only_root_ops,
+                           MR_NULL, MR_NULL);
+    if (!root) {
+        return -MR_ENOMEM;
+    }
+    sb->priv = context;
+    sb->root = root;
+    __mknod_fs_context = context;
+    return 0;
+}
+
 static void fs_mknod_test(volatile mr_uint32_t *__test_status) {
+    mknod_fs_context_t fallback_context = {0};
     mknod_fs_context_t context = {0};
     mr_file_t fallback_file = MR_FILE_INIT(fallback_file);
     mr_heap_info_t heap_before;
@@ -164,7 +229,9 @@ static void fs_mknod_test(volatile mr_uint32_t *__test_status) {
     int object;
     mr_err_t ret;
 
-    /* Register test filesystem */
+    /* Register test filesystems */
+    ret = mr_file_system_register(&__mknod_create_only_fs);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_file_system_register(&__mknod_fs);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 
@@ -172,8 +239,8 @@ static void fs_mknod_test(volatile mr_uint32_t *__test_status) {
     heap_before = mr_heap_information(MR_TRUE);
 
     /* Fall back to create when mknod is not implemented */
-    ret = fs_test_mount_root("ramfs", 0, MR_NULL);
-    mknod_fs_expect(__test_status, "mknod mount ramfs", ret, 0);
+    ret = fs_test_mount_root("mknodcreatefs", 0, &fallback_context);
+    mknod_fs_expect(__test_status, "mknod mount create-only fs", ret, 0);
     if (ret == 0) {
         ret = mr_fs_mknod("/fallback", MR_INODE_CHR, &object);
         mknod_fs_expect(__test_status, "fallback mknod to create", ret, 0);
@@ -190,8 +257,9 @@ static void fs_mknod_test(volatile mr_uint32_t *__test_status) {
             mknod_fs_expect(__test_status, "unlink fallback node",
                             fs_test_unlink("/fallback"), 0);
         }
-        mknod_fs_expect(__test_status, "mknod umount ramfs", mr_fs_umount("/"),
-                        0);
+        mknod_fs_expect(__test_status, "mknod umount create-only fs",
+                        mr_fs_umount("/"), 0);
+        __mknod_fs_context = MR_NULL;
     }
 
     /* Mount test filesystem */

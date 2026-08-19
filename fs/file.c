@@ -994,6 +994,11 @@ mr_err_t mr_fs_mknod(const char *path, mr_inode_type_t type, void *priv) {
     return fs_mknod(nsp, path, type, priv);
 }
 
+mr_err_t mr_fs_mkfifo(const char *path) {
+    /* Create a FIFO through mknod; capacity comes from the filesystem default */
+    return mr_fs_mknod(path, MR_INODE_FIFO, MR_NULL);
+}
+
 static mr_err_t fs_file_close(mr_file_t *file) {
     mr_err_t ret;
 
@@ -2279,6 +2284,12 @@ mr_err_t mr_fs_mknodat(const mr_file_t *dir, const char *path,
     return ret;
 }
 
+mr_err_t mr_fs_mkfifoat(const mr_file_t *dir, const char *path, int flags) {
+    /* Create a FIFO through mknodat; capacity comes from the filesystem
+     * default */
+    return mr_fs_mknodat(dir, path, MR_INODE_FIFO, MR_NULL, flags);
+}
+
 mr_err_t mr_fs_openat(mr_file_t *file, const mr_file_t *dir, const char *path,
                       int flags) {
     fs_path_context_t ctx;
@@ -2598,6 +2609,24 @@ mr_err_t mr_fs_sync(mr_file_t *file) {
 
     /* Sync the file */
     return file->fops->sync(file);
+}
+
+mr_ssize_t mr_fs_fcntl(mr_file_t *file, int cmd, mr_intptr_t arg) {
+    /* Check parameter */
+    MR_ASSERT(file != MR_NULL);
+
+    /* File must be open */
+    if (!file->inode) {
+        return -MR_EBADF;
+    }
+
+    /* Check the FS supports fcntl */
+    if ((!file->fops) || (!file->fops->fcntl)) {
+        return -MR_ENOSYS;
+    }
+
+    /* Control the file */
+    return file->fops->fcntl(file, cmd, arg);
 }
 
 mr_err_t mr_fs_ioctl(mr_file_t *file, int cmd, void *arg) {

@@ -235,7 +235,9 @@ static void fs_relative_test(volatile mr_uint32_t *__test_status) {
         fs_relative_expect(__test_status, "close regular base",
                            mr_fs_close(&regular), 0);
     }
-    if (dir.fops) {
+    /* Directories may have no data file operations, so inode marks an open
+     * handle */
+    if (dir.inode) {
         fs_relative_expect(__test_status, "closedir /base",
                            mr_fs_closedir(&dir), 0);
     }

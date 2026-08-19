@@ -49,6 +49,7 @@ typedef int mr_err_t;
 #define MR_EXDEV                        EXDEV
 #define MR_ERANGE                       ERANGE
 #define MR_ELOOP                        ELOOP
+#define MR_ESPIPE                       ESPIPE
 #elif defined(MR_USE_ERRNO_3RD)
 /* In 'mrX/3party/libc/mr_errno.h' */
 #else
@@ -71,6 +72,7 @@ typedef int mr_err_t;
 #define MR_EXDEV                        (18)
 #define MR_ERANGE                       (34)
 #define MR_ELOOP                        (92)
+#define MR_ESPIPE                       (29)
 #endif /* defined(MR_USE_ERRNO_STD) */
 
 /** @} */

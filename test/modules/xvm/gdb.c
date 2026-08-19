@@ -292,6 +292,8 @@ MR_TEST(xvm_gdb, queries) {
     mr_uint8_t data[TEST_GDB_DATA_SIZE];
     mr_uint8_t image[4] = {0};
     char payload[4096];
+    char size_token[32];
+    mr_size_t packet_size;
     test_gdb_io_t io;
     mr_xvm_gdb_t gdb;
     mr_xvm_t xvm;
@@ -304,8 +306,15 @@ MR_TEST(xvm_gdb, queries) {
     MR_TEST_ASSERT_GT_INT(test_gdb_xfer(&gdb, &io, "qSupported"), 0);
     MR_TEST_ASSERT_EQ_INT(test_gdb_last_payload(&io, payload, sizeof(payload)),
                           MR_TRUE);
-    MR_TEST_ASSERT_EQ_INT(test_gdb_contains(payload, "PacketSize=1000"),
-                          MR_TRUE);
+    packet_size = (mr_size_t)MR_CFG_XVM_GDB_PACKET_SIZE;
+    if (packet_size > ((mr_size_t)MR_CFG_XVM_GDB_REPLY_SIZE - 4U)) {
+        packet_size = (mr_size_t)MR_CFG_XVM_GDB_REPLY_SIZE - 4U;
+    }
+    MR_TEST_ASSERT_GT_INT(
+        mr_snprintf(size_token, sizeof(size_token), "PacketSize=%zx",
+                    packet_size),
+        0);
+    MR_TEST_ASSERT_EQ_INT(test_gdb_contains(payload, size_token), MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(test_gdb_contains(payload, "qXfer:features:read+"),
                           MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(test_gdb_contains(payload, "QStartNoAckMode+"),
@@ -558,7 +567,6 @@ MR_TEST(xvm_gdb, remaining_commands) {
     mr_uint8_t image[12] = {0};
     mr_xvm_event_t event = {0};
     char payload[512];
-    char gcmd[280];
     test_gdb_io_t io;
     mr_xvm_gdb_t gdb;
     mr_xvm_t xvm;
@@ -577,14 +585,23 @@ MR_TEST(xvm_gdb, remaining_commands) {
     MR_TEST_ASSERT_EQ_INT(test_gdb_last_payload(&io, payload, sizeof(payload)),
                           MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(mr_strlen(payload), 33U * 8U);
-    gcmd[0] = 'G';
-    mr_memcpy(gcmd + 1, payload, 33U * 8U);
-    mr_memcpy(gcmd + 1U + 8U, "44332211", 8);
-    gcmd[1U + (33U * 8U)] = '\0';
-    MR_TEST_ASSERT_GT_INT(test_gdb_xfer(&gdb, &io, gcmd), 0);
-    MR_TEST_ASSERT_EQ_INT(test_gdb_has_packet(&io, "OK"), MR_TRUE);
-    MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 1, &value), 0);
-    MR_TEST_ASSERT_EQ_UINT(value, 0x11223344U);
+#if (MR_CFG_XVM_GDB_PACKET_SIZE > (1U + (33U * 8U)))
+    {
+        char gcmd[280];
+
+        gcmd[0] = 'G';
+        mr_memcpy(gcmd + 1, payload, 33U * 8U);
+        mr_memcpy(gcmd + 1U + 8U, "44332211", 8);
+        gcmd[1U + (33U * 8U)] = '\0';
+        MR_TEST_ASSERT_GT_INT(test_gdb_xfer(&gdb, &io, gcmd), 0);
+        MR_TEST_ASSERT_EQ_INT(test_gdb_has_packet(&io, "OK"), MR_TRUE);
+        MR_TEST_ASSERT_EQ_INT(mr_xvm_reg_load(&xvm, 1, &value), 0);
+        MR_TEST_ASSERT_EQ_UINT(value, 0x11223344U);
+    }
+#else
+    /* RV32 G is 265 bytes; a smaller packet buffer drops it, which is
+     * expected for this configuration */
+#endif /* MR_CFG_XVM_GDB_PACKET_SIZE > (1U + (33U * 8U)) */
     MR_TEST_ASSERT_GT_INT(test_gdb_xfer(&gdb, &io, "G00"), 0);
     MR_TEST_ASSERT_EQ_INT(test_gdb_has_packet(&io, "E01"), MR_TRUE);
 

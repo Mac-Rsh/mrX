@@ -54,7 +54,6 @@ static void fs_at_test(volatile mr_uint32_t *__test_status) {
     mr_file_t target = MR_FILE_INIT(target);
     mr_file_t base = MR_FILE_INIT(base);
     mr_file_t file = MR_FILE_INIT(file);
-    int private_data;
     mr_err_t ret;
 
     /* Mount RAMFS and create directory handles */
@@ -94,11 +93,9 @@ static void fs_at_test(volatile mr_uint32_t *__test_status) {
     fs_at_path_expect(__test_status, "/rooted", -MR_ENOENT, MR_INODE_NONE);
 
     /* Create a file-system-specific node relative to the base */
-    private_data = 1;
     fs_at_expect(__test_status, "mknodat node",
-                 mr_fs_mknodat(&base, "node", MR_INODE_CHR, &private_data, 0),
-                 0);
-    fs_at_stat_expect(__test_status, &base, "node", 0, 0, MR_INODE_CHR);
+                 mr_fs_mknodat(&base, "node", MR_INODE_REG, MR_NULL, 0), 0);
+    fs_at_stat_expect(__test_status, &base, "node", 0, 0, MR_INODE_REG);
 
     /* Select whether stat follows the final symbolic link */
     fs_at_expect(__test_status, "create symbolic link",
@@ -184,16 +181,16 @@ static void fs_at_test(volatile mr_uint32_t *__test_status) {
 
     /* Confine mknodat and unlinkat to the directory handle */
     fs_at_expect(__test_status, "mknodat parent clamp",
-                 mr_fs_mknodat(&base, "../chr", MR_INODE_CHR, &private_data,
+                 mr_fs_mknodat(&base, "../chr", MR_INODE_REG, MR_NULL,
                                MR_AT_IN_ROOT),
                  0);
-    fs_at_path_expect(__test_status, "/base/chr", 0, MR_INODE_CHR);
+    fs_at_path_expect(__test_status, "/base/chr", 0, MR_INODE_REG);
     fs_at_path_expect(__test_status, "/chr", -MR_ENOENT, MR_INODE_NONE);
     fs_at_expect(__test_status, "mknodat absolute in-root",
-                 mr_fs_mknodat(&base, "/blk", MR_INODE_BLK, &private_data,
+                 mr_fs_mknodat(&base, "/blk", MR_INODE_REG, MR_NULL,
                                MR_AT_IN_ROOT),
                  0);
-    fs_at_path_expect(__test_status, "/base/blk", 0, MR_INODE_BLK);
+    fs_at_path_expect(__test_status, "/base/blk", 0, MR_INODE_REG);
     fs_at_expect(__test_status, "unlinkat parent clamp",
                  mr_fs_unlinkat_by_path(&base, "../chr", MR_AT_IN_ROOT), 0);
     fs_at_path_expect(__test_status, "/base/chr", -MR_ENOENT, MR_INODE_NONE);

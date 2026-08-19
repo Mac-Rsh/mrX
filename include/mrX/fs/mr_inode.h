@@ -88,6 +88,7 @@ typedef struct mr_file_ops {
     mr_ssize_t (*write)(struct mr_file *file, const void *buf, mr_size_t size);
     mr_int64_t (*llseek)(struct mr_file *file, mr_int64_t offset, int whence);
     mr_err_t (*ioctl)(struct mr_file *file, int cmd, void *arg);
+    mr_ssize_t (*fcntl)(struct mr_file *file, int cmd, mr_intptr_t arg);
     mr_err_t (*readdir)(struct mr_file *file, mr_dirent_t *dirent);
     mr_err_t (*sync)(struct mr_file *file);
 } mr_file_ops_t;

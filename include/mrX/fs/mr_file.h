@@ -48,6 +48,10 @@ extern "C" {
 #define MR_SEEK_CUR                     (1)
 #define MR_SEEK_END                     (2)
 
+/* File control commands */
+#define MR_F_GETPIPE_SZ                 (0x0100)
+#define MR_F_SETPIPE_SZ                 (0x0101)
+
 /* File type */
 typedef struct mr_file {
     mr_dentry_t *dentry;
@@ -183,6 +187,18 @@ mr_err_t mr_fs_rmdir(const char *path);
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_fs_mknod(const char *path, mr_inode_type_t type, void *priv);
+
+/**
+ * @brief This function creates a FIFO node at the given path.
+ *
+ * @param path The FIFO path.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note This is equivalent to mr_fs_mknod(path, MR_INODE_FIFO, MR_NULL).
+ * @note The parent must already exist(-MR_ENOENT).
+ * @note An existing leaf is rejected with -MR_EEXIST.
+ */
+mr_err_t mr_fs_mkfifo(const char *path);
 
 /**
  * @brief This function opens a file by path.
@@ -430,6 +446,20 @@ mr_err_t mr_fs_mknodat(const mr_file_t *dir, const char *path,
                        mr_inode_type_t type, void *priv, int flags);
 
 /**
+ * @brief This function creates a FIFO node relative to a directory handle.
+ *
+ * @param dir The base directory for path resolution. It is ignored for an
+ * absolute path unless MR_AT_IN_ROOT is specified and may be MR_NULL otherwise.
+ * @param path The FIFO path.
+ * @param flags The path resolution flags(see MR_AT_*).
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note For a relative path, dir must be an open directory handle.
+ * @note MR_AT_IN_ROOT treats dir as a temporary FS root.
+ */
+mr_err_t mr_fs_mkfifoat(const mr_file_t *dir, const char *path, int flags);
+
+/**
  * @brief This function opens a file relative to a directory handle.
  *
  * @param file The file to open.
@@ -591,6 +621,18 @@ mr_err_t mr_fs_truncate(mr_file_t *file, mr_int64_t length);
  * @note Returns -MR_ENOSYS if no sync hook is provided.
  */
 mr_err_t mr_fs_sync(mr_file_t *file);
+
+/**
+ * @brief This function performs file control on an open file.
+ *
+ * @param file The file.
+ * @param cmd The command(see MR_F_*).
+ * @param arg The command argument.
+ * @return A non-negative result on success, a negative error code on failure.
+ *
+ * @note Commands with no argument must pass 0.
+ */
+mr_ssize_t mr_fs_fcntl(mr_file_t *file, int cmd, mr_intptr_t arg);
 
 /**
  * @brief This function performs an I/O control on a file.

@@ -13,4 +13,24 @@ config MR_USE_FS_RAMFS
         are backed by a growable heap buffer. Use it as an example filesystem
         implementation and for testing the FS.
 
+config MR_USE_FS_RAMFS_FIFO
+    depends on MR_USE_FS_RAMFS
+    bool "Use ramfs FIFO nodes"
+    default y
+    help
+        Enable named FIFO nodes in ramfs. Create them with mr_fs_mkfifo() or
+        mr_fs_mknod(path, MR_INODE_FIFO, MR_NULL). First-version FIFOs are
+        shared non-blocking byte queues. Capacity is queried and changed with
+        MR_F_GETPIPE_SZ and MR_F_SETPIPE_SZ.
+
+config MR_CFG_FS_RAMFS_FIFO_SIZE
+    depends on MR_USE_FS_RAMFS_FIFO
+    int "Default ramfs FIFO size"
+    default 32
+    range 1 1048576
+    help
+        Default byte capacity used when create or mknod allocates a ramfs FIFO.
+        Runtime MR_F_SETPIPE_SZ may select any positive size that mr_ssize_t
+        can represent and the allocator can satisfy.
+
 endmenu
