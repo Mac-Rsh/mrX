@@ -51,11 +51,12 @@ htmlcov/
 # mrX generated files
 mr_config.h
 mr_hardgen.h
-platform/
+/platform/*
+!/platform/.gitkeep
 include/mrX/mr_config.h
 include/mrX/mr_hardgen.h
-include/mrX/platform/
-.platform/
+include/mrX/platform/*
+!include/mrX/platform/.gitkeep
 
 # Keil/MDK generated files
 Listings/
