@@ -241,7 +241,7 @@ MR_INLINE mr_bool_t mr_ram_put(mr_driver_t *drv) {
                            MR_ARRAY_SIZE(MR_CAT(__mr_ram_region_, _id)));      \
     MR_HT_DRIVER_INSTALL(_id, MR_DRIVER_CLAZZES_STATIK(ram),                   \
                          MR_DRIVER_TYPE_RAM, &MR_CAT(__mr_ram_data_, _id),     \
-                         _priv, _ops);
+                         _priv, _ops)
 #define __MR_HT_RAM_REGION_IMPL(_elem, _node, _prop)                           \
     {                                                                          \
         .address = (void *)MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0),       \

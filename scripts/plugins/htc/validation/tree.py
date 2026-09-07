@@ -244,13 +244,14 @@ class TreeValidator:
     def _check_array_modes(self, value: ValueExpr, prop_name: str,
                            node_path: str, inline_parent: bool = False) -> None:
         """Validate that inline arrays contain only numeric scalar elements."""
-        # Inline arrays may contain only integers, floats, or nested inline arrays
+        # Inline arrays may contain numbers, floats, or nested inline arrays
         if inline_parent and not isinstance(value,
                                             (ArrayValue, NumberValue,
                                              FloatValue)):
             self._error_at(
                 ErrorCode.INVALID_INLINE_ARRAY,
-                f"property '{prop_name}' in '{node_path}' can only contain numbers or floats inside inline arrays",
+                f"property '{prop_name}' in '{node_path}' can only contain "
+                "numbers or floats inside inline arrays",
                 value.span,
             )
             return
@@ -261,7 +262,8 @@ class TreeValidator:
         if inline_parent and value.mode == ArrayMode.EXPANDED:
             self._error_at(
                 ErrorCode.INVALID_INLINE_ARRAY,
-                f"property '{prop_name}' in '{node_path}' cannot nest expanded arrays inside inline arrays",
+                f"property '{prop_name}' in '{node_path}' cannot nest "
+                "expanded arrays inside inline arrays",
                 value.span,
             )
             return

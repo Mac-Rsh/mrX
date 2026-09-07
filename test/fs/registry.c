@@ -9,21 +9,21 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST) && defined(MR_USE_FS)
 #include <mrX.h>
-#include "fs_test.h"
+#include <mrX/test/fs/fs_test.h>
 
 /* Mock FS that returns a non-directory root from mount */
-static mr_err_t registry_badroot_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t registry_badroot_mount(mr_sblock_t *sb, const char *source,
                                        int flags, void *data);
-static mr_err_t registry_good_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t registry_good_mount(mr_sblock_t *sb, const char *source,
                                     int flags, void *data);
-static void registry_good_kill_sb(mr_super_block_t *sb);
+static void registry_good_unmount(mr_sblock_t *sb);
 
 static mr_file_system_t __registry_badroot_fs = MR_FILE_SYSTEM_INIT(
-    "badrootfs", registry_badroot_mount, MR_NULL, MR_NULL);
+    "badrootfs", registry_badroot_mount, MR_NULL);
 static mr_file_system_t __registry_good_fs = MR_FILE_SYSTEM_INIT(
-    "registryfs", registry_good_mount, MR_NULL, registry_good_kill_sb);
+    "registryfs", registry_good_mount, registry_good_unmount);
 
-static mr_size_t __registry_kill_calls;
+static mr_size_t __registry_unmount_calls;
 
 static void registry_expect(volatile mr_uint32_t *__test_status,
                             const char *name, mr_int64_t actual,
@@ -33,7 +33,7 @@ static void registry_expect(volatile mr_uint32_t *__test_status,
     MR_TEST_EXPECT_EQ_INT(actual, expected);
 }
 
-static mr_err_t registry_badroot_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t registry_badroot_mount(mr_sblock_t *sb, const char *source,
                                        int flags, void *data) {
     MR_IGNORE(source);
     MR_IGNORE(flags);
@@ -43,7 +43,7 @@ static mr_err_t registry_badroot_mount(mr_super_block_t *sb, const char *source,
     return sb->root ? 0 : -MR_ENOMEM;
 }
 
-static mr_err_t registry_good_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t registry_good_mount(mr_sblock_t *sb, const char *source,
                                     int flags, void *data) {
     MR_IGNORE(source);
     MR_IGNORE(flags);
@@ -53,13 +53,13 @@ static mr_err_t registry_good_mount(mr_super_block_t *sb, const char *source,
     return sb->root ? 0 : -MR_ENOMEM;
 }
 
-static void registry_good_kill_sb(mr_super_block_t *sb) {
+static void registry_good_unmount(mr_sblock_t *sb) {
     MR_IGNORE(sb);
 
-    __registry_kill_calls++;
+    __registry_unmount_calls++;
 }
 
-static void fs_registry_test(volatile mr_uint32_t *__test_status) {
+MR_TEST(fs, registry) {
     mr_file_system_t *found;
     mr_dentry_t *dentry;
     mr_inode_t *inode;
@@ -88,16 +88,16 @@ static void fs_registry_test(volatile mr_uint32_t *__test_status) {
     ret = fs_test_mount_root("badrootfs", 0, MR_NULL);
     registry_expect(__test_status, "mount badrootfs", ret, -MR_ENOTDIR);
 
-    /* A well-formed mount completes and kill_sb runs on unmount */
-    __registry_kill_calls = 0;
+    /* A well-formed mount releases the backend on unmount */
+    __registry_unmount_calls = 0;
     ret = fs_test_mount_root("registryfs", 0, MR_NULL);
     registry_expect(__test_status, "mount registryfs", ret, 0);
     if (ret != 0) {
         return;
     }
     registry_expect(__test_status, "unmount registryfs", mr_fs_umount("/"), 0);
-    registry_expect(__test_status, "kill_sb called",
-                    (mr_int64_t)__registry_kill_calls, 1);
+    registry_expect(__test_status, "unmount called",
+                    (mr_int64_t)__registry_unmount_calls, 1);
 
     /* Static dentry lifecycle */
     dentry = mr_malloc(sizeof(mr_dentry_t));
@@ -123,10 +123,6 @@ static void fs_registry_test(volatile mr_uint32_t *__test_status) {
     }
 
     return;
-}
-
-MR_TEST(fs, registry) {
-    fs_registry_test(__test_status);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

@@ -96,16 +96,24 @@ static void *ref_mt_worker(void *arg) {
 MR_TEST(ref, concurrent_get_put) {
     pthread_t threads[REF_MT_THREADS];
     mr_ref_t r;
+    int created;
     int i;
     int ret;
 
     mr_ref_init(&r);
-    for (i = 0; i < REF_MT_THREADS; i++) {
+    for (created = i = 0; i < REF_MT_THREADS; i++) {
         ret = pthread_create(&threads[i], MR_NULL, ref_mt_worker, (void *)&r);
-        MR_TEST_ASSERT_EQ_INT(ret, 0);
+        MR_TEST_EXPECT_EQ_INT(ret, 0);
+        if (ret != 0) {
+            break;
+        }
+        created++;
     }
-    for (i = 0; i < REF_MT_THREADS; i++) {
+    for (i = 0; i < created; i++) {
         MR_TEST_EXPECT_EQ_INT(pthread_join(threads[i], MR_NULL), 0);
+    }
+    if (created != REF_MT_THREADS) {
+        return;
     }
     MR_TEST_ASSERT_EQ_INT(MR_REF_IS_INITED(r), MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(MR_REF_COUNT(r), 1);

@@ -1,147 +1,315 @@
-[**中文**](kernel_log.md) | [**English**](kernel_log_en.md)
+# 日志（Log）
+
+> 日志基于格式化输出提供带时间戳、带模块标签、分级可过滤的打印能力：源码中以
+> `MR_LOG_xxx` 宏按级别埋点，编译期按全局级别裁剪，运行期按级别掩码过滤，
+> 输出统一经由 [格式化输出 Printf](printf.md) 送往平台输出通道。
+
+| 项       | 说明                                                                         |
+|----------|------------------------------------------------------------------------------|
+| 功能宏   | `MR_USE_LOG`（默认开启，自动选中 `MR_USE_PRINTF`）                           |
+| 头文件   | `<mrX/kernel/mr_log.h>`                                                      |
+| 依赖模块 | [格式化输出 Printf](printf.md)（文本输出）、[时钟 Clock](clock.md)（时间戳） |
+| 参考测试 | `mrX/test/kernel/log.c`                                                      |
 
 ---
 
-# 内核日志
+## 用户指南
 
-内核日志模块提供带时间戳、等级和标签的日志输出能力。模块基于 `mr_printf` 输出文本，通过全局等级掩码控制运行时输出范围，并通过编译期配置和
-`MR_LOG_TAG` 控制各级日志宏是否展开。
+### 1. 模块概述
 
-本文对应 `include/mrX/kernel/mr_log.h`、`kernel/log.c` 和 `test/kernel/log.c`。
+日志解决的问题是： **让散落在各模块的调试输出拥有统一的时间戳、统一的模块标签和 统一的级别开关**，且能在发布版本中零成本裁剪。
 
-## 模块用途
+特性：
 
-`mr_log` 模块用于在内核和组件中输出结构化调试信息。调用日志宏时，宏会生成包含等级和模块标签的格式字符串；`mr_log()`
-在实际输出前打印时间戳，并根据等级掩码决定是否输出该日志。
+- 五个级别：`ERR` / `WRN` / `INF` / `DBG` / `TRC`，严重度递减。
+- 编译期过滤：`MR_CFG_LOG_LEVEL` 之下的级别宏被整体替换为空语句，不产生任何代码。
+- 运行期过滤：32 位级别掩码可动态开/关任意级别组合，无需重新编译。
+- 每条日志自动附带时间戳与 `[级别/标签]` 前缀，标签由各编译单元的 `MR_LOG_TAG` 决定。
+- 级别敏感的输出经 [格式化输出 Printf](printf.md)，格式语法与其一致。
 
-模块依赖 `MR_USE_LOG`。在 Kconfig 中，`MR_USE_LOG` 会 `select MR_USE_PRINTF`，因此日志输出总是基于 printf 模块。
+不适用于：需要落盘/网络回传的结构化日志（本模块只负责输出到平台输出通道）、 对吞吐敏感的大量逐条打印（每条一次格式化 + 输出）。
 
-## 核心宏和配置
+### 2. 配置与依赖
 
-### 日志等级
+| 配置项                 | 类型 | 默认值 | 说明                                                                           |
+|------------------------|------|--------|--------------------------------------------------------------------------------|
+| `MR_USE_LOG`           | bool | y      | 启用日志模块，自动选中 `MR_USE_PRINTF`（`mrX/include/mrX/kernel/Kconfig:110`） |
+| `MR_CFG_LOG_LEVEL`     | 整型 | 4      | 编译期最高日志级别，范围 0~4（`Kconfig:119`）                                  |
+| `MR_CFG_LOG_TIME_ZONE` | 整型 | 8      | 高分辨率时间戳的时区（UTC 偏移小时数），范围 -12~12（`Kconfig:133`）           |
 
-```c
-#define MR_LOG_LEVEL_ERR                (0)
-#define MR_LOG_LEVEL_WRN                (1)
-#define MR_LOG_LEVEL_INF                (2)
-#define MR_LOG_LEVEL_DBG                (3)
-#define MR_LOG_LEVEL_TRC                (4)
-```
+`MR_CFG_LOG_LEVEL` 取值对应：0 = 仅 `ERR`，1 = `WRN` 及以上，2 = `INF` 及以上， 3 = `DBG` 及以上，4 = 全部（含 `TRC`
+）。仅当编译单元定义了 `MR_LOG_TAG` 时该裁剪 才生效（见第 4 节）。
 
-日志等级使用从 0 到 4 的整数表示。数值越大，信息越详细。`mr_log()` 本身接受 0 到 31 的等级值，但头文件提供的标准宏只定义了上述五个等级。
+`MR_CFG_LOG_TIME_ZONE` 仅在高分辨率时钟路径（`MR_USE_CLOCK_HIRES`）下参与换算， Kconfig 中也依赖该选项。
 
-### 等级掩码
-
-```c
-#define MR_LOG_MASK(_level)             (1U << (_level))
-```
-
-等级掩码用于运行时过滤日志。`mr_log()` 只在 `(1U << level) & mask` 非零时输出。源码中的默认掩码为 `0xffffffffU`，表示所有 0
-到 31 的等级默认开启。
-
-### 默认编译期等级
+启用 `MR_USE_LOG` 并重新生成 `mr_config.h` 后，包含头文件即可使用：
 
 ```c
-#if !defined(MR_CFG_LOG_LEVEL)
-#define MR_CFG_LOG_LEVEL                MR_LOG_LEVEL_TRC
-#endif
+#include <mrX/kernel/mr_log.h>
 ```
 
-`MR_CFG_LOG_LEVEL` 控制日志宏的编译期展开上限。Kconfig 中该配置依赖 `MR_USE_LOG`，默认值为 4，取值范围为 0 到
-4。若源码包含日志宏的位置未定义 `MR_LOG_TAG`，对应日志宏会展开为空操作。
+### 3. 快速上手
 
-### 日志格式宏
+在一个编译单元中定义模块标签后即可使用级别宏：
 
 ```c
-#define __MR_LOG_FORMAT(_level, _fmt)                                          \
-    (" [" _level "/" MR_LOG_TAG "] " _fmt "\r\n")
+#define MR_LOG_TAG                      "demo"
+#include <mrX/kernel/mr_log.h>
+
+void demo(void) {
+    int value = 42;
+
+    MR_LOG_INF("value is %d", value);
+    MR_LOG_ERR("something failed: %d", -1);
+}
 ```
 
-日志宏会将等级、`MR_LOG_TAG` 和用户格式串拼接为最终格式串。时间戳不在该宏中生成，而是在 `mr_log()` 内部先行输出。
+典型输出（时间戳格式见第 4 节）：
 
-### 日志输出宏
-
-```c
-#define MR_LOG_ERR(_fmt, ...) mr_log(MR_LOG_LEVEL_ERR, ...)
-#define MR_LOG_WRN(_fmt, ...) mr_log(MR_LOG_LEVEL_WRN, ...)
-#define MR_LOG_INF(_fmt, ...) mr_log(MR_LOG_LEVEL_INF, ...)
-#define MR_LOG_DBG(_fmt, ...) mr_log(MR_LOG_LEVEL_DBG, ...)
-#define MR_LOG_TRC(_fmt, ...) mr_log(MR_LOG_LEVEL_TRC, ...)
+```
+[   1.234] [INF/demo] value is 42
+[   1.235] [ERR/demo] something failed: -1
 ```
 
-各宏只有在定义了 `MR_LOG_TAG` 且 `MR_CFG_LOG_LEVEL` 大于等于对应等级时才会展开为 `mr_log()` 调用，否则展开为 `((void)0)`。
+要点：
 
-## 模块接口
+- `MR_LOG_TAG` 必须在包含 `mr_log.h` 之前定义，否则级别宏全部展开为空语句。
+- 级别宏自带换行（`\r\n`），调用处不要再写 `\n`。
 
-### 输出日志
+### 4. 使用说明
+
+**级别与标签**
+
+- 每个编译单元用一个 `MR_LOG_TAG` 字符串标识自己（如 `"timer"`、`"gpio"`）， 输出前缀为 `" [级别/标签] "`。
+- 级别宏与级别的对应：`MR_LOG_ERR`(0) / `MR_LOG_WRN`(1) / `MR_LOG_INF`(2) /
+  `MR_LOG_DBG`(3) / `MR_LOG_TRC`(4)。
+
+**双重过滤**
+
+| 过滤层 | 手段                                                    | 生效条件                             |
+|--------|---------------------------------------------------------|--------------------------------------|
+| 编译期 | `MR_CFG_LOG_LEVEL` 低于当前级别的宏被替换为 `((void)0)` | 该编译单元定义了 `MR_LOG_TAG`        |
+| 运行期 | 32 位掩码 `mr_log_mask_set` / `mr_log_mask`             | 始终生效（直接调 `mr_log` 时也生效） |
+
+掩码按位对应级别：`MR_LOG_MASK(level)` 生成第 `level` 位的掩码，可按位或组合。 初始掩码为 `0xffffffff`（全部开启），与
+`MR_CFG_LOG_LEVEL` 无关——后者只做 编译期裁剪。
+
+**时间戳**
+
+- 高分辨率路径（`MR_USE_CLOCK_HIRES`）：`[年-月-日-时:分:秒:毫秒:微秒]`，由
+  `mr_hires_tick2timestamp` 按 `MR_CFG_LOG_TIME_ZONE` 换算墙钟时间。
+- 普通路径：`[运行秒.毫秒]`（秒占 9 位右对齐），来自时钟模块 uptime。
+
+**调用约束**
+
+| 事项                                                 | 约定                                                         |
+|------------------------------------------------------|--------------------------------------------------------------|
+| `mr_log` 的 `level >= 32`、`fmt` 为 `MR_NULL` 或空串 | 直接忽略，无输出                                             |
+| 格式语法                                             | 与 `mr_vsnprintf` 一致（见 [格式化输出 Printf](printf.md)）  |
+| 输出终点                                             | 平台输出通道 `mr_port_output`，由移植层决定（串口/控制台等） |
+| 时间戳与正文                                         | 分两次输出调用，中间无同步保证                               |
+
+### 5. API 参考
+
+级别宏（仅当定义了 `MR_LOG_TAG` 且 `MR_CFG_LOG_LEVEL` 允许时才有输出）：
+
+| API                     | 说明                         |
+|-------------------------|------------------------------|
+| `MR_LOG_ERR(_fmt, ...)` | 以 `MR_LOG_LEVEL_ERR` 输出   |
+| `MR_LOG_WRN(_fmt, ...)` | 以 `MR_LOG_LEVEL_WRN` 输出   |
+| `MR_LOG_INF(_fmt, ...)` | 以 `MR_LOG_LEVEL_INF` 输出   |
+| `MR_LOG_DBG(_fmt, ...)` | 以 `MR_LOG_LEVEL_DBG` 输出   |
+| `MR_LOG_TRC(_fmt, ...)` | 以 `MR_LOG_LEVEL_TRC` 输出   |
+| `MR_LOG_MASK(_level)`   | 生成级别掩码：`1U << _level` |
+
+核心函数：
+
+| API               | 说明                                   |
+|-------------------|----------------------------------------|
+| `mr_log`          | 按级别输出一条日志（级别宏的底层实现） |
+| `mr_log_mask_set` | 设置运行期级别掩码                     |
+| `mr_log_mask`     | 读取运行期级别掩码                     |
+
+**`mr_log`**
 
 ```c
 void mr_log(mr_uint32_t level, const char *fmt, ...);
 ```
 
-`mr_log()` 根据等级掩码过滤日志。参数合法且等级启用时，它先输出时间戳，再将 `fmt` 和可变参数传给 `mr_vprintf()`。
+- `level`：日志级别（0~4 有效；`>= 32` 直接忽略）。
+- `fmt`：格式串，`MR_NULL` 或空串直接忽略。
+- 返回：无。级别未在掩码中开启时不产生任何输出。
+- 注意：该函数不做编译期裁剪，级别宏内部先经编译期判断再调用它。
 
-无返回值。以下情况会直接返回且不输出：
-
-| 条件               | 行为                  |
-|------------------|---------------------|
-| `level >= 32U`   | 等级超出 32 位掩码范围，直接忽略。 |
-| `fmt == MR_NULL` | 格式串无效，直接忽略。         |
-| `fmt[0] == '\0'` | 空格式串，直接忽略。          |
-| 当前等级未被掩码启用       | 输出被过滤。              |
-
-时间戳格式由时钟配置决定：
-
-| 配置                       | 时间戳来源和格式                                                                                   |
-|--------------------------|--------------------------------------------------------------------------------------------|
-| `MR_USE_CLOCK_HIRES`     | 使用 `mr_clock_hires_tick()` 和 `mr_hires_tick2timestamp()`，输出 `[YYYY-MM-DD-HH:MM:SS:ms:us]`。 |
-| 未启用 `MR_USE_CLOCK_HIRES` | 使用 `mr_clock_uptime()`，输出 `[seconds.millisecond]`。                                         |
-
-### 设置日志掩码
+**`mr_log_mask_set` / `mr_log_mask`**
 
 ```c
 void mr_log_mask_set(mr_uint32_t mask);
-```
-
-`mr_log_mask_set()` 将全局日志等级掩码设置为 `mask`。例如，`MR_LOG_MASK(MR_LOG_LEVEL_ERR)` 只开启错误日志，`0U` 会关闭所有等级输出。
-
-### 获取日志掩码
-
-```c
 mr_uint32_t mr_log_mask(void);
 ```
 
-`mr_log_mask()` 返回当前全局日志等级掩码。测试用例覆盖了默认掩码、设置和读取掩码、非法等级、无效格式串以及掩码过滤行为。
-
-## 使用示例
+掩码第 `n` 位对应级别 `n`：置 1 输出，清 0 静默。常用值：
 
 ```c
-#define MR_LOG_TAG "demo"
-#include <mrX/kernel/mr_log.h>
+mr_log_mask_set(0xffffffffU);                            /* All levels on */
+mr_log_mask_set(MR_LOG_MASK(MR_LOG_LEVEL_ERR)
+              | MR_LOG_MASK(MR_LOG_LEVEL_WRN));          /* ERR and WRN only */
+mr_log_mask_set(0U);                                     /* All levels off */
+```
 
-void example_log(void) {
-    mr_log_mask_set(MR_LOG_MASK(MR_LOG_LEVEL_ERR) |
-                    MR_LOG_MASK(MR_LOG_LEVEL_INF));
+### 6. 完整示例
 
-    MR_LOG_ERR("open failed: %d", -1);
-    MR_LOG_INF("device ready: %s", "uart0");
-    MR_LOG_DBG("this message depends on mask and compile level");
+示例 1：运行期动态调整级别（改编自 `mrX/test/kernel/log.c` 的 `mask_filter` 用例）：
+
+```c
+void level_switch_demo(void) {
+    mr_uint32_t saved = mr_log_mask();
+
+    mr_log_mask_set(0U);
+    mr_log(MR_LOG_LEVEL_ERR, "silent now");            /* No output */
+
+    mr_log_mask_set(MR_LOG_MASK(MR_LOG_LEVEL_ERR));
+    mr_log(MR_LOG_LEVEL_ERR, "only err passes");       /* Output */
+
+    mr_log_mask_set(saved);                            /* Restore */
 }
 ```
 
-也可以直接调用 `mr_log()`：
+示例 2：模块内按级别埋点（配合 `MR_LOG_TAG` 与编译期裁剪）：
 
 ```c
-mr_log(MR_LOG_LEVEL_WRN, " [WRN/manual] value=%u\r\n", value);
+#define MR_LOG_TAG                      "sensor"
+#include <mrX/kernel/mr_log.h>
+
+int sensor_read(int *val) {
+    if (val == MR_NULL) {
+        MR_LOG_ERR("invalid parameter");
+        return -MR_EINVAL;
+    }
+    MR_LOG_DBG("raw sample %d", *val);
+    MR_LOG_INF("sensor ready");
+    return 0;
+}
 ```
 
-直接调用时，调用者需要自行组织等级和标签文本；日志宏已经内置了这一格式。
+更多行为参考（掩码过滤、非法级别、空格式串）见 `mrX/test/kernel/log.c`。
 
-## 注意事项
+### 7. 常见问题（FAQ）
 
-- 日志宏依赖 `MR_LOG_TAG`，未定义标签时宏不会输出。
-- `MR_CFG_LOG_LEVEL` 是编译期过滤，等级高于该值的宏不会生成 `mr_log()` 调用。
-- `mr_log_mask_set()` 是运行时过滤，不能恢复已经被编译期过滤掉的日志宏。
-- 全局掩码 `__log_level` 在当前实现中没有单独加锁；多执行上下文同时读写掩码时需要调用者自行约束。
-- `mr_log()` 使用 `mr_printf()` 和 `mr_vprintf()` 输出，printf 模块的缓冲区大小、安全模式和平台输出限制同样适用于日志模块。
-- 启用高精度时钟后，时间戳使用 `MR_CFG_LOG_TIME_ZONE`，未配置时源码默认使用 8。
+**Q：`MR_LOG_INF(...)` 编译后完全没有输出，连运行期掩码也开了？**
+
+检查该编译单元是否定义了 `MR_LOG_TAG`：未定义时级别宏无条件展开为 `((void)0)`。 同时确认 `MR_CFG_LOG_LEVEL`
+不低于所用级别（裁剪发生在编译期）。
+
+**Q：`MR_CFG_LOG_LEVEL` 设为 0 后 `mr_log_mask` 仍返回 `0xffffffff`？**
+
+正常。`MR_CFG_LOG_LEVEL` 只影响级别宏是否编译进代码；运行期掩码独立初始化为全开， 直接调用 `mr_log` 不受编译期配置约束。
+
+**Q：时间戳怎么从 uptime 变成了日期时间？**
+
+启用了高分辨率时钟（`MR_USE_CLOCK_HIRES`）：日志自动切换为墙钟时间戳，时区由
+`MR_CFG_LOG_TIME_ZONE`（默认 UTC+8）决定。
+
+**Q：输出内容交错/乱码？**
+
+日志本身不加锁：时间戳与正文经由 [格式化输出 Printf](printf.md) 输出，多上下文 并发输出请启用 `MR_USE_PRINTF_SAFE`
+（每个格式化调用使用独立缓冲），并确保平台 输出通道 `mr_port_output` 本身线程/中断安全。
+
+**Q：如何临时静默某个模块的日志？**
+
+运行期掩码是全局的，无法按模块过滤；如需模块级静默，可用条件编译包裹或在输出端 按 `[级别/标签]` 前缀过滤。
+
+---
+
+## 开发者指南
+
+### 8. 架构总览
+
+日志是内核中最上层的诊断输出模块，自身不接触硬件：
+
+```
+        +---------------------------------+
+        |  各模块（MR_LOG_xxx 埋点）        |
+        +----------------+----------------+
+                         | mr_log(level, fmt, ...)
+        +----------------v----------------+
+        |  日志 Log (mrX/kernel/log.c)     |----> 级别掩码过滤
+        |                                 |----> 时间戳（时钟 Clock）
+        +----------------+----------------+
+                         | mr_vprintf(fmt, args)
+        +----------------v----------------+
+        |  格式化输出 Printf               |----> mr_port_output（移植层）
+        +---------------------------------+
+             依赖：Printf（文本输出）、Clock（时间戳）、sprintf（格式化）
+```
+
+- `MR_USE_LOG` 在 Kconfig 中 `select MR_USE_PRINTF`（`Kconfig:111`），保证底层 输出可用。
+- 高分辨率路径额外依赖 `MR_USE_CLOCK_HIRES`（`log.c:17` 编译分支）。
+
+### 9. 数据结构
+
+模块只有一个全局状态：级别掩码 `__log_level`（`mrX/kernel/log.c:15`），
+`mr_uint32_t`，初始值 `0xffffffffU`（全开）。掩码第 `n` 位对应级别 `n`，
+`mr_log` 以 `(1U << level) & __log_level` 判定输出（`log.c:63`）。
+
+级别编号由 `mr_log.h:31-35` 固定：`ERR`=0、`WRN`=1、`INF`=2、`DBG`=3、`TRC`=4；
+`MR_LOG_MASK(_level)` 即 `1U << (_level)`（`mr_log.h:28`）。
+
+级别宏的展开格式由 `__MR_LOG_FORMAT`（`mr_log.h:66`）定义：
+`" [" 级别名 "/" MR_LOG_TAG "] " fmt "\r\n"`——标签是编译期字符串拼接，因此
+`MR_LOG_TAG` 必须是字面量宏且先于包含头文件定义。
+
+### 10. 核心流程
+
+**编译期裁剪**：每个级别宏的守卫为 `defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >=
+级别)`（如 `mr_log.h:70`）。条件不满足时宏展开为 `((void)0)`，格式串与参数一并 消失——这是发布版本去除调试日志的零开销途径。
+
+**运行期输出**：`mr_log`（`mrX/kernel/log.c:54`）：
+
+1. 参数检查：`level >= 32`、`fmt` 为空或空串直接返回（`log.c:58`）。
+2. 掩码过滤：级别位未置 1 直接返回（`log.c:63`）。
+3. `log_timestamp_print`（`log.c:18` / `log.c:37`）输出时间戳前缀：
+    - 高分辨率路径：`mr_clock_hires_tick` → `mr_hires_tick2timestamp(tick,
+     MR_CFG_LOG_TIME_ZONE)` → `[年-月-日-时:分:秒:毫秒:微秒]`（`log.c:29-34`）。
+    - 普通路径：`mr_clock_uptime` 除以 1000 拆分为秒与毫秒， 输出 `[9 位秒.毫秒]`（`log.c:43-50`）。
+4. `mr_vprintf` 可变参输出正文（`log.c:72-74`），换行已在格式串内。
+
+**掩码读写**：`mr_log_mask_set` / `mr_log_mask` 直接赋值/读取全局变量 （`log.c:77-85`），无锁。
+
+### 11. 并发与中断安全
+
+- 模块内部无锁：掩码是单个 32 位全局变量，读写各为单条访问，不存在部分更新， 但多线程同时 `mr_log_mask_set`
+  不同值时后写者胜出（常见约定：掩码在初始化阶段 设置）。
+- `mr_log` 可在中断上下文调用，安全性取决于下游：格式化缓冲的并发行为见
+  [格式化输出 Printf](printf.md)（`MR_USE_PRINTF_SAFE`），平台输出通道
+  `mr_port_output` 由移植层保证。
+- 时间戳与正文是两次独立输出调用，多上下文并发时可能交错。
+
+### 12. 源码导读
+
+| 位置                                 | 职责                                    |
+|--------------------------------------|-----------------------------------------|
+| `mrX/include/mrX/kernel/mr_log.h:28` | 掩码宏与五级定义                        |
+| `mrX/include/mrX/kernel/mr_log.h:66` | 输出格式（标签拼接与换行）              |
+| `mrX/include/mrX/kernel/mr_log.h:70` | 级别宏的编译期裁剪守卫                  |
+| `mrX/kernel/log.c:15`                | 全局级别掩码                            |
+| `mrX/kernel/log.c:18`                | 高分辨率时间戳（含时区换算）            |
+| `mrX/kernel/log.c:37`                | uptime 时间戳                           |
+| `mrX/kernel/log.c:54`                | `mr_log` 主流程（过滤 + 时间戳 + 输出） |
+| `mrX/test/kernel/log.c`              | 掩码、非法参数、各级别输出的行为级测试  |
+
+### 13. 附录
+
+**配置宏**
+
+| 宏                                      | 说明                                             |
+|-----------------------------------------|--------------------------------------------------|
+| `MR_USE_LOG`                            | 模块开关，默认 y，自动选中 `MR_USE_PRINTF`       |
+| `MR_CFG_LOG_LEVEL`                      | 编译期最高级别，默认 4（全部），范围 0~4         |
+| `MR_CFG_LOG_TIME_ZONE`                  | 高分辨率时间戳时区，默认 8（UTC+8），范围 -12~12 |
+| `MR_LOG_LEVEL_ERR` ~ `MR_LOG_LEVEL_TRC` | 级别常量 0~4                                     |
+| `MR_LOG_MASK(_level)`                   | 级别位掩码生成宏                                 |
+| `MR_LOG_TAG`                            | 编译单元自定标签（用户侧定义，非 Kconfig 项）    |
+
+**错误码**：本模块 API 无返回值、不产生错误码；非法输入（级别越界、空格式串） 被静默忽略。时间戳换算失败不存在——时钟模块保证
+`uptime`/`hires tick` 单调可用。

@@ -1,126 +1,325 @@
-[**中文**](kernel_hook.md) | [**English**](kernel_hook_en.md)
+# 钩子（Hook）
+
+> 钩子提供一个容量固定、加锁追加的函数指针表，用于把"一个执行点上要做的多件事"
+> 组织成可注册的回调链；内核时钟子系统每 tick 的回调分发就建立在它之上。
+
+| 项       | 说明                                                         |
+|----------|--------------------------------------------------------------|
+| 功能宏   | 无（始终编译）                                               |
+| 头文件   | `<mrX/kernel/mr_hook.h>`                                     |
+| 依赖模块 | 自旋锁（`mr_spinlock`）；主要使用方为 [时钟 Clock](clock.md) |
+| 参考测试 | `mrX/test/kernel/hook.c`                                     |
 
 ---
 
-# 钩子管理
+## 用户指南
 
-钩子模块提供固定容量的回调入口表管理能力。模块负责初始化钩子表、向表中追加入口，并提供遍历宏供调用者按注册顺序执行回调。它适用于系统
-tick、工作队列、驱动事件等需要维护一组回调函数的场景。
+### 1. 模块概述
 
-本文对应 `include/mrX/kernel/mr_hook.h`、`kernel/hook.c` 和 `test/kernel/hook.c`。
+钩子解决的问题是： **同一个执行点上可能挂多个回调，且回调数量由各模块运行期决定**。
+`mr_hook_t` 用一块调用者提供的函数指针数组做容器，`mr_hook_add` 把新回调追加到表尾，
+`MR_HOOK_EACH` 按注册顺序遍历执行。
 
-## 模块用途
+特性：
 
-`mr_hook` 模块只管理入口指针数组，不定义回调函数的具体签名，也不主动调用回调。调用者负责准备存储数组、指定容量、将函数或对象入口转换为
-`mr_ptr_t` 后注册，并在遍历时转换回实际类型。
+- 零分配：数组由使用者提供，钩子本体不引用堆。
+- 加锁追加：`mr_hook_add` 内部经自旋锁保护，可在线程与中断上下文注册。
+- 顺序保证：按注册先后顺序遍历执行。
 
-`mr_hook_add()` 使用模块内部的全局自旋锁保护追加操作，避免多个执行上下文同时修改 `next`
-和入口数组。遍历宏本身不加锁，是否允许注册和遍历并发由具体使用模块决定。
+不适用于：需要移除回调的场合（本模块只提供 `add`，无 remove）；回调数量不确定且 可能很大的场合（容量固定，超出返回
+`-MR_ENOMEM`）。
 
-## 核心数据结构和宏
+**与时钟的关系**：本模块是通用容器，时钟子系统是它最大的使用方——时钟内部用一个
+`mr_hook_t` 维护每 tick 回调表，`mr_clock_hook_add` 就是对 `mr_hook_add` 的封装 （见 [时钟](clock.md)）。应用注册"每 tick
+回调"请使用 `mr_clock_hook_add`，而不是 直接操作 `mr_hook_t`。
 
-### 钩子控制块
+### 2. 配置与依赖
 
-```c
-typedef struct mr_hook {
-    mr_ptr_t *entry;
-    mr_uint16_t size;
-    mr_uint16_t next;
-} mr_hook_t;
-```
+本模块自身无 Kconfig 选项，始终编译。时钟钩子表的容量由时钟模块的配置决定：
 
-字段含义如下：
+| 配置项                   | 类型 | 默认值 | 说明                                                                                                        |
+|--------------------------|------|--------|-------------------------------------------------------------------------------------------------------------|
+| `MR_CFG_CLOCK_HOOK_SIZE` | 整型 | 2      | 时钟钩子表容量，范围 2~128（`mrX/include/mrX/kernel/Kconfig:26`）；由时钟模块经 `MR_HOOK_INIT` 传入钩子容器 |
 
-| 字段      | 含义                          |
-|---------|-----------------------------|
-| `entry` | 入口数组首地址，数组元素类型为 `mr_ptr_t`。 |
-| `size`  | 入口数组容量，单位是入口数量。             |
-| `next`  | 下一个可写入位置，同时表示已注册入口数量。       |
-
-### 静态初始化宏
+包含头文件即可使用：
 
 ```c
-#define MR_HOOK_INIT(_entry, _size)                                            \
-    {.entry = (_entry), .size = (_size), .next = 0}
+#include <mrX/kernel/mr_hook.h>
 ```
 
-`MR_HOOK_INIT()` 用于静态初始化 `mr_hook_t`。初始化后，`next` 为 0，表示尚未注册任何入口。
+### 3. 快速上手
 
-### 遍历宏
+建立一个回调链并依次执行：
 
 ```c
-#define MR_HOOK_EACH(_i, _entry, _type, _hook)                                 \
-    for ((_i) = 0, (_entry) = (_type *)(_hook)->entry[(_i)];                   \
-         (_i) < (_hook)->next;                                                 \
-         (_i)++, (_entry) = (_type *)(_hook)->entry[(_i)])
+#include <mrX/kernel/mr_hook.h>
+
+typedef void(my_hook_fn_t)(void);
+
+static int sum;
+
+static void add_one(void) { sum += 1; }
+static void add_two(void) { sum += 2; }
+
+void my_hook_example(void) {
+    mr_ptr_t buf[4];                        /* Caller-provided storage */
+    my_hook_fn_t *entry;
+    mr_uint32_t i;
+
+    mr_hook_t hook = MR_HOOK_INIT(buf, 4);  /* Static initialization */
+
+    mr_hook_add(&hook, (mr_ptr_t)add_one);
+    mr_hook_add(&hook, (mr_ptr_t)add_two);
+
+    MR_HOOK_EACH(i, entry, my_hook_fn_t, &hook) {
+        entry();                            /* sum == 3 after the loop */
+    }
+}
 ```
 
-`MR_HOOK_EACH()` 按索引从 0 遍历到 `next - 1`，并将每个 `mr_ptr_t` 入口转换为 `_type *`。如果入口本身是函数指针，调用者需要传入匹配的函数类型。
+### 4. 使用说明
 
-## 模块接口
+**生命周期**
 
-### 初始化钩子
+- 定义 `mr_hook_t` 与一块 `mr_ptr_t` 数组（容量即数组长度），用 `MR_HOOK_INIT`
+  静态初始化或运行时调用 `mr_hook_init`。
+- 之后随时可 `mr_hook_add` 追加回调，直至容量用满。
+- 没有删除/反初始化接口：容器生命周期与所在作用域一致，通常为全局或组件内静态 变量。
+
+**行为约定**
+
+| 操作                                  | 行为                                   |
+|---------------------------------------|----------------------------------------|
+| `mr_hook_add` 成功                    | 回调追加到表尾，`0` 返回               |
+| 容量已满时 `mr_hook_add`              | 返回 `-MR_ENOMEM`，表内容不变          |
+| `entry` 为 `MR_NULL` 时 `mr_hook_add` | 非法，断言开启时被 `MR_ASSERT` 拦截    |
+| 容量为 0（`entry` 数组为 `MR_NULL`）  | 合法构造，所有 `add` 返回 `-MR_ENOMEM` |
+| `MR_HOOK_EACH` 遍历                   | 按注册顺序访问 0 ~ 已注册数-1 的条目   |
+
+**遍历期间的限制**：`MR_HOOK_EACH` 遍历的依据是"已注册数"，遍历期间不应再执行
+`mr_hook_add`（新条目不会被本次遍历覆盖，但请避免在回调内对本表注册，保持语义清晰）。 回调按注册顺序串行同步执行，一个回调阻塞会阻塞整条链。
+
+### 5. API 参考
+
+初始化：
+
+| API            | 说明                 |
+|----------------|----------------------|
+| `MR_HOOK_INIT` | 静态初始化宏         |
+| `mr_hook_init` | 运行时初始化钩子容器 |
+
+注册与遍历：
+
+| API            | 说明                       |
+|----------------|----------------------------|
+| `mr_hook_add`  | 追加一个回调条目           |
+| `MR_HOOK_EACH` | 宏：按注册顺序遍历执行条目 |
+
+**`mr_hook_init` / `MR_HOOK_INIT`**
 
 ```c
-MR_INLINE void mr_hook_init(mr_hook_t *hook, mr_ptr_t *entry,
-                            mr_uint16_t size);
+MR_INLINE void mr_hook_init(mr_hook_t *hook, mr_ptr_t *entry, mr_uint16_t size);
+#define MR_HOOK_INIT(_entry, _size) {.entry = (_entry), .size = (_size), .next = 0}
 ```
 
-`mr_hook_init()` 初始化钩子控制块，设置入口数组、容量和 `next`。该函数不返回错误码，也不做空指针检查；调用者必须传入有效的
-`hook`，并保证 `entry` 与 `size` 的组合有效。
+- `hook`：钩子容器，由调用者分配存储。
+- `entry`：`mr_ptr_t` 数组（函数指针存储区），容量为 0 时可传 `MR_NULL`。
+- `size`：数组容量（可容纳的回调个数）。
 
-测试用例覆盖了 `MR_HOOK_INIT()` 和 `mr_hook_init()` 初始化后 `size`、`next` 字段的结果。
-
-### 添加入口
+**`mr_hook_add`**
 
 ```c
 mr_err_t mr_hook_add(mr_hook_t *hook, mr_ptr_t entry);
 ```
 
-`mr_hook_add()` 将入口追加到钩子表末尾。函数会在内部获取全局自旋锁并保存中断状态，写入完成后释放锁并恢复中断状态。
+- `hook`：已初始化的钩子容器。
+- `entry`：回调函数指针（以 `mr_ptr_t` 传递，如 `(mr_ptr_t)my_func`）。
+- 返回：成功 `0`；容量已满返回 `-MR_ENOMEM`；参数非法在断言开启时由 `MR_ASSERT` 拦截。
 
-返回值如下：
-
-| 返回值          | 含义                    |
-|--------------|-----------------------|
-| `0`          | 添加成功，`next` 增加 1。     |
-| `-MR_ENOMEM` | `next >= size`，入口表已满。 |
-
-源码使用 `MR_ASSERT()` 检查以下条件：`hook != MR_NULL`、`entry != MR_NULL`、以及 `hook->entry != MR_NULL` 或
-`hook->size == 0`。这些断言失败时的行为取决于断言配置。
-
-## 使用示例
+**`MR_HOOK_EACH`**
 
 ```c
-#include <mrX/kernel/mr_hook.h>
+#define MR_HOOK_EACH(_i, _entry, _type, _hook)                                 \
+    for ((_i) = 0; ((_i) < (_hook)->next)                                      \
+                   && (((_entry) = (_type *)(_hook)->entry[(_i)]), 1);         \
+         (_i)++)
+```
 
-typedef void (*event_hook_t)(int event);
+- `_i`：循环索引变量（无符号整型）。
+- `_entry`：条目指针变量，每次迭代被赋值为按 `_type` 转型后的回调指针。
+- `_type`：回调函数类型（typedef 的函数类型，如 `my_hook_fn_t`）。
+- `_hook`：钩子容器指针。
+- 用法为普通 `for` 循环体：在循环体内调用 `entry()`。
 
-static mr_ptr_t event_entries[4];
-static mr_hook_t event_hook = MR_HOOK_INIT(event_entries, 4);
+### 6. 完整示例
 
-static void on_event(int event) {
-    (void)event;
-}
+示例 1：带返回值聚合的回调链（回调返回剩余量，取最小正值——即时钟 tickless 的 聚合模式，改编自 `mrX/kernel/clock.c:34-53`
+的用法）：
 
-void example_hook_register(void) {
-    mr_hook_add(&event_hook, (mr_ptr_t)on_event);
-}
+```c
+typedef mr_tick_t(poll_fn_t)(void);
 
-void example_hook_emit(int event) {
-    mr_uint16_t i;
-    event_hook_t cb;
+static mr_tick_t poll_a(void) { return 5; }
+static mr_tick_t poll_b(void) { return 20; }
 
-    MR_HOOK_EACH(i, cb, event_hook_t, &event_hook) {
-        cb(event);
+mr_tick_t poll_min(poll_fn_t **entries, mr_uint16_t count) {
+    mr_hook_t hook = MR_HOOK_INIT(entries, count);
+    poll_fn_t *entry;
+    mr_tick_t less, min = MR_TICK_MAX;
+    mr_uint32_t i;
+
+    while (count--) {
+        mr_hook_add(&hook, (mr_ptr_t)*entries++);
     }
+    MR_HOOK_EACH(i, entry, poll_fn_t, &hook) {
+        less = entry();
+        if ((less > 0) && (less < min)) {
+            min = less;
+        }
+    }
+    return min;
 }
 ```
 
-## 注意事项
+示例 2：容量耗尽的处理（改编自 `mrX/test/kernel/hook.c:45-54`）：
 
-- 钩子表容量固定，模块不会自动扩容；容量不足时 `mr_hook_add()` 返回 `-MR_ENOMEM`。
-- `mr_hook_init()` 不清空入口数组内容，只将 `next` 置为 0；旧数组内容不会被遍历到。
-- `mr_hook_add()` 只保护追加过程；`MR_HOOK_EACH()` 遍历时没有加锁。
-- `MR_HOOK_EACH()` 会在循环初始化阶段读取 `entry[0]`，因此即使 `next == 0`，也要求 `entry` 指向有效数组，除非调用者避免对空钩子执行遍历宏。
-- 模块存储的是 `mr_ptr_t`，函数指针和数据指针转换需要与目标平台 ABI 保持一致。
+```c
+void full_example(void) {
+    mr_ptr_t buf[2];
+    mr_hook_t hook;
+
+    mr_hook_init(&hook, buf, 2);
+    if (mr_hook_add(&hook, (mr_ptr_t)full_example) != 0) {
+        return;
+    }
+    /* Third add on a 2-slot hook returns -MR_ENOMEM */
+}
+```
+
+更多行为（零容量、遍历顺序、重复注册）见 `mrX/test/kernel/hook.c`。
+
+### 7. 常见问题（FAQ）
+
+**Q：想注册"每 tick 执行一次"的回调，该用哪个 API？**
+
+用 [时钟](clock.md) 的 `mr_clock_hook_add`，不要自建 `mr_hook_t`。时钟钩子表容量 由 `MR_CFG_CLOCK_HOOK_SIZE` 决定（默认
+2，已被软定时器等内核服务占用， 扩容见时钟模块文档）。
+
+**Q：`mr_hook_add` 返回 `-MR_ENOMEM` 怎么办？**
+
+表已满。调大容器数组（自定义钩子）或调大对应配置项（时钟钩子为
+`MR_CFG_CLOCK_HOOK_SIZE`）。追加失败不会破坏已有内容。
+
+**Q：能移除已注册的回调吗？**
+
+不能。本模块只提供追加。需要"注销"语义的场合请在回调内加使能标志，或重新设计 容器生命周期。
+
+**Q：回调的执行顺序有保证吗？**
+
+有，按 `mr_hook_add` 的注册顺序串行执行。
+
+**Q：钩子容器能放栈上吗？**
+
+仅当注册与遍历都发生在同一作用域内生命周期覆盖使用全程时才可以。跨上下文使用 （如中断注册、线程遍历）应使用全局或静态存储。
+
+---
+
+## 开发者指南
+
+### 8. 架构总览
+
+钩子是内核基础设施层的小容器，无业务语义，向上支撑"一个事件点、多个观察者"的 分发模式。内核中的使用关系：
+
+```
+        +---------------------------------------+
+        |  时钟 Clock（每 tick 事件源）           |
+        |  __clock_hook : mr_hook_t              |
+        |  __clock_entry[MR_CFG_CLOCK_HOOK_SIZE] |
+        +-------------------+-------------------+
+                            | mr_hook_add（注册）
+        +-------------------v-------------------+
+        |  钩子 Hook                              |
+        |  固定容量函数指针表 + 自旋锁追加         |
+        +-------------------+-------------------+
+                            | MR_HOOK_EACH（分发）
+        +-------------------v-------------------+
+        |  各 tick 回调：软定时器到期检查等        |
+        +---------------------------------------+
+```
+
+关键接线：时钟在 `mrX/kernel/clock.c:23-26` 以 `MR_HOOK_INIT(__clock_entry,
+MR_CFG_CLOCK_HOOK_SIZE)` 构造钩子表；`mr_clock_hook_add`（`clock.c:85`）封装
+`mr_hook_add`；每个 tick 的 `mr_clock_increase`（`clock.c:55`）末尾调用
+`clock_hook()`（`clock.c:34`）以 `MR_HOOK_EACH` 分发全部回调并聚合最小正值作为 tickless。软定时器的到期检查（
+`timer_timeout_check`）即通过该链每 tick 被驱动， 见 [定时器](timer.md) 与 [时钟](clock.md)。
+
+### 9. 数据结构
+
+```c
+typedef struct mr_hook {                /* mrX/include/mrX/kernel/mr_hook.h:26 */
+    mr_ptr_t *entry;                    /* Function pointer array (caller-owned) */
+    mr_uint16_t size;                   /* Capacity (number of slots) */
+    mr_uint16_t next;                   /* Number of registered entries */
+} mr_hook_t;
+```
+
+| 字段    | 说明                                                                   |
+|---------|------------------------------------------------------------------------|
+| `entry` | 指向调用者提供的 `mr_ptr_t` 数组；钩子本体不做任何分配                 |
+| `size`  | 容量上限；为 0 时允许 `entry` 为 `MR_NULL`（占位容器）                 |
+| `next`  | 已注册数量，`mr_hook_add` 成功后自增；同时是 `MR_HOOK_EACH` 的遍历上界 |
+
+条目以 `mr_ptr_t`（通用指针）存储，读取时由 `MR_HOOK_EACH` 按 `_type` 转型， 类型安全由使用者保证。
+
+### 10. 核心流程
+
+**追加**：`mr_hook_add`（`mrX/kernel/hook.c:16`）：
+
+1. 断言检查：容器非空、（数组非空或容量为 0）、条目非空（`hook.c:21-23`）。
+2. 以 `mr_spinlock_lock_irqsave` 获取全局自旋锁 `__hook_lock`（`hook.c:14`、
+   `hook.c:26`）。
+3. `next < size` 则写入 `entry[next++]`，返回 0；否则返回 `-MR_ENOMEM`（`hook.c:29-35`）。
+4. 解锁（`hook.c:38`）。
+
+**为什么用全局锁**：钩子是轻量容器，不值得为每个实例配一把锁；追加操作是低频
+初始化期动作，全局锁把临界区压缩到一条数组写入，代价可忽略。时钟的注册路径 （`mr_clock_hook_add`）因此天然中断安全。
+
+**分发**：`MR_HOOK_EACH`（`mr_hook.h:75`）是无锁的普通 for 循环，读 `next` 与
+`entry[i]`。分发（遍历执行）不加锁是刻意设计：回调在事件源上下文（如 tick 中断） 中运行，若在锁内执行任意用户回调，将把不可预期的代码拖入临界区。正确性由使用
+约定保证——注册发生在初始化期，分发发生在稳定运行期，二者不相交（时钟场景中 钩子在启动阶段注册，之后只读）。
+
+### 11. 并发与中断安全
+
+- `mr_hook_add` 可在任意上下文调用，由全局自旋锁（关中断型）保护，临界区为 常数时间。
+- `MR_HOOK_EACH` 无锁：要求遍历期间没有并发追加。使用者遵循"初始化期注册、 运行期只读分发"即可；若业务确实需要运行期注册，需自行在分发侧加同步。
+- 回调在分发者上下文中同步执行（时钟场景下为 tick 上下文，回调内禁止阻塞， 见 [时钟](clock.md) 的回调上下文约定）。
+
+### 12. 源码导读
+
+| 位置                                  | 职责                                        |
+|---------------------------------------|---------------------------------------------|
+| `mrX/include/mrX/kernel/mr_hook.h:26` | `mr_hook_t` 结构                            |
+| `mrX/include/mrX/kernel/mr_hook.h:38` | `MR_HOOK_INIT` 静态初始化宏                 |
+| `mrX/include/mrX/kernel/mr_hook.h:75` | `MR_HOOK_EACH` 遍历宏                       |
+| `mrX/kernel/hook.c:14`                | 全局自旋锁                                  |
+| `mrX/kernel/hook.c:16`                | `mr_hook_add`：断言 + 锁内追加              |
+| `mrX/kernel/clock.c:23`               | 时钟钩子表（`MR_CFG_CLOCK_HOOK_SIZE` 容量） |
+| `mrX/kernel/clock.c:34`               | 时钟 tick 分发与 tickless 聚合              |
+| `mrX/kernel/clock.c:85`               | `mr_clock_hook_add`（时钟侧封装）           |
+| `mrX/test/kernel/hook.c`              | 初始化/追加/容量/遍历行为测试               |
+
+### 13. 附录
+
+**配置宏**
+
+| 宏                       | 说明                                                                                                 |
+|--------------------------|------------------------------------------------------------------------------------------------------|
+| `MR_CFG_CLOCK_HOOK_SIZE` | 时钟钩子表容量（时钟模块配置，默认 2，范围 2~128），由 `mrX/kernel/clock.c:17-22` 提供缺省与下限校验 |
+
+**错误码**
+
+| 返回值       | 产生点                                                                                   |
+|--------------|------------------------------------------------------------------------------------------|
+| `-MR_ENOMEM` | 钩子表容量已满（`mrX/kernel/hook.c:34`）                                                 |
+| `0`          | 追加成功                                                                                 |
+| （断言）     | `hook` 为 `MR_NULL`、`entry` 条目为 `MR_NULL`、（数组为空且容量非 0）时 `MR_ASSERT` 拦截 |

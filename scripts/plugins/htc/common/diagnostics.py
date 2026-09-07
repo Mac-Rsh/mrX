@@ -12,9 +12,10 @@ compiler pipeline.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from .source import IncludeSite, SourceLocation, SourceSpan
 from dataclasses import dataclass, field
 from enum import Enum
+
+from .source import IncludeSite, SourceLocation, SourceSpan
 
 
 class Level(Enum):
@@ -126,6 +127,7 @@ class Diagnostics:
     POINTER_MARKER = "^"
 
     def __init__(self) -> None:
+        """Create an empty diagnostic collection."""
         self.diagnostics: list[Diagnostic] = []
         self.sources: dict[str, str] = {}
 
@@ -159,7 +161,10 @@ class Diagnostics:
 
     def _render(self, diagnostic: Diagnostic) -> str:
         """Render one diagnostic using cargo-style formatting."""
-        header = f"{diagnostic.level.value}[{diagnostic.code.value}]: {diagnostic.message}"
+        header = (
+            f"{diagnostic.level.value}[{diagnostic.code.value}]: "
+            f"{diagnostic.message}"
+        )
         lines = [header]
 
         # Inline source preview is optional when a span is available

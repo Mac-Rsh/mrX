@@ -31,6 +31,7 @@ extern "C" {
 #define mr_memccpy(_d, _s, _c, _sz)     memccpy(_d, _s, _c, _sz)
 #define mr_memcmp(_m1, _m2, _sz)        memcmp(_m1, _m2, _sz)
 #define mr_memcpy(_d, _s, _sz)          memcpy(_d, _s, _sz)
+#define mr_memmove(_d, _s, _sz)         memmove(_d, _s, _sz)
 #define mr_memset(_d, _c, _sz)          memset(_d, _c, _sz)
 #define mr_memchr(_s, _c, _sz)          memchr(_s, _c, _sz)
 #define mr_strcmp(_s1, _s2)             strcmp(_s1, _s2)
@@ -73,6 +74,16 @@ int mr_memcmp(const void *m1, const void *m2, mr_size_t size);
  * @return The destination.
  */
 void *mr_memcpy(void *dst, const void *src, mr_size_t size);
+
+/**
+ * @brief This function moves size bytes from src to dst.
+ *
+ * @param dst The destination.
+ * @param src The source.
+ * @param size The move size.
+ * @return The destination.
+ */
+void *mr_memmove(void *dst, const void *src, mr_size_t size);
 
 /**
  * @brief This function sets size bytes of dst to c.

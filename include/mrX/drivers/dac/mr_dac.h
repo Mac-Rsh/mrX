@@ -241,6 +241,11 @@ MR_INLINE mr_err_t mr_dac_stream_start(mr_driver_t *drv, mr_dac_seq_t *seq,
     /* Get DAC operations */
     da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
 
+    /* Check if operation is supported */
+    if (!da_ops->stream_start) {
+        return -MR_ENOSYS;
+    }
+
     /* Start DAC stream */
     return da_ops->stream_start(drv, seq, circular);
 }
@@ -249,31 +254,27 @@ MR_INLINE mr_err_t mr_dac_stream_start(mr_driver_t *drv, mr_dac_seq_t *seq,
  * @brief This function checks if a DAC stream is busy.
  *
  * @param drv The DAC driver.
- * @return MR_TRUE if the stream is busy, MR_FALSE otherwise.
+ * @param busy The stream busy status, valid on success.
+ * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_bool_t mr_dac_stream_is_busy(mr_driver_t *drv) {
+MR_INLINE mr_err_t mr_dac_stream_is_busy(mr_driver_t *drv, mr_bool_t *busy) {
     const mr_dac_ops_t *da_ops;
-    mr_bool_t busy;
-    mr_err_t ret;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_DAC);
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+    MR_ASSERT(busy != MR_NULL);
 
     /* Get DAC operations */
     da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Check if operation is supported */
     if (!da_ops->stream_is_busy) {
-        return MR_FALSE;
+        return -MR_ENOSYS;
     }
 
     /* Get stream busy status */
-    ret = da_ops->stream_is_busy(drv, &busy);
-    if (ret != 0) {
-        return MR_FALSE;
-    }
-    return busy;
+    return da_ops->stream_is_busy(drv, busy);
 }
 
 /**
@@ -515,6 +516,23 @@ MR_INLINE mr_err_t mr_ht_dac_configure(mr_ht_dac_spec_t *spec) {
 }
 
 /**
+ * @brief This function initializes a DAC sequence from a specification.
+ *
+ * @param spec The DAC specification.
+ * @param seq The DAC sequence.
+ */
+MR_INLINE void mr_ht_dac_seq_init(mr_ht_dac_spec_t *spec, mr_dac_seq_t *seq) {
+    /* Check parameter */
+    MR_ASSERT(spec != MR_NULL);
+    MR_ASSERT(seq != MR_NULL);
+    MR_ASSERT(spec->channel < 32U);
+
+    /* Init sequence channels mask and resolution */
+    seq->channels = 1U << spec->channel;
+    seq->resolution = spec->resolution;
+}
+
+/**
  * @brief This function writes a DAC specification sequence.
  *
  * @param spec The DAC specification.
@@ -554,14 +572,16 @@ MR_INLINE mr_err_t mr_ht_dac_stream_start(mr_ht_dac_spec_t *spec,
  * @brief This function checks if a DAC specification stream is busy.
  *
  * @param spec The DAC specification.
- * @return MR_TRUE if the stream is busy, MR_FALSE otherwise.
+ * @param busy The stream busy status, valid on success.
+ * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_bool_t mr_ht_dac_stream_is_busy(mr_ht_dac_spec_t *spec) {
+MR_INLINE mr_err_t mr_ht_dac_stream_is_busy(mr_ht_dac_spec_t *spec,
+                                            mr_bool_t *busy) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
     /* Check stream busy status */
-    return mr_dac_stream_is_busy(spec->drv);
+    return mr_dac_stream_is_busy(spec->drv, busy);
 }
 
 /**

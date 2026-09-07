@@ -108,6 +108,30 @@ MR_TEST(hashmap, collision_lookup) {
     }
 }
 
+MR_TEST(hashmap, collision_delete_preserves_neighbor) {
+    mr_list_t buckets[TEST_HASHMAP_BUCKET_NUM];
+    mr_hashmap_t map;
+    test_hashmap_item_t first;
+    test_hashmap_item_t second;
+
+    hashmap_init_local(&map, buckets);
+    mr_hashnode_init(&first.node, MR_UINT32_MAX, &first.value);
+    mr_hashnode_init(&second.node, MR_UINT32_MAX - 4U, &second.value);
+
+    MR_TEST_ASSERT_EQ_INT(mr_hashmap_add(&map, &first.node), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_hashmap_add(&map, &second.node), 0);
+    MR_TEST_ASSERT_EQ_PTR(mr_hashmap_find(&map, MR_UINT32_MAX), &first.node);
+    MR_TEST_ASSERT_EQ_PTR(mr_hashmap_find(&map, MR_UINT32_MAX - 4U),
+                          &second.node);
+
+    MR_TEST_ASSERT_EQ_INT(mr_hashmap_del(&first.node), 0);
+    MR_TEST_ASSERT_EQ_PTR(mr_hashmap_find(&map, MR_UINT32_MAX), MR_NULL);
+    MR_TEST_ASSERT_EQ_PTR(mr_hashmap_find(&map, MR_UINT32_MAX - 4U),
+                          &second.node);
+    MR_TEST_ASSERT_EQ_INT(mr_hashmap_del(&second.node), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_hashmap_is_empty(&map), MR_TRUE);
+}
+
 MR_TEST(hashmap, readd_after_del) {
     mr_list_t buckets[TEST_HASHMAP_BUCKET_NUM];
     mr_hashmap_t map;

@@ -9,7 +9,7 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST) && defined(MR_USE_FS)
 #include <mrX.h>
-#include "fs_test.h"
+#include <mrX/test/fs/fs_test.h>
 
 static void truncate_expect(volatile mr_uint32_t *__test_status,
                             const char *name, mr_int64_t actual,
@@ -19,7 +19,7 @@ static void truncate_expect(volatile mr_uint32_t *__test_status,
     MR_TEST_EXPECT_EQ_INT(actual, expected);
 }
 
-static void fs_truncate_test(volatile mr_uint32_t *__test_status) {
+MR_TEST(fs, truncate) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_file_t ro = MR_FILE_INIT(ro);
     mr_stat_t stat;
@@ -45,18 +45,18 @@ static void fs_truncate_test(volatile mr_uint32_t *__test_status) {
 
     /* Same-size truncate is a no-op */
     truncate_expect(__test_status, "truncate same size",
-                    mr_fs_truncate(&file, 10), 0);
-    truncate_expect(__test_status, "stat same size", mr_fs_stat(&file, &stat),
+                    mr_fs_ftruncate(&file, 10), 0);
+    truncate_expect(__test_status, "stat same size", mr_fs_fstat(&file, &stat),
                     0);
     truncate_expect(__test_status, "same size value", stat.size, 10);
 
     /* Shrink */
-    truncate_expect(__test_status, "truncate shrink", mr_fs_truncate(&file, 4),
+    truncate_expect(__test_status, "truncate shrink", mr_fs_ftruncate(&file, 4),
                     0);
-    truncate_expect(__test_status, "stat shrink", mr_fs_stat(&file, &stat), 0);
+    truncate_expect(__test_status, "stat shrink", mr_fs_fstat(&file, &stat), 0);
     truncate_expect(__test_status, "shrink size", stat.size, 4);
     truncate_expect(__test_status, "seek shrink head",
-                    mr_fs_seek(&file, 0, MR_SEEK_SET), 0);
+                    mr_fs_lseek(&file, 0, MR_SEEK_SET), 0);
     io_ret = mr_fs_read(&file, buffer, sizeof(buffer));
     truncate_expect(__test_status, "read shrink", io_ret, 4);
     if ((io_ret == 4) && (mr_memcmp(buffer, "0123", 4) != 0)) {
@@ -64,12 +64,12 @@ static void fs_truncate_test(volatile mr_uint32_t *__test_status) {
     }
 
     /* Grow with zero fill */
-    truncate_expect(__test_status, "truncate grow", mr_fs_truncate(&file, 8),
+    truncate_expect(__test_status, "truncate grow", mr_fs_ftruncate(&file, 8),
                     0);
-    truncate_expect(__test_status, "stat grow", mr_fs_stat(&file, &stat), 0);
+    truncate_expect(__test_status, "stat grow", mr_fs_fstat(&file, &stat), 0);
     truncate_expect(__test_status, "grow size", stat.size, 8);
     truncate_expect(__test_status, "seek grow head",
-                    mr_fs_seek(&file, 0, MR_SEEK_SET), 0);
+                    mr_fs_lseek(&file, 0, MR_SEEK_SET), 0);
     io_ret = mr_fs_read(&file, buffer, sizeof(buffer));
     truncate_expect(__test_status, "read grow", io_ret, 8);
     if ((io_ret == 8) && (mr_memcmp(buffer, "0123\0\0\0\0", 8) != 0)) {
@@ -77,24 +77,24 @@ static void fs_truncate_test(volatile mr_uint32_t *__test_status) {
     }
 
     /* Truncate to zero */
-    truncate_expect(__test_status, "truncate zero", mr_fs_truncate(&file, 0),
+    truncate_expect(__test_status, "truncate zero", mr_fs_ftruncate(&file, 0),
                     0);
-    truncate_expect(__test_status, "stat zero", mr_fs_stat(&file, &stat), 0);
+    truncate_expect(__test_status, "stat zero", mr_fs_fstat(&file, &stat), 0);
     truncate_expect(__test_status, "zero size", stat.size, 0);
     truncate_expect(__test_status, "seek zero head",
-                    mr_fs_seek(&file, 0, MR_SEEK_SET), 0);
+                    mr_fs_lseek(&file, 0, MR_SEEK_SET), 0);
     truncate_expect(__test_status, "read empty",
                     mr_fs_read(&file, buffer, sizeof(buffer)), 0);
 
     /* Hole write beyond EOF zero-fills the gap */
     truncate_expect(__test_status, "seek hole",
-                    mr_fs_seek(&file, 4, MR_SEEK_SET), 4);
+                    mr_fs_lseek(&file, 4, MR_SEEK_SET), 4);
     truncate_expect(__test_status, "write hole", mr_fs_write(&file, "AB", 2),
                     2);
-    truncate_expect(__test_status, "stat hole", mr_fs_stat(&file, &stat), 0);
+    truncate_expect(__test_status, "stat hole", mr_fs_fstat(&file, &stat), 0);
     truncate_expect(__test_status, "hole size", stat.size, 6);
     truncate_expect(__test_status, "seek hole head",
-                    mr_fs_seek(&file, 0, MR_SEEK_SET), 0);
+                    mr_fs_lseek(&file, 0, MR_SEEK_SET), 0);
     io_ret = mr_fs_read(&file, buffer, sizeof(buffer));
     truncate_expect(__test_status, "read hole", io_ret, 6);
     if ((io_ret == 6) && (mr_memcmp(buffer, "\0\0\0\0AB", 6) != 0)) {
@@ -103,14 +103,15 @@ static void fs_truncate_test(volatile mr_uint32_t *__test_status) {
 
     /* Negative length is invalid */
     truncate_expect(__test_status, "truncate negative",
-                    mr_fs_truncate(&file, -1), -MR_EINVAL);
+                    mr_fs_ftruncate(&file, -1), -MR_EINVAL);
 
     /* Truncate does not change the file position */
     truncate_expect(__test_status, "seek mid",
-                    mr_fs_seek(&file, 2, MR_SEEK_SET), 2);
+                    mr_fs_lseek(&file, 2, MR_SEEK_SET), 2);
     truncate_expect(__test_status, "truncate keep pos size",
-                    mr_fs_truncate(&file, 3), 0);
-    truncate_expect(__test_status, "tell after truncate", mr_fs_tell(&file), 2);
+                    mr_fs_ftruncate(&file, 3), 0);
+    truncate_expect(__test_status, "position after truncate",
+                    mr_fs_lseek(&file, 0, MR_SEEK_CUR), 2);
 
     truncate_expect(__test_status, "close trunc file", mr_fs_close(&file), 0);
 
@@ -119,7 +120,7 @@ static void fs_truncate_test(volatile mr_uint32_t *__test_status) {
     truncate_expect(__test_status, "open readonly trunc", ret, 0);
     if (ret == 0) {
         truncate_expect(__test_status, "truncate readonly",
-                        mr_fs_truncate(&ro, 1), -MR_EBADF);
+                        mr_fs_ftruncate(&ro, 1), -MR_EBADF);
         truncate_expect(__test_status, "close readonly trunc", mr_fs_close(&ro),
                         0);
     }
@@ -131,13 +132,13 @@ static void fs_truncate_test(volatile mr_uint32_t *__test_status) {
     truncate_expect(__test_status, "open trunc-dir", ret, 0);
     if (ret == 0) {
         truncate_expect(__test_status, "truncate directory",
-                        mr_fs_truncate(&file, 0), -MR_EISDIR);
+                        mr_fs_ftruncate(&file, 0), -MR_EISDIR);
         truncate_expect(__test_status, "close trunc-dir", mr_fs_close(&file),
                         0);
     }
 
     /* Closed handle */
-    truncate_expect(__test_status, "truncate closed", mr_fs_truncate(&file, 0),
+    truncate_expect(__test_status, "truncate closed", mr_fs_ftruncate(&file, 0),
                     -MR_EBADF);
 
     /* Seek edges on an empty file */
@@ -145,13 +146,13 @@ static void fs_truncate_test(volatile mr_uint32_t *__test_status) {
     truncate_expect(__test_status, "create seek-edge", ret, 0);
     if (ret == 0) {
         truncate_expect(__test_status, "seek end empty",
-                        mr_fs_seek(&file, 0, MR_SEEK_END), 0);
+                        mr_fs_lseek(&file, 0, MR_SEEK_END), 0);
         truncate_expect(__test_status, "seek cur empty",
-                        mr_fs_seek(&file, 0, MR_SEEK_CUR), 0);
+                        mr_fs_lseek(&file, 0, MR_SEEK_CUR), 0);
         truncate_expect(__test_status, "seek invalid whence",
-                        mr_fs_seek(&file, 0, 99), -MR_EINVAL);
-        truncate_expect(__test_status, "seek negative clamp",
-                        mr_fs_seek(&file, -5, MR_SEEK_SET), 0);
+                        mr_fs_lseek(&file, 0, 99), -MR_EINVAL);
+        truncate_expect(__test_status, "seek negative rejected",
+                        mr_fs_lseek(&file, -5, MR_SEEK_SET), -MR_EINVAL);
         truncate_expect(__test_status, "close seek-edge", mr_fs_close(&file),
                         0);
     }
@@ -159,10 +160,6 @@ static void fs_truncate_test(volatile mr_uint32_t *__test_status) {
 _exit:
     truncate_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
-}
-
-MR_TEST(fs, truncate) {
-    fs_truncate_test(__test_status);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

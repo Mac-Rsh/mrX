@@ -13,238 +13,175 @@ then writes normalized configuration output and an exported header file.
 """
 
 from argparse import ArgumentParser, Namespace
-from dock import PluginSpec, export_plugin
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 import subprocess
+
 import kconfiglib
 
+from framework.command import Command, CommandResult, CommandSpec
+from framework.completion import FILE_COMPLETION, attach_path_completion
+from framework.context import CommandContext
 
-@export_plugin
-class KconfigCommand:
+
+class KconfigCommand(Command):
     """Built-in command for processing Kconfig configuration files."""
 
     DEFAULT_KCONFIG_PATH = "Kconfig"
     DEFAULT_CONFIG_PATH = ".config"
     DEFAULT_OUTPUT_PATH = "./include/mrX/mr_config.h"
 
-    spec = PluginSpec(
+    spec = CommandSpec(
         name="kconfig",
-        description="Process Kconfig and generate a C header.",
+        description="Process Kconfig and generate a C header",
         version="1.0.0",
-        author="MacRsh",
     )
 
-    def help(self) -> str:
-        """Return detailed help text for the Kconfig command.
-
-        Returns:
-            Human-readable help text for the command.
-        """
-        parser = self._build_parser()
-        lines = [
-            "Usage: python ./scripts/cli.py kconfig [options]",
-            "Description: Process Kconfig and generate a C header.",
-            "Aliases: (none)",
-            "",
-            parser.format_help().rstrip(),
-            f"Default Kconfig: {self.DEFAULT_KCONFIG_PATH}",
-            f"Default config: {self.DEFAULT_CONFIG_PATH}",
-            f"Default output: {self.DEFAULT_OUTPUT_PATH}",
-        ]
-        return "\n".join(lines)
-
-    def run(self, args: list[str]) -> int:
-        """Execute the Kconfig processing workflow.
-
-        Args:
-            args: Command line arguments passed to the command.
-
-        Returns:
-            Exit code (0 for success, non-zero for error).
-        """
-        # Parse command line arguments
-        options = self._parse_args(args)
-        if options is None:
-            return 1
-
-        # Show menuconfig UI before loading configuration when requested
-        if not options.no_ui:
-            self._show_ui()
-
-        # Parse and validate input paths
-        paths = self._parse_paths(options)
-        if paths is None:
-            return 1
-        kconfig_path, config_path, output_path = paths
-
-        # Load and export Kconfig data
-        if self._parse_kconfig(kconfig_path, config_path, output_path) is None:
-            return 1
-
-        # Rewrite generated header
-        header_text = self._wrap_output(output_path)
-
-        # Write output file
-        if not self._write_output(output_path, header_text):
-            print("Failed to rewrite header file.")
-            return 1
-
-        # Report successful completion
-        print(f"Build: {output_path}")
-        return 0
-
-    @classmethod
-    def _build_parser(cls) -> ArgumentParser:
-        """Build the Kconfig command line argument parser.
-
-        Returns:
-            Configured argument parser for the Kconfig command.
-        """
-        parser = ArgumentParser(
-            prog="python ./scripts/cli.py kconfig",
-            add_help=True,
-        )
-        parser.add_argument(
+    def configure(self, parser: ArgumentParser) -> None:
+        """Declare Kconfig command arguments."""
+        attach_path_completion(parser.add_argument(
             "-k",
             "--kconfig",
-            default=cls.DEFAULT_KCONFIG_PATH,
-            help=f"Kconfig file path (default: {cls.DEFAULT_KCONFIG_PATH})",
-        )
-        parser.add_argument(
+            default=None,
+            help=f"Kconfig file path (default: {self.DEFAULT_KCONFIG_PATH})",
+        ), FILE_COMPLETION)
+        attach_path_completion(parser.add_argument(
             "-c",
             "--config",
-            default=cls.DEFAULT_CONFIG_PATH,
-            help=f".config file path (default: {cls.DEFAULT_CONFIG_PATH})",
-        )
-        parser.add_argument(
+            default=None,
+            help=f".config file path (default: {self.DEFAULT_CONFIG_PATH})",
+        ), FILE_COMPLETION)
+        attach_path_completion(parser.add_argument(
             "-o",
             "--output",
-            default=cls.DEFAULT_OUTPUT_PATH,
-            help=f"Output header file path (default: {cls.DEFAULT_OUTPUT_PATH})",
-        )
+            default=None,
+            help=("Output header file path "
+                  f"(default: {self.DEFAULT_OUTPUT_PATH})"),
+        ), FILE_COMPLETION)
         parser.add_argument(
             "--no-ui",
             action="store_true",
-            help="Disable menuconfig UI.",
+            help="Disable menuconfig UI",
         )
-        return parser
 
-    @classmethod
-    def _parse_args(cls, args: list[str]) -> Namespace | None:
-        """Parse Kconfig command line arguments.
-
-        Args:
-            args: Raw command line arguments passed to the command.
-
-        Returns:
-            Parsed argument namespace, or `None` when parsing fails.
-        """
-        parser = cls._build_parser()
-        try:
-            return parser.parse_args(args)
-        except SystemExit:
-            return None
-
-    @staticmethod
-    def _parse_paths(args: Namespace) -> tuple[Path, Path, Path] | None:
-        """Parse and validate command input and output paths.
-
-        Args:
-            args: Parsed Kconfig command line arguments.
-
-        Returns:
-            Resolved Kconfig, config, and output paths, or `None` on error.
-        """
-        # Kconfig file path
-        kconfig_path = Path(args.kconfig).resolve()
+    def execute(self, context: CommandContext,
+                arguments: Namespace) -> CommandResult:
+        """Execute the Kconfig processing workflow."""
+        kconfig_path = context.resolve_optional_path(
+            arguments.kconfig, self.DEFAULT_KCONFIG_PATH)
         if not kconfig_path.exists():
-            print(f"Kconfig file not found: {args.kconfig}")
-            return None
+            return CommandResult.failure(
+                "Kconfig file not found: "
+                f"{arguments.kconfig or self.DEFAULT_KCONFIG_PATH}"
+            )
 
-        # Config file path
-        config_path = Path(args.config).resolve()
+        config_path = context.resolve_optional_path(
+            arguments.config, self.DEFAULT_CONFIG_PATH)
+        output_path = context.resolve_optional_path(
+            arguments.output, self.DEFAULT_OUTPUT_PATH)
+
+        if not arguments.no_ui:
+            try:
+                self._show_ui(
+                    context.project_root,
+                    kconfig_path,
+                    config_path,
+                    context.environment,
+                )
+            except RuntimeError as exc:
+                return CommandResult.failure(str(exc))
+
         if not config_path.exists():
-            print(f"Config file not found: {args.config}")
-            return None
+            return CommandResult.failure(
+                "Config file not found: "
+                f"{arguments.config or self.DEFAULT_CONFIG_PATH}"
+            )
 
-        # Output file path
-        output_path = Path(args.output).resolve()
+        error = self._export_config(kconfig_path, config_path, output_path)
+        if error is not None:
+            return CommandResult.failure(f"Failed to export Kconfig: {error}")
 
-        return kconfig_path, config_path, output_path
+        header_text = self._wrap_output(output_path)
+        if not self._write_output(output_path, header_text):
+            return CommandResult.failure("Failed to rewrite header file")
+
+        context.console.write(f"Build: {output_path}")
+        return CommandResult.success()
 
     @staticmethod
-    def _show_ui() -> None:
+    def _show_ui(
+            project_root: Path,
+            kconfig_path: Path,
+            config_path: Path,
+            environment: Mapping[str, str],
+    ) -> None:
         """Show the menuconfig user interface.
 
         Raises:
             RuntimeError: `menuconfig` failed to launch successfully.
         """
+        process_environment = dict(environment)
+        process_environment["KCONFIG_CONFIG"] = str(config_path)
         try:
-            subprocess.run(["menuconfig"], check=True)
+            subprocess.run(
+                ["menuconfig", str(kconfig_path)],
+                check=True,
+                cwd=str(project_root),
+                env=process_environment,
+            )
         except FileNotFoundError as exc:
             raise RuntimeError(
-                "Showing menuconfig failed. Please make sure menuconfig is installed."
+                "Showing menuconfig failed. Please make sure menuconfig "
+                "is installed."
             ) from exc
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(f"Showing menuconfig failed: {exc}") from exc
 
     @staticmethod
-    def _parse_kconfig(
+    def _export_config(
             kconfig_path: Path,
             config_path: Path,
             output_path: Path,
-    ) -> kconfiglib.Kconfig | None:
-        """Parse the Kconfig tree and export autoconfiguration output.
+    ) -> str | None:
+        """Load Kconfig, write `.config`, and export the autoconf header.
 
-        Args:
+        Arguments:
             kconfig_path: Resolved `Kconfig` file path.
             config_path: Resolved `.config` file path.
             output_path: Resolved generated header output path.
 
         Returns:
-            Loaded `kconfiglib.Kconfig` instance, or `None` on failure.
+            `None` on success, otherwise an error message.
         """
         try:
-            # Ensure output parent directory exists before writing
             output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Load Kconfig tree and `.config` contents
             kconf = kconfiglib.Kconfig(
                 str(kconfig_path),
                 warn=False,
                 warn_to_stderr=False,
             )
             kconf.load_config(str(config_path))
-
-            # Normalize config outputs
             kconf.write_config(str(config_path))
             kconf.write_autoconf(str(output_path))
-            return kconf
         except Exception as exc:
-            print(f"Failed to parse Kconfig: {exc}")
-            return None
+            return str(exc)
+        return None
 
     @classmethod
     def _wrap_output(cls, output_path: Path) -> str:
-        """Wrap generated header output.
+        """Wrap generated autoconf output in the project header template.
 
-        Args:
+        Arguments:
             output_path: Resolved generated header file path.
+
+        Returns:
+            Header text ready to replace the autoconf file.
         """
-        # Read generated autoconf header content
         content = output_path.read_text(encoding="utf-8")
-
-        # Remove `CONFIG_` prefix from generated macro names
         content = content.replace("#define CONFIG_", "#define ")
-
-        # Build include guard
         guard = cls._build_header_guard(output_path)
-
-        # Build timestamp
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Build '.h'
         lines = [
             f"#ifndef {guard}",
             f"#define {guard}",
@@ -273,7 +210,7 @@ class KconfigCommand:
     def _build_header_guard(output_path: Path) -> str:
         """Build an include guard macro name from the output file name.
 
-        Args:
+        Arguments:
             output_path: Resolved output header file path.
 
         Returns:
@@ -292,7 +229,7 @@ class KconfigCommand:
     ) -> bool:
         """Write compiled header text to the requested output path.
 
-        Args:
+        Arguments:
             output_path: Resolved output header file path.
             header_text: Rendered header text.
 
@@ -300,10 +237,7 @@ class KconfigCommand:
             `True` when the output file is written successfully, else `False`.
         """
         try:
-            # Ensure parent directory exists before writing
             output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Write generated header text as UTF-8
             output_path.write_text(header_text, encoding="utf-8")
         except OSError:
             return False

@@ -55,7 +55,6 @@ typedef enum mr_driver_type {
 
 /* Driver method type */
 typedef mr_err_t(mr_driver_method_t)(const struct mr_driver *drv);
-/* Driver release type */
 typedef void(mr_driver_release_t)(const struct mr_driver *drv);
 
 /* Driver clazz type */
@@ -359,7 +358,8 @@ mr_err_t mr_driver_del(mr_driver_t *drv);
  * @param _drv The driver.
  * @return MR_TRUE if the driver is initialized, MR_FALSE otherwise.
  */
-#define MR_DRIVER_IS_SETUP(_drv)        ((_drv)->flags & MR_DRIVER_FLAG_SETUP)
+#define MR_DRIVER_IS_SETUP(_drv)                                               \
+    (mr_atomic_load(&((mr_driver_t *)(_drv))->flags) & MR_DRIVER_FLAG_SETUP)
 
 /**
  * @brief This function sets up a driver.
@@ -376,10 +376,12 @@ mr_err_t mr_driver_setup(mr_driver_t *drv);
  * @param _type The driver major type.
  */
 #define MR_DRIVER_ASSERT(_drv, _type)                                          \
-    MR_ASSERT(((_drv) != MR_NULL) && MR_OBJECT_IS_INITED(_drv));               \
-    MR_ASSERT(MR_OBJECT_IS_CLAZZES((_drv), driver));                           \
-    MR_ASSERT(MR_DRIVER_IS_SETUP(_drv));                                       \
-    MR_ASSERT((MR_DRIVER_TYPE(_drv) & MR_DRIVER_TYPE_MASK) == (_type))
+    do {                                                                       \
+        MR_ASSERT(((_drv) != MR_NULL) && MR_OBJECT_IS_INITED(_drv));           \
+        MR_ASSERT(MR_OBJECT_IS_CLAZZES((_drv), driver));                       \
+        MR_ASSERT(MR_DRIVER_IS_SETUP(_drv));                                   \
+        MR_ASSERT((MR_DRIVER_TYPE(_drv) & MR_DRIVER_TYPE_MASK) == (_type));    \
+    } while (0)
 
 /**
  * @brief This function checks if a driver is ready.

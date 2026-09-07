@@ -101,7 +101,8 @@ class SemanticBuilder:
             if value.mode != ArrayMode.EXPANDED:
                 self._warn_at(
                     ErrorCode.INVALID_COMPATIBLE_VALUE,
-                    f"node '{path}': compatible must use string literals or expanded string lists",
+                    f"node '{path}': compatible must use string literals "
+                    "or expanded string lists",
                     value.span or prop.span,
                 )
                 return []
@@ -170,7 +171,7 @@ class SemanticBuilder:
                                    document: Document) -> None:
         """Apply ordered top-level modifications after base registration."""
         operations = document.operations or [*document.delete_nodes,
-                                              *document.overrides]
+                                             *document.overrides]
         for operation in operations:
             if isinstance(operation, DeleteNodeDecl):
                 self._apply_delete_node(tree, operation)
@@ -278,7 +279,7 @@ class SemanticBuilder:
     ) -> None:
         """Resolve and apply one `/delete-node/` directive."""
         candidates = self._resolve_delete_candidates(tree, deletion,
-                                                      parent_path)
+                                                     parent_path)
         if not candidates:
             self._warn_at(
                 ErrorCode.INVALID_NODE_DECL,
@@ -443,7 +444,7 @@ class SemanticBuilder:
         parent = tree.nodes_by_path.get(node.parent_path or "")
         node.effective_status = self.STATUS_DISABLED \
             if parent is not None \
-            and parent.effective_status == self.STATUS_DISABLED \
+               and parent.effective_status == self.STATUS_DISABLED \
             else node.declared_status
         self._refresh_descendant_statuses(tree, node)
 
@@ -460,7 +461,7 @@ class SemanticBuilder:
             self._refresh_descendant_statuses(tree, child)
 
     def _apply_deleted_properties(self, tree: HardTree) -> None:
-        """Apply recorded `/delete-property/` directives to the semantic tree."""
+        """Apply recorded `/delete-property/` directives."""
         pending = self._pending_deleted_properties
         self._pending_deleted_properties = {}
         for path, prop_names in pending.items():

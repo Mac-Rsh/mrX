@@ -33,6 +33,7 @@ typedef int mr_err_t;
 #define MR_EPERM                        EPERM
 #define MR_ENOENT                       ENOENT
 #define MR_EIO                          EIO
+#define MR_ENODEV                       ENODEV
 #define MR_EAGAIN                       EAGAIN
 #define MR_ENOMEM                       ENOMEM
 #define MR_EBUSY                        EBUSY
@@ -56,6 +57,7 @@ typedef int mr_err_t;
 #define MR_EPERM                        (1)
 #define MR_ENOENT                       (2)
 #define MR_EIO                          (5)
+#define MR_ENODEV                       (19)
 #define MR_EAGAIN                       (11)
 #define MR_ENOMEM                       (12)
 #define MR_EBUSY                        (16)

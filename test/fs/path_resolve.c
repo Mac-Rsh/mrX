@@ -9,7 +9,7 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST) && defined(MR_USE_FS)
 #include <mrX.h>
-#include "fs_test.h"
+#include <mrX/test/fs/fs_test.h>
 
 static void path_expect(volatile mr_uint32_t *__test_status, const char *name,
                         mr_int64_t actual, mr_int64_t expected) {
@@ -32,19 +32,11 @@ static void path_stat_type(volatile mr_uint32_t *__test_status,
     return;
 }
 
-static void fs_path_resolve_test(volatile mr_uint32_t *__test_status) {
+MR_TEST(fs, path_resolve) {
     mr_file_t file = MR_FILE_INIT(file);
     char long_path[MR_CFG_FS_PATH_LEN + 8];
-    char join_target[MR_CFG_FS_PATH_LEN];
-    char link_name[32];
-    char target[32];
-    mr_size_t target_len;
     mr_stat_t stat;
-    mr_size_t i;
     mr_err_t ret;
-#if !defined(MR_CFG_FS_SYMLINK_MAX)
-#define MR_CFG_FS_SYMLINK_MAX (16U)
-#endif
 
     /* Mount RamFS */
     ret = fs_test_mount_root("ramfs", 0, MR_NULL);
@@ -96,7 +88,7 @@ static void fs_path_resolve_test(volatile mr_uint32_t *__test_status) {
     path_expect(__test_status, "open through file",
                 mr_fs_open(&file, "/a/file/x", MR_O_RDONLY), -MR_ENOTDIR);
     path_expect(__test_status, "stat through file",
-                mr_fs_stat_by_path("/a/file/x", &stat), -MR_ENOTDIR);
+                fs_test_stat("/a/file/x", &stat), -MR_ENOTDIR);
     path_expect(__test_status, "mkdir through file", mr_fs_mkdir("/a/file/x"),
                 -MR_ENOTDIR);
 
@@ -107,56 +99,11 @@ static void fs_path_resolve_test(volatile mr_uint32_t *__test_status) {
     path_expect(__test_status, "path too long",
                 mr_fs_open(&file, long_path, MR_O_RDONLY), -MR_ENAMETOOLONG);
     path_expect(__test_status, "stat path too long",
-                mr_fs_stat_by_path(long_path, &stat), -MR_ENAMETOOLONG);
+                fs_test_stat(long_path, &stat), -MR_ENAMETOOLONG);
 
     long_path[MR_CFG_FS_PATH_LEN] = '\0';
     path_expect(__test_status, "path max len",
                 mr_fs_open(&file, long_path, MR_O_RDONLY), -MR_ENAMETOOLONG);
-
-    /* Symlink depth: chain of length SYMLINK_MAX succeeds; +1 loops */
-    path_expect(__test_status, "chdir root for links", mr_fs_chdir("/"), 0);
-    ret = mr_fs_open(&file, "/chain0", MR_O_RDWR | MR_O_CREAT);
-    path_expect(__test_status, "create chain0 target", ret, 0);
-    if (ret == 0) {
-        path_expect(__test_status, "close chain0", mr_fs_close(&file), 0);
-    }
-
-    for (i = 1; i <= (mr_size_t)MR_CFG_FS_SYMLINK_MAX; i++) {
-        mr_snprintf(link_name, sizeof(link_name), "/chain%u", (unsigned)i);
-        mr_snprintf(target, sizeof(target), "/chain%u", (unsigned)(i - 1U));
-        path_expect(__test_status, link_name, mr_fs_symlink(target, link_name),
-                    0);
-    }
-
-    /* Following SYMLINK_MAX links reaches the regular file */
-    mr_snprintf(link_name, sizeof(link_name), "/chain%u",
-                (unsigned)MR_CFG_FS_SYMLINK_MAX);
-    path_expect(__test_status, "stat chain max", fs_test_stat(link_name, &stat),
-                0);
-    if (fs_test_stat(link_name, &stat) == 0) {
-        path_expect(__test_status, "chain max type", stat.type, MR_INODE_REG);
-    }
-
-    /* One more link exceeds the limit */
-    mr_snprintf(link_name, sizeof(link_name), "/chain%u",
-                (unsigned)(MR_CFG_FS_SYMLINK_MAX + 1U));
-    mr_snprintf(target, sizeof(target), "/chain%u",
-                (unsigned)MR_CFG_FS_SYMLINK_MAX);
-    path_expect(__test_status, "create over-depth link",
-                mr_fs_symlink(target, link_name), 0);
-    path_expect(__test_status, "open over-depth link",
-                mr_fs_open(&file, link_name, MR_O_RDONLY), -MR_ELOOP);
-
-    /* Joining a long symbolic-link target with a suffix overflows */
-    target_len = (mr_size_t)MR_CFG_FS_PATH_LEN - 8U;
-    mr_memset(join_target, 't', target_len);
-    join_target[0] = '/';
-    join_target[target_len] = '\0';
-    path_expect(__test_status, "create long target link",
-                mr_fs_symlink(join_target, "/long-link"), 0);
-    path_expect(__test_status, "join overflow",
-                mr_fs_open(&file, "/long-link/extra-component", MR_O_RDONLY),
-                -MR_ENAMETOOLONG);
 
     /* Long dentry names use the heap path (beyond inline name length) */
     path_expect(__test_status, "mkdir long name", mr_fs_mkdir("/longnamedir"),
@@ -182,10 +129,6 @@ static void fs_path_resolve_test(volatile mr_uint32_t *__test_status) {
 
     path_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
-}
-
-MR_TEST(fs, path_resolve) {
-    fs_path_resolve_test(__test_status);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

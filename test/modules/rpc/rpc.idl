@@ -1,0 +1,48 @@
+/*
+ * RPC unit-test schema
+ *
+ * Regenerate the RPC codec from the mrX directory with:
+ * python ./scripts/cli.py idl -i ./test/modules/rpc/rpc.idl --no-cpp
+ */
+
+enum status: u8 {
+    ok = 0,
+    busy = 1,
+    fail = 2,
+};
+
+struct point {
+    x: i16;
+    y: i16;
+};
+
+struct sample {
+    id: u32;
+    name: string<24>;
+    pos: point;
+    tags: u8[4];
+    st: status;
+};
+
+struct kv {
+    key: string<12>;
+    val: u32;
+};
+
+service lab @1 {
+    mix @0 (
+        title: string<16>,
+        count: u32,
+        note: string<32>,
+        blob: bytes<40>
+    ) -> (
+        title: string<16>,
+        count: u32,
+        note: string<32>,
+        blob: bytes<40>
+    );
+    nest @1 (item: sample) -> (item: sample);
+    table @2 (rows: kv[2]) -> (rows: kv[2]);
+    ping @3 () -> ();
+    log @4 (msg: string<48>);
+};

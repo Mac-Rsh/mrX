@@ -21,3 +21,11 @@ output = ".text"
 keep = true
 sort = true
 comment = "Driver"
+
+[[section]]
+name = "rpc"
+input = "mr_rpc.*"
+output = ".text"
+keep = true
+sort = true
+comment = "Rpc"

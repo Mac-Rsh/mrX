@@ -9,7 +9,7 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST) && defined(MR_USE_FS)
 #include <mrX.h>
-#include "fs_test.h"
+#include <mrX/test/fs/fs_test.h>
 
 #define MKNOD_FS_NAME_MAX (16)
 
@@ -32,13 +32,13 @@ static mr_err_t mknod_fs_inode_mknod(mr_inode_t *dir, const char *name,
                                      mr_inode_type_t type, void *priv,
                                      mr_inode_t **out);
 static void mknod_fs_inode_destroy(mr_inode_t *inode);
-static mr_err_t mknod_fs_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t mknod_fs_mount(mr_sblock_t *sb, const char *source,
                                int flags, void *data);
 
 static mr_err_t mknod_fs_inode_create_only(mr_inode_t *dir, const char *name,
                                            mr_inode_type_t type,
                                            mr_inode_t **out);
-static mr_err_t mknod_fs_create_only_mount(mr_super_block_t *sb,
+static mr_err_t mknod_fs_create_only_mount(mr_sblock_t *sb,
                                            const char *source, int flags,
                                            void *data);
 
@@ -58,9 +58,9 @@ static const mr_inode_ops_t __mknod_fs_node_inode_ops = {
 static const mr_file_ops_t __mknod_fs_file_ops;
 
 static mr_file_system_t __mknod_fs
-    = MR_FILE_SYSTEM_INIT("mknodfs", mknod_fs_mount, MR_NULL, MR_NULL);
+    = MR_FILE_SYSTEM_INIT("mknodfs", mknod_fs_mount, MR_NULL);
 static mr_file_system_t __mknod_create_only_fs
-    = MR_FILE_SYSTEM_INIT("mknodcreatefs", mknod_fs_create_only_mount, MR_NULL,
+    = MR_FILE_SYSTEM_INIT("mknodcreatefs", mknod_fs_create_only_mount,
                           MR_NULL);
 
 static void mknod_fs_expect(volatile mr_uint32_t *__test_status,
@@ -169,7 +169,7 @@ static void mknod_fs_inode_destroy(mr_inode_t *inode) {
     }
 }
 
-static mr_err_t mknod_fs_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t mknod_fs_mount(mr_sblock_t *sb, const char *source,
                                int flags, void *data) {
     mknod_fs_context_t *context = data;
     mr_inode_t *root;
@@ -194,7 +194,7 @@ static mr_err_t mknod_fs_mount(mr_super_block_t *sb, const char *source,
     return 0;
 }
 
-static mr_err_t mknod_fs_create_only_mount(mr_super_block_t *sb,
+static mr_err_t mknod_fs_create_only_mount(mr_sblock_t *sb,
                                            const char *source, int flags,
                                            void *data) {
     mknod_fs_context_t *context = data;
@@ -220,7 +220,7 @@ static mr_err_t mknod_fs_create_only_mount(mr_super_block_t *sb,
     return 0;
 }
 
-static void fs_mknod_test(volatile mr_uint32_t *__test_status) {
+MR_TEST(fs, mknod) {
     mknod_fs_context_t fallback_context = {0};
     mknod_fs_context_t context = {0};
     mr_file_t fallback_file = MR_FILE_INIT(fallback_file);
@@ -255,7 +255,7 @@ static void fs_mknod_test(volatile mr_uint32_t *__test_status) {
                                 mr_fs_close(&fallback_file), 0);
             }
             mknod_fs_expect(__test_status, "unlink fallback node",
-                            fs_test_unlink("/fallback"), 0);
+                            mr_fs_unlink("/fallback"), 0);
         }
         mknod_fs_expect(__test_status, "mknod umount create-only fs",
                         mr_fs_umount("/"), 0);
@@ -320,11 +320,11 @@ static void fs_mknod_test(volatile mr_uint32_t *__test_status) {
 
     /* Rename and remove without optional filesystem callbacks */
     mknod_fs_expect(__test_status, "rename mknod node",
-                    fs_test_rename("/node", "/renamed"), 0);
+                    mr_fs_rename("/node", "/renamed"), 0);
     mknod_fs_stat_expect(__test_status, "/node", -MR_ENOENT, MR_INODE_NONE);
     mknod_fs_stat_expect(__test_status, "/renamed", 0, MR_INODE_CHR);
     mknod_fs_expect(__test_status, "unlink mknod node",
-                    fs_test_unlink("/renamed"), 0);
+                    mr_fs_unlink("/renamed"), 0);
     mknod_fs_stat_expect(__test_status, "/renamed", -MR_ENOENT, MR_INODE_NONE);
     mknod_fs_size_expect(__test_status, "destroy mknod inode",
                          context.destroy_calls, 1);
@@ -338,10 +338,6 @@ static void fs_mknod_test(volatile mr_uint32_t *__test_status) {
     mknod_fs_size_expect(__test_status, "mknod heap restored",
                          heap_after.used_bytes, heap_before.used_bytes);
     return;
-}
-
-MR_TEST(fs, mknod) {
-    fs_mknod_test(__test_status);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

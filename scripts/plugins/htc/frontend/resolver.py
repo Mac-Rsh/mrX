@@ -11,9 +11,10 @@ Resolves source files and include directives for the preprocessor stage.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
+from pathlib import Path
+
 from ..common import Diagnostics, ErrorCode
 from .directives import DirectiveParser
-from pathlib import Path
 
 
 class SourceResolver:
@@ -23,6 +24,7 @@ class SourceResolver:
 
     def __init__(self, include_dirs: list[str],
                  diagnostics: Diagnostics) -> None:
+        """Create a resolver with extra include search directories."""
         self.include_dirs = [Path(directory).resolve() for directory in
                              include_dirs]
         self.diagnostics = diagnostics

@@ -12,13 +12,14 @@ preprocessor.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from .directives import ConditionalDirective, DirectiveParser
-from ..common import Diagnostics, ErrorCode
-from .conditions import ConditionEvaluator
 from dataclasses import dataclass
 
+from ..common import Diagnostics, ErrorCode
+from .conditions import ConditionEvaluator
+from .directives import ConditionalDirective, DirectiveParser
 
-@dataclass
+
+@dataclass(slots=True)
 class ConditionalFrame:
     """Tracks active state for one nested conditional compilation block."""
 
@@ -42,6 +43,7 @@ class ConditionalState:
     DIRECTIVE_IFNDEF = DirectiveParser.DIRECTIVE_IFNDEF
 
     def __init__(self, diagnostics: Diagnostics) -> None:
+        """Create a conditional stack bound to one diagnostic sink."""
         self.diagnostics = diagnostics
         self.evaluator = ConditionEvaluator()
         self.frames: list[ConditionalFrame] = []
@@ -99,6 +101,7 @@ class ConditionalState:
     def _handle_elif(self, expression: str, macros: dict[str, str],
                      file_path: str, line_number: int, directive_column: int,
                      expression_column: int) -> None:
+        """Apply `#elif` to the current conditional frame."""
         if not self.frames:
             self._report_unexpected(self.DIRECTIVE_ELIF, file_path,
                                     line_number, directive_column)
@@ -107,7 +110,8 @@ class ConditionalState:
         if frame.saw_else:
             self._report_line_error(
                 ErrorCode.INCLUDE_ERROR,
-                f"#{self.DIRECTIVE_ELIF} cannot appear after #{self.DIRECTIVE_ELSE}",
+                f"#{self.DIRECTIVE_ELIF} cannot appear after "
+                f"#{self.DIRECTIVE_ELSE}",
                 file_path,
                 line_number,
                 directive_column,
@@ -121,6 +125,7 @@ class ConditionalState:
 
     def _handle_else(self, file_path: str, line_number: int,
                      directive_column: int) -> None:
+        """Apply `#else` to the current conditional frame."""
         if not self.frames:
             self._report_unexpected(self.DIRECTIVE_ELSE, file_path,
                                     line_number, directive_column)
@@ -141,6 +146,7 @@ class ConditionalState:
 
     def _push(self, parent_active: bool, matched: bool, file_path: str,
               line_number: int, column: int) -> None:
+        """Push one nested conditional frame."""
         self.frames.append(
             ConditionalFrame(
                 parent_active=parent_active,
@@ -154,6 +160,7 @@ class ConditionalState:
 
     def _evaluate(self, expression: str, macros: dict[str, str],
                   file_path: str, line_number: int, column: int) -> bool:
+        """Evaluate one expression and report invalid syntax as an error."""
         try:
             return self.evaluator.evaluate(expression, macros)
         except ValueError as exc:
@@ -165,6 +172,7 @@ class ConditionalState:
 
     def _report_unexpected(self, directive_name: str, file_path: str,
                            line_number: int, column: int) -> None:
+        """Report a conditional directive that has no matching open block."""
         self._report_line_error(
             ErrorCode.INCLUDE_ERROR,
             f"unexpected #{directive_name} without matching conditional block",
@@ -176,16 +184,19 @@ class ConditionalState:
     def _report_line_error(self, code: ErrorCode, message: str,
                            file_path: str, line_number: int,
                            column: int = 1) -> None:
+        """Attach a source span to one preprocessor error."""
         self.diagnostics.error(code, message).with_span(file_path, line_number,
                                                         column)
 
     @classmethod
     def _directive_column(cls, line: str) -> int:
+        """Return the column of the `#` directive marker."""
         return cls._column_of(line, DirectiveParser.DIRECTIVE_PREFIX)
 
     @staticmethod
     def _column_of(line: str, text: str | None,
                    fallback: int | None = None) -> int:
+        """Return a 1-based column for `text`, or a fallback location."""
         if text:
             index = line.find(text)
             if index >= 0:

@@ -12,18 +12,22 @@ or renames the project file set.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from xml.etree.ElementTree import Element, ElementTree, ParseError, SubElement, \
-    indent, parse
 from argparse import ArgumentParser, Namespace
-from dock import PluginSpec, export_plugin
 from dataclasses import dataclass, field
-from tempfile import NamedTemporaryFile
 from pathlib import Path
+from tempfile import NamedTemporaryFile
+from xml.etree.ElementTree import Element, ElementTree, ParseError
+from xml.etree.ElementTree import SubElement, indent, parse
 import os
+
+from framework.command import Command, CommandResult, CommandSpec
+from framework.completion import FILE_COMPLETION, PATH_COMPLETION
+from framework.completion import attach_path_completion
+from framework.context import CommandContext
 
 
 @dataclass(slots=True, frozen=True)
-class MdkPaths:
+class MDKPaths:
     """Resolved project and source paths for one command invocation."""
 
     project: Path
@@ -32,7 +36,7 @@ class MdkPaths:
 
 
 @dataclass(slots=True)
-class MdkGroupContext:
+class MDKGroupContext:
     """One target group and its file containers."""
 
     name: str
@@ -41,17 +45,17 @@ class MdkGroupContext:
 
 
 @dataclass(slots=True)
-class MdkTargetContext:
+class MDKTargetContext:
     """Resolved target state used by the MDK command."""
 
     name: str
     element: Element
     groups_element: Element | None
-    groups: dict[str, MdkGroupContext]
+    groups: dict[str, MDKGroupContext]
 
 
 @dataclass(slots=True, frozen=True)
-class MdkFileRecord:
+class MDKFileRecord:
     """One existing file entry inside the selected target."""
 
     group_name: str
@@ -64,7 +68,7 @@ class MdkFileRecord:
 
 
 @dataclass(slots=True, frozen=True)
-class MdkAddEntry:
+class MDKAddEntry:
     """One file entry prepared for insertion into the project."""
 
     source: Path
@@ -76,15 +80,14 @@ class MdkAddEntry:
 
 
 @dataclass(slots=True, frozen=True)
-class MdkRenameEntry:
+class MDKRenameEntry:
     """One file rename planned for the MDK project file set."""
 
     source: Path
     destination: Path
 
 
-@export_plugin
-class MdkCommand:
+class MDKCommand(Command):
     """Built-in command for managing one MDK project file set."""
 
     DEFAULT_GROUP_NAME = "Sources"
@@ -97,155 +100,29 @@ class MdkCommand:
         ".uvgui.",
     )
 
-    spec = PluginSpec(
+    spec = CommandSpec(
         name="mdk",
-        description="Add, delete, sync, or rename an MDK project.",
+        description="Add, delete, sync, or rename an MDK project",
     )
 
-    def help(self) -> str:
-        """Return detailed help text for the MDK command.
-
-        Returns:
-            Human-readable help text for the command.
-        """
-        parser = self._build_parser()
-        lines = [
-            "Usage: python ./scripts/cli.py mdk <add|del|sync|rename> -p <project.uvprojx> [options]",
-            "Description: Add, delete, sync file lists, or rename the project file set.",
-            "Aliases: (none)",
-            "",
-            parser.format_help().rstrip(),
-            "Add, del, and sync require `--source`.",
-            "Directory add, del, and sync without `--group` expand visible first-level subdirectories below `--source` and recurse inside each subtree.",
-            "Add and del skip duplicate paths with a warning and continue processing the remaining files.",
-            "Del also skips paths that are not present in the selected target.",
-            "Sync uses the same directory expansion rules as add, automatically adds missing files, and removes project entries whose source files no longer exist.",
-            "Rename mode uses `--name`, renames matching `.uvoptx`/`.uvopt` and user files, and updates the selected Keil target/output name.",
-            "Directory add, del, or sync with `--group` keeps the source tree under MDK group names such as `group/subdir`.",
-        ]
-        return "\n".join(lines)
-
-    def run(self, args: list[str]) -> int:
-        """Execute the MDK project update workflow.
-
-        Args:
-            args: Command line arguments passed to the command.
-
-        Returns:
-            Exit code (0 for success, non-zero for error).
-        """
-        # Parse command line arguments
-        options = self._parse_args(args)
-        if options is None:
-            return 1
-
-        # Resolve and validate command paths
-        paths = self._parse_paths(options)
-        if paths is None:
-            return 1
-
-        try:
-            if options.action == "rename":
-                renamed_project = self._rename_project(paths.project,
-                                                       options.name,
-                                                       options.target)
-                print(f"Build: {renamed_project}")
-                return 0
-
-            updated_project = self._update_project(paths, options)
-            print(f"Build: {updated_project}")
-            return 0
-        except ValueError as exc:
-            print(exc)
-            return 1
-
-    @classmethod
-    def _update_project(cls, paths: MdkPaths, options: Namespace) -> Path:
-        """Apply add, del, or sync mode updates to one MDK project file."""
-        if paths.source is None or paths.source_text is None:
-            raise ValueError(f"Missing source path for `{options.action}` mode")
-
-        # Load the selected project target and current file list
-        tree = cls._load_project(paths.project)
-        target = cls._select_target(tree.getroot(), options.target)
-        existing_files = cls._collect_existing_files(target,
-                                                     paths.project.parent)
-        project_updated = False
-
-        # Apply the requested in-memory update before writing the project
-        if options.action in {"add", "sync"}:
-            entries = cls._collect_requested_add_entries(
-                paths,
-                options.group,
-                paths.project.parent,
-                allow_empty=(options.action == "sync"),
-            )
-            entries, skipped_messages = cls._filter_add_entries(entries,
-                                                                existing_files)
-            for message in skipped_messages:
-                print(f"Skip: {message}")
-
-            if options.action == "sync":
-                missing_files = cls._collect_sync_remove_files(
-                    paths, existing_files, paths.project.parent)
-                for record in missing_files:
-                    print(
-                        f"Remove: missing source file in group `{record.group_name}`: {record.file_path}"
-                    )
-                if missing_files:
-                    cls._remove_files(target, missing_files,
-                                      options.keep_empty_groups)
-                    project_updated = True
-
-            if entries:
-                cls._add_entries(target, entries)
-                project_updated = True
-        else:
-            matched_files, skipped_messages = cls._collect_requested_remove_files(
-                paths,
-                options.group,
-                existing_files,
-                paths.project.parent,
-            )
-            for message in skipped_messages:
-                print(f"Skip: {message}")
-            if matched_files:
-                cls._remove_files(target, matched_files,
-                                  options.keep_empty_groups)
-                project_updated = True
-
-        # Write the updated project only after all checks succeed
-        if project_updated:
-            cls._write_project(tree, paths.project)
-        return paths.project
-
-    @classmethod
-    def _build_parser(cls) -> ArgumentParser:
-        """Build the MDK command line argument parser.
-
-        Returns:
-            Configured argument parser for the MDK command.
-        """
-        parser = ArgumentParser(
-            prog="python ./scripts/cli.py mdk",
-            add_help=True,
-        )
+    def configure(self, parser: ArgumentParser) -> None:
+        """Declare MDK command arguments."""
         parser.add_argument(
             "action",
             choices=("add", "del", "sync", "rename"),
             help="Operation to apply to the MDK project",
         )
-        parser.add_argument(
+        attach_path_completion(parser.add_argument(
             "-p",
             "--project",
             required=True,
             help="Target MDK '.uvprojx' or '.uvproj' file path",
-        )
-        parser.add_argument(
+        ), FILE_COMPLETION)
+        attach_path_completion(parser.add_argument(
             "-s",
             "--source",
             help="File or directory path used by add/del/sync mode",
-        )
+        ), PATH_COMPLETION)
         parser.add_argument(
             "-n",
             "--name",
@@ -254,72 +131,132 @@ class MdkCommand:
         parser.add_argument(
             "-t",
             "--target",
-            help="Target name inside the MDK project (used by add/del/sync, and rename for multi-target projects)",
+            help=("Target name inside the MDK project (used by add/del/sync, "
+                  "and rename for multi-target projects)"),
         )
         parser.add_argument(
             "-g",
             "--group",
-            help="Root MDK group name used by add/del/sync mode; omit it for directory add, del, or sync to enable auto grouping",
+            help=("Root MDK group name used by add/del/sync mode; omit it "
+                  "for directory add, del, or sync to enable auto grouping"),
         )
         parser.add_argument(
             "--keep-empty-groups",
             action="store_true",
             help="Keep empty groups after del or sync removes files",
         )
-        return parser
 
-    @classmethod
-    def _parse_args(cls, args: list[str]) -> Namespace | None:
-        """Parse MDK command line arguments.
-
-        Args:
-            args: Raw command line arguments passed to the command.
-
-        Returns:
-            Parsed argument namespace, or `None` when parsing fails.
-        """
-        parser = cls._build_parser()
+    def execute(self, context: CommandContext,
+                arguments: Namespace) -> CommandResult:
+        """Execute the MDK project update workflow."""
+        paths = self._parse_paths(context, arguments)
+        if isinstance(paths, str):
+            return CommandResult.failure(paths)
 
         try:
-            return parser.parse_args(args)
-        except SystemExit:
-            return None
+            if arguments.action == "rename":
+                renamed_project = self._rename_project(paths.project,
+                                                       arguments.name,
+                                                       arguments.target)
+                context.console.write(f"Build: {renamed_project}")
+                return CommandResult.success()
+
+            updated_project = self._update_project(paths, arguments, context)
+            context.console.write(f"Build: {updated_project}")
+            return CommandResult.success()
+        except ValueError as exc:
+            return CommandResult.failure(str(exc))
+
+    @classmethod
+    def _update_project(cls, paths: MDKPaths, arguments: Namespace,
+                        context: CommandContext) -> Path:
+        """Apply add, del, or sync mode updates to one MDK project file."""
+        if paths.source is None or paths.source_text is None:
+            raise ValueError(
+                f"Missing source path for `{arguments.action}` mode")
+
+        # Load the selected project target and current file list
+        tree = cls._load_project(paths.project)
+        target = cls._select_target(tree.getroot(), arguments.target)
+        existing_files = cls._collect_existing_files(target,
+                                                     paths.project.parent)
+        project_updated = False
+
+        # Apply the requested in-memory update before writing the project
+        if arguments.action in {"add", "sync"}:
+            entries = cls._collect_requested_add_entries(
+                paths,
+                arguments.group,
+                paths.project.parent,
+                allow_empty=(arguments.action == "sync"),
+            )
+            entries, skipped_messages = cls._filter_add_entries(entries,
+                                                                existing_files)
+            for message in skipped_messages:
+                context.console.warning(f"Skip: {message}")
+
+            if arguments.action == "sync":
+                missing_files = cls._collect_sync_remove_files(
+                    paths, existing_files, paths.project.parent)
+                for record in missing_files:
+                    context.console.write(
+                        "Remove: missing source file in group "
+                        f"`{record.group_name}`: {record.file_path}"
+                    )
+                if missing_files:
+                    cls._remove_files(target, missing_files,
+                                      arguments.keep_empty_groups)
+                    project_updated = True
+
+            if entries:
+                cls._add_entries(target, entries)
+                project_updated = True
+        else:
+            matched_files, skipped_messages = (
+                cls._collect_requested_remove_files(
+                    paths,
+                    arguments.group,
+                    existing_files,
+                    paths.project.parent,
+                )
+            )
+            for message in skipped_messages:
+                context.console.warning(f"Skip: {message}")
+            if matched_files:
+                cls._remove_files(target, matched_files,
+                                  arguments.keep_empty_groups)
+                project_updated = True
+
+        # Write the updated project only after all checks succeed
+        if project_updated:
+            cls._write_project(tree, paths.project)
+        return paths.project
 
     @staticmethod
-    def _parse_paths(args: Namespace) -> MdkPaths | None:
-        """Parse and validate command input paths.
-
-        Args:
-            args: Parsed MDK command line arguments.
-
-        Returns:
-            Resolved project and source paths, or `None` on error.
-        """
-        project_path = Path(args.project).resolve()
+    def _parse_paths(context: CommandContext,
+                     arguments: Namespace) -> MDKPaths | str:
+        """Parse and validate command input paths."""
+        project_path = context.resolve_path(arguments.project)
 
         if not project_path.exists():
-            print(f"MDK project file not found: {args.project}")
-            return None
+            return f"MDK project file not found: {arguments.project}"
         suffix = project_path.suffix.lower()
         if suffix not in {".uvprojx", ".uvproj"}:
-            print(f"Unsupported MDK project file: {args.project}")
-            return None
+            return f"Unsupported MDK project file: {arguments.project}"
 
-        if args.action in {"add", "del", "sync"}:
-            if not args.source:
-                print(f"`--source` is required for `{args.action}` mode")
-                return None
-            source_path = Path(args.source).resolve(strict=False)
-            source_text = args.source
+        if arguments.action in {"add", "del", "sync"}:
+            if not arguments.source:
+                return f"`--source` is required for `{arguments.action}` mode"
+            source_path = context.resolve_path(arguments.source)
+            source_text = arguments.source
         else:
             source_path = None
             source_text = None
 
-        if args.action == "rename" and not (args.name or "").strip():
-            print("`--name` is required for `rename` mode")
-            return None
+        if arguments.action == "rename" and not (arguments.name or "").strip():
+            return "`--name` is required for `rename` mode"
 
-        return MdkPaths(
+        return MDKPaths(
             project=project_path,
             source=source_path,
             source_text=source_text,
@@ -360,7 +297,7 @@ class MdkCommand:
             project_path: Path,
             target_name: str | None,
             new_name: str,
-            rename_entries: list[MdkRenameEntry],
+            rename_entries: list[MDKRenameEntry],
     ) -> list[tuple[Path, Path]]:
         """Prepare updated XML files before any project file is renamed."""
         project_tree = cls._load_project(project_path)
@@ -438,7 +375,8 @@ class MdkCommand:
                 return Path(handle.name)
         except OSError as exc:
             raise ValueError(
-                f"Failed to create temporary file near: {reference_path} ({exc})"
+                "Failed to create temporary file near: "
+                f"{reference_path} ({exc})"
             ) from exc
 
     @classmethod
@@ -481,7 +419,7 @@ class MdkCommand:
                 os.replace(destination_path, backup_path)
                 backups.append((backup_path, destination_path))
                 os.replace(staged_path, destination_path)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             for backup_path, destination_path in reversed(backups):
                 try:
                     os.replace(backup_path, destination_path)
@@ -515,7 +453,8 @@ class MdkCommand:
         if name_path.suffix:
             if name_path.suffix.lower() != project_suffix:
                 raise ValueError(
-                    f"Rename target must keep project suffix `{project_suffix}`: {raw_name}"
+                    "Rename target must keep project suffix "
+                    f"`{project_suffix}`: {raw_name}"
                 )
             normalized_name = name_path.stem.strip()
         else:
@@ -525,16 +464,17 @@ class MdkCommand:
             raise ValueError(f"Invalid project name: {raw_name}")
         if normalized_name == project_path.stem:
             raise ValueError(
-                f"New project name is the same as the current name: {normalized_name}"
+                "New project name is the same as the current name: "
+                f"{normalized_name}"
             )
         return normalized_name
 
     @classmethod
     def _build_rename_entries(cls, project_path: Path,
-                              new_name: str) -> list[MdkRenameEntry]:
+                              new_name: str) -> list[MDKRenameEntry]:
         """Build and validate the file rename plan for one project."""
         rename_entries = [
-            MdkRenameEntry(
+            MDKRenameEntry(
                 source=project_path,
                 destination=project_path.with_name(
                     f"{new_name}{project_path.suffix}"),
@@ -547,7 +487,7 @@ class MdkCommand:
             option_path = project_path.with_suffix(option_suffix)
             if option_path.exists():
                 rename_entries.append(
-                    MdkRenameEntry(
+                    MDKRenameEntry(
                         source=option_path,
                         destination=option_path.with_name(
                             f"{new_name}{option_suffix}"),
@@ -563,9 +503,9 @@ class MdkCommand:
             cls,
             project_path: Path,
             new_name: str,
-    ) -> list[MdkRenameEntry]:
+    ) -> list[MDKRenameEntry]:
         """Collect matching Keil user files that should follow the rename."""
-        rename_entries: list[MdkRenameEntry] = []
+        rename_entries: list[MDKRenameEntry] = []
         project_name = project_path.stem
 
         for marker in cls.PROJECT_USER_FILE_MARKERS:
@@ -573,7 +513,7 @@ class MdkCommand:
             for source_path in sorted(project_path.parent.glob(pattern)):
                 suffix_text = source_path.name[len(project_name):]
                 rename_entries.append(
-                    MdkRenameEntry(
+                    MDKRenameEntry(
                         source=source_path,
                         destination=source_path.with_name(
                             f"{new_name}{suffix_text}"),
@@ -583,7 +523,7 @@ class MdkCommand:
     @classmethod
     def _validate_rename_entries(
             cls,
-            rename_entries: list[MdkRenameEntry],
+            rename_entries: list[MDKRenameEntry],
     ) -> None:
         """Validate that every rename source and destination is safe."""
         destination_map: dict[str, Path] = {}
@@ -597,7 +537,8 @@ class MdkCommand:
             owner = destination_map.get(destination_key)
             if owner is not None:
                 raise ValueError(
-                    f"Duplicate rename target detected: {entry.destination} and {owner}"
+                    "Duplicate rename target detected: "
+                    f"{entry.destination} and {owner}"
                 )
             destination_map[destination_key] = entry.source
 
@@ -607,9 +548,9 @@ class MdkCommand:
 
     @classmethod
     def _apply_rename_entries(cls,
-                              rename_entries: list[MdkRenameEntry]) -> None:
+                              rename_entries: list[MDKRenameEntry]) -> None:
         """Apply one validated rename plan and roll back on failure."""
-        applied_entries: list[MdkRenameEntry] = []
+        applied_entries: list[MDKRenameEntry] = []
 
         try:
             for entry in rename_entries:
@@ -622,7 +563,7 @@ class MdkCommand:
 
     @classmethod
     def _rollback_rename_entries(cls,
-                                 rename_entries: list[MdkRenameEntry]) -> None:
+                                 rename_entries: list[MDKRenameEntry]) -> None:
         """Restore one applied rename plan back to its original paths."""
         rollback_errors: list[str] = []
 
@@ -661,7 +602,8 @@ class MdkCommand:
                 f"Invalid MDK option file: {option_path} ({exc})") from exc
         except OSError as exc:
             raise ValueError(
-                f"Failed to read MDK option file: {option_path} ({exc})") from exc
+                f"Failed to read MDK option file: {option_path} ({exc})"
+            ) from exc
 
     @staticmethod
     def _select_option_target(root: Element, target_name: str) -> Element:
@@ -681,8 +623,11 @@ class MdkCommand:
             None,
         )
         if target_element is None:
+            available = ", ".join(
+                name or "<unnamed>" for name in target_names)
             raise ValueError(
-                f"Target not found in option file: {target_name} (available: {', '.join(name or '<unnamed>' for name in target_names)})"
+                f"Target not found in option file: {target_name} "
+                f"(available: {available})"
             )
         return target_element
 
@@ -690,7 +635,7 @@ class MdkCommand:
     def _load_project(project_path: Path) -> ElementTree:
         """Load one MDK project file.
 
-        Args:
+        Arguments:
             project_path: Resolved MDK project path.
 
         Returns:
@@ -706,14 +651,15 @@ class MdkCommand:
                 f"Invalid MDK project file: {project_path} ({exc})") from exc
         except OSError as exc:
             raise ValueError(
-                f"Failed to read MDK project file: {project_path} ({exc})") from exc
+                f"Failed to read MDK project file: {project_path} ({exc})"
+            ) from exc
 
     @classmethod
     def _select_target(cls, root: Element,
-                       target_name: str | None) -> MdkTargetContext:
+                       target_name: str | None) -> MDKTargetContext:
         """Resolve the target that will be updated.
 
-        Args:
+        Arguments:
             root: MDK project XML root element.
             target_name: Optional target name from the command line.
 
@@ -743,18 +689,21 @@ class MdkCommand:
         else:
             target_element = next(
                 (element for element in target_elements
-                 if
-                 (element.findtext("TargetName") or "").strip() == target_name),
+                 if (element.findtext("TargetName") or "").strip()
+                 == target_name),
                 None,
             )
             if target_element is None:
+                available = ", ".join(
+                    name or "<unnamed>" for name in target_names)
                 raise ValueError(
-                    f"Target not found: {target_name} (available: {', '.join(name or '<unnamed>' for name in target_names)})"
+                    f"Target not found: {target_name} "
+                    f"(available: {available})"
                 )
 
         # Collect group state for the selected target
         groups_element = target_element.find("Groups")
-        return MdkTargetContext(
+        return MDKTargetContext(
             name=(target_element.findtext("TargetName") or "").strip(),
             element=target_element,
             groups_element=groups_element,
@@ -763,10 +712,10 @@ class MdkCommand:
 
     @staticmethod
     def _collect_groups(groups_element: Element | None
-                        ) -> dict[str, MdkGroupContext]:
+                        ) -> dict[str, MDKGroupContext]:
         """Collect target groups and validate group names.
 
-        Args:
+        Arguments:
             groups_element: Target `Groups` XML element.
 
         Returns:
@@ -775,7 +724,7 @@ class MdkCommand:
         Raises:
             ValueError: Group names are missing or duplicated.
         """
-        groups: dict[str, MdkGroupContext] = {}
+        groups: dict[str, MDKGroupContext] = {}
 
         if groups_element is None:
             return groups
@@ -787,8 +736,9 @@ class MdkCommand:
                 raise ValueError("Invalid MDK group: missing GroupName")
             if group_name in groups:
                 raise ValueError(
-                    f"Duplicate MDK group name detected in target: {group_name}")
-            groups[group_name] = MdkGroupContext(
+                    "Duplicate MDK group name detected in target: "
+                    f"{group_name}")
+            groups[group_name] = MDKGroupContext(
                 name=group_name,
                 element=element,
                 files_elements=element.findall("./Files"),
@@ -798,12 +748,12 @@ class MdkCommand:
     @classmethod
     def _collect_existing_files(
             cls,
-            target: MdkTargetContext,
+            target: MDKTargetContext,
             project_dir: Path,
-    ) -> list[MdkFileRecord]:
+    ) -> list[MDKFileRecord]:
         """Collect all existing file records from the selected target.
 
-        Args:
+        Arguments:
             target: Selected target context.
             project_dir: MDK project parent directory.
 
@@ -813,7 +763,7 @@ class MdkCommand:
         Raises:
             ValueError: One file entry is structurally invalid.
         """
-        records: list[MdkFileRecord] = []
+        records: list[MDKFileRecord] = []
 
         # Walk every group and capture the current file entries
         for group in target.groups.values():
@@ -826,14 +776,15 @@ class MdkCommand:
                     file_type = cls._parse_file_type(file_element)
                     if not file_name or not file_path:
                         raise ValueError(
-                            f"Invalid MDK file entry in group `{group.name}`: missing FileName or FilePath"
+                            "Invalid MDK file entry in group "
+                            f"`{group.name}`: missing FileName or FilePath"
                         )
 
                     # Resolve one stable path key for duplicate detection
                     path_key = cls._path_key(
                         cls._resolve_project_path(project_dir, file_path))
                     records.append(
-                        MdkFileRecord(
+                        MDKFileRecord(
                             group_name=group.name,
                             file_name=file_name,
                             file_type=file_type,
@@ -848,7 +799,7 @@ class MdkCommand:
     def _parse_file_type(file_element: Element) -> int:
         """Parse one MDK file type value.
 
-        Args:
+        Arguments:
             file_element: MDK `File` XML element.
 
         Returns:
@@ -868,10 +819,10 @@ class MdkCommand:
             group_name: str | None,
             project_dir: Path,
             allow_empty: bool = False,
-    ) -> list[MdkAddEntry]:
+    ) -> list[MDKAddEntry]:
         """Collect file entries that should be inserted into the project.
 
-        Args:
+        Arguments:
             source_path: Source file or directory path.
             group_name: Optional root MDK group name.
             project_dir: MDK project parent directory.
@@ -882,7 +833,7 @@ class MdkCommand:
         Raises:
             ValueError: The source path is invalid.
         """
-        entries: list[MdkAddEntry] = []
+        entries: list[MDKAddEntry] = []
         resolved_source = source_path.resolve()
         root_group_name = cls._normalize_group_name(group_name)
 
@@ -890,7 +841,8 @@ class MdkCommand:
             raise ValueError(f"Source path not found: {source_path}")
         if cls._has_hidden_name(resolved_source.name):
             raise ValueError(
-                f"Hidden source paths are not supported by MDK add: {source_path}"
+                "Hidden source paths are not supported by MDK add: "
+                f"{source_path}"
             )
 
         # Resolve the source file list and the default root group name
@@ -926,7 +878,7 @@ class MdkCommand:
             file_type = cls._detect_file_type(resolved_path)
             file_path = cls._project_path_text(project_dir, resolved_path)
             entries.append(
-                MdkAddEntry(
+                MDKAddEntry(
                     source=resolved_path,
                     group_name=target_group_name,
                     file_name=file_name,
@@ -943,7 +895,7 @@ class MdkCommand:
             group_name: str | None,
             project_dir: Path,
             allow_empty: bool = False,
-    ) -> list[MdkAddEntry]:
+    ) -> list[MDKAddEntry]:
         """Collect file entries by expanding visible first-level directories."""
         resolved_source = source_path.resolve()
         root_group_name = cls._normalize_group_name(group_name)
@@ -952,14 +904,16 @@ class MdkCommand:
             raise ValueError(f"Source path not found: {source_path}")
         if not resolved_source.is_dir():
             raise ValueError(
-                f"Automatic group expansion requires a directory source path: {source_path}"
+                "Automatic group expansion requires a directory source "
+                f"path: {source_path}"
             )
         if cls._has_hidden_name(resolved_source.name):
             raise ValueError(
-                f"Hidden source paths are not supported by automatic group expansion: {source_path}"
+                "Hidden source paths are not supported by automatic "
+                f"group expansion: {source_path}"
             )
 
-        entries: list[MdkAddEntry] = []
+        entries: list[MDKAddEntry] = []
         child_directories = sorted(
             path.resolve() for path in resolved_source.iterdir()
             if path.is_dir() and not cls._has_hidden_name(
@@ -969,7 +923,8 @@ class MdkCommand:
             if allow_empty:
                 return []
             raise ValueError(
-                f"No visible child directories found for automatic group expansion: {source_path}"
+                "No visible child directories found for automatic group "
+                f"expansion: {source_path}"
             )
 
         for child_path in child_directories:
@@ -987,18 +942,19 @@ class MdkCommand:
             if allow_empty:
                 return []
             raise ValueError(
-                f"No visible files found below the automatic group expansion source path: {source_path}"
+                "No visible files found below the automatic group "
+                f"expansion source path: {source_path}"
             )
         return entries
 
     @classmethod
     def _collect_requested_add_entries(
             cls,
-            paths: MdkPaths,
+            paths: MDKPaths,
             group_name: str | None,
             project_dir: Path,
             allow_empty: bool = False,
-    ) -> list[MdkAddEntry]:
+    ) -> list[MDKAddEntry]:
         """Collect add entries for one source request."""
         if paths.source is None:
             return []
@@ -1019,11 +975,11 @@ class MdkCommand:
     @classmethod
     def _collect_requested_remove_files(
             cls,
-            paths: MdkPaths,
+            paths: MDKPaths,
             group_name: str | None,
-            existing_files: list[MdkFileRecord],
+            existing_files: list[MDKFileRecord],
             project_dir: Path,
-    ) -> tuple[list[MdkFileRecord], list[str]]:
+    ) -> tuple[list[MDKFileRecord], list[str]]:
         """Collect del-mode file entries and skipped path messages."""
         if paths.source is None:
             return [], []
@@ -1040,7 +996,7 @@ class MdkCommand:
     def _normalize_group_name(group_name: str | None) -> str:
         """Normalize one MDK group name string.
 
-        Args:
+        Arguments:
             group_name: Raw group name text.
 
         Returns:
@@ -1070,16 +1026,16 @@ class MdkCommand:
     @classmethod
     def _collect_sync_remove_files(
             cls,
-            paths: MdkPaths,
-            existing_files: list[MdkFileRecord],
+            paths: MDKPaths,
+            existing_files: list[MDKFileRecord],
             project_dir: Path,
-    ) -> list[MdkFileRecord]:
-        """Collect existing project file entries that no longer exist on disk."""
+    ) -> list[MDKFileRecord]:
+        """Collect project file entries that no longer exist on disk."""
         if paths.source is None:
             return []
 
         scope_files = cls._collect_sync_scope_files(paths, existing_files)
-        missing_files: list[MdkFileRecord] = []
+        missing_files: list[MDKFileRecord] = []
 
         for record in scope_files:
             resolved_path = cls._resolve_project_path(project_dir,
@@ -1092,12 +1048,12 @@ class MdkCommand:
     @classmethod
     def _collect_sync_scope_files(
             cls,
-            paths: MdkPaths,
-            existing_files: list[MdkFileRecord],
-    ) -> list[MdkFileRecord]:
+            paths: MDKPaths,
+            existing_files: list[MDKFileRecord],
+    ) -> list[MDKFileRecord]:
         """Collect existing project file entries covered by one sync request."""
-        descendants: list[MdkFileRecord] = []
-        exact_matches: list[MdkFileRecord] = []
+        descendants: list[MDKFileRecord] = []
+        exact_matches: list[MDKFileRecord] = []
         path_key = cls._path_key(paths.source)
         prefix = path_key + os.sep
 
@@ -1131,7 +1087,7 @@ class MdkCommand:
     def _project_path_text(project_dir: Path, file_path: Path) -> str:
         """Build the MDK `FilePath` string for one source file.
 
-        Args:
+        Arguments:
             project_dir: MDK project parent directory.
             file_path: Resolved source file path.
 
@@ -1179,22 +1135,22 @@ class MdkCommand:
     @classmethod
     def _filter_add_entries(
             cls,
-            entries: list[MdkAddEntry],
-            existing_files: list[MdkFileRecord],
-    ) -> tuple[list[MdkAddEntry], list[str]]:
+            entries: list[MDKAddEntry],
+            existing_files: list[MDKFileRecord],
+    ) -> tuple[list[MDKAddEntry], list[str]]:
         """Filter duplicate add entries and return skipped path messages.
 
-        Args:
+        Arguments:
             entries: Prepared add entries.
             existing_files: Existing target file records.
 
         Returns:
             Remaining entries to add and warning messages for skipped paths.
         """
-        filtered_entries: list[MdkAddEntry] = []
+        filtered_entries: list[MDKAddEntry] = []
         skipped_messages: list[str] = []
-        existing_by_path: dict[str, MdkFileRecord] = {}
-        new_path_owner: dict[str, MdkAddEntry] = {}
+        existing_by_path: dict[str, MDKFileRecord] = {}
+        new_path_owner: dict[str, MDKAddEntry] = {}
 
         # Index existing entries by path only; MDK can manage same-stem files.
         for existing_record in existing_files:
@@ -1205,13 +1161,17 @@ class MdkCommand:
             existing_record = existing_by_path.get(owner.path_key)
             if existing_record is not None:
                 skipped_messages.append(
-                    f"Path already exists in group `{existing_record.group_name}`: {existing_record.file_path}"
+                    "Path already exists in group "
+                    f"`{existing_record.group_name}`: "
+                    f"{existing_record.file_path}"
                 )
                 continue
 
             if owner.path_key in new_path_owner:
                 skipped_messages.append(
-                    f"Duplicate input path detected: {owner.source} and {new_path_owner[owner.path_key].source}"
+                    "Duplicate input path detected: "
+                    f"{owner.source} and "
+                    f"{new_path_owner[owner.path_key].source}"
                 )
                 continue
 
@@ -1222,13 +1182,13 @@ class MdkCommand:
     @classmethod
     def _match_remove_entries(
             cls,
-            entries: list[MdkAddEntry],
-            existing_files: list[MdkFileRecord],
-    ) -> tuple[list[MdkFileRecord], list[str]]:
+            entries: list[MDKAddEntry],
+            existing_files: list[MDKFileRecord],
+    ) -> tuple[list[MDKFileRecord], list[str]]:
         """Match del entries by path and keep unmatched paths as warnings."""
-        matched_files: list[MdkFileRecord] = []
+        matched_files: list[MDKFileRecord] = []
         skipped_messages: list[str] = []
-        existing_by_path: dict[str, MdkFileRecord] = {}
+        existing_by_path: dict[str, MDKFileRecord] = {}
         seen_paths: dict[str, Path] = {}
 
         for existing_record in existing_files:
@@ -1238,7 +1198,8 @@ class MdkCommand:
             previous_owner = seen_paths.get(entry.path_key)
             if previous_owner is not None:
                 skipped_messages.append(
-                    f"Duplicate input path detected: {entry.source} and {previous_owner}"
+                    "Duplicate input path detected: "
+                    f"{entry.source} and {previous_owner}"
                 )
                 continue
             seen_paths[entry.path_key] = entry.source
@@ -1253,8 +1214,8 @@ class MdkCommand:
         return matched_files, skipped_messages
 
     @classmethod
-    def _add_entries(cls, target: MdkTargetContext,
-                     entries: list[MdkAddEntry]) -> None:
+    def _add_entries(cls, target: MDKTargetContext,
+                     entries: list[MDKAddEntry]) -> None:
         """Add prepared file entries into the selected target."""
         grouped_entries = cls._group_add_entries(entries)
 
@@ -1265,9 +1226,9 @@ class MdkCommand:
 
     @staticmethod
     def _group_add_entries(
-            entries: list[MdkAddEntry]) -> dict[str, list[MdkAddEntry]]:
+            entries: list[MDKAddEntry]) -> dict[str, list[MDKAddEntry]]:
         """Group add entries by their destination MDK group name."""
-        grouped: dict[str, list[MdkAddEntry]] = {}
+        grouped: dict[str, list[MDKAddEntry]] = {}
         sorted_entries = sorted(entries,
                                 key=lambda item: (item.group_name,
                                                   item.file_path))
@@ -1277,8 +1238,8 @@ class MdkCommand:
         return grouped
 
     @classmethod
-    def _ensure_group(cls, target: MdkTargetContext,
-                      group_name: str) -> tuple[MdkGroupContext, bool]:
+    def _ensure_group(cls, target: MDKTargetContext,
+                      group_name: str) -> tuple[MDKGroupContext, bool]:
         """Ensure the selected target contains one specific group."""
         group = target.groups.get(group_name)
 
@@ -1291,13 +1252,13 @@ class MdkCommand:
         group_element = SubElement(target.groups_element, "Group")
         name_element = SubElement(group_element, "GroupName")
         name_element.text = group_name
-        group = MdkGroupContext(name=group_name, element=group_element)
+        group = MDKGroupContext(name=group_name, element=group_element)
         target.groups[group_name] = group
         return group, True
 
     @classmethod
-    def _append_group_files(cls, group: MdkGroupContext,
-                            entries: list[MdkAddEntry]) -> None:
+    def _append_group_files(cls, group: MDKGroupContext,
+                            entries: list[MDKAddEntry]) -> None:
         """Append new file entries into one MDK group."""
         use_split_style = cls._use_split_files_style(group.files_elements)
 
@@ -1329,20 +1290,20 @@ class MdkCommand:
     @classmethod
     def _match_remove_files(
             cls,
-            paths: MdkPaths,
-            existing_files: list[MdkFileRecord],
-    ) -> tuple[list[MdkFileRecord], list[str]]:
+            paths: MDKPaths,
+            existing_files: list[MDKFileRecord],
+    ) -> tuple[list[MDKFileRecord], list[str]]:
         """Match target file entries for one del request.
 
-        Args:
+        Arguments:
             paths: Resolved project and source paths.
             existing_files: Existing target file records.
 
         Returns:
             Matched file records and skipped path messages.
         """
-        descendants: list[MdkFileRecord] = []
-        exact_matches: list[MdkFileRecord] = []
+        descendants: list[MDKFileRecord] = []
+        exact_matches: list[MDKFileRecord] = []
         is_directory = cls._has_directory_intent(paths)
         path_key = cls._path_key(paths.source)
         prefix = path_key + os.sep
@@ -1368,8 +1329,8 @@ class MdkCommand:
         return [], [f"No MDK files matched path: {paths.source_text}"]
 
     @staticmethod
-    def _has_directory_intent(paths: MdkPaths) -> bool:
-        """Check whether one del or sync request explicitly targets a directory."""
+    def _has_directory_intent(paths: MDKPaths) -> bool:
+        """Return whether del or sync explicitly targets a directory."""
         if paths.source is None:
             return False
         if paths.source.exists():
@@ -1379,8 +1340,8 @@ class MdkCommand:
     @classmethod
     def _remove_files(
             cls,
-            target: MdkTargetContext,
-            matched_files: list[MdkFileRecord],
+            target: MDKTargetContext,
+            matched_files: list[MDKFileRecord],
             keep_empty_groups: bool,
     ) -> int:
         """Remove matched file entries and optionally prune empty groups."""
@@ -1424,7 +1385,7 @@ class MdkCommand:
     def _write_xml_file(tree: ElementTree, xml_path: Path) -> None:
         """Write one updated XML file back to disk.
 
-        Args:
+        Arguments:
             tree: Updated XML tree.
             xml_path: Destination XML file path.
 
@@ -1442,7 +1403,7 @@ class MdkCommand:
     def _write_project(cls, tree: ElementTree, project_path: Path) -> None:
         """Write one updated MDK project file back to disk.
 
-        Args:
+        Arguments:
             tree: Updated XML tree.
             project_path: Destination MDK project path.
 

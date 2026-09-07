@@ -7,7 +7,8 @@
  */
 
 #include <mrX/test/mr_test.h>
-#if defined(MR_USE_TEST) && defined(MR_USE_MODULE_XVM_RISCV32)
+#if defined(MR_USE_TEST)
+#if defined(MR_USE_MODULE_XVM_RISCV32)
 #include <mrX/libc/mr_string.h>
 #include <mrX/modules/xvm/mr_xvm.h>
 #include <mrX/modules/xvm/isa/riscv32/core.h>
@@ -669,4 +670,5 @@ MR_TEST(xvm, riscv32_mmio_interrupt_registers) {
     MR_TEST_ASSERT_EQ_INT(mr_xvm_del(&xvm), 0);
 }
 
-#endif /* defined(MR_USE_TEST) && defined(MR_USE_MODULE_XVM_RISCV32) */
+#endif /* defined(MR_USE_MODULE_XVM_RISCV32) */
+#endif /* defined(MR_USE_TEST) */

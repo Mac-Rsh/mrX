@@ -8,7 +8,6 @@
 
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#include <mrX/kernel/mr_clock.h>
 #include <mrX/libc/mr_assert.h>
 #include <mrX/libc/mr_string.h>
 
@@ -48,13 +47,21 @@ static mr_bool_t testcase_run(const mr_testcase_t *cs) {
     }
 }
 
-void mr_testcase_run(const char *suite, const char *name) {
-    const mr_testcase_t *start = &__mr_testcase_sys_start;
-    const mr_testcase_t *end = &__mr_testcase_sys_end;
+mr_bool_t mr_testcase_run(const char *suite, const char *name) {
+    mr_uintptr_t start = (mr_uintptr_t)&__mr_testcase_sys_start;
+    mr_uintptr_t end = (mr_uintptr_t)&__mr_testcase_sys_end;
     const mr_testcase_t *cs;
+    mr_uintptr_t addr;
+
+    /* Check link address */
+    MR_ASSERT(start < end);
 
     /* Each test cases */
-    for (cs = start + 1; cs < end; cs++) {
+    for (addr = start + sizeof(*cs); addr < end; addr += sizeof(*cs)) {
+        cs = (const mr_testcase_t *)addr;
+        MR_ASSERT(cs->suite != MR_NULL);
+        MR_ASSERT(cs->name != MR_NULL);
+
         /* Match testcase */
         if ((mr_strcmp(cs->suite, suite) != 0)
             || (mr_strcmp(cs->name, name) != 0)) {
@@ -62,22 +69,32 @@ void mr_testcase_run(const char *suite, const char *name) {
         }
 
         /* Run testcase */
-        testcase_run(cs);
+        return testcase_run(cs);
     }
+
+    /* Report a missing testcase */
+    mr_printf("[ NOT FOUND ] %s.%s\r\n", suite, name);
+    return MR_FALSE;
 }
 
-void mr_testsuite_run(const char *suite) {
-    const mr_testcase_t *start = &__mr_testcase_sys_start;
-    const mr_testcase_t *end = &__mr_testcase_sys_end;
+mr_bool_t mr_testsuite_run(const char *suite) {
+    mr_uintptr_t start = (mr_uintptr_t)&__mr_testcase_sys_start;
+    mr_uintptr_t end = (mr_uintptr_t)&__mr_testcase_sys_end;
     const mr_testcase_t *cs;
+    mr_uintptr_t addr;
     int pass, fail;
     mr_bool_t ret;
+
+    /* Check link address */
+    MR_ASSERT(start < end);
 
     /* Test begin */
     mr_printf("[==========] Running '%s' suite\r\n", suite);
 
     /* Each test cases */
-    for (pass = fail = 0, cs = start + 1; cs < end; cs++) {
+    for (pass = fail = 0, addr = start + sizeof(*cs); addr < end;
+         addr += sizeof(*cs)) {
+        cs = (const mr_testcase_t *)addr;
         /* Match testcase */
         if (mr_strcmp(cs->suite, suite) != 0) {
             continue;
@@ -96,20 +113,32 @@ void mr_testsuite_run(const char *suite) {
     mr_printf("[==========]\r\n");
     mr_printf("[  PASSED  ] %d tests\r\n", pass);
     mr_printf("[  FAILED  ] %d tests\r\n", fail);
+
+    if ((pass + fail) == 0) {
+        mr_printf("[ NOT FOUND ] %s\r\n", suite);
+        return MR_FALSE;
+    }
+    return (fail == 0) ? MR_TRUE : MR_FALSE;
 }
 
 mr_bool_t mr_test_run(void) {
-    const mr_testcase_t *start = &__mr_testcase_sys_start;
-    const mr_testcase_t *end = &__mr_testcase_sys_end;
+    mr_uintptr_t start = (mr_uintptr_t)&__mr_testcase_sys_start;
+    mr_uintptr_t end = (mr_uintptr_t)&__mr_testcase_sys_end;
     const mr_testcase_t *cs;
+    mr_uintptr_t addr;
     int pass, fail;
     mr_bool_t ret;
+
+    /* Check link address */
+    MR_ASSERT(start < end);
 
     /* Test begin */
     mr_printf("[==========] Running 'all' tests\r\n");
 
     /* Each test cases */
-    for (pass = fail = 0, cs = start + 1; cs < end; cs++) {
+    for (pass = fail = 0, addr = start + sizeof(*cs); addr < end;
+         addr += sizeof(*cs)) {
+        cs = (const mr_testcase_t *)addr;
         /* Run testcase */
         ret = testcase_run(cs);
         if (ret) {

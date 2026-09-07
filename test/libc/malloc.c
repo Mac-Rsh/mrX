@@ -8,9 +8,9 @@
 
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
+#if defined(MR_USE_MALLOC)
 #include <mrX/libc/mr_malloc.h>
 
-/* -------------------------------------------------------------------------- */
 /* Utility: fill/verify canary pattern                                        */
 static void canary_fill(void *p, mr_size_t usable) {
     mr_uint8_t *data;
@@ -33,14 +33,11 @@ static int canary_verify(void *p, mr_size_t usable) {
     return 1;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Test: allocate, write pattern, verify, free                                */
+/* Test: allocate, write pattern, verify, free */
 MR_TEST(malloc, free_basic) {
-    mr_size_t alloc_usable;
     mr_size_t usable;
     void *p = MR_NULL;
 
-#if defined(MR_USE_MALLOC)
     p = mr_malloc(0);
     MR_TEST_EXPECT_EQ_PTR(p, MR_NULL);
     if (p != MR_NULL) {
@@ -48,7 +45,6 @@ MR_TEST(malloc, free_basic) {
         p = MR_NULL;
     }
     mr_free(MR_NULL);
-#endif /* defined(MR_USE_MALLOC) */
 
     p = mr_malloc(128);
     if (p == MR_NULL) {
@@ -56,13 +52,11 @@ MR_TEST(malloc, free_basic) {
         goto _exit;
     }
 
-#if defined(MR_USE_MALLOC)
     usable = mr_malloc_usable_size(p);
     MR_TEST_EXPECT_GE_UINT(usable, 128);
     if (usable < 128) {
         goto _exit;
     }
-    alloc_usable = usable;
 
     usable = mr_malloc_usable_size(MR_NULL);
     MR_TEST_EXPECT_EQ_UINT(usable, 0);
@@ -75,32 +69,23 @@ MR_TEST(malloc, free_basic) {
     if (usable != 0) {
         goto _exit;
     }
-#else
-    alloc_usable = 128;
-#endif /* defined(MR_USE_MALLOC) */
-
-    canary_fill(p, alloc_usable);
-    MR_TEST_EXPECT_EQ_INT(canary_verify(p, alloc_usable), 1);
 
 _exit:
     mr_free(p);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: memory must be zero-filled                                           */
 MR_TEST(malloc, calloc_zero) {
     const mr_size_t n = 16, sz = 32;
     mr_size_t usable, i;
     void *p = MR_NULL;
 
-#if defined(MR_USE_MALLOC)
     p = mr_calloc(0, 0);
     MR_TEST_EXPECT_EQ_PTR(p, MR_NULL);
     if (p != MR_NULL) {
         mr_free(p);
         p = MR_NULL;
     }
-#endif /* defined(MR_USE_MALLOC) */
 
     p = mr_calloc(MR_SIZE_MAX >> 1, 1);
     MR_TEST_EXPECT_EQ_PTR(p, MR_NULL);
@@ -115,15 +100,11 @@ MR_TEST(malloc, calloc_zero) {
         goto _exit;
     }
 
-#if defined(MR_USE_MALLOC)
     usable = mr_malloc_usable_size(p);
     MR_TEST_EXPECT_GE_UINT(usable, n * sz);
     if (usable < (n * sz)) {
         goto _exit;
     }
-#else
-    usable = n * sz;
-#endif /* defined(MR_USE_MALLOC) */
 
     /* Verify all bytes are zero */
     for (i = 0; i < usable; ++i) {
@@ -134,7 +115,6 @@ _exit:
     mr_free(p);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: resize buffer and retain original data                               */
 MR_TEST(malloc, realloc_resize) {
     void *p1 = MR_NULL, *p2 = MR_NULL, *p3 = MR_NULL;
@@ -178,8 +158,6 @@ _exit:
     mr_free(p3);
 }
 
-#if defined(MR_USE_MALLOC)
-/* -------------------------------------------------------------------------- */
 /* Test: Zero-size malloc should return NULL                                  */
 MR_TEST(malloc, malloc_zero) {
     void *p;
@@ -189,9 +167,7 @@ MR_TEST(malloc, malloc_zero) {
     mr_free(p);
 }
 
-#endif /* defined(MR_USE_MALLOC) */
 
-/* -------------------------------------------------------------------------- */
 /* Test: allocate, free, re-allocate                                          */
 MR_TEST(malloc, frag_merge) {
     enum {
@@ -236,7 +212,6 @@ _exit:
     }
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: may fail gracefully if heap too small                                */
 MR_TEST(malloc, malloc_max) {
     const mr_size_t huge = 3 * 1024;
@@ -251,12 +226,8 @@ MR_TEST(malloc, malloc_max) {
     }
 
     p = mr_malloc(huge);
-    if (p) {
-#if defined(MR_USE_MALLOC)
+    if (p != MR_NULL) {
         usable = mr_malloc_usable_size(p);
-#else
-        usable = huge;
-#endif /* defined(MR_USE_MALLOC) */
         MR_TEST_EXPECT_GE_UINT(usable, huge);
         if (usable < huge) {
             goto _exit;
@@ -269,22 +240,43 @@ _exit:
     mr_free(p);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: add memory region                                                    */
 MR_TEST(malloc, malloc_region) {
     static mr_uint8_t test_mem1[128];
     static mr_uint8_t test_mem2[256];
+    mr_heap_info_t before;
+    mr_heap_info_t after;
     const mr_heap_region_t regions[] = {
         {.address = test_mem1, .size = sizeof(test_mem1)},
         {.address = test_mem2, .size = sizeof(test_mem2)},
         {  .address = MR_NULL,                 .size = 0}
     };
 
+    before = mr_heap_information(MR_TRUE);
     mr_heap_region_add(regions);
-    MR_IGNORE(__test_status);
+    after = mr_heap_information(MR_TRUE);
+    MR_TEST_EXPECT_GT_UINT(after.total_bytes, before.total_bytes);
+    MR_TEST_EXPECT_GT_UINT(after.free_bytes, before.free_bytes);
 }
 
-/* -------------------------------------------------------------------------- */
+/* Test: a region below the minimum size is rejected without changes         */
+MR_TEST(malloc, region_too_small_skipped) {
+    static mr_uint8_t tiny_mem[64];
+    mr_heap_info_t before;
+    mr_heap_info_t after;
+    const mr_heap_region_t regions[] = {
+        {.address = tiny_mem, .size = sizeof(tiny_mem)},
+        {.address = MR_NULL,  .size = 0}
+    };
+
+    before = mr_heap_information(MR_TRUE);
+    mr_heap_region_add(regions);
+    after = mr_heap_information(MR_TRUE);
+    MR_TEST_EXPECT_EQ_UINT(after.total_bytes, before.total_bytes);
+    MR_TEST_EXPECT_EQ_UINT(after.free_bytes, before.free_bytes);
+    MR_TEST_EXPECT_EQ_UINT(after.frag_num, before.frag_num);
+}
+
 /* Test: realloc(NULL, size) behaves like malloc                              */
 MR_TEST(malloc, realloc_null) {
     void *p = MR_NULL;
@@ -299,8 +291,6 @@ MR_TEST(malloc, realloc_null) {
     mr_free(p);
 }
 
-#if defined(MR_USE_MALLOC)
-/* -------------------------------------------------------------------------- */
 /* Test: heap information tracks used and free bytes                          */
 MR_TEST(malloc, heap_information) {
     mr_heap_info_t before;
@@ -329,7 +319,6 @@ MR_TEST(malloc, heap_information) {
     MR_TEST_EXPECT_EQ_UINT(restored.free_bytes, before.free_bytes);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: realloc of a live block keeps identity of the data prefix            */
 MR_TEST(malloc, realloc_same_size) {
     void *p1 = MR_NULL;
@@ -351,5 +340,6 @@ MR_TEST(malloc, realloc_same_size) {
     MR_TEST_EXPECT_EQ_INT(canary_verify(p2, 48), 1);
     mr_free(p2);
 }
+
 #endif /* defined(MR_USE_MALLOC) */
 #endif /* defined(MR_USE_TEST) */

@@ -96,7 +96,7 @@ static mr_err_t driver_lock(mr_driver_t *drv) {
     do {
         /* Check if driver is dying */
         if (flags & MR_DRIVER_FLAG_DYING) {
-            return -MR_ENOENT;
+            return -MR_EPERM;
         }
 
         /* Check if driver is locked */
@@ -131,6 +131,7 @@ mr_err_t mr_driver_setup(mr_driver_t *drv) {
     /* Check if driver is setup */
     if (mr_atomic_load(&drv->flags) & MR_DRIVER_FLAG_SETUP) {
         ret = 0;
+        mr_driver_state_set(drv, 0);
         goto _exit;
     }
 
@@ -157,6 +158,8 @@ _exit:
 }
 
 mr_bool_t mr_driver_is_ready(mr_driver_t *drv) {
+    mr_atomic_t flags;
+
     /* Check parameter */
     if ((!drv) || (!MR_OBJECT_IS_INITED(drv))) {
         return MR_FALSE;
@@ -165,8 +168,9 @@ mr_bool_t mr_driver_is_ready(mr_driver_t *drv) {
         return MR_FALSE;
     }
 
-    /* Check if driver is setup */
-    if (!(mr_atomic_load(&drv->flags) & MR_DRIVER_FLAG_SETUP)) {
+    /* Check if driver is setup and available */
+    flags = mr_atomic_load(&drv->flags);
+    if (!(flags & MR_DRIVER_FLAG_SETUP) || (flags & MR_DRIVER_FLAG_DYING)) {
         return MR_FALSE;
     }
 
@@ -216,18 +220,23 @@ _exit:
 }
 
 mr_driver_t *mr_driver_find(const char *name) {
-    const mr_driver_entry_t *start = &__mr_driver_entry_start;
-    const mr_driver_entry_t *defer = &__mr_driver_entry_defer;
-    const mr_driver_entry_t *end = &__mr_driver_entry_end;
+    mr_uintptr_t start = (mr_uintptr_t)&__mr_driver_entry_start;
+    mr_uintptr_t defer = (mr_uintptr_t)&__mr_driver_entry_defer;
+    mr_uintptr_t end = (mr_uintptr_t)&__mr_driver_entry_end;
+    mr_uintptr_t addr;
     const mr_driver_entry_t *entry;
 
     /* Check parameter */
     MR_ASSERT((name != MR_NULL) && (name[0] != '\0'));
 
+    /* Check link address */
+    MR_ASSERT(start < end);
+
     /* Find the driver */
-    for (entry = start + 1; entry < end; entry++) {
+    for (addr = start + sizeof(*entry); addr < end; addr += sizeof(*entry)) {
+        entry = (const mr_driver_entry_t *)addr;
         if (mr_strcmp(entry->name, name) == 0) {
-            if (entry == defer) {
+            if (addr == defer) {
                 /* Internal drive */
                 return MR_NULL;
             }
@@ -288,15 +297,23 @@ static void driver_release(mr_object_t *obj) {
 }
 
 static void mr_drivers_driver_init(void) {
-    const mr_driver_entry_t *start = &__mr_driver_entry_start;
-    const mr_driver_entry_t *end = &__mr_driver_entry_defer;
+    mr_uintptr_t start = (mr_uintptr_t)&__mr_driver_entry_start;
+    mr_uintptr_t end = (mr_uintptr_t)&__mr_driver_entry_defer;
     const mr_driver_entry_t *entry;
+    mr_uintptr_t addr;
+    mr_err_t ret;
 
-    for (entry = start + 1; entry < end; entry++) {
+    /* Check link address */
+    MR_ASSERT(start < end);
+
+    for (addr = start + sizeof(*entry); addr < end; addr += sizeof(*entry)) {
+        entry = (const mr_driver_entry_t *)addr;
         MR_ASSERT(entry->drv != MR_NULL);
 
         /* Setup driver */
-        mr_driver_setup(entry->drv);
+        ret = mr_driver_setup(entry->drv);
+        MR_ASSERT(ret == 0);
+        MR_IGNORE(ret);
     }
 }
 MR_INIT_EXPORT(mr_drivers_driver_init, MR_INIT_LEVEL_DRIVER);

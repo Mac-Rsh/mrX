@@ -8,7 +8,7 @@ config MR_USE_FS
     select MR_USE_REF_LONG_COUNT
     default n
     help
-        Enable the file system. Provides a path-based namespace built
+        Enable the file system. Provides a path-based structure built
         on a directory-entry(dentry) tree, independent inodes with file
         operations, a handle-based open/read/write API, and a file-system
         mount/unmount framework.
@@ -18,27 +18,9 @@ config MR_USE_FS_MULTIUSER
     bool "Use multi-user"
     default n
     help
-        Provide a file-system namespace(root/cwd) for each caller instead of
-        using one global namespace. When enabled, the platform must provide
-        mr_fs_nsp_current() and return the namespace owned by the current task.
-
-config MR_USE_FS_AT
-    depends on MR_USE_FS
-    bool "Use directory-relative file interfaces"
-    default y
-    help
-        Provide the mr_fs_*at() interfaces for resolving paths relative to an
-        open directory handle. This also enables the MR_AT_* path resolution
-        flags.
-
-config MR_USE_FS_BY_PATH
-    depends on MR_USE_FS
-    bool "Use by-path file interfaces"
-    default y
-    help
-        Provide the mr_fs_*_by_path() convenience interfaces. Disable this
-        option when applications use open file handles for stat, rename, and
-        unlink operations.
+        Provide a file-system structure(root/cwd) for each caller instead of
+        using one global structure. When enabled, the platform must provide
+        mr_fs_struct_current() and return the structure owned by the current task.
 
 config MR_CFG_FS_PATH_LEN
     depends on MR_USE_FS
@@ -51,25 +33,16 @@ config MR_CFG_FS_PATH_LEN
         than the actual working-directory path makes mr_fs_getcwd() return
         -MR_ERANGE.
 
-config MR_CFG_FS_DENTRY_INLINE_NAME_LEN
+config MR_CFG_FS_INLINE_NAME_LEN
     depends on MR_USE_FS
-    int "Dentry short-name inline buffer"
-    default 4
+    int "Short-name inline buffer"
+    default 8
     range 2 256
     help
         Size of the in-object buffer used to store short dentry names. This is
         not the maximum file name length. Names shorter than this size are
         stored in the dentry object; longer names are allocated on the heap.
         Increase this value to reduce heap usage when short names are common.
-
-config MR_CFG_FS_SYMLINK_MAX
-    depends on MR_USE_FS
-    int "Symbolic link depth"
-    default 16
-    range 1 255
-    help
-        Maximum number of symbolic links followed during a single path
-        lookup. Exceeding this limit makes path resolution return -MR_ELOOP.
 
 # ==================================
 # RSOURCE

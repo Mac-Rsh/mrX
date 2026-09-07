@@ -9,7 +9,7 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST) && defined(MR_USE_FS)
 #include <mrX.h>
-#include "fs_test.h"
+#include <mrX/test/fs/fs_test.h>
 
 static void open_flags_expect(volatile mr_uint32_t *__test_status,
                               const char *name, mr_int64_t actual,
@@ -19,7 +19,7 @@ static void open_flags_expect(volatile mr_uint32_t *__test_status,
     MR_TEST_EXPECT_EQ_INT(actual, expected);
 }
 
-static void fs_open_flags_test(volatile mr_uint32_t *__test_status) {
+MR_TEST(fs, open_flags) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_file_t other = MR_FILE_INIT(other);
     mr_stat_t stat;
@@ -118,7 +118,7 @@ static void fs_open_flags_test(volatile mr_uint32_t *__test_status) {
     open_flags_expect(__test_status, "open trunc", ret, 0);
     if (ret == 0) {
         open_flags_expect(__test_status, "stat trunc open",
-                          mr_fs_stat(&file, &stat), 0);
+                          mr_fs_fstat(&file, &stat), 0);
         open_flags_expect(__test_status, "trunc size zero", stat.size, 0);
         open_flags_expect(__test_status, "write after trunc",
                           mr_fs_write(&file, "xy", 2), 2);
@@ -133,7 +133,7 @@ static void fs_open_flags_test(volatile mr_uint32_t *__test_status) {
     open_flags_expect(__test_status, "open trunc readonly", ret, 0);
     if (ret == 0) {
         open_flags_expect(__test_status, "stat trunc readonly",
-                          mr_fs_stat(&file, &stat), 0);
+                          mr_fs_fstat(&file, &stat), 0);
         open_flags_expect(__test_status, "trunc readonly keeps size", stat.size,
                           2);
         open_flags_expect(__test_status, "close trunc readonly",
@@ -156,20 +156,6 @@ static void fs_open_flags_test(volatile mr_uint32_t *__test_status) {
         open_flags_expect(__test_status, "close zero io", mr_fs_close(&file),
                           0);
     }
-
-    /* O_DIRECTORY follows a directory symlink unless NOFOLLOW is set */
-    open_flags_expect(__test_status, "create directory symlink",
-                      mr_fs_symlink("flags-dir", "/dir-link"), 0);
-    ret = mr_fs_open(&file, "/dir-link", MR_O_RDONLY | MR_O_DIRECTORY);
-    open_flags_expect(__test_status, "open directory symlink", ret, 0);
-    if (ret == 0) {
-        open_flags_expect(__test_status, "close directory symlink",
-                          mr_fs_close(&file), 0);
-    }
-    open_flags_expect(__test_status, "directory nofollow symlink",
-                      mr_fs_open(&file, "/dir-link",
-                                 MR_O_RDONLY | MR_O_DIRECTORY | MR_O_NOFOLLOW),
-                      -MR_ENOTDIR);
 
     /* Directory cannot be read as a file */
     ret = mr_fs_open(&file, "/flags-dir", MR_O_RDONLY);
@@ -196,10 +182,6 @@ static void fs_open_flags_test(volatile mr_uint32_t *__test_status) {
 
     open_flags_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
-}
-
-MR_TEST(fs, open_flags) {
-    fs_open_flags_test(__test_status);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

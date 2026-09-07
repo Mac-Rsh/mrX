@@ -6,8 +6,12 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mrX/fs/mr_file.h>
+#include <mrX/fs/mr_fs_file.h>
 #if defined(MR_USE_FS_RAMFS)
+#if defined(MR_USE_FS_RAMFS_FIFO)
+#include <mrX/kernel/mr_fifo.h>
+#endif /* defined(MR_USE_FS_RAMFS_FIFO) */
+#include <mrX/kernel/mr_spinlock.h>
 #include <mrX/libc/mr_malloc.h>
 #include <mrX/libc/mr_string.h>
 
@@ -43,34 +47,30 @@ static mr_ssize_t ramfs_fifo_write(mr_file_t *file, const void *buf,
                                    mr_size_t size);
 static mr_int64_t ramfs_fifo_llseek(mr_file_t *file, mr_int64_t offset,
                                     int whence);
-static mr_ssize_t ramfs_fifo_fcntl(mr_file_t *file, int cmd, mr_intptr_t arg);
 static const mr_file_ops_t __ramfs_fifo_files = {
     .read = ramfs_fifo_read,
     .write = ramfs_fifo_write,
     .llseek = ramfs_fifo_llseek,
-    .fcntl = ramfs_fifo_fcntl,
 };
 #endif /* defined(MR_USE_FS_RAMFS_FIFO) */
 
 /* RamFS file system operations */
-static mr_err_t ramfs_mount(mr_super_block_t *sb, const char *source, int flags,
+static mr_err_t ramfs_mount(mr_sblock_t *sb, const char *source, int flags,
                             void *data);
 static mr_file_system_t __ramfs
-    = MR_FILE_SYSTEM_INIT(FS_NAME, ramfs_mount, MR_NULL, MR_NULL);
+    = MR_FILE_SYSTEM_INIT(FS_NAME, ramfs_mount, MR_NULL);
 
 /* RamFS node type */
-typedef union ramfs_node {
-    struct ramfs_node_regular {
-        mr_uint8_t *data;
-    } regular;
+typedef struct ramfs_node {
+    mr_spinlock_t lock;
+    union ramfs_node_data {
+        struct ramfs_node_regular {
+            mr_uint8_t *data;
+        } regular;
 #if defined(MR_USE_FS_RAMFS_FIFO)
-    struct ramfs_node_fifo {
-        mr_size_t capacity;
-        mr_uint8_t *data;
-        mr_size_t head;
-        mr_size_t len;
-    } fifo;
+        mr_fifo_t fifo;
 #endif /* defined(MR_USE_FS_RAMFS_FIFO) */
+    } data;
 } ramfs_node_t;
 
 static mr_err_t ramfs_inode_alloc(mr_inode_type_t type, mr_inode_t **out) {
@@ -97,6 +97,7 @@ static mr_err_t ramfs_inode_alloc(mr_inode_type_t type, mr_inode_t **out) {
         node = mr_malloc(sizeof(ramfs_node_t));
         if (node) {
             mr_memset(node, 0, sizeof(ramfs_node_t));
+            mr_spinlock_init(&node->lock);
         } else {
             ret = -MR_ENOMEM;
             goto _exit;
@@ -110,9 +111,8 @@ static mr_err_t ramfs_inode_alloc(mr_inode_type_t type, mr_inode_t **out) {
 #if !defined(MR_CFG_FS_RAMFS_FIFO_SIZE)
 #define MR_CFG_FS_RAMFS_FIFO_SIZE       (32U)
 #endif /* !defined(MR_CFG_FS_RAMFS_FIFO_SIZE) */
-            node->fifo.capacity = MR_CFG_FS_RAMFS_FIFO_SIZE;
-            node->fifo.data = mr_malloc(node->fifo.capacity);
-            if (node->fifo.data) {
+            if (mr_fifo_alloc(&node->data.fifo, MR_CFG_FS_RAMFS_FIFO_SIZE, 1U)
+                != 0U) {
                 fops = &__ramfs_fifo_files;
             } else {
                 ret = -MR_ENOMEM;
@@ -135,8 +135,8 @@ static mr_err_t ramfs_inode_alloc(mr_inode_type_t type, mr_inode_t **out) {
     return 0;
 _exit_free:
 #if defined(MR_USE_FS_RAMFS_FIFO)
-    if ((type == MR_INODE_FIFO) && node && node->fifo.data) {
-        mr_free(node->fifo.data);
+    if ((type == MR_INODE_FIFO) && node) {
+        mr_fifo_free(&node->data.fifo);
     }
 #endif /* defined(MR_USE_FS_RAMFS_FIFO) */
     if (node) {
@@ -156,50 +156,74 @@ static mr_err_t ramfs_inode_create(mr_inode_t *dir, const char *name,
     return ramfs_inode_alloc(type, out);
 }
 
+static mr_err_t ramfs_node_try_lock(ramfs_node_t *node) {
+    /* Try to lock node data once */
+    return mr_spinlock_try_lock(&node->lock) ? 0 : -MR_EBUSY;
+}
+
+static void ramfs_node_unlock(ramfs_node_t *node) {
+    /* Unlock node data */
+    mr_spinlock_unlock(&node->lock);
+}
+
 static mr_err_t ramfs_inode_truncate(mr_inode_t *inode, mr_file_t *file,
                                      mr_int64_t length) {
-    ramfs_node_t *node = file->inode->priv;
+    ramfs_node_t *node = inode->priv;
     mr_uint8_t *data;
+    mr_err_t ret;
+
+    MR_IGNORE(file);
 
     /* Check parameter */
     if (length < 0) {
         return -MR_EINVAL;
     }
 
+    /* Lock node data */
+    ret = ramfs_node_try_lock(node);
+    if (ret != 0) {
+        return ret;
+    }
+
     /* No need to change */
     if (length == inode->size) {
-        return 0;
+        goto _exit;
     }
 
     /* Truncate file */
     if (length > 0) {
         /* Check size limit */
         if ((mr_uint64_t)length > (mr_uint64_t)MR_SIZE_MAX) {
-            return -MR_ENOMEM;
+            ret = -MR_ENOMEM;
+            goto _exit;
         }
 
         /* Allocate memory */
-        data = mr_realloc(node->regular.data, (mr_size_t)length);
+        data = mr_realloc(node->data.regular.data, (mr_size_t)length);
         if (data) {
-            node->regular.data = data;
+            node->data.regular.data = data;
         } else {
-            return -MR_ENOMEM;
+            ret = -MR_ENOMEM;
+            goto _exit;
         }
 
         /* Init memory */
         if (length > inode->size) {
-            mr_memset(node->regular.data + inode->size, 0,
+            mr_memset(node->data.regular.data + inode->size, 0,
                       (mr_size_t)(length - inode->size));
         }
     } else {
         /* Free memory */
-        if (node->regular.data) {
-            mr_free(node->regular.data);
-            node->regular.data = MR_NULL;
+        if (node->data.regular.data) {
+            mr_free(node->data.regular.data);
+            node->data.regular.data = MR_NULL;
         }
     }
     inode->size = length;
-    return 0;
+_exit:
+    /* Unlock node data */
+    ramfs_node_unlock(node);
+    return ret;
 }
 
 static void ramfs_inode_destroy(mr_inode_t *inode) {
@@ -210,17 +234,16 @@ static void ramfs_inode_destroy(mr_inode_t *inode) {
         return;
     }
 
-    /* Destroy type-specific buffers */
+    /* Destroy type-specific buffers. The inode is at end of life, so no data
+     * operation can hold the node lock any more */
     if (inode->type == MR_INODE_REG) {
-        if (node->regular.data) {
-            mr_free(node->regular.data);
+        if (node->data.regular.data) {
+            mr_free(node->data.regular.data);
         }
     }
 #if defined(MR_USE_FS_RAMFS_FIFO)
     else if (inode->type == MR_INODE_FIFO) {
-        if (node->fifo.data) {
-            mr_free(node->fifo.data);
-        }
+        mr_fifo_free(&node->data.fifo);
     }
 #endif /* defined(MR_USE_FS_RAMFS_FIFO) */
     inode->priv = MR_NULL;
@@ -231,157 +254,163 @@ static mr_ssize_t ramfs_regular_read(mr_file_t *file, void *buf,
                                      mr_size_t size) {
     ramfs_node_t *node = file->inode->priv;
     mr_int64_t avail;
+    mr_err_t ret;
 
     /* Check parameter */
-    if ((size == 0) || (file->pos >= file->inode->size)) {
+    if (size == 0) {
         return 0;
     }
 
-    /* Read data */
-    avail = file->inode->size - file->pos;
-    if ((mr_int64_t)size > avail) {
-        size = (mr_size_t)avail;
+    /* Lock node data */
+    ret = ramfs_node_try_lock(node);
+    if (ret != 0) {
+        return (mr_ssize_t)ret;
     }
-    mr_memcpy(buf, node->regular.data + file->pos, size);
-    file->pos += (mr_int64_t)size;
+
+    /* Read data */
+    if (file->pos < file->inode->size) {
+        avail = file->inode->size - file->pos;
+        if ((mr_int64_t)size > avail) {
+            size = (mr_size_t)avail;
+        }
+        mr_memcpy(buf, node->data.regular.data + file->pos, size);
+        file->pos += (mr_int64_t)size;
+    } else {
+        size = 0;
+    }
+
+    /* Unlock node data */
+    ramfs_node_unlock(node);
     return (mr_ssize_t)size;
 }
 
 static mr_ssize_t ramfs_regular_write(mr_file_t *file, const void *buf,
                                       mr_size_t size) {
     ramfs_node_t *node = file->inode->priv;
+    mr_int64_t previous_pos, end;
     mr_uint8_t *data;
-    mr_int64_t end;
+    mr_ssize_t ret;
 
-    /* Check parameter */
+    /* Zero-length writes leave the position unchanged, including O_APPEND */
     if (size == 0) {
         return 0;
     }
 
-    /* Check position range before conversion and addition */
+    /* Lock node data */
+    ret = (mr_ssize_t)ramfs_node_try_lock(node);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Select EOF under the same lock as the write */
+    previous_pos = file->pos;
+    mr_file_apply_append(file);
+
+    /* Check position range after append has updated the handle */
     if (((mr_uint64_t)size > (mr_uint64_t)(MR_INT64_MAX - file->pos))
         || (file->pos < 0)) {
-        return -MR_ERANGE;
+        file->pos = previous_pos;
+        ret = -MR_ERANGE;
+        goto _exit;
     }
     end = file->pos + (mr_int64_t)size;
     if ((mr_uint64_t)end > (mr_uint64_t)MR_SIZE_MAX) {
-        return -MR_ENOMEM;
+        file->pos = previous_pos;
+        ret = -MR_ENOMEM;
+        goto _exit;
     }
 
     /* Allocate memory */
     if (end > file->inode->size) {
-        data = mr_realloc(node->regular.data, (mr_size_t)end);
+        data = mr_realloc(node->data.regular.data, (mr_size_t)end);
         if (data) {
-            node->regular.data = data;
+            node->data.regular.data = data;
         } else {
-            return -MR_ENOMEM;
+            file->pos = previous_pos;
+            ret = -MR_ENOMEM;
+            goto _exit;
         }
 
         /* Zero-fill hole between old size and write position */
         if (file->pos > file->inode->size) {
-            mr_memset(node->regular.data + file->inode->size, 0,
+            mr_memset(node->data.regular.data + file->inode->size, 0,
                       (mr_size_t)(file->pos - file->inode->size));
         }
     }
 
     /* Write data */
-    mr_memcpy(node->regular.data + file->pos, buf, size);
+    mr_memcpy(node->data.regular.data + file->pos, buf, size);
     file->pos = end;
     if (end > file->inode->size) {
         file->inode->size = end;
     }
-    return (mr_ssize_t)size;
+    ret = (mr_ssize_t)size;
+_exit:
+    /* Unlock node data */
+    ramfs_node_unlock(node);
+    return ret;
 }
 
 #if defined(MR_USE_FS_RAMFS_FIFO)
-static void ramfs_fifo_copy_out(const ramfs_node_t *node, mr_size_t offset,
-                                void *buf, mr_size_t size) {
-    const mr_uint8_t *data = node->fifo.data;
-    mr_size_t capacity = node->fifo.capacity;
-    mr_size_t pos = node->fifo.head + offset;
-    mr_size_t first;
-
-    /* Convert logical offset to ring index */
-    if (pos >= capacity) {
-        pos -= capacity;
-    }
-
-    /* Copy the tail, then the wrapped head */
-    first = MR_MIN(size, capacity - pos);
-    mr_memcpy(buf, data + pos, first);
-    if (first < size) {
-        mr_memcpy((mr_uint8_t *)buf + first, data, size - first);
-    }
-}
-
-static void ramfs_fifo_copy_in(ramfs_node_t *node, const void *buf,
-                               mr_size_t size) {
-    mr_size_t pos = node->fifo.head + node->fifo.len;
-    mr_size_t capacity = node->fifo.capacity;
-    mr_uint8_t *data = node->fifo.data;
-    mr_size_t first;
-
-    /* Convert write offset to ring index */
-    if (pos >= capacity) {
-        pos -= capacity;
-    }
-
-    /* Copy the tail, then the wrapped head */
-    first = MR_MIN(size, capacity - pos);
-    mr_memcpy(data + pos, buf, first);
-    if (first < size) {
-        mr_memcpy(data, (const mr_uint8_t *)buf + first, size - first);
-    }
-}
-
 static mr_ssize_t ramfs_fifo_read(mr_file_t *file, void *buf, mr_size_t size) {
     ramfs_node_t *node = file->inode->priv;
+    mr_ssize_t ret;
     mr_size_t n;
 
     /* Zero-length reads succeed without touching the queue */
     if (size == 0) {
         return 0;
     }
-    if (node->fifo.len == 0) {
-        return -MR_EAGAIN;
+
+    /* Lock node data so "check length, then drain" is one transaction */
+    ret = (mr_ssize_t)ramfs_node_try_lock(node);
+    if (ret != 0) {
+        return ret;
     }
 
     /* Read as many bytes as currently available */
-    n = MR_MIN(size, node->fifo.len);
+    n = MR_MIN(size, mr_fifo_len(&node->data.fifo));
     if (n > (mr_size_t)MR_SSIZE_MAX) {
         n = (mr_size_t)MR_SSIZE_MAX;
     }
-    ramfs_fifo_copy_out(node, 0, buf, n);
-    node->fifo.head += n;
-    if (node->fifo.head >= node->fifo.capacity) {
-        node->fifo.head -= node->fifo.capacity;
+    if (n > 0) {
+        ret = (mr_ssize_t)mr_fifo_read(&node->data.fifo, buf, (mr_uint32_t)n);
     }
-    node->fifo.len -= n;
-    return (mr_ssize_t)n;
+
+    /* Unlock node data */
+    ramfs_node_unlock(node);
+    return ret;
 }
 
 static mr_ssize_t ramfs_fifo_write(mr_file_t *file, const void *buf,
                                    mr_size_t size) {
     ramfs_node_t *node = file->inode->priv;
-    mr_size_t space, n;
+    mr_ssize_t ret;
+    mr_size_t n;
 
     /* Zero-length writes succeed without touching the queue */
     if (size == 0) {
         return 0;
     }
-    space = node->fifo.capacity - node->fifo.len;
-    if (space == 0) {
-        return -MR_EAGAIN;
+
+    /* Lock node data so "check space, then fill" is one transaction */
+    ret = (mr_ssize_t)ramfs_node_try_lock(node);
+    if (ret != 0) {
+        return ret;
     }
 
     /* Write as many bytes as currently fit */
-    n = MR_MIN(size, space);
+    n = MR_MIN(size, mr_fifo_avail(&node->data.fifo));
     if (n > (mr_size_t)MR_SSIZE_MAX) {
         n = (mr_size_t)MR_SSIZE_MAX;
     }
-    ramfs_fifo_copy_in(node, buf, n);
-    node->fifo.len += n;
-    return (mr_ssize_t)n;
+    if (n > 0) {
+        ret = (mr_ssize_t)mr_fifo_write(&node->data.fifo, buf, (mr_uint32_t)n);
+    }
+
+    /* Unlock node data */
+    ramfs_node_unlock(node);
+    return ret;
 }
 
 static mr_int64_t ramfs_fifo_llseek(mr_file_t *file, mr_int64_t offset,
@@ -391,63 +420,11 @@ static mr_int64_t ramfs_fifo_llseek(mr_file_t *file, mr_int64_t offset,
     MR_IGNORE(whence);
     return -MR_ESPIPE;
 }
-
-static mr_ssize_t ramfs_fifo_fcntl(mr_file_t *file, int cmd, mr_intptr_t arg) {
-    ramfs_node_t *node = file->inode->priv;
-    mr_uint8_t *new_data, *old_data;
-    mr_size_t requested;
-    mr_size_t n;
-
-    switch (cmd) {
-        case MR_F_GETPIPE_SZ: {
-            if (arg != 0) {
-                return -MR_EINVAL;
-            }
-            return (mr_ssize_t)node->fifo.capacity;
-        }
-        case MR_F_SETPIPE_SZ: {
-            if (arg <= 0) {
-                return -MR_EINVAL;
-            }
-            if ((mr_uintptr_t)arg > (mr_uintptr_t)MR_SSIZE_MAX) {
-                return -MR_ERANGE;
-            }
-            requested = (mr_size_t)arg;
-            if (requested == node->fifo.capacity) {
-                return (mr_ssize_t)requested;
-            }
-            if (node->fifo.len > requested) {
-                return -MR_EBUSY;
-            }
-
-            /* Allocate the new buffer before touching the current one */
-            new_data = mr_malloc(requested);
-            if (!new_data) {
-                return -MR_ENOMEM;
-            }
-
-            /* Preserve unread bytes in logical order at the new origin */
-            n = node->fifo.len;
-            if (n > 0) {
-                ramfs_fifo_copy_out(node, 0, new_data, n);
-            }
-            old_data = node->fifo.data;
-            node->fifo.capacity = requested;
-            node->fifo.data = new_data;
-            node->fifo.head = 0;
-            mr_free(old_data);
-            return (mr_ssize_t)requested;
-        }
-        default: {
-            return -MR_EINVAL;
-        }
-    }
-}
 #endif /* defined(MR_USE_FS_RAMFS_FIFO) */
 
-static mr_err_t ramfs_mount(mr_super_block_t *sb, const char *source, int flags,
+static mr_err_t ramfs_mount(mr_sblock_t *sb, const char *source, int flags,
                             void *data) {
-    mr_inode_t *root_inode;
+    mr_inode_t *root;
     mr_err_t ret;
 
     MR_IGNORE(source);
@@ -455,12 +432,12 @@ static mr_err_t ramfs_mount(mr_super_block_t *sb, const char *source, int flags,
     MR_IGNORE(data);
 
     /* Create root directory inode */
-    ret = ramfs_inode_alloc(MR_INODE_DIR, &root_inode);
+    ret = ramfs_inode_alloc(MR_INODE_DIR, &root);
     if (ret != 0) {
         return ret;
     }
-    sb->root = root_inode;
     sb->dops = MR_NULL;
+    sb->root = root;
     return 0;
 }
 

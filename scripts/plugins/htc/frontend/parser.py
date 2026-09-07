@@ -86,8 +86,9 @@ class Parser:
         # Optional `/dts-v1/;` tag
         if self._check(TokenType.SLASH):
             next_token = self._peek(1)
-            if next_token is not None and next_token.type == TokenType.IDENTIFIER \
-                    and next_token.value == "dts-v1":
+            if (next_token is not None
+                    and next_token.type == TokenType.IDENTIFIER
+                    and next_token.value == "dts-v1"):
                 self._advance()
                 self._advance()
                 self._expect(TokenType.SLASH, ErrorCode.EXPECTED_SLASH,
@@ -107,7 +108,8 @@ class Parser:
             if not self._check(TokenType.SLASH):
                 token = self._peek()
                 self._error(ErrorCode.INVALID_NODE_DECL,
-                            "expected '/', '&label', or '&{/path}' at top level",
+                            "expected '/', '&label', or '&{/path}' "
+                            "at top level",
                             token.span if token else None)
                 self._sync()
                 continue
@@ -144,7 +146,7 @@ class Parser:
         return document
 
     def _parse_root_contents(self, document: Document) -> None:
-        """Parse the inside of a `/ { ... }` root and append it to the document."""
+        """Parse `/ { ... }` contents and append them to the document."""
         slash_span = self.tokens[self.pos - 2].span if self.pos >= 2 else None
         body = self._parse_node_body("root", slash_span)
         self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
@@ -168,7 +170,8 @@ class Parser:
         if self.strict:
             self._warn(
                 ErrorCode.INVALID_NODE_DECL,
-                "strict: /memreserve/ is parsed but ignored by the HTC macro backend",
+                "strict: /memreserve/ is parsed but ignored by the HTC "
+                "macro backend",
                 name.span,
             )
 
@@ -263,7 +266,7 @@ class Parser:
             and self._peek(2).type == TokenType.SLASH
 
     def _starts_delete_property(self) -> bool:
-        """Return True when the current tokens start `/delete-property/ prop;`."""
+        """Return True when tokens start `/delete-property/ prop;`."""
         current = self._peek()
         next_token = self._peek(1)
         if current is None:
@@ -298,7 +301,8 @@ class Parser:
                      "expected '/' after 'delete-property'")
         target = self._expect(TokenType.IDENTIFIER,
                               ErrorCode.EXPECTED_IDENTIFIER,
-                              "expected property name after '/delete-property/'")
+                              "expected property name after "
+                              "'/delete-property/'")
         self._expect(TokenType.SEMICOLON, ErrorCode.EXPECTED_SEMICOLON,
                      "expected ';' after '/delete-property/'")
         if self.strict and legacy_form:
@@ -313,7 +317,7 @@ class Parser:
         return DeletePropertyDecl(name=target.value, span=span)
 
     def _parse_node(self) -> NodeDecl | None:
-        """Parse a DTS node with optional label, unit address, and closing `;`."""
+        """Parse a DTS node with optional label, unit address, and `;`."""
         if self._peek() is None:
             return None
 
@@ -337,7 +341,8 @@ class Parser:
                 address_parts.append(address)
                 while self._match(TokenType.COMMA):
                     part = self._parse_unit_address(
-                        "expected hexadecimal address after ',' in unit address")
+                        "expected hexadecimal address after ',' in "
+                        "unit address")
                     if part is not None:
                         address_parts.append(part)
         address = ",".join(address_parts) if address_parts else None
@@ -495,7 +500,8 @@ class Parser:
         if isinstance(value, NumberValue):
             self._warn(ErrorCode.INVALID_PROPERTY,
                        f"strict: property '{name_token.value}' uses a bare "
-                       "number; use a cell list like '<...>' for DTS compatibility",
+                       "number; use a cell list like '<...>' for DTS "
+                       "compatibility",
                        value.span)
             return
         if isinstance(value, FloatValue):
@@ -781,7 +787,7 @@ class Parser:
                           span=lt.span if lt else None)
 
     def _parse_inline_array(self) -> ValueExpr | None:
-        """Parse a bracketed value as a DTS bytestring or legacy inline array."""
+        """Parse a bracketed DTS bytestring or legacy inline array."""
         # Expect '['
         lbracket = self._expect(TokenType.LBRACKET, ErrorCode.EXPECTED_TOKEN,
                                 "expected '[' for bracketed value")
@@ -795,7 +801,8 @@ class Parser:
                 token = self._advance()
                 if not self._is_hex_byte(token.value):
                     self._error(ErrorCode.INVALID_NUMBER,
-                                f"invalid byte value in bytestring: '{token.value}'",
+                                "invalid byte value in bytestring: "
+                                f"'{token.value}'",
                                 token.span)
                     break
                 values.append(int(token.value, 16))

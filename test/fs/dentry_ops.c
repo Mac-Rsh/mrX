@@ -18,7 +18,7 @@ static void dentry_ops_expect(volatile mr_uint32_t *__test_status,
     MR_TEST_EXPECT_EQ_INT(actual, expected);
 }
 
-static void fs_dentry_ops_test(volatile mr_uint32_t *__test_status) {
+MR_TEST(fs, dentry_ops) {
     mr_dentry_t *root;
     mr_dentry_t *parent;
     mr_dentry_t *child;
@@ -172,10 +172,6 @@ static void fs_dentry_ops_test(volatile mr_uint32_t *__test_status) {
     dentry_ops_expect(__test_status, "del parent", mr_dentry_del(parent), 0);
     dentry_ops_expect(__test_status, "del root", mr_dentry_del(root), 0);
     return;
-}
-
-MR_TEST(fs, dentry_ops) {
-    fs_dentry_ops_test(__test_status);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

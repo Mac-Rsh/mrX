@@ -14,17 +14,21 @@ state, and uninstall restores that saved state.
 """
 
 from argparse import ArgumentParser, Namespace
-from dock import PluginSpec, export_plugin
-from datetime import datetime, timezone
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
-import tomllib
-import shutil
 import json
+import shutil
+import tomllib
+
+from framework.command import Command, CommandResult, CommandSpec
+from framework.completion import FILE_COMPLETION, attach_path_completion
+from framework.console import Console
+from framework.context import CommandContext
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PlatformDir:
     """Resolved platform source and output directories."""
 
@@ -32,7 +36,7 @@ class PlatformDir:
     output: Path
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CopyEntry:
     """One resolved copy operation."""
 
@@ -40,7 +44,7 @@ class CopyEntry:
     target: Path
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SourceSet:
     """Resolved source files for one add rule."""
 
@@ -48,7 +52,7 @@ class SourceSet:
     keep_structure: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PlatformResult:
     """Resolved platform data used by the command."""
 
@@ -57,8 +61,27 @@ class PlatformResult:
     entries: list[CopyEntry]
 
 
-@export_plugin
-class PlatformCommand:
+@dataclass(frozen=True, slots=True)
+class PlatformReporter:
+    """Per-invocation output services for the platform command."""
+
+    console: Console
+    cwd: Path
+
+    def write(self, message: str) -> None:
+        """Write one platform status line."""
+        self.console.write(message)
+
+    def format_path(self, path: Path) -> str:
+        """Return a concise path relative to the session directory."""
+        try:
+            display_path = path.resolve().relative_to(self.cwd.resolve())
+        except ValueError:
+            display_path = path
+        return display_path.as_posix()
+
+
+class PlatformCommand(Command):
     """Built-in command for installing and uninstalling platform files."""
 
     STATE_DIR_NAME = ".platform"
@@ -68,92 +91,13 @@ class PlatformCommand:
     OLD_MANIFEST_NAME = "manifest.json"
     FILES_DIR_NAME = "files"
 
-    spec = PluginSpec(
+    spec = CommandSpec(
         name="platform",
-        description="Install, uninstall, or inspect platform files.",
+        description="Install, uninstall, or inspect platform files",
     )
 
-    def help(self) -> str:
-        """Return detailed help text for the platform command."""
-        parser = self._build_parser()
-        lines = [
-            "Usage: python ./scripts/cli.py platform [install|uninstall|status] [options]",
-            "Description: Install platform files and restore previous files on uninstall.",
-            "Aliases: (none)",
-            "",
-            parser.format_help().rstrip(),
-            "Legacy install form is still supported: platform -i <platform.toml>",
-        ]
-        return "\n".join(lines)
-
-    def run(self, args: list[str]) -> int:
-        """Execute the platform workflow."""
-        options = self._parse_args(args)
-        if isinstance(options, int):
-            return options
-
-        try:
-            if options.action == "install":
-                return self._run_install(options)
-            if options.action == "uninstall":
-                return self._run_uninstall(options)
-            if options.action == "status":
-                return self._run_status(options)
-        except ValueError as exc:
-            print(exc)
-            return 1
-
-        print(f"Unknown platform action: {options.action}")
-        return 1
-
-    @classmethod
-    def _run_install(cls, options: Namespace) -> int:
-        """Install one platform and save previous target file state."""
-        input_path = cls._parse_input_path(options)
-        if input_path is None:
-            return 1
-
-        result = cls._resolve_platform(input_path)
-        if options.dry_run:
-            cls._print_install_plan(result)
-            return 0
-
-        cls._install(result)
-        print(f"Build: {result.directory.output}")
-        return 0
-
-    @classmethod
-    def _run_uninstall(cls, options: Namespace) -> int:
-        """Uninstall the current platform by restoring saved old state."""
-        output_root = cls._parse_output_root(options)
-        if output_root is None:
-            return 1
-
-        if options.dry_run:
-            cls._print_uninstall_plan(output_root)
-            return 0
-
-        cls._uninstall(output_root, options.force)
-        print(f"Build: {output_root}")
-        return 0
-
-    @classmethod
-    def _run_status(cls, options: Namespace) -> int:
-        """Print the current platform install status."""
-        output_root = cls._parse_output_root(options)
-        if output_root is None:
-            return 1
-
-        cls._print_status(output_root)
-        return 0
-
-    @classmethod
-    def _build_parser(cls) -> ArgumentParser:
-        """Build the platform command line argument parser."""
-        parser = ArgumentParser(
-            prog="python ./scripts/cli.py platform",
-            add_help=True,
-        )
+    def configure(self, parser: ArgumentParser) -> None:
+        """Declare platform command arguments."""
         parser.add_argument(
             "action",
             nargs="?",
@@ -161,60 +105,114 @@ class PlatformCommand:
             choices=("install", "uninstall", "status"),
             help="Operation to apply (default: install)",
         )
-        parser.add_argument(
+        attach_path_completion(parser.add_argument(
             "-i",
             "--input",
             help="Input platform '.toml' file path",
-        )
+        ), FILE_COMPLETION)
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Print the resolved plan without writing files.",
+            help="Print the resolved plan without writing files",
         )
         parser.add_argument(
             "--force",
             action="store_true",
-            help="Uninstall even when installed files changed after install.",
+            help="Uninstall even when installed files changed after install",
         )
-        return parser
 
-    @classmethod
-    def _parse_args(cls, args: list[str]) -> Namespace | int:
-        """Parse platform command line arguments."""
-        parser = cls._build_parser()
-
+    def execute(self, context: CommandContext,
+                arguments: Namespace) -> CommandResult:
+        """Execute the platform workflow."""
+        reporter = PlatformReporter(context.console, context.cwd)
         try:
-            return parser.parse_args(args)
-        except SystemExit as exc:
-            return int(exc.code or 0)
+            if arguments.action == "install":
+                return self._run_install(context, arguments, reporter)
+            if arguments.action == "uninstall":
+                return self._run_uninstall(context, arguments, reporter)
+            if arguments.action == "status":
+                return self._run_status(context, arguments, reporter)
+        except ValueError as exc:
+            return CommandResult.failure(str(exc))
+        return CommandResult.failure(
+            f"Unknown platform action: {arguments.action}"
+        )
 
     @classmethod
-    def _parse_input_path(cls, args: Namespace) -> Path | None:
-        """Parse and validate the command input path."""
-        if not args.input:
-            print("Missing platform file: -i/--input")
-            return None
-
-        input_path = Path(args.input).resolve()
+    def _run_install(cls, context: CommandContext,
+                     arguments: Namespace,
+                     reporter: PlatformReporter) -> CommandResult:
+        """Install one platform and save previous target file state."""
+        if not arguments.input:
+            return CommandResult.failure(
+                "Missing platform file: -i/--input",
+                code="MISSING_INPUT",
+            )
+        input_path = context.resolve_path(arguments.input)
         if not input_path.exists():
-            print(f"Platform file not found: {args.input}")
-            return None
-        return input_path
+            return CommandResult.failure(
+                f"Platform file not found: {arguments.input}"
+            )
+
+        result = cls._resolve_platform(input_path)
+        if arguments.dry_run:
+            cls._print_install_plan(result, reporter)
+            return CommandResult.success()
+
+        cls._install(result, reporter)
+        reporter.write(f"Build: {result.directory.output}")
+        return CommandResult.success()
 
     @classmethod
-    def _parse_output_root(cls, args: Namespace) -> Path | None:
-        """Resolve the output root for uninstall or status."""
-        if not args.input:
-            return Path.cwd().resolve()
+    def _run_uninstall(cls, context: CommandContext,
+                       arguments: Namespace,
+                       reporter: PlatformReporter) -> CommandResult:
+        """Uninstall the current platform by restoring saved old state."""
+        output_root = cls._parse_output_root(context, arguments)
+        if output_root is None:
+            return CommandResult.failure(
+                "Failed to resolve platform output directory"
+            )
 
-        input_path = cls._parse_input_path(args)
-        if input_path is None:
+        if arguments.dry_run:
+            cls._print_uninstall_plan(output_root, reporter)
+            return CommandResult.success()
+
+        cls._uninstall(output_root, arguments.force, reporter)
+        reporter.write(f"Build: {output_root}")
+        return CommandResult.success()
+
+    @classmethod
+    def _run_status(cls, context: CommandContext,
+                    arguments: Namespace,
+                    reporter: PlatformReporter) -> CommandResult:
+        """Print the current platform install status."""
+        output_root = cls._parse_output_root(context, arguments)
+        if output_root is None:
+            return CommandResult.failure(
+                "Failed to resolve platform output directory"
+            )
+
+        cls._print_status(output_root, reporter)
+        return CommandResult.success()
+
+    @classmethod
+    def _parse_output_root(cls, context: CommandContext,
+                           arguments: Namespace) -> Path | None:
+        """Resolve the output root for uninstall or status."""
+        if not arguments.input:
+            return context.cwd.resolve()
+
+        input_path = context.resolve_path(arguments.input)
+        if not input_path.exists():
+            context.console.write(
+                f"Platform file not found: {arguments.input}")
             return None
         try:
             data = cls._load_platform(input_path)
             return cls._resolve_directory(input_path, data.get("dir")).output
         except ValueError as exc:
-            print(exc)
+            context.console.write(str(exc))
             return None
 
     @classmethod
@@ -334,7 +332,8 @@ class PlatformCommand:
 
         if len(sources.files) > 1 and cls._looks_like_file_path(target_root):
             raise ValueError(
-                f"Invalid destination path for multi-source rule: {target_root}")
+                "Invalid destination path for multi-source rule: "
+                f"{target_root}")
 
         entries: list[CopyEntry] = []
         for source_path, relative_path in sources.files:
@@ -385,7 +384,8 @@ class PlatformCommand:
         return files
 
     @classmethod
-    def _install(cls, result: PlatformResult) -> None:
+    def _install(cls, result: PlatformResult,
+                 reporter: PlatformReporter) -> None:
         """Install platform files and persist previous state for uninstall."""
         output_root = result.directory.output
         state_dir = cls._state_dir(output_root)
@@ -401,14 +401,17 @@ class PlatformCommand:
             )
 
         if tmp_dir.exists():
-            shutil.rmtree(tmp_dir)
+            raise ValueError(
+                f"Incomplete platform state found: {tmp_dir}. "
+                "Restore or move this backup before installing again."
+            )
         tmp_dir.mkdir(parents=True)
 
         try:
             old_manifest = cls._backup_old_state(result, tmp_dir)
             cls._write_json(tmp_dir / cls.OLD_MANIFEST_NAME, old_manifest)
 
-            files = cls._copy_files(result.entries, output_root)
+            files = cls._copy_files(result.entries, output_root, reporter)
             manifest = {
                 "version": 1,
                 "name": result.name,
@@ -419,16 +422,19 @@ class PlatformCommand:
             cls._write_json(tmp_manifest_path, manifest)
             tmp_dir.replace(old_dir)
             tmp_manifest_path.replace(manifest_path)
-        except Exception:
+        except (Exception, KeyboardInterrupt):
             restore_dir = old_dir if old_dir.exists() else tmp_dir
-            cls._restore_old_state(output_root, restore_dir, force=True)
+            cls._restore_old_state(
+                output_root, restore_dir, force=True, reporter=reporter)
+            manifest_path.unlink(missing_ok=True)
             tmp_manifest_path.unlink(missing_ok=True)
             shutil.rmtree(tmp_dir, ignore_errors=True)
             shutil.rmtree(old_dir, ignore_errors=True)
             raise
 
     @classmethod
-    def _uninstall(cls, output_root: Path, force: bool) -> None:
+    def _uninstall(cls, output_root: Path, force: bool,
+                   reporter: PlatformReporter) -> None:
         """Restore the saved old state and remove current platform state."""
         state_dir = cls._state_dir(output_root)
         manifest_path = cls._manifest_path(output_root)
@@ -439,14 +445,16 @@ class PlatformCommand:
             raise ValueError(f"Platform previous state not found: {state_dir}")
 
         manifest = cls._read_json(manifest_path)
-        changed = cls._changed_installed_files(output_root, manifest)
+        changed = cls._changed_installed_files(
+            output_root, manifest, reporter)
         if changed and not force:
             for path in changed:
-                print(f"Skip: changed installed file: {path}")
+                reporter.write(f"Skip: changed installed file: {path}")
             raise ValueError(
                 "Use `--force` to uninstall changed installed files.")
 
-        cls._restore_old_state(output_root, old_dir, force=True)
+        cls._restore_old_state(
+            output_root, old_dir, force=True, reporter=reporter)
         manifest_path.unlink(missing_ok=True)
         shutil.rmtree(old_dir, ignore_errors=True)
         try:
@@ -493,6 +501,7 @@ class PlatformCommand:
             output_root: Path,
             old_dir: Path,
             force: bool,
+            reporter: PlatformReporter,
     ) -> None:
         """Restore one saved old state directory."""
         old_manifest_path = old_dir / cls.OLD_MANIFEST_NAME
@@ -515,7 +524,8 @@ class PlatformCommand:
                     shutil.rmtree(target_path)
                 target_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(backup_path, target_path)
-                print(f"Restore: {cls._format_display_path(target_path)}")
+                reporter.write(
+                    f"Restore: {reporter.format_path(target_path)}")
                 continue
 
             if state == "missing":
@@ -524,10 +534,12 @@ class PlatformCommand:
                         raise ValueError(
                             f"Target path is a directory: {target_path}")
                     shutil.rmtree(target_path)
-                    print(f"Delete: {cls._format_display_path(target_path)}")
+                    reporter.write(
+                        f"Delete: {reporter.format_path(target_path)}")
                 elif target_path.exists() and (force or target_path.is_file()):
                     target_path.unlink()
-                    print(f"Delete: {cls._format_display_path(target_path)}")
+                    reporter.write(
+                        f"Delete: {reporter.format_path(target_path)}")
                 cls._clean_empty_parents(output_root, target_path.parent)
                 continue
 
@@ -538,6 +550,7 @@ class PlatformCommand:
             cls,
             output_root: Path,
             manifest: dict,
+            reporter: PlatformReporter,
     ) -> list[str]:
         """Return installed files whose hash differs from the manifest."""
         changed: list[str] = []
@@ -547,23 +560,29 @@ class PlatformCommand:
             if not isinstance(expected_hash, str):
                 continue
             if not target_path.is_file():
-                changed.append(cls._format_display_path(target_path))
+                changed.append(reporter.format_path(target_path))
                 continue
             if cls._sha256(target_path) != expected_hash:
-                changed.append(cls._format_display_path(target_path))
+                changed.append(reporter.format_path(target_path))
         return changed
 
     @classmethod
-    def _copy_files(cls, entries: list[CopyEntry], output_root: Path) -> list[
-        dict]:
+    def _copy_files(
+            cls,
+            entries: list[CopyEntry],
+            output_root: Path,
+            reporter: PlatformReporter,
+    ) -> list[dict]:
         """Copy all resolved platform files into the output directory."""
         copied_files: list[dict] = []
         for entry in entries:
-            copied_files.append(cls._copy_one_file(entry, output_root))
+            copied_files.append(
+                cls._copy_one_file(entry, output_root, reporter))
         return copied_files
 
     @classmethod
-    def _copy_one_file(cls, entry: CopyEntry, output_root: Path) -> dict:
+    def _copy_one_file(cls, entry: CopyEntry, output_root: Path,
+                       reporter: PlatformReporter) -> dict:
         """Copy one resolved source file to its target path."""
         if not entry.source.exists():
             raise ValueError(f"Source path not found: {entry.source}")
@@ -571,33 +590,35 @@ class PlatformCommand:
         relative_path = cls._relative_to_output(output_root, entry.target)
         entry.target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(entry.source, entry.target)
-        source = cls._format_display_path(entry.source)
-        target = cls._format_display_path(entry.target)
-        print(f"Copy: {source} -> {target}")
+        source = reporter.format_path(entry.source)
+        target = reporter.format_path(entry.target)
+        reporter.write(f"Copy: {source} -> {target}")
         return {
             "path": relative_path.as_posix(),
             "hash": cls._sha256(entry.target),
         }
 
     @classmethod
-    def _print_install_plan(cls, result: PlatformResult) -> None:
+    def _print_install_plan(cls, result: PlatformResult,
+                            reporter: PlatformReporter) -> None:
         """Print the resolved platform install plan."""
-        print(f"Platform: {result.name}")
-        print(
-            f"Source dir: {cls._format_display_path(result.directory.source)}")
-        print(
-            f"Output dir: {cls._format_display_path(result.directory.output)}")
+        reporter.write(f"Platform: {result.name}")
+        reporter.write(
+            f"Source dir: {reporter.format_path(result.directory.source)}")
+        reporter.write(
+            f"Output dir: {reporter.format_path(result.directory.output)}")
         state_dir = cls._state_dir(result.directory.output)
-        print(f"State dir: {cls._format_display_path(state_dir)}")
+        reporter.write(f"State dir: {reporter.format_path(state_dir)}")
         for entry in result.entries:
             if entry.target.exists():
-                print(f"Save: {cls._format_display_path(entry.target)}")
-            source = cls._format_display_path(entry.source)
-            target = cls._format_display_path(entry.target)
-            print(f"Copy: {source} -> {target}")
+                reporter.write(f"Save: {reporter.format_path(entry.target)}")
+            source = reporter.format_path(entry.source)
+            target = reporter.format_path(entry.target)
+            reporter.write(f"Copy: {source} -> {target}")
 
     @classmethod
-    def _print_uninstall_plan(cls, output_root: Path) -> None:
+    def _print_uninstall_plan(cls, output_root: Path,
+                              reporter: PlatformReporter) -> None:
         """Print the resolved platform uninstall plan."""
         state_dir = cls._state_dir(output_root)
         manifest_path = cls._manifest_path(output_root)
@@ -608,32 +629,36 @@ class PlatformCommand:
             raise ValueError(f"Platform previous state not found: {state_dir}")
 
         old_manifest = cls._read_json(old_dir / cls.OLD_MANIFEST_NAME)
-        print(f"Output dir: {cls._format_display_path(output_root)}")
+        reporter.write(f"Output dir: {reporter.format_path(output_root)}")
         for item in old_manifest.get("files", []):
             target_path = cls._safe_output_path(output_root, item.get("path"))
             if item.get("state") == "saved":
-                print(f"Restore: {cls._format_display_path(target_path)}")
+                reporter.write(
+                    f"Restore: {reporter.format_path(target_path)}")
             elif item.get("state") == "missing":
-                print(f"Delete: {cls._format_display_path(target_path)}")
+                reporter.write(
+                    f"Delete: {reporter.format_path(target_path)}")
 
     @classmethod
-    def _print_status(cls, output_root: Path) -> None:
+    def _print_status(cls, output_root: Path,
+                      reporter: PlatformReporter) -> None:
         """Print the current platform install status."""
         state_dir = cls._state_dir(output_root)
         manifest_path = cls._manifest_path(output_root)
-        print(f"Output dir: {cls._format_display_path(output_root)}")
+        reporter.write(f"Output dir: {reporter.format_path(output_root)}")
         if not manifest_path.exists():
-            print("Platform: not installed")
+            reporter.write("Platform: not installed")
             return
 
         manifest = cls._read_json(manifest_path)
         files = manifest.get("files", [])
-        print(f"Platform: {manifest.get('name', 'unknown')}")
-        print(f"State dir: {cls._format_display_path(state_dir)}")
-        print(f"Files: {len(files)}")
-        changed = cls._changed_installed_files(output_root, manifest)
+        reporter.write(f"Platform: {manifest.get('name', 'unknown')}")
+        reporter.write(f"State dir: {reporter.format_path(state_dir)}")
+        reporter.write(f"Files: {len(files)}")
+        changed = cls._changed_installed_files(
+            output_root, manifest, reporter)
         if changed:
-            print(f"Changed: {len(changed)}")
+            reporter.write(f"Changed: {len(changed)}")
 
     @classmethod
     def _state_dir(cls, output_root: Path) -> Path:
@@ -712,15 +737,6 @@ class PlatformCommand:
         if normalized == "." and not allow_dot:
             raise ValueError(f"Invalid {description}: {value}")
         return path.as_posix()
-
-    @staticmethod
-    def _format_display_path(path: Path) -> str:
-        """Return a concise path string for user-facing CLI output."""
-        try:
-            display_path = path.resolve().relative_to(Path.cwd().resolve())
-        except ValueError:
-            display_path = path
-        return display_path.as_posix()
 
     @staticmethod
     def _clean_empty_parents(output_root: Path, path: Path) -> None:

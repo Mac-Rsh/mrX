@@ -1,134 +1,299 @@
-[**中文**](kernel_printf.md) | [**English**](kernel_printf_en.md)
+# 格式化输出（Printf）
+
+> 格式化输出提供轻量级 `printf`：以 `mr_vsnprintf` 将格式串与参数格式化到内部
+> 缓冲，再经平台输出通道 `mr_port_output` 送出，是内核日志与用户打印的统一出口。
+
+| 项       | 说明                                                                                    |
+|----------|-----------------------------------------------------------------------------------------|
+| 功能宏   | `MR_USE_PRINTF`（默认开启）                                                             |
+| 头文件   | `<mrX/kernel/mr_printf.h>`                                                              |
+| 依赖模块 | [格式化 sprintf](../libc/sprintf.md)（`mr_vsnprintf`）、移植层输出通道 `mr_port_output` |
+| 参考测试 | `mrX/test/kernel/printf.c`                                                              |
 
 ---
 
-# 内核输出
+## 用户指南
 
-内核输出模块提供轻量级格式化输出能力。模块通过 `mr_vsnprintf()` 将格式化结果写入内部缓冲区，再调用平台层
-`mr_port_output()` 输出字节流。该模块由 `MR_USE_PRINTF` 配置控制，常用于内核调试、日志输出和测试输出。
+### 1. 模块概述
 
-本文对应 `include/mrX/kernel/mr_printf.h`、`kernel/printf.c` 和 `test/kernel/printf.c`。
+格式化输出解决的问题是： **在没有完整 C 库 stdio 的环境下提供 `printf` 能力**， 并统一接管"格式化到哪里、从哪里出去"两个决策。
 
-## 模块用途
+特性：
 
-`mr_printf` 模块封装了两个输出接口：`mr_printf()` 处理可变参数，`mr_vprintf()` 处理已经展开的 `mr_va_list` 参数。格式化能力来自
-mrX libc 中的 `mr_vsnprintf()`，实际字符输出由端口层 `mr_port_output()` 完成，因此该模块本身不绑定具体串口、控制台或宿主输出设备。
+- `mr_printf` / `mr_vprintf` 两个入口，覆盖直接调用与可变参转发两种场景。
+- 格式语法由 [格式化 sprintf](../libc/sprintf.md) 的 `mr_vsnprintf` 决定，与库内 其他格式化函数一致。
+- 输出经统一的平台通道 `mr_port_output`，移植层决定落点是串口、控制台或仿真终端。
+- `MR_CFG_PRINTF_BUF_SIZE` 控制格式化缓冲大小，超长输出自动截断。
+- 可选 ANSI 颜色宏（`MR_USE_PRINTF_COLOR`）与多上下文安全模式 （`MR_USE_PRINTF_SAFE`）。
 
-当 `MR_USE_PRINTF_SAFE` 未启用时，`mr_vprintf()` 使用静态缓冲区；启用后，每次调用会通过 `mr_malloc()` 申请临时缓冲区并在输出后释放。缓冲区大小由
-`MR_CFG_PRINTF_BUF_SIZE` 控制，源码中未定义时默认使用 64 字节。
+不适用于：写入缓冲区的格式化（请使用 [格式化 sprintf](../libc/sprintf.md) 的
+`snprintf` 系列函数）、浮点格式化（能力以 `mr_vsnprintf` 实际支持为准）。
 
-## 核心宏和配置
+### 2. 配置与依赖
 
-### 输出开关
+| 配置项                   | 类型 | 默认值 | 说明                                                         |
+|--------------------------|------|--------|--------------------------------------------------------------|
+| `MR_USE_PRINTF`          | bool | y      | 启用格式化输出（`mrX/include/mrX/kernel/Kconfig:69`）        |
+| `MR_CFG_PRINTF_BUF_SIZE` | 整型 | 64     | 内部格式化缓冲字节数，范围 8~65535（`Kconfig:77`）           |
+| `MR_USE_PRINTF_COLOR`    | bool | n      | 启用 ANSI 颜色宏（`Kconfig:88`）                             |
+| `MR_USE_PRINTF_SAFE`     | bool | n      | 启用多上下文安全模式：每次调用改用堆分配缓冲（`Kconfig:97`） |
 
-```c
-#if defined(MR_USE_PRINTF)
-```
-
-只有启用 `MR_USE_PRINTF` 后，颜色宏和输出接口才会生效。`include/mrX/kernel/Kconfig` 中该配置默认开启。
-
-### 缓冲区大小
-
-```c
-#define MR_CFG_PRINTF_BUF_SIZE          (64)
-```
-
-`MR_CFG_PRINTF_BUF_SIZE` 是格式化缓冲区大小。Kconfig 中该配置依赖 `MR_USE_PRINTF`，默认值为 64，取值范围为 8 到
-65535。源码在配置缺失时也会使用 64 作为默认值。
-
-### 安全输出模式
+启用 `MR_USE_PRINTF` 并重新生成 `mr_config.h` 后，包含头文件即可使用：
 
 ```c
-#if !defined(MR_USE_PRINTF_SAFE)
-    static char buf[MR_CFG_PRINTF_BUF_SIZE];
-#else
-    char *buf;
-#endif
+#include <mrX/kernel/mr_printf.h>
 ```
 
-未启用 `MR_USE_PRINTF_SAFE` 时，模块使用函数内静态缓冲区，多个执行上下文同时调用时会共享同一块缓冲区。启用后，模块为每次调用分配独立缓冲区，可避免共享缓冲区竞争，但会引入堆分配开销，并可能返回
-`-MR_ENOMEM`。
+缓冲取舍：`MR_CFG_PRINTF_BUF_SIZE` 决定单次输出的最大长度（超出部分被截断）， 静态模式下它同时是所有调用共享的那块内存的大小；调大以容纳更长日志行，
+调小以省内存。
 
-### 颜色宏
+### 3. 快速上手
 
 ```c
-#define MR_COLOR_RESET                  "\033[0m"
-#define MR_COLOR_BLACK                  "\033[30m"
-#define MR_COLOR_RED                    "\033[31m"
-#define MR_COLOR_GREEN                  "\033[32m"
-#define MR_COLOR_YELLOW                 "\033[33m"
-#define MR_COLOR_BLUE                   "\033[34m"
-#define MR_COLOR(_color, _str)          _color _str MR_COLOR_RESET
+#include <mrX/kernel/mr_printf.h>
+
+void demo(void) {
+    int count = 3;
+
+    mr_printf("boot ok, count=%d, state=%s\r\n", count, "ready");
+}
 ```
 
-启用 `MR_USE_PRINTF_COLOR` 后，颜色宏展开为 ANSI 转义序列；未启用时，颜色常量为空，`MR_COLOR(_color, _str)` 直接返回 `_str`
-。使用颜色输出时，实际终端或输出设备需要支持 ANSI 转义序列。
+要点：
 
-## 模块接口
+- 换行需自行携带 `\r\n`，模块不追加。
+- 返回值为输出的字符数；`fmt` 为 `MR_NULL` 或空串返回 `-MR_EINVAL`。
 
-### 格式化输出可变参数列表
+### 4. 使用说明
+
+**输出流程**：格式化 → 截断 → 输出。格式化结果先写入大小为
+`MR_CFG_PRINTF_BUF_SIZE` 的内部缓冲，实际送出的字符数不超过
+`MR_CFG_PRINTF_BUF_SIZE - 1`；被截断时不报错，按截断后的长度输出。
+
+**返回值约定**
+
+| 情形                                  | 返回                     |
+|---------------------------------------|--------------------------|
+| 成功                                  | 实际输出的字符数（正数） |
+| `fmt` 为 `MR_NULL` 或空串             | `-MR_EINVAL`             |
+| 格式化失败（`mr_vsnprintf` 返回负数） | `-MR_EINVAL`             |
+| `MR_USE_PRINTF_SAFE` 下缓冲分配失败   | `-MR_ENOMEM`             |
+
+**缓冲模式**
+
+| 模式                 | 缓冲                                 | 适用                           |
+|----------------------|--------------------------------------|--------------------------------|
+| 默认（静态）         | 全局唯一 `static` 缓冲，所有调用共享 | 单线程、或能保证调用串行的场合 |
+| `MR_USE_PRINTF_SAFE` | 每次调用 `mr_malloc`/`mr_free`       | 多线程/多上下文并发输出        |
+
+**颜色宏**（需 `MR_USE_PRINTF_COLOR`）：`MR_COLOR_RED` 等展开为 ANSI 转义序列， 未启用时展开为空，用法：
 
 ```c
-int mr_vprintf(const char *fmt, mr_va_list args);
+mr_printf(MR_COLOR(MR_COLOR_RED, "error: %d\r\n"), code);
 ```
 
-`mr_vprintf()` 接收格式字符串和 `mr_va_list`，将格式化结果写入内部缓冲区，然后调用 `mr_port_output(buf, outsz)` 输出。
+可用颜色：`MR_COLOR_BLACK` / `RED` / `GREEN` / `YELLOW` / `BLUE`，
+`MR_COLOR_RESET` 复位；`MR_COLOR(_color, _str)` 自动在串尾附加重置序列。
 
-返回值如下：
+**调用约束**
 
-| 返回值          | 含义                                  |
-|--------------|-------------------------------------|
-| `>= 0`       | `mr_port_output()` 的返回值，表示平台层输出结果。  |
-| `-MR_EINVAL` | `fmt` 为空、`fmt` 是空字符串，或格式化函数返回错误。    |
-| `-MR_ENOMEM` | 启用 `MR_USE_PRINTF_SAFE` 时临时缓冲区申请失败。 |
+| 事项             | 约定                                                       |
+|------------------|------------------------------------------------------------|
+| 可否在中断中调用 | 默认模式可（静态缓冲、无阻塞）；安全模式取决于 `mr_malloc` |
+| 可否在回调中调用 | 可以，遵循与所在上下文相同的输出通道约束                   |
+| 格式化失败的处理 | 返回负数错误码，不输出任何内容                             |
 
-测试用例覆盖了空指针格式串、空字符串格式串、普通字符串、整数、十六进制、字符和较长格式串输出。
+### 5. API 参考
 
-### 格式化输出
+| API                                | 说明                                   |
+|------------------------------------|----------------------------------------|
+| `mr_printf`                        | 可变参格式化输出                       |
+| `mr_vprintf`                       | `va_list` 版本格式化输出               |
+| `MR_COLOR(_color, _str)`           | 颜色包裹宏（需 `MR_USE_PRINTF_COLOR`） |
+| `MR_COLOR_RESET` ~ `MR_COLOR_BLUE` | ANSI 颜色序列宏（未启用时为空）        |
+
+**`mr_printf`**
 
 ```c
 int mr_printf(const char *fmt, ...);
 ```
 
-`mr_printf()` 是常用输出接口。它检查 `fmt` 后通过 `mr_va_start()` 构造参数列表，再调用 `mr_vprintf()` 完成输出。
+- `fmt`：格式串，不可为 `MR_NULL` 或空串。
+- `...`：格式参数。
+- 返回：成功为实际输出的字符数；失败返回负数错误码（见第 4 节）。
 
-返回值与 `mr_vprintf()` 一致。`fmt` 为空或空字符串时直接返回 `-MR_EINVAL`。
+**`mr_vprintf`**
 
-## 使用示例
+```c
+int mr_vprintf(const char *fmt, mr_va_list args);
+```
+
+- `fmt`：格式串，约束同上。
+- `args`：由 `mr_va_start` 初始化的可变参列表，调用后由调用方 `mr_va_end` 收尾。
+- 返回：同 `mr_printf`。
+- 注意：`mr_printf` 内部即经由它实现；自定义带前缀的打印函数（如日志）应封装
+  `mr_vprintf`。
+
+### 6. 完整示例
+
+示例 1：封装一个带标签的打印函数（`mr_vprintf` 的典型用法，改编自
+`mrX/test/kernel/printf.c` 的 `vprintf_wrapper`）：
 
 ```c
 #include <mrX/kernel/mr_printf.h>
 
-void example_printf(void) {
-    int ret;
-
-    ret = mr_printf("boot step: %u\n", 1U);
-    if (ret < 0) {
-        return;
-    }
-
-    mr_printf(MR_COLOR(MR_COLOR_GREEN, "init ok\n"));
-}
-```
-
-如果需要转发已有的可变参数列表，可以封装为 `mr_vprintf()` 调用：
-
-```c
-static int output_with_prefix(const char *fmt, ...) {
+static int tag_printf(const char *fmt, ...) {
     mr_va_list args;
     int ret;
 
+    mr_printf("[app] ");
     mr_va_start(args, fmt);
     ret = mr_vprintf(fmt, args);
     mr_va_end(args);
     return ret;
 }
+
+void demo(void) {
+    tag_printf("value=%d\n", 42);
+}
 ```
 
-## 注意事项
+示例 2：超长格式串的截断行为（缓冲默认 64 字节时输出被截断但不报错，改编自 测试 `vprintf_long_format` 用例）：
 
-- `mr_printf()` 和 `mr_vprintf()` 不接受空格式串，传入 `MR_NULL` 或 `""` 会返回 `-MR_EINVAL`。
-- 未启用 `MR_USE_PRINTF_SAFE` 时，内部静态缓冲区不适合多个线程或中断上下文并发输出同一条格式化数据。
-- 启用 `MR_USE_PRINTF_SAFE` 后，调用路径依赖堆分配，不适合不能分配内存的上下文。
-- 输出长度受 `MR_CFG_PRINTF_BUF_SIZE` 限制，超过缓冲区时实际格式化行为由 `mr_vsnprintf()` 决定。
-- 该模块只负责格式化和调用端口层输出；输出设备初始化、阻塞行为和并发保护由 `mr_port_output()` 的平台实现决定。
+```c
+#include <mrX/kernel/mr_printf.h>
+
+void truncation_demo(void) {
+    /* Format result exceeds MR_CFG_PRINTF_BUF_SIZE - 1: truncated */
+    int ret = mr_printf(
+        "this_is_a_very_long_format_string_that_exceeds_sixty_four_bytes_%s\n",
+        "done");
+    (void)ret;      /* ret > 0, but shorter than the full string */
+}
+```
+
+更多行为参考（非法参数、基础格式化）见 `mrX/test/kernel/printf.c`。
+
+### 7. 常见问题（FAQ）
+
+**Q：返回的字符数比格式串展开后的完整长度短？**
+
+输出被缓冲截断了。实际送出的字符数上限为 `MR_CFG_PRINTF_BUF_SIZE - 1`，调大该 配置即可；截断不视为错误。
+
+**Q：`mr_printf(MR_NULL)` 会崩溃吗？**
+
+不会，返回 `-MR_EINVAL`；空串同理。
+
+**Q：两个线程同时打印，输出交错/出现半截内容？**
+
+默认模式所有调用共享同一静态缓冲，并发时互相覆盖。启用 `MR_USE_PRINTF_SAFE`
+（每次调用独立堆缓冲）可消除缓冲竞争；输出通道本身的原子性仍由移植层
+`mr_port_output` 保证。
+
+**Q：为什么启用 `MR_USE_PRINTF_SAFE` 后偶发返回 `-MR_ENOMEM`？**
+
+安全模式每次调用都要 `mr_malloc` 一块缓冲，堆耗尽即失败；调用方需检查返回值或 改用默认模式。
+
+**Q：颜色宏在串口终端上显示乱码？**
+
+确认 `MR_USE_PRINTF_COLOR` 已启用（未启用时宏为空，不存在乱码问题）；乱码通常 是终端不支持 ANSI 转义序列，关闭该选项即可。
+
+**Q：格式语法支持哪些占位符？**
+
+由 [格式化 sprintf](../libc/sprintf.md) 的 `mr_vsnprintf` 决定，与本模块无关； 未支持的占位符行为以该模块文档为准。
+
+---
+
+## 开发者指南
+
+### 8. 架构总览
+
+格式化输出是内核的诊断出口，把"格式化"与"输出"两个阶段拼接起来：
+
+```
+        +----------------------------------+
+        |  调用方（应用 / 日志 Log）         |
+        +-----------------+----------------+
+                           | mr_printf / mr_vprintf
+        +-----------------v----------------+
+        |  格式化输出 Printf                 |
+        |  (mrX/kernel/printf.c)           |----> mr_vsnprintf 格式化到 buf
+        +-----------------+----------------+     （MR_CFG_PRINTF_BUF_SIZE）
+                           | mr_port_output(buf, outsz)
+        +-----------------v----------------+
+        |  移植层输出通道（平台相关）         |----> 串口 / 控制台 / 仿真终端
+        +----------------------------------+
+             依赖：sprintf（mr_vsnprintf）、port 输出通道、
+                   malloc（仅 MR_USE_PRINTF_SAFE）
+```
+
+- [日志 Log](log.md) 的时间戳与正文均经由本模块输出。
+- 平台侧 `mr_port_output` 声明于 `mrX/include/mrX/port/mr_port_output.h:32`， 由移植层实现（宿主模拟中对接 `stdio` 的
+  `printf`，见
+  `mrX/platform/port/output.c:13`）。
+
+### 9. 数据结构
+
+模块无核心结构体，仅两个编译期决策：
+
+- 格式化缓冲：默认为函数内 `static char buf[MR_CFG_PRINTF_BUF_SIZE]`
+  （`mrX/kernel/printf.c:23`），所有调用共享；`MR_USE_PRINTF_SAFE` 下改为每次 调用 `mr_malloc(MR_CFG_PRINTF_BUF_SIZE)` 的堆缓冲（
+  `printf.c:36`）。
+- 颜色宏：`MR_USE_PRINTF_COLOR` 启用时为 ANSI 转义字符串常量，未启用时全部展开 为空、`MR_COLOR(_color, _str)` 只保留
+  `_str`（`mr_printf.h:30-45`）。
+
+`MR_CFG_PRINTF_BUF_SIZE` 若未定义，源内默认 64（`printf.c:20`），与 Kconfig 默认值一致。
+
+### 10. 核心流程
+
+**`mr_vprintf`**（`mrX/kernel/printf.c:18`）：
+
+1. 参数检查：`fmt` 为 `MR_NULL` 或空串返回 `-MR_EINVAL`（`printf.c:30`）。
+2. 取缓冲：静态或按 `MR_USE_PRINTF_SAFE` 分配，分配失败返回 `-MR_ENOMEM`
+   （`printf.c:36`）。
+3. `mr_vsnprintf(buf, MR_CFG_PRINTF_BUF_SIZE, fmt, args)` 格式化（`printf.c:43`）； 返回负数视为格式化失败，转 `-MR_EINVAL`。
+4. 计算实际输出长度 `outsz = MR_MIN(ret, buf_size - 1)`（`printf.c:45`）：
+   `mr_vsnprintf` 的返回值是"本应写入的完整长度"，截断保证只送出缓冲容纳的部分， 且不含结尾填 0。
+5. `mr_port_output(buf, outsz)` 输出并返回其返回值（`printf.c:52`）。
+6. 安全模式下释放缓冲（`printf.c:55`）。
+
+**`mr_printf`**（`printf.c:60`）：参数检查后以 `mr_va_start`/`mr_va_end` 包裹
+`mr_vprintf`，纯转发逻辑。
+
+**截断语义**：第 4 步的 `MR_MIN` 使返回值上界为 `MR_CFG_PRINTF_BUF_SIZE - 1`， 配合测试 `vprintf_long_format`
+用例（超长格式串返回正数）可验证"截断但成功"。
+
+### 11. 并发与中断安全
+
+- 默认静态缓冲模式：格式化阶段非可重入——两个上下文并发调用会互相覆盖缓冲内容 （内容交错或串行化失败）；单上下文（主循环或唯一
+  ISR）使用是安全的。
+- `MR_USE_PRINTF_SAFE` 模式：缓冲按调用独立，格式化阶段可并发；整体安全性还 取决于 `mr_malloc` 的中断可用性与
+  `mr_port_output` 的实现。
+- 模块本身不加锁；跨上下文的输出原子性由移植层负责。
+
+### 12. 源码导读
+
+| 位置                                    | 职责                                               |
+|-----------------------------------------|----------------------------------------------------|
+| `mrX/include/mrX/kernel/mr_printf.h:30` | 颜色宏定义（含禁用时的空展开）                     |
+| `mrX/include/mrX/kernel/mr_printf.h:54` | API 声明与 Doxygen 约定                            |
+| `mrX/kernel/printf.c:18`                | `mr_vprintf`：检查 → 取缓冲 → 格式化 → 截断 → 输出 |
+| `mrX/kernel/printf.c:36`                | 安全模式的堆缓冲分配                               |
+| `mrX/kernel/printf.c:60`                | `mr_printf`：可变参转发                            |
+| `mrX/platform/port/output.c:13`         | 宿主模拟的输出通道实现示例                         |
+| `mrX/test/kernel/printf.c`              | 非法参数、基础/可变参格式化、超长截断的行为级测试  |
+
+### 13. 附录
+
+**配置宏**
+
+| 宏                       | 说明                                  |
+|--------------------------|---------------------------------------|
+| `MR_USE_PRINTF`          | 模块开关，默认 y                      |
+| `MR_CFG_PRINTF_BUF_SIZE` | 格式化缓冲大小，默认 64，范围 8~65535 |
+| `MR_USE_PRINTF_COLOR`    | ANSI 颜色宏开关，默认 n               |
+| `MR_USE_PRINTF_SAFE`     | 堆缓冲安全模式开关，默认 n            |
+
+**错误码**：`-MR_EINVAL`（`fmt` 为空/空串，或 `mr_vsnprintf` 失败）、
+`-MR_ENOMEM`（仅 `MR_USE_PRINTF_SAFE`，缓冲分配失败）；见
+`mrX/include/mrX/libc/mr_errno.h`。成功返回值即 `mr_port_output` 的返回值 （宿主平台实现中为实际送出的字符数）。

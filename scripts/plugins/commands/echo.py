@@ -2,52 +2,33 @@
 # -*- coding: utf-8 -*-
 
 """
-Echo command - Print input arguments back to the terminal.
-
-Echoes all provided command line arguments in their original order as a single
-space-separated line.
+Echo command used as a minimal local plugin implementation.
 
 @copyright (c) 2024-2026, MacRsh
 
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from dock import PluginSpec, export_plugin
+from argparse import ArgumentParser, Namespace
+
+from framework.command import Command, CommandResult, CommandSpec
+from framework.context import CommandContext
 
 
-@export_plugin
-class EchoCommand:
-    """Built-in command for echoing input arguments."""
+class EchoCommand(Command):
+    """Print positional text through the shared command context."""
 
-    spec = PluginSpec(
+    spec = CommandSpec(
         name="echo",
-        description="Print the provided arguments.",
+        description="Print the provided arguments",
     )
 
-    def help(self) -> str:
-        """Return detailed help text for the echo command.
+    def configure(self, parser: ArgumentParser) -> None:
+        """Declare repeatable positional text values."""
+        parser.add_argument("text", nargs="*", help="Text to print")
 
-        Returns:
-            Human-readable help text for the command.
-        """
-
-        return "\n".join([
-            "Usage: python ./scripts/cli.py echo [text...]",
-            "Description: Print the provided arguments as one line.",
-            "Aliases: (none)",
-            "Examples:",
-            "- python ./scripts/cli.py echo hello world",
-        ])
-
-    def run(self, args: list[str]) -> int:
-        """Print the provided command line arguments.
-
-        Args:
-            args: Command line arguments passed to the command.
-
-        Returns:
-            Exit code (0 for success, non-zero for error).
-        """
-        # Print command line arguments
-        print(" ".join(args))
-        return 0
+    def execute(self, context: CommandContext,
+                arguments: Namespace) -> CommandResult:
+        """Print the parsed text values in their original order."""
+        context.console.write(" ".join(arguments.text))
+        return CommandResult.success()

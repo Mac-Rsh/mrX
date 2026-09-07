@@ -46,6 +46,9 @@ extern "C" {
  * @param _a The first value.
  * @param _b The second value.
  * @return The minimum value.
+ *
+ * @note Each argument may be evaluated more than once; expressions with side
+ * effects are not supported.
  */
 #define MR_MIN(_a, _b)                  (((_a) < (_b)) ? (_a) : (_b))
 
@@ -55,6 +58,9 @@ extern "C" {
  * @param _a The first value.
  * @param _b The second value.
  * @return The maximum value.
+ *
+ * @note Each argument may be evaluated more than once; expressions with side
+ * effects are not supported.
  */
 #define MR_MAX(_a, _b)                  (((_a) > (_b)) ? (_a) : (_b))
 

@@ -57,6 +57,23 @@ MR_INLINE void mr_spinlock_lock(mr_spinlock_t *lock) {
 }
 
 /**
+ * @brief This function tries to lock a spinlock without spinning.
+ *
+ * @param lock The spinlock.
+ * @return MR_TRUE on locked, MR_FALSE if the spinlock is held by another
+ * owner.
+ */
+MR_INLINE mr_bool_t mr_spinlock_try_lock(mr_spinlock_t *lock) {
+    mr_atomic_t unlock;
+
+    /* Init unlock value */
+    mr_atomic_init(&unlock, 0);
+
+    /* Try to lock spinlock once */
+    return mr_atomic_compare_exchange(lock, &unlock, 1) ? MR_TRUE : MR_FALSE;
+}
+
+/**
  * @brief This function unlocks a spinlock.
  *
  * @param lock The spinlock.

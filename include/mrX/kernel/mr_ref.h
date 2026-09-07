@@ -76,6 +76,9 @@ MR_INLINE void mr_ref_init(mr_ref_t *ref) {
  *
  * @param ref The ref.
  * @return MR_TRUE on success, MR_FALSE otherwise.
+ *
+ * @note Incrementing the maximum count changes the magic to MR_REF_OVERFLOW
+ * and invalidates the ref.
  */
 MR_INLINE mr_bool_t mr_ref_get(mr_ref_t *ref) {
     mr_atomic_t last;

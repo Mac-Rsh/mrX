@@ -154,14 +154,13 @@ class NodeDecl:
     deleted_nodes: list[DeleteNodeDecl] = field(default_factory=list)
 
     def get_property(self, name: str) -> PropertyDecl | None:
-        """
-        Get a property by name.
+        """Return a property declaration by name.
 
-        Args:
+        Arguments:
             name: Property name.
 
         Returns:
-            PropertyDecl if found, None otherwise.
+            Matching property, or `None` when it is absent.
         """
         for prop in self.properties:
             if prop.name == name:

@@ -17,8 +17,8 @@ config MR_USE_REF_LONG_COUNT
     bool "Use ref long count"
     default n
     help
-        Enable 16-bit reference counting instead of 8-bit. Use this when
-        reference counts may exceed 16-bit range.
+        Enable 16-bit reference counting instead of 8-bit. Use this when an
+        object may have more than 255 concurrent references.
 
 # ==================================
 # CLOCK
@@ -48,8 +48,8 @@ config MR_USE_CLOCK_HIRES
     bool "Use clock high resolution"
     default y
     help
-        Enable high-resolution clock support. Provides microsecond or nanosecond
-        timing precision for time-critical applications.
+        Enable high-resolution clock support. Provides up to microsecond timing
+        precision for time-critical applications.
         This adds a secondary high-frequency tick source.
 
 config MR_CFG_HIRES_TICK_PER_SECOND
@@ -60,9 +60,8 @@ config MR_CFG_HIRES_TICK_PER_SECOND
     help
         High-resolution tick frequency (Hz). This defines the precision of the
         high-resolution clock.
-        Common values:
+        Common value:
             - 1000000: Microsecond resolution (1us tick)
-            - 1000000000: Nanosecond resolution (1ns tick, hardware-dependent)
 
 # ==================================
 # PRINTF

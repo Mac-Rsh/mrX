@@ -45,8 +45,9 @@ MR_TEST(fifo, alloc_free) {
     MR_TEST_EXPECT_EQ_PTR(fifo.buf, MR_NULL);
 
     cap = mr_fifo_alloc(&fifo, 7, sizeof(test_elem_t));
-    MR_TEST_EXPECT_EQ_UINT(cap, 8);
+    MR_TEST_EXPECT_EQ_UINT(cap, 7);
     MR_TEST_EXPECT_EQ_UINT(mr_fifo_len(&fifo), 0);
+    MR_TEST_EXPECT_EQ_UINT(mr_fifo_size(&fifo), 7);
 
     mr_fifo_free(&fifo);
     MR_TEST_EXPECT_EQ_PTR(fifo.buf, MR_NULL);
@@ -373,6 +374,85 @@ MR_TEST(fifo, wrap) {
         MR_TEST_ASSERT_EQ_UINT(mr_fifo_pop(&fifo, &elem), 1);
         MR_TEST_ASSERT_EQ_INT(elem.id, (int)i);
     }
+    MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
+}
+
+/* Test: bulk read and peek preserve order across the backing-buffer boundary */
+MR_TEST(fifo, bulk_read_peek_wrap) {
+    mr_uint8_t buf[4 * sizeof(test_elem_t)];
+    test_elem_t first[] = {{.id = 1}, {.id = 2}, {.id = 3}};
+    test_elem_t second[] = {{.id = 4}, {.id = 5}, {.id = 6}};
+    test_elem_t discarded[2];
+    test_elem_t peeked[4];
+    test_elem_t read[4];
+    mr_fifo_t fifo;
+
+    MR_TEST_ASSERT_EQ_UINT(
+        mr_fifo_init(&fifo, buf, sizeof(buf), sizeof(test_elem_t)), 4);
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_write(&fifo, first, MR_ARRAY_SIZE(first)),
+                           MR_ARRAY_SIZE(first));
+    MR_TEST_ASSERT_EQ_UINT(
+        mr_fifo_read(&fifo, discarded, MR_ARRAY_SIZE(discarded)),
+        MR_ARRAY_SIZE(discarded));
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_write(&fifo, second, MR_ARRAY_SIZE(second)),
+                           MR_ARRAY_SIZE(second));
+
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_peek(&fifo, peeked, MR_ARRAY_SIZE(peeked)),
+                           MR_ARRAY_SIZE(peeked));
+    MR_TEST_ASSERT_EQ_INT(peeked[0].id, 3);
+    MR_TEST_ASSERT_EQ_INT(peeked[1].id, 4);
+    MR_TEST_ASSERT_EQ_INT(peeked[2].id, 5);
+    MR_TEST_ASSERT_EQ_INT(peeked[3].id, 6);
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_len(&fifo), 4);
+
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_read(&fifo, read, MR_ARRAY_SIZE(read)),
+                           MR_ARRAY_SIZE(read));
+    MR_TEST_ASSERT_EQ_INT(read[0].id, 3);
+    MR_TEST_ASSERT_EQ_INT(read[1].id, 4);
+    MR_TEST_ASSERT_EQ_INT(read[2].id, 5);
+    MR_TEST_ASSERT_EQ_INT(read[3].id, 6);
+    MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
+}
+
+/* Test: claim offsets span both contiguous portions of a wrapped fifo */
+MR_TEST(fifo, claim_finish_wrap) {
+    mr_uint8_t buf[4 * sizeof(test_elem_t)];
+    test_elem_t initial[] = {{.id = 1}, {.id = 2}, {.id = 3}};
+    test_elem_t discarded[2];
+    test_elem_t result[4];
+    test_elem_t *claimed;
+    mr_fifo_t fifo;
+
+    MR_TEST_ASSERT_EQ_UINT(
+        mr_fifo_init(&fifo, buf, sizeof(buf), sizeof(test_elem_t)), 4);
+    MR_TEST_ASSERT_EQ_UINT(
+        mr_fifo_write(&fifo, initial, MR_ARRAY_SIZE(initial)),
+        MR_ARRAY_SIZE(initial));
+    MR_TEST_ASSERT_EQ_UINT(
+        mr_fifo_read(&fifo, discarded, MR_ARRAY_SIZE(discarded)),
+        MR_ARRAY_SIZE(discarded));
+
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_write_claim(&fifo, 0, (void **)&claimed, 3),
+                           1);
+    claimed[0].id = 4;
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_write_claim(&fifo, 1, (void **)&claimed, 2),
+                           2);
+    claimed[0].id = 5;
+    claimed[1].id = 6;
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_write_finish(&fifo, 3), 3);
+
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_read_claim(&fifo, 0, (void **)&claimed, 4),
+                           2);
+    MR_TEST_ASSERT_EQ_INT(claimed[0].id, 3);
+    MR_TEST_ASSERT_EQ_INT(claimed[1].id, 4);
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_read_claim(&fifo, 2, (void **)&claimed, 2),
+                           2);
+    MR_TEST_ASSERT_EQ_INT(claimed[0].id, 5);
+    MR_TEST_ASSERT_EQ_INT(claimed[1].id, 6);
+    mr_fifo_read_finish(&fifo, 4);
+
+    MR_TEST_ASSERT_EQ_UINT(mr_fifo_read(&fifo, result, MR_ARRAY_SIZE(result)),
+                           0);
     MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
 }
 

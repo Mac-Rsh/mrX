@@ -6,64 +6,53 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
+#include <mrX/kernel/mr_service.h>
 #include <mrX/kernel/mr_fifo.h>
 #include <mrX/libc/mr_malloc.h>
 #include <mrX/libc/mr_string.h>
 
-/* Fifo align macro function */
-#define FIFO_ALIGN_POW2_DOWN(_size)     (1U << (mr_fls32(_size) - 1))
+/* FIFO capacity max definition */
+#define FIFO_CAPACITY_MAX               (((mr_uint32_t)MR_INT32_MAX / 2U) + 1U)
 
 mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
                          mr_uint32_t elemsz) {
+    mr_uint32_t capacity;
+
     /* Check parameter */
     if ((buf == MR_NULL) || (elemsz == 0) || (size < elemsz)) {
         return 0;
     }
 
-    /* Align size(down to power of 2) */
-    size /= elemsz;
-    if (size == 0) {
+    /* Get capacity */
+    capacity = size / elemsz;
+    if (capacity > FIFO_CAPACITY_MAX) {
         return 0;
     }
-    size = FIFO_ALIGN_POW2_DOWN(size);
 
     /* Init fifo */
     mr_atomic_init(&fifo->ridx, 0);
     mr_atomic_init(&fifo->widx, 0);
+    fifo->capacity = capacity;
     fifo->elemsz = elemsz;
-    fifo->mask = size - 1;
     fifo->buf = buf;
-    return size;
+    return capacity;
 }
 
 mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t num,
                           mr_uint32_t elemsz) {
-    mr_uint32_t cap, size;
-    int shift;
+    mr_uint32_t size;
     void *buf;
 
     /* Check parameter */
-    if ((fifo == MR_NULL) || (num == 0) || (elemsz == 0)) {
+    if ((fifo == MR_NULL) || (num > FIFO_CAPACITY_MAX) || (elemsz == 0)) {
         return 0;
     }
     if (num > (MR_UINT32_MAX / elemsz)) {
         return 0;
     }
 
-    /* Align capacity(up to power of 2) */
-    shift = mr_fls32(num - 1U);
-    if (shift < 32) {
-        cap = 1U << shift;
-    } else {
-        return 0;
-    }
-
     /* Get buffer size */
-    if (cap <= (MR_UINT32_MAX / elemsz)) {
-        size = cap * elemsz;
-    } else {
-        return 0;
-    }
+    size = num * elemsz;
 
     /* Allocate buffer */
     buf = mr_malloc(size);
@@ -87,8 +76,45 @@ void mr_fifo_free(mr_fifo_t *fifo) {
     fifo->buf = MR_NULL;
 }
 
+MR_INLINE mr_uint32_t fifo_cursor_to_index(mr_fifo_t *fifo,
+                                           mr_uint32_t cursor) {
+    /* Fold cursor into buffer range */
+    if (cursor >= fifo->capacity) {
+        cursor -= fifo->capacity;
+    }
+    return (mr_uint32_t)cursor;
+}
+
+MR_INLINE mr_uint32_t fifo_cursor_advance(mr_fifo_t *fifo, mr_uint32_t cursor,
+                                          mr_uint32_t num) {
+    mr_uint32_t period;
+
+    /* Get cursor period */
+    period = fifo->capacity * 2U;
+
+    /* Advance and wrap cursor */
+    cursor += num;
+    if (cursor >= period) {
+        cursor -= period;
+    }
+    return cursor;
+}
+
+MR_INLINE void fifo_cursor_add(mr_fifo_t *fifo, volatile mr_atomic_t *cursor,
+                               mr_uint32_t num) {
+    mr_atomic_t curr, next;
+
+    /* Get current cursor */
+    curr = mr_atomic_load(cursor);
+
+    /* Advance cursor atomically */
+    do {
+        next = (mr_atomic_t)fifo_cursor_advance(fifo, (mr_uint32_t)curr, num);
+    } while (!mr_atomic_compare_exchange(cursor, &curr, next));
+}
+
 mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data) {
-    mr_uint32_t index;
+    mr_uint32_t cursor, index;
 
     /* Check if fifo is not initialized */
     if (!fifo->buf) {
@@ -101,19 +127,20 @@ mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data) {
     }
 
     /* Get write index */
-    index = (mr_uint32_t)mr_atomic_load(&fifo->widx) & fifo->mask;
+    cursor = (mr_uint32_t)mr_atomic_load(&fifo->widx);
+    index = fifo_cursor_to_index(fifo, cursor);
     if (fifo->elemsz != 1U) {
         index *= fifo->elemsz;
     }
 
     /* Push data */
     mr_memcpy(fifo->buf + index, data, fifo->elemsz);
-    mr_atomic_fetch_add(&fifo->widx, 1);
+    fifo_cursor_add(fifo, &fifo->widx, 1U);
     return 1;
 }
 
 mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data) {
-    mr_uint32_t index;
+    mr_uint32_t cursor, index;
 
     /* Check if fifo is not initialized */
     if (!fifo->buf) {
@@ -126,19 +153,20 @@ mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data) {
     }
 
     /* Get read index */
-    index = (mr_uint32_t)mr_atomic_load(&fifo->ridx) & fifo->mask;
+    cursor = (mr_uint32_t)mr_atomic_load(&fifo->ridx);
+    index = fifo_cursor_to_index(fifo, cursor);
     if (fifo->elemsz != 1U) {
         index *= fifo->elemsz;
     }
 
     /* Pop data */
     mr_memcpy(data, fifo->buf + index, fifo->elemsz);
-    mr_atomic_fetch_add(&fifo->ridx, 1);
+    fifo_cursor_add(fifo, &fifo->ridx, 1U);
     return 1;
 }
 
 mr_uint32_t mr_fifo_write(mr_fifo_t *fifo, const void *buf, mr_uint32_t num) {
-    mr_uint32_t avail, num2, index, size, n;
+    mr_uint32_t avail, num2, cursor, index, size, n;
 
     /* Check if fifo is not initialized */
     if (!fifo->buf) {
@@ -156,8 +184,9 @@ mr_uint32_t mr_fifo_write(mr_fifo_t *fifo, const void *buf, mr_uint32_t num) {
     num2 = num;
 
     /* Get write index */
-    index = (mr_uint32_t)mr_atomic_load(&fifo->widx) & fifo->mask;
-    size = fifo->mask + 1U;
+    cursor = (mr_uint32_t)mr_atomic_load(&fifo->widx);
+    index = fifo_cursor_to_index(fifo, cursor);
+    size = fifo->capacity;
     if (fifo->elemsz != 1U) {
         index *= fifo->elemsz;
         size *= fifo->elemsz;
@@ -168,7 +197,7 @@ mr_uint32_t mr_fifo_write(mr_fifo_t *fifo, const void *buf, mr_uint32_t num) {
     n = MR_MIN(num, size - index);
     mr_memcpy(fifo->buf + index, buf, n);
     mr_memcpy(fifo->buf, (mr_uint8_t *)buf + n, num - n);
-    mr_atomic_fetch_add(&fifo->widx, (mr_atomic_t)num2);
+    fifo_cursor_add(fifo, &fifo->widx, num2);
     return num2;
 }
 
@@ -182,7 +211,7 @@ mr_uint32_t mr_fifo_overwrite(mr_fifo_t *fifo, const void *buf,
     }
 
     /* Limit number */
-    cap = fifo->mask + 1U;
+    cap = fifo->capacity;
     if (num > cap) {
         buf = (mr_uint8_t *)buf + ((num - cap) * fifo->elemsz);
         num = cap;
@@ -199,7 +228,7 @@ mr_uint32_t mr_fifo_overwrite(mr_fifo_t *fifo, const void *buf,
 }
 
 mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
-    mr_uint32_t avail, num2, index, size, n;
+    mr_uint32_t avail, num2, cursor, index, size, n;
 
     /* Check if fifo is not initialized */
     if (!fifo->buf) {
@@ -217,8 +246,9 @@ mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
     num2 = num;
 
     /* Get read index */
-    index = (mr_uint32_t)mr_atomic_load(&fifo->ridx) & fifo->mask;
-    size = fifo->mask + 1U;
+    cursor = (mr_uint32_t)mr_atomic_load(&fifo->ridx);
+    index = fifo_cursor_to_index(fifo, cursor);
+    size = fifo->capacity;
     if (fifo->elemsz != 1U) {
         index *= fifo->elemsz;
         size *= fifo->elemsz;
@@ -232,9 +262,23 @@ mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
     return num2;
 }
 
+mr_uint32_t mr_fifo_read(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
+    /* Pop buffer */
+    num = mr_fifo_peek(fifo, buf, num);
+    fifo_cursor_add(fifo, &fifo->ridx, num);
+    return num;
+}
+
+mr_uint32_t mr_fifo_skip(mr_fifo_t *fifo, mr_uint32_t num) {
+    /* Skip buffer */
+    num = MR_MIN(num, mr_fifo_len(fifo));
+    fifo_cursor_add(fifo, &fifo->ridx, num);
+    return num;
+}
+
 mr_uint32_t mr_fifo_write_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
                                 mr_uint32_t want) {
-    mr_uint32_t avail, index;
+    mr_uint32_t avail, cursor, index;
 
     /* Check if fifo is not initialized */
     if (!fifo->buf) {
@@ -252,17 +296,31 @@ mr_uint32_t mr_fifo_write_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
     }
 
     /* Get write index */
-    index = ((mr_uint32_t)mr_atomic_load(&fifo->widx) + off) & fifo->mask;
-    want = MR_MIN(want, (fifo->mask + 1U) - index);
+    cursor = (mr_uint32_t)mr_atomic_load(&fifo->widx);
+    cursor = fifo_cursor_advance(fifo, cursor, off);
+    index = fifo_cursor_to_index(fifo, cursor);
+    want = MR_MIN(want, fifo->capacity - index);
 
     /* Claim buffer */
     *buf = fifo->buf + index * fifo->elemsz;
     return want;
 }
 
+mr_uint32_t mr_fifo_write_finish(mr_fifo_t *fifo, mr_uint32_t num) {
+    /* Check if fifo is not initialized */
+    if (!fifo->buf) {
+        return 0;
+    }
+
+    /* Finish buffer */
+    num = MR_MIN(num, mr_fifo_avail(fifo));
+    fifo_cursor_add(fifo, &fifo->widx, num);
+    return num;
+}
+
 mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
                                     void **buf, mr_uint32_t want) {
-    mr_uint32_t cap, index;
+    mr_uint32_t cap, cursor, index;
 
     /* Check if fifo is not initialized */
     if (!fifo->buf) {
@@ -270,7 +328,7 @@ mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
     }
 
     /* Limit wants */
-    cap = fifo->mask + 1U;
+    cap = fifo->capacity;
     if (off >= cap) {
         return 0;
     }
@@ -280,7 +338,9 @@ mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
     }
 
     /* Get write index */
-    index = ((mr_uint32_t)mr_atomic_load(&fifo->widx) + off) & fifo->mask;
+    cursor = (mr_uint32_t)mr_atomic_load(&fifo->widx);
+    cursor = fifo_cursor_advance(fifo, cursor, off);
+    index = fifo_cursor_to_index(fifo, cursor);
     want = MR_MIN(want, cap - index);
 
     /* Claim buffer */
@@ -288,9 +348,27 @@ mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
     return want;
 }
 
+mr_uint32_t mr_fifo_overwrite_finish(mr_fifo_t *fifo, mr_uint32_t num) {
+    mr_uint32_t avail;
+
+    /* Check if fifo is not initialized */
+    if (!fifo->buf) {
+        return 0;
+    }
+
+    /* Finish buffer */
+    num = MR_MIN(num, mr_fifo_size(fifo));
+    avail = mr_fifo_avail(fifo);
+    if (avail < num) {
+        fifo_cursor_add(fifo, &fifo->ridx, num - avail);
+    }
+    fifo_cursor_add(fifo, &fifo->widx, num);
+    return num;
+}
+
 mr_uint32_t mr_fifo_read_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
                                mr_uint32_t want) {
-    mr_uint32_t avail, index;
+    mr_uint32_t avail, cursor, index;
 
     /* Check if fifo is not initialized */
     if (!fifo->buf) {
@@ -308,10 +386,23 @@ mr_uint32_t mr_fifo_read_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
     }
 
     /* Get read index */
-    index = ((mr_uint32_t)mr_atomic_load(&fifo->ridx) + off) & fifo->mask;
-    want = MR_MIN(want, (fifo->mask + 1U) - index);
+    cursor = (mr_uint32_t)mr_atomic_load(&fifo->ridx);
+    cursor = fifo_cursor_advance(fifo, cursor, off);
+    index = fifo_cursor_to_index(fifo, cursor);
+    want = MR_MIN(want, fifo->capacity - index);
 
     /* Claim buffer */
     *buf = fifo->buf + (index * fifo->elemsz);
     return want;
+}
+
+void mr_fifo_read_finish(mr_fifo_t *fifo, mr_uint32_t num) {
+    /* Check if fifo is not initialized */
+    if (!fifo->buf) {
+        return;
+    }
+
+    /* Finish buffer */
+    num = MR_MIN(num, mr_fifo_len(fifo));
+    fifo_cursor_add(fifo, &fifo->ridx, num);
 }

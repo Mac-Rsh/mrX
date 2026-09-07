@@ -9,23 +9,17 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST) && defined(MR_USE_FS)
 #include <mrX.h>
-#include <mrX/fs/mr_nsp.h>
-#include "fs_test.h"
+#include <mrX/fs/mr_fs_struct.h>
+#include <mrX/test/fs/fs_test.h>
 
 /* Failing filesystem mount state */
 static mr_size_t __fs_mount_fail_calls;
-static mr_bool_t __fs_unmount_reject;
 
-static mr_err_t fs_mount_fail_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t fs_mount_fail_mount(mr_sblock_t *sb, const char *source,
                                     int flags, void *data);
-static mr_err_t fs_unmount_test_mount(mr_super_block_t *sb, const char *source,
-                                      int flags, void *data);
-static mr_err_t fs_unmount_test_unmount(mr_super_block_t *sb);
 
 static mr_file_system_t __fs_mount_fail
-    = MR_FILE_SYSTEM_INIT("mountfail", fs_mount_fail_mount, MR_NULL, MR_NULL);
-static mr_file_system_t __fs_unmount_test = MR_FILE_SYSTEM_INIT(
-    "unmounttest", fs_unmount_test_mount, fs_unmount_test_unmount, MR_NULL);
+    = MR_FILE_SYSTEM_INIT("mountfail", fs_mount_fail_mount, MR_NULL);
 
 static void fs_mount_expect(volatile mr_uint32_t *__test_status,
                             const char *name, mr_int64_t actual,
@@ -33,6 +27,18 @@ static void fs_mount_expect(volatile mr_uint32_t *__test_status,
     MR_IGNORE(name);
 
     MR_TEST_EXPECT_EQ_INT(actual, expected);
+}
+
+static void fs_mount_register(volatile mr_uint32_t *__test_status,
+                              const char *name, mr_file_system_t *fs) {
+    mr_err_t ret;
+
+    /* Reuse the test-owned registration on repeated test runs */
+    ret = mr_file_system_register(fs);
+    if ((ret == -MR_EEXIST) && (mr_file_system_find(fs->name) == fs)) {
+        ret = 0;
+    }
+    fs_mount_expect(__test_status, name, ret, 0);
 }
 
 static void fs_mount_stat_expect(volatile mr_uint32_t *__test_status,
@@ -57,7 +63,7 @@ static void fs_mount_cwd_expect(volatile mr_uint32_t *__test_status,
     return;
 }
 
-static mr_err_t fs_mount_fail_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t fs_mount_fail_mount(mr_sblock_t *sb, const char *source,
                                     int flags, void *data) {
     MR_IGNORE(sb);
     MR_IGNORE(source);
@@ -69,61 +75,39 @@ static mr_err_t fs_mount_fail_mount(mr_super_block_t *sb, const char *source,
     return -MR_ENOMEM;
 }
 
-static mr_err_t fs_unmount_test_mount(mr_super_block_t *sb, const char *source,
-                                      int flags, void *data) {
-    MR_IGNORE(source);
-    MR_IGNORE(flags);
-    MR_IGNORE(data);
-
-    /* Create a minimal root directory */
-    sb->root = mr_inode_create(MR_INODE_DIR, MR_NULL, MR_NULL, MR_NULL);
-    return sb->root ? 0 : -MR_ENOMEM;
-}
-
-static mr_err_t fs_unmount_test_unmount(mr_super_block_t *sb) {
-    MR_IGNORE(sb);
-
-    /* Reject unmount while requested */
-    return __fs_unmount_reject ? -MR_EIO : 0;
-}
-
-static void fs_mount_restore_nsp(mr_dentry_t *root, mr_dentry_t *cwd) {
-    mr_fs_nsp_t *nsp;
+static void fs_mount_restore_struct(mr_dentry_t *root, mr_dentry_t *cwd) {
+    mr_fs_struct_t *fs_struct;
     mr_dentry_t *old_root, *old_cwd;
     int mask;
 
     /* Get current file-system namespace */
-    nsp = mr_fs_nsp_current();
-    if (!nsp) {
+    fs_struct = mr_fs_struct_current();
+    if (!fs_struct) {
         return;
     }
 
     /* Restore saved context */
-    mask = mr_fs_nsp_lock();
-    old_root = nsp->root;
-    old_cwd = nsp->cwd;
-    nsp->root = root;
-    nsp->cwd = cwd;
-    mr_fs_nsp_unlock(mask);
+    mask = mr_fs_struct_lock();
+    old_root = fs_struct->root;
+    old_cwd = fs_struct->cwd;
+    fs_struct->root = root;
+    fs_struct->cwd = cwd;
+    mr_fs_struct_unlock(mask);
 
     /* Drop replaced namespace references */
     mr_dentry_put(old_root);
     mr_dentry_put(old_cwd);
 }
 
-static void fs_mount_test(volatile mr_uint32_t *__test_status) {
-    mr_fs_nsp_t *nsp;
+MR_TEST(fs, mount) {
+    mr_fs_struct_t *fs_struct;
     mr_dentry_t *saved_root, *saved_cwd;
     mr_file_t file = MR_FILE_INIT(file);
-    mr_file_t directory = MR_FILE_INIT(directory);
     int mask;
     mr_err_t ret;
 
     /* Register a filesystem which rejects mount requests */
-    fs_mount_expect(__test_status, "register mountfail",
-                    mr_file_system_register(&__fs_mount_fail), 0);
-    fs_mount_expect(__test_status, "register unmounttest",
-                    mr_file_system_register(&__fs_unmount_test), 0);
+    fs_mount_register(__test_status, "register mountfail", &__fs_mount_fail);
 
     /* Mount the root filesystem */
     ret = fs_test_mount_root("ramfs", 0, MR_NULL);
@@ -166,33 +150,6 @@ static void fs_mount_test(volatile mr_uint32_t *__test_status) {
                         0);
     }
     fs_mount_stat_expect(__test_status, "/fail/uncovered", 0);
-
-    /* Preserve the mount when its backing FS rejects unmount */
-    fs_mount_expect(__test_status, "mkdir unmount reject",
-                    mr_fs_mkdir("/unmount-reject"), 0);
-    fs_mount_expect(
-        __test_status, "mount unmount reject",
-        mr_fs_mount(MR_NULL, "/unmount-reject", "unmounttest", 0, MR_NULL), 0);
-    __fs_unmount_reject = MR_TRUE;
-    fs_mount_expect(__test_status, "propagate unmount rejection",
-                    mr_fs_umount("/unmount-reject"), -MR_EIO);
-    fs_mount_stat_expect(__test_status, "/unmount-reject", 0);
-    ret = mr_fs_opendir(&directory, "/unmount-reject");
-    fs_mount_expect(__test_status, "open rejected mount root", ret, 0);
-    if (ret == 0) {
-        ret = mr_fs_openat(&file, &directory, ".",
-                           MR_O_RDONLY | MR_O_DIRECTORY);
-        fs_mount_expect(__test_status, "use rejected mount root", ret, 0);
-        if (ret == 0) {
-            fs_mount_expect(__test_status, "close rejected mount child",
-                            mr_fs_close(&file), 0);
-        }
-        fs_mount_expect(__test_status, "close rejected mount root",
-                        mr_fs_closedir(&directory), 0);
-    }
-    __fs_unmount_reject = MR_FALSE;
-    fs_mount_expect(__test_status, "retry unmount rejection",
-                    mr_fs_umount("/unmount-reject"), 0);
 
     /* Mount across a covered directory and walk mount boundaries */
     fs_mount_expect(__test_status, "mkdir mount", mr_fs_mkdir("/mount"), 0);
@@ -243,25 +200,21 @@ static void fs_mount_test(volatile mr_uint32_t *__test_status) {
                     -MR_ENOTDIR);
     fs_mount_expect(__test_status, "chroot regular", mr_fs_chroot("/jail/file"),
                     -MR_ENOTDIR);
-    fs_mount_expect(__test_status, "create jail escape link",
-                    mr_fs_symlink("/outside", "/jail/escape"), 0);
-    fs_mount_expect(__test_status, "create jail work link",
-                    mr_fs_symlink("work", "/jail/work-link"), 0);
-    fs_mount_expect(__test_status, "chdir work link",
-                    mr_fs_chdir("/jail/work-link"), 0);
+    fs_mount_expect(__test_status, "chdir jail work",
+                    mr_fs_chdir("/jail/work"), 0);
     fs_mount_cwd_expect(__test_status, "/jail/work");
     fs_mount_expect(__test_status, "chdir outside", mr_fs_chdir("/outside"), 0);
 
     /* Pin the original context before changing the namespace root */
-    nsp = mr_fs_nsp_current();
+    fs_struct = mr_fs_struct_current();
     saved_root = MR_NULL;
     saved_cwd = MR_NULL;
-    if (!nsp) {
+    if (!fs_struct) {
     } else {
-        mask = mr_fs_nsp_lock();
-        saved_root = mr_dentry_get(nsp->root);
-        saved_cwd = mr_dentry_get(nsp->cwd);
-        mr_fs_nsp_unlock(mask);
+        mask = mr_fs_struct_lock();
+        saved_root = mr_dentry_get(fs_struct->root);
+        saved_cwd = mr_dentry_get(fs_struct->cwd);
+        mr_fs_struct_unlock(mask);
         if ((!saved_root) || (!saved_cwd)) {
         }
     }
@@ -273,12 +226,11 @@ static void fs_mount_test(volatile mr_uint32_t *__test_status) {
         fs_mount_expect(__test_status, "chroot retain cwd",
                         mr_fs_chroot("/jail"), 0);
         fs_mount_cwd_expect(__test_status, "/work");
-        fs_mount_stat_expect(__test_status, "/escape", -MR_ENOENT);
         fs_mount_expect(__test_status, "chdir work parent", mr_fs_chdir(".."),
                         0);
         fs_mount_cwd_expect(__test_status, "/");
-        fs_mount_restore_nsp(mr_dentry_get(saved_root),
-                             mr_dentry_get(saved_cwd));
+        fs_mount_restore_struct(mr_dentry_get(saved_root),
+                                mr_dentry_get(saved_cwd));
         fs_mount_expect(__test_status, "chdir outside again",
                         mr_fs_chdir("/outside"), 0);
         fs_mount_expect(__test_status, "chroot jail", mr_fs_chroot("/jail"), 0);
@@ -300,7 +252,7 @@ static void fs_mount_test(volatile mr_uint32_t *__test_status) {
         fs_mount_cwd_expect(__test_status, "/");
 
         /* Restore the context before releasing the root filesystem */
-        fs_mount_restore_nsp(saved_root, saved_cwd);
+        fs_mount_restore_struct(saved_root, saved_cwd);
         saved_root = MR_NULL;
         saved_cwd = MR_NULL;
     } else {
@@ -335,10 +287,6 @@ static void fs_mount_test(volatile mr_uint32_t *__test_status) {
                     0);
     fs_mount_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
-}
-
-MR_TEST(fs, mount) {
-    fs_mount_test(__test_status);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

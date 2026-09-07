@@ -18,8 +18,7 @@ mr_err_t mr_gpio_configure(mr_driver_t *drv, mr_uint32_t pin,
                            mr_gpio_config_t *config) {
     const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
-    mr_uint8_t value;
-    mr_err_t ret;
+    mr_gpio_config_t cfg;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
@@ -31,31 +30,27 @@ mr_err_t mr_gpio_configure(mr_driver_t *drv, mr_uint32_t pin,
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
     gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(gp_ops->pin_configure != MR_NULL);
-    MR_ASSERT(gp_ops->pin_write != MR_NULL);
+    cfg = *config;
 
     /* Check if pin is existed */
     if ((pin >= 32U) || (!(gp_data->exist_mask & (1U << pin)))) {
         return -MR_EINVAL;
     }
 
-    /* Configure pin */
-    ret = gp_ops->pin_configure(drv, pin, config);
-    if (ret != 0) {
-        return ret;
+    /* Invert output level */
+    if (cfg.mode == MR_GPIO_MODE_OUTPUT) {
+        cfg.level ^= !!(gp_data->invert_mask & (1U << pin));
     }
 
-    /* If pin is output, write pin default value */
-    if (config->mode == MR_GPIO_MODE_OUTPUT) {
-        value = (!!config->level) ^ (!!(gp_data->invert_mask & (1U << pin)));
-        return gp_ops->pin_write(drv, pin, value);
-    }
-    return 0;
+    /* Configure pin */
+    return gp_ops->pin_configure(drv, pin, &cfg);
 }
 
 mr_err_t mr_gpio_configuration(mr_driver_t *drv, mr_uint32_t pin,
                                mr_gpio_config_t *config) {
     const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
+    mr_err_t ret;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
@@ -74,7 +69,16 @@ mr_err_t mr_gpio_configuration(mr_driver_t *drv, mr_uint32_t pin,
     }
 
     /* Get pin configuration */
-    return gp_ops->pin_configuration(drv, pin, config);
+    ret = gp_ops->pin_configuration(drv, pin, config);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Restore logical output level for the caller */
+    if (config->mode == MR_GPIO_MODE_OUTPUT) {
+        config->level ^= !!(gp_data->invert_mask & (1U << pin));
+    }
+    return 0;
 }
 
 static void gpio_release(const mr_driver_t *drv) {

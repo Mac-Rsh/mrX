@@ -28,7 +28,7 @@ class NodeProperty:
 
 @dataclass
 class HardNode:
-    """A hardware node after path resolution and effective status calculation."""
+    """A hardware node after path resolution and status calculation."""
 
     path: str
     name: str
@@ -54,4 +54,5 @@ class HardTree:
 
     @property
     def nodes(self) -> list[HardNode]:
+        """Return hardware nodes in path insertion order."""
         return list(self.nodes_by_path.values())

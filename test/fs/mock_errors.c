@@ -9,7 +9,7 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST) && defined(MR_USE_FS)
 #include <mrX.h>
-#include "fs_test.h"
+#include <mrX/test/fs/fs_test.h>
 
 /* Mock FS behavior flags */
 typedef struct mock_error_context {
@@ -35,7 +35,7 @@ static mr_ssize_t mock_error_file_read(mr_file_t *file, void *buf,
                                        mr_size_t size);
 static mr_ssize_t mock_error_file_write(mr_file_t *file, const void *buf,
                                         mr_size_t size);
-static mr_err_t mock_error_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t mock_error_mount(mr_sblock_t *sb, const char *source,
                                  int flags, void *data);
 
 static const mr_inode_ops_t __mock_error_inode_ops = {
@@ -52,7 +52,7 @@ static const mr_file_ops_t __mock_error_file_ops = {
 };
 
 static mr_file_system_t __mock_error_fs
-    = MR_FILE_SYSTEM_INIT("errfs", mock_error_mount, MR_NULL, MR_NULL);
+    = MR_FILE_SYSTEM_INIT("errfs", mock_error_mount, MR_NULL);
 
 static void mock_error_expect(volatile mr_uint32_t *__test_status,
                               const char *name, mr_int64_t actual,
@@ -113,7 +113,6 @@ static mr_err_t mock_error_inode_lookup(mr_inode_t *dir, const char *name,
 static mr_err_t mock_error_inode_stat(mr_inode_t *inode, mr_stat_t *stat) {
     stat->type = inode->type;
     stat->mode = 0;
-    stat->nlink = inode->nlink;
     stat->size = inode->size;
     return 0;
 }
@@ -161,7 +160,7 @@ static mr_ssize_t mock_error_file_write(mr_file_t *file, const void *buf,
     return (mr_ssize_t)size;
 }
 
-static mr_err_t mock_error_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t mock_error_mount(mr_sblock_t *sb, const char *source,
                                  int flags, void *data) {
     mock_error_context_t *context;
 
@@ -184,7 +183,7 @@ static mr_err_t mock_error_mount(mr_super_block_t *sb, const char *source,
     return 0;
 }
 
-static void fs_mock_error_test(volatile mr_uint32_t *__test_status) {
+MR_TEST(fs, mock_errors) {
     mr_file_t file = MR_FILE_INIT(file);
     mock_error_context_t *context;
     char buffer[8];
@@ -203,13 +202,22 @@ static void fs_mock_error_test(volatile mr_uint32_t *__test_status) {
     }
     context = __mock_ctx;
 
-    /* A cache miss is filled by the lookup callback */
+    /* A cache miss is filled by lookup. Closing the stat handle drops the
+     * last reference, so the lookup-filled dentry is released */
     mock_error_expect(__test_status, "stat ghost",
                       fs_test_stat("/ghost", &stat), 0);
     mock_error_expect(__test_status, "ghost lookup calls",
                       (mr_int64_t)context->lookup_calls, 1);
-    mock_error_expect(__test_status, "destroy calls",
-                      (mr_int64_t)context->destroy_calls, 0);
+    mock_error_expect(__test_status, "destroy after stat close",
+                      (mr_int64_t)context->destroy_calls, 1);
+
+    /* The next open cannot reuse a pinned dentry and looks up again */
+    mock_error_expect(__test_status, "stat ghost again",
+                      fs_test_stat("/ghost", &stat), 0);
+    mock_error_expect(__test_status, "ghost lookup again",
+                      (mr_int64_t)context->lookup_calls, 2);
+    mock_error_expect(__test_status, "destroy after second stat",
+                      (mr_int64_t)context->destroy_calls, 2);
 
     /* Read/write through the mock op layers, incl. stat callback */
     ret = mr_fs_open(&file, "/data", MR_O_RDWR | MR_O_CREAT);
@@ -218,10 +226,10 @@ static void fs_mock_error_test(volatile mr_uint32_t *__test_status) {
         mock_error_expect(__test_status, "write errfs data",
                           mr_fs_write(&file, "abc", 3), 3);
         mock_error_expect(__test_status, "truncate errfs data 4",
-                          mr_fs_truncate(&file, 4), 0);
+                          mr_fs_ftruncate(&file, 4), 0);
         mock_error_expect(__test_status, "read errfs data",
                           mr_fs_read(&file, buffer, 0), 0);
-        ret = mr_fs_stat(&file, &stat);
+        ret = mr_fs_fstat(&file, &stat);
         mock_error_expect(__test_status, "stat errfs data", ret, 0);
         if (ret == 0) {
             mock_error_expect(__test_status, "errfs data size", stat.size, 4);
@@ -244,8 +252,8 @@ static void fs_mock_error_test(volatile mr_uint32_t *__test_status) {
     /* Rename/unlink stay within the dentry namespace layer */
     mock_error_expect(__test_status, "mkdir errfs dir", mr_fs_mkdir("/dir"), 0);
     mock_error_expect(__test_status, "rename dir",
-                      fs_test_rename("/dir", "/dir2"), 0);
-    mock_error_expect(__test_status, "unlink dir2", fs_test_unlink("/dir2"), 0);
+                      mr_fs_rename("/dir", "/dir2"), 0);
+    mock_error_expect(__test_status, "rmdir dir2", mr_fs_rmdir("/dir2"), 0);
     mock_error_expect(__test_status, "umount errfs", mr_fs_umount("/"), 0);
 
     /* A create callback returning the wrong inode type -> -MR_EINVAL */
@@ -280,10 +288,6 @@ static void fs_mock_error_test(volatile mr_uint32_t *__test_status) {
                           mr_fs_umount("/"), 0);
     }
     return;
-}
-
-MR_TEST(fs, mock_errors) {
-    fs_mock_error_test(__test_status);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

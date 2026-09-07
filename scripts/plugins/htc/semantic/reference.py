@@ -20,7 +20,7 @@ class ReferenceResolver:
 
     @staticmethod
     def resolve(tree: HardTree, reference: str, is_path: bool) -> str | None:
-        """Resolve a reference through path, label, root shorthand, then name."""
+        """Resolve by path, label, root shorthand, then node name."""
         if is_path:
             path = normalize_node_path(reference)
             return path if path in tree.nodes_by_path else None

@@ -79,8 +79,10 @@ class DirectiveParser:
     DIRECTIVE_PREFIX = "#"
 
     def parse(
-            self, line: str
-    ) -> IncludeDirective | DefineDirective | UndefDirective | ConditionalDirective | UnsupportedDirective | None:
+            self,
+            line: str,
+    ) -> (IncludeDirective | DefineDirective | UndefDirective |
+          ConditionalDirective | UnsupportedDirective | None):
         """Parse one physical line into a recognized preprocessor directive."""
         stripped = line.strip()
         if not stripped:
@@ -115,14 +117,17 @@ class DirectiveParser:
             return UnsupportedDirective(unsupported_match.group(1))
         return None
 
-    def _parse_include(self,
-                       remainder: str) -> IncludeDirective | UnsupportedDirective:
+    def _parse_include(
+            self,
+            remainder: str,
+    ) -> IncludeDirective | UnsupportedDirective:
         """Parse one include directive payload."""
         include_match = self.C_INCLUDE_PATTERN.match(remainder)
         if include_match is None:
             return UnsupportedDirective(self.DIRECTIVE_INCLUDE)
         marker = include_match.group(1)
-        kind = self.INCLUDE_KIND_ANGLE if marker == "<" else self.INCLUDE_KIND_QUOTE
+        kind = (self.INCLUDE_KIND_ANGLE if marker == "<"
+                else self.INCLUDE_KIND_QUOTE)
         return IncludeDirective(include_match.group(2), kind)
 
     def _parse_define(self,

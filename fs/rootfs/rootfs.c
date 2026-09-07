@@ -3,10 +3,10 @@
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
- * @date 2026-07-20        MacRsh        First version
+ * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mrX/fs/mr_file.h>
+#include <mrX/fs/mr_fs_file.h>
 #if defined(MR_USE_FS_ROOTFS)
 
 /* FS name */
@@ -24,10 +24,10 @@ static const mr_inode_ops_t __rootfs_inodes = {
 };
 
 /* RootFS file system operations */
-static mr_err_t rootfs_mount(mr_super_block_t *sb, const char *source,
-                             int flags, void *data);
+static mr_err_t rootfs_mount(mr_sblock_t *sb, const char *source, int flags,
+                             void *data);
 static mr_file_system_t __rootfs
-    = MR_FILE_SYSTEM_INIT(FS_NAME, rootfs_mount, MR_NULL, MR_NULL);
+    = MR_FILE_SYSTEM_INIT(FS_NAME, rootfs_mount, MR_NULL);
 
 static mr_err_t rootfs_inode_alloc(mr_inode_type_t type, void *priv,
                                    mr_inode_t **out) {
@@ -66,8 +66,8 @@ static mr_err_t rootfs_inode_mknod(mr_inode_t *dir, const char *name,
     return rootfs_inode_alloc(type, priv, out);
 }
 
-static mr_err_t rootfs_mount(mr_super_block_t *sb, const char *source,
-                             int flags, void *data) {
+static mr_err_t rootfs_mount(mr_sblock_t *sb, const char *source, int flags,
+                             void *data) {
     mr_inode_t *root;
 
     MR_IGNORE(source);
@@ -79,8 +79,8 @@ static mr_err_t rootfs_mount(mr_super_block_t *sb, const char *source,
     if (!root) {
         return -MR_ENOMEM;
     }
-    sb->root = root;
     sb->dops = MR_NULL;
+    sb->root = root;
     return 0;
 }
 
@@ -92,7 +92,7 @@ static void mr_fs_rootfs_init(void) {
 
     /* Mount root */
     ret = mr_fs_mount_root(MR_NULL, FS_NAME, 0, MR_NULL);
-    MR_ASSERT((ret == 0) || (ret == MR_EBUSY));
+    MR_ASSERT((ret == 0) || (ret == (-MR_EBUSY)));
 }
 MR_INIT_EXPORT(mr_fs_rootfs_init, MR_INIT_LEVEL_FS);
 #endif /* defined(MR_USE_FS_ROOTFS) */

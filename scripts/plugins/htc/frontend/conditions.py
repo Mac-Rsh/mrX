@@ -30,7 +30,11 @@ class ConditionEvaluator:
 
     IDENTIFIER_PATTERN = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
     TOKEN_PATTERN = re.compile(
-        r'\s*(\|\||&&|==|!=|\(|\)|!|defined|0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+|[A-Za-z_][A-Za-z0-9_]*)'
+        r"\s*("
+        r"\|\||&&|==|!=|\(|\)|!|defined|"
+        r"0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+|"
+        r"[A-Za-z_][A-Za-z0-9_]*"
+        r")"
     )
 
     def evaluate(self, expression: str, macros: dict[str, str]) -> bool:

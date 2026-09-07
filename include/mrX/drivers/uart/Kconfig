@@ -1,0 +1,34 @@
+menu "UART: Universal Asynchronous Receiver/Transmitter"
+
+# ==================================
+# UART
+# ==================================
+config MR_USE_DRIVER_UART
+    depends on MR_USE_DRIVER
+    bool "Use UART"
+    default n
+    help
+        Enable UART driver for asynchronous serial communication.
+        Features:
+            - Configurable baud rate, data bits, stop bits and parity
+            - Optional RTS/CTS hardware flow control
+            - Direct byte read and write without software FIFO
+            - Waitable receive and transmit events
+
+# ==================================
+# STREAM
+# ==================================
+config MR_USE_DRIVER_UART_STREAM
+    depends on MR_USE_DRIVER_UART
+    bool "Use UART stream"
+    default y
+    help
+        Enable UART stream transfer operations.
+        Features:
+            - Independent receive and transmit streams
+            - DMA-based or interrupt-driven transfers
+            - Half/full buffer completion wait events
+            - Circular buffer mode for continuous transfers
+        Required for asynchronous stream buffer events.
+
+endmenu

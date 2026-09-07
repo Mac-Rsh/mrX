@@ -25,6 +25,7 @@ MR_CLAZZES_DEFINE(work, work_statik_release, work_dynamic_release, MR_NULL);
 /* Workqueue lock */
 static mr_spinlock_t __work_lock = MR_SPINLOCK_INIT();
 
+#if defined(MR_USE_WORKQUEUE_HOOK)
 static void queue_wakeup(mr_workqueue_t *queue) {
     mr_atomic_t last;
 
@@ -35,16 +36,15 @@ static void queue_wakeup(mr_workqueue_t *queue) {
         return;
     }
 
-#if defined(MR_USE_WORKQUEUE_HOOK)
     /* Wakeup workqueue */
     if (queue->hook && queue->hook->wakeup) {
         queue->hook->wakeup(queue, queue->hook->param);
     }
-#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 }
+#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
 static void queue_timer_entry(mr_timer_t *timer, void *param) {
-    mr_tick_t tickless, tick;
+    mr_tick_t tickless, tick, timer_tick;
     mr_workqueue_t *queue;
     mr_work_t *work;
     int mask;
@@ -61,8 +61,8 @@ static void queue_timer_entry(mr_timer_t *timer, void *param) {
     mask = mr_spinlock_lock_irqsave(&__work_lock);
 
     /* Check timeout work */
-    for (tickless = 0, tick = mr_clock_tick();
-         !mr_list_is_empty(&queue->tlist);) {
+    tickless = 0;
+    for (tick = mr_clock_tick(); !mr_list_is_empty(&queue->tlist);) {
         work = MR_CONTAINER_OF(queue->tlist.next, mr_work_t, list);
 
         /* Check timeout tick */
@@ -77,7 +77,8 @@ static void queue_timer_entry(mr_timer_t *timer, void *param) {
     }
 
     /* Check if workqueue need set timer tick */
-    if ((tickless != 0) && (tickless != mr_timer_tick(&queue->timer))) {
+    timer_tick = mr_timer_tick(&queue->timer) & (~MR_TIMER_PERIODIC);
+    if ((tickless != 0) && (tickless != timer_tick)) {
         /* Set to optimal tick */
         mr_timer_tick_set(&queue->timer, tickless | MR_TIMER_PERIODIC);
         mr_timer_start(&queue->timer);
@@ -91,8 +92,10 @@ static void queue_timer_entry(mr_timer_t *timer, void *param) {
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 
+#if defined(MR_USE_WORKQUEUE_HOOK)
     /* Wakeup workqueue */
     queue_wakeup(queue);
+#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
     /* Put workqueue */
     mr_workqueue_put(queue);
@@ -109,10 +112,10 @@ static mr_err_t workqueue_init(mr_workqueue_t *queue, const mr_clazz_t *clazz) {
 
     /* Init workqueue */
     mr_atomic_init(&queue->dying, MR_FALSE);
-    mr_atomic_init(&queue->depth, 0);
     mr_list_init(&queue->tlist);
     mr_list_init(&queue->list);
 #if defined(MR_USE_WORKQUEUE_HOOK)
+    mr_atomic_init(&queue->depth, 0);
     queue->hook = MR_NULL;
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
@@ -168,6 +171,7 @@ mr_err_t mr_workqueue_del(mr_workqueue_t *queue) {
     return 0;
 }
 
+#if defined(MR_USE_WORKQUEUE_HOOK)
 static void queue_suspend(mr_workqueue_t *queue) {
     mr_atomic_t last;
 
@@ -178,17 +182,18 @@ static void queue_suspend(mr_workqueue_t *queue) {
         return;
     }
 
-#if defined(MR_USE_WORKQUEUE_HOOK)
     /* Suspend workqueue */
     if (queue->hook && queue->hook->suspend) {
         queue->hook->suspend(queue, queue->hook->param);
     }
-#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 }
+#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
 mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
     mr_work_entry_t *entry;
+#if defined(MR_USE_WORKQUEUE_HOOK)
     mr_bool_t pending;
+#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
     mr_list_t oplist;
     mr_work_t *work;
     void *param;
@@ -217,8 +222,10 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
      * in the middle) */
     mr_list_replace(&oplist, &queue->list);
 
+#if defined(MR_USE_WORKQUEUE_HOOK)
     /* Mark workqueue as running(reset depth) */
     mr_atomic_store(&queue->depth, 1);
+#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
     /* Check workqueue work list */
     while (!mr_list_is_empty(&oplist)) {
@@ -241,16 +248,20 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
         mask = mr_spinlock_lock_irqsave(&__work_lock);
     }
 
+#if defined(MR_USE_WORKQUEUE_HOOK)
     /* Check if the callback commits the next batch */
     pending = !mr_list_is_empty(&queue->list);
+#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 
+#if defined(MR_USE_WORKQUEUE_HOOK)
     /* Suspend workqueue */
     if (!pending) {
         queue_suspend(queue);
     }
+#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
     return 0;
 }
 
@@ -285,8 +296,10 @@ mr_err_t mr_workqueue_work(mr_workqueue_t *queue, mr_work_t *work) {
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 
+#if defined(MR_USE_WORKQUEUE_HOOK)
     /* Wakeup workqueue */
     queue_wakeup(queue);
+#endif /* defined(MR_USE_WORKQUEUE_HOOK) */
     return 0;
 _exit:
     /* Unlock */
@@ -329,7 +342,7 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
     }
 
     /* Set timeout tick */
-    tick = tick & ~MR_TIMER_PERIODIC;
+    tick = tick & (~MR_TIMER_PERIODIC);
     work->tick = mr_clock_tick() + tick;
 
     /* Insert work into workqueue timer list */

@@ -252,7 +252,8 @@ class MacroBuilder:
 
     def _should_emit_node(self, node: HardNode) -> bool:
         """Return True when a hardware node should be emitted."""
-        return node.path != "/aliases" and node.effective_status != self.STATUS_DISABLED
+        return (node.path != "/aliases"
+                and node.effective_status != self.STATUS_DISABLED)
 
     def _path_to_macro(self, path: str) -> str:
         """Convert a canonical DTS path into an HTC macro prefix."""
@@ -281,7 +282,8 @@ class MacroBuilder:
             self._define(lines, f"{base}_LEN", str(len(value.elements)))
             if len(value.elements) == 1:
                 self._define(lines, base,
-                             self._format_expanded_element(tree, value.elements[0]))
+                             self._format_expanded_element(tree,
+                                                           value.elements[0]))
             return
 
         # Inline arrays: one aggregate macro plus a scalar length macro

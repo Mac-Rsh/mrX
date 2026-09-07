@@ -7,8 +7,9 @@
  */
 
 #include <mrX/test/mr_test.h>
-#if defined(MR_USE_TEST) && defined(MR_USE_MODULE_XVM_GDB)                     \
-    && defined(MR_USE_MODULE_XVM_RISCV32)
+#if defined(MR_USE_TEST)
+#if defined(MR_USE_MODULE_XVM_GDB)
+#if defined(MR_USE_MODULE_XVM_RISCV32)
 #include <mrX/libc/mr_sprintf.h>
 #include <mrX/libc/mr_string.h>
 #include <mrX/modules/xvm/mr_xvm_gdb.h>
@@ -292,8 +293,13 @@ MR_TEST(xvm_gdb, queries) {
     mr_uint8_t data[TEST_GDB_DATA_SIZE];
     mr_uint8_t image[4] = {0};
     char payload[4096];
+    char doc[4096];
+    char range[64];
     char size_token[32];
     mr_size_t packet_size;
+    mr_size_t doc_len;
+    mr_size_t offset;
+    mr_size_t n;
     test_gdb_io_t io;
     mr_xvm_gdb_t gdb;
     mr_xvm_t xvm;
@@ -322,16 +328,36 @@ MR_TEST(xvm_gdb, queries) {
     MR_TEST_ASSERT_EQ_INT(test_gdb_contains(payload, "vContSupported+"),
                           MR_TRUE);
 
-    MR_TEST_ASSERT_GT_INT(
-        test_gdb_xfer(&gdb, &io, "qXfer:features:read:target.xml:0,fff"), 0);
-    MR_TEST_ASSERT_EQ_INT(test_gdb_last_payload(&io, payload, sizeof(payload)),
+    /* Read the whole target document slice by slice */
+    offset = 0;
+    doc_len = 0;
+    while (1) {
+        ret = mr_snprintf(range, sizeof(range),
+                          "qXfer:features:read:target.xml:%zx,80", offset);
+        MR_TEST_ASSERT_GT_INT(ret, 0);
+        MR_TEST_ASSERT_GT_INT(test_gdb_xfer(&gdb, &io, range), 0);
+        MR_TEST_ASSERT_EQ_INT(
+            test_gdb_last_payload(&io, payload, sizeof(payload)), MR_TRUE);
+        n = mr_strlen(payload + 1);
+        if ((doc_len + n) >= sizeof(doc)) {
+            MR_TEST_EXPECT_LT_UINT(doc_len + n, sizeof(doc));
+            break;
+        }
+        mr_memcpy(doc + doc_len, payload + 1, n);
+        doc_len += n;
+        offset += n;
+        if (payload[0] == 'l') {
+            break;
+        }
+        MR_TEST_ASSERT_EQ_INT(payload[0], 'm');
+    }
+    doc[doc_len] = '\0';
+    MR_TEST_ASSERT_GT_UINT(doc_len, 0);
+    MR_TEST_ASSERT_EQ_INT(test_gdb_contains(doc, "riscv:rv32"), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(test_gdb_contains(doc, "org.gnu.gdb.riscv.cpu"),
                           MR_TRUE);
-    MR_TEST_ASSERT_EQ_INT((payload[0] == 'l') || (payload[0] == 'm'), MR_TRUE);
-    MR_TEST_ASSERT_EQ_INT(test_gdb_contains(payload, "riscv:rv32"), MR_TRUE);
-    MR_TEST_ASSERT_EQ_INT(test_gdb_contains(payload, "org.gnu.gdb.riscv.cpu"),
-                          MR_TRUE);
-    MR_TEST_ASSERT_EQ_INT(test_gdb_contains(payload, "name=\"pc\""), MR_TRUE);
-    MR_TEST_ASSERT_EQ_INT(test_gdb_contains(payload, "regnum=\"0\""), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(test_gdb_contains(doc, "name=\"pc\""), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(test_gdb_contains(doc, "regnum=\"32\""), MR_TRUE);
 
     MR_TEST_ASSERT_GT_INT(test_gdb_xfer(&gdb, &io, "?"), 0);
     MR_TEST_ASSERT_EQ_INT(test_gdb_has_packet(&io, "S05"), MR_TRUE);
@@ -730,5 +756,7 @@ MR_TEST(xvm_gdb, query_edges_and_errors) {
     MR_TEST_ASSERT_EQ_INT(io.len, 0);
     MR_TEST_ASSERT_EQ_INT(mr_xvm_gdb_del(&gdb), 0);
 }
-#endif /* defined(MR_USE_TEST) && defined(MR_USE_MODULE_XVM_GDB)               \
-          && defined(MR_USE_MODULE_XVM_RISCV32) */
+
+#endif /* defined(MR_USE_MODULE_XVM_RISCV32) */
+#endif /* defined(MR_USE_MODULE_XVM_GDB) */
+#endif /* defined(MR_USE_TEST) */

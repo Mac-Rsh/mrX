@@ -271,6 +271,11 @@ MR_INLINE mr_err_t mr_adc_stream_start(mr_driver_t *drv, mr_adc_seq_t *seq,
     /* Get ADC operations */
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
 
+    /* Check if operation is supported */
+    if (!ad_ops->stream_start) {
+        return -MR_ENOSYS;
+    }
+
     /* Start ADC stream */
     return ad_ops->stream_start(drv, seq, circular);
 }
@@ -279,31 +284,27 @@ MR_INLINE mr_err_t mr_adc_stream_start(mr_driver_t *drv, mr_adc_seq_t *seq,
  * @brief This function checks if an ADC stream is busy.
  *
  * @param drv The ADC driver.
- * @return MR_TRUE if the stream is busy, MR_FALSE otherwise.
+ * @param busy The stream busy status, valid on success.
+ * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_bool_t mr_adc_stream_is_busy(mr_driver_t *drv) {
+MR_INLINE mr_err_t mr_adc_stream_is_busy(mr_driver_t *drv, mr_bool_t *busy) {
     const mr_adc_ops_t *ad_ops;
-    mr_bool_t busy;
-    mr_err_t ret;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_ADC);
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+    MR_ASSERT(busy != MR_NULL);
 
     /* Get ADC operations */
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Check if operation is supported */
     if (!ad_ops->stream_is_busy) {
-        return MR_FALSE;
+        return -MR_ENOSYS;
     }
 
     /* Get stream busy status */
-    ret = ad_ops->stream_is_busy(drv, &busy);
-    if (ret != 0) {
-        return MR_FALSE;
-    }
-    return busy;
+    return ad_ops->stream_is_busy(drv, busy);
 }
 
 /**
@@ -435,7 +436,7 @@ MR_INLINE mr_uint16_t mr_adc_ref_internal(mr_driver_t *drv) {
 MR_INLINE mr_int64_t mr_adc_raw2millivolt(mr_int32_t ref_mv, mr_adc_gain_t gain,
                                           mr_uint8_t resolution,
                                           mr_int64_t raw) {
-    struct mr_adc_gain_md {
+    static const struct mr_adc_gain_md {
         mr_uint8_t mul;
         mr_uint8_t div;
     } gains[] = {
@@ -566,6 +567,23 @@ MR_INLINE mr_err_t mr_ht_adc_configure(mr_ht_adc_spec_t *spec) {
 }
 
 /**
+ * @brief This function initializes an ADC sequence from a specification.
+ *
+ * @param spec The ADC specification.
+ * @param seq The ADC sequence.
+ */
+MR_INLINE void mr_ht_adc_seq_init(mr_ht_adc_spec_t *spec, mr_adc_seq_t *seq) {
+    /* Check parameter */
+    MR_ASSERT(spec != MR_NULL);
+    MR_ASSERT(seq != MR_NULL);
+    MR_ASSERT(spec->channel < 32U);
+
+    /* Init sequence channels mask and resolution */
+    seq->channels = 1U << spec->channel;
+    seq->resolution = spec->resolution;
+}
+
+/**
  * @brief This function reads an ADC specification sequence.
  *
  * @param spec The ADC specification.
@@ -604,14 +622,16 @@ MR_INLINE mr_err_t mr_ht_adc_stream_start(mr_ht_adc_spec_t *spec,
  * @brief This function checks if an ADC specification stream is busy.
  *
  * @param spec The ADC specification.
- * @return MR_TRUE if the stream is busy, MR_FALSE otherwise.
+ * @param busy The stream busy status, valid on success.
+ * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_bool_t mr_ht_adc_stream_is_busy(mr_ht_adc_spec_t *spec) {
+MR_INLINE mr_err_t mr_ht_adc_stream_is_busy(mr_ht_adc_spec_t *spec,
+                                            mr_bool_t *busy) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
     /* Check stream busy status */
-    return mr_adc_stream_is_busy(spec->drv);
+    return mr_adc_stream_is_busy(spec->drv, busy);
 }
 
 /**

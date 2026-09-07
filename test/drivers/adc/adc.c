@@ -222,6 +222,7 @@ MR_TEST(adc, read_and_conversion) {
 #if defined(MR_USE_DRIVER_ADC_STREAM)
 MR_TEST(adc, stream_paths) {
     mr_driver_t *drv;
+    mr_bool_t busy;
     mr_uint16_t buffer[4] = {0};
     mr_adc_seq_t seq = {
         .channels = 1,
@@ -236,10 +237,11 @@ MR_TEST(adc, stream_paths) {
     MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
     MR_TEST_ASSERT_EQ_INT(mr_driver_setup(drv), 0);
     adc_busy = MR_TRUE;
-    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_is_busy(drv), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_is_busy(drv, &busy), 0);
+    MR_TEST_ASSERT_EQ_INT(busy, MR_TRUE);
     adc_busy = MR_FALSE;
     adc_stream_busy_ret = -MR_EIO;
-    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_is_busy(drv), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_is_busy(drv, &busy), -MR_EIO);
     adc_stream_busy_ret = 0;
     MR_TEST_ASSERT_EQ_INT(mr_adc_stream_start(drv, &seq, MR_TRUE), 0);
     MR_TEST_ASSERT_EQ_INT(adc_stream_start_count, 1);
@@ -254,6 +256,39 @@ MR_TEST(adc, stream_paths) {
     adc_stream_stop_ret = 0;
     MR_TEST_ASSERT_EQ_INT(mr_adc_stream_stop(drv), 0);
     MR_TEST_ASSERT_EQ_INT(adc_stream_stop_count, 2);
+    mr_adc_del(drv);
+}
+
+MR_TEST(adc, stream_optional_operations) {
+    mr_driver_t *drv;
+    mr_bool_t busy;
+    mr_adc_ops_t empty_ops = adc_ops;
+    mr_uint16_t buffer[2] = {0};
+    mr_adc_seq_t seq = {
+        .channels = 1,
+        .resolution = 8,
+        .buf = buffer,
+        .size = sizeof(buffer),
+    };
+    mr_size_t offset = 99;
+
+    adc_test_reset();
+    empty_ops.stream_stop = MR_NULL;
+    empty_ops.stream_is_busy = MR_NULL;
+    empty_ops.stream_offset = MR_NULL;
+    drv = adc_create(1U);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(drv), 0);
+    drv->ops = (mr_ptr_t)&empty_ops;
+    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_stop(drv), -MR_ENOSYS);
+    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_is_busy(drv, &busy), -MR_ENOSYS);
+    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_offset(drv, &offset), -MR_ENOSYS);
+    MR_TEST_ASSERT_EQ_UINT(offset, 99U);
+
+    drv->ops = (mr_ptr_t)&adc_ops;
+    adc_stream_start_ret = -MR_EIO;
+    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_start(drv, &seq, MR_FALSE), -MR_EIO);
+    MR_TEST_ASSERT_EQ_INT(adc_stream_start_count, 1);
     mr_adc_del(drv);
 }
 
@@ -277,4 +312,33 @@ MR_TEST(adc, event_paths) {
 }
 
 #endif
+
+MR_TEST(adc, init_static_and_reference) {
+    mr_driver_t drv;
+    mr_adc_data_t *data;
+
+    adc_test_reset();
+    data = mr_malloc(sizeof(*data));
+    MR_TEST_ASSERT_NE_PTR(data, MR_NULL);
+    *data = (mr_adc_data_t)MR_ADC_DATA_INIT(2500, 1U);
+
+    /* A statically initialized driver shares the core lifecycle */
+    MR_TEST_ASSERT_EQ_INT(
+        mr_adc_init(&drv, data, MR_NULL, (mr_adc_ops_t *)&adc_ops), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_is_ready(&drv), MR_TRUE);
+    MR_TEST_ASSERT_EQ_UINT(mr_adc_ref_internal(&drv), 2500U);
+
+    /* A held reference delays the release until the final put */
+    MR_TEST_ASSERT_EQ_PTR(mr_adc_get(&drv), &drv);
+    MR_TEST_ASSERT_EQ_INT(mr_adc_del(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_is_ready(&drv), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(mr_adc_put(&drv), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_is_ready(&drv), MR_FALSE);
+
+    /* A statically initialized driver does not own the data, the module
+       release hook only runs for dynamically created drivers */
+    mr_free(data);
+}
+
 #endif

@@ -48,7 +48,7 @@ typedef long long                       mr_int64_t;
 #define MR_INT8_MIN                     (-128)
 #define MR_INT16_MIN                    (-32768)
 #define MR_INT32_MIN                    (-2147483648)
-#define MR_INT64_MIN                    (-9223372036854775808LL)
+#define MR_INT64_MIN                    (-9223372036854775807LL - 1)
 #define MR_INT8_MAX                     (127)
 #define MR_INT16_MAX                    (32767)
 #define MR_INT32_MAX                    (2147483647)

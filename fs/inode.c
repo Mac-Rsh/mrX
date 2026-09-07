@@ -6,10 +6,10 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mrX/fs/mr_inode.h>
+#include <mrX/fs/mr_fs_inode.h>
 #if defined(MR_USE_FS)
+#include <mrX/fs/mr_fs_sblock.h>
 #include <mrX/libc/mr_malloc.h>
-#include <mrX/fs/mr_sb.h>
 
 /* Inode clazzes(static & dynamic) */
 static void inode_statik_release(mr_object_t *obj);
@@ -26,7 +26,6 @@ static mr_err_t inode_init(mr_inode_t *inode, const mr_clazz_t *clazz,
     /* Init inode */
     inode->type = type;
     inode->mode = 0;
-    inode->nlink = 1;
     inode->size = 0;
     inode->sb = MR_NULL;
     inode->ops = ops;
@@ -87,7 +86,7 @@ static mr_inode_t *inode_obj_release(mr_object_t *obj) {
 
     /* Detach from super-block */
     if (inode->sb) {
-        mr_super_block_put(inode->sb);
+        mr_sblock_put(inode->sb);
         inode->sb = MR_NULL;
     }
     return inode;

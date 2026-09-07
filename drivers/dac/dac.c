@@ -86,12 +86,28 @@ static mr_err_t dac_init(const mr_driver_t *drv) {
 
 static mr_err_t dac_deinit(const mr_driver_t *drv) {
     mr_dac_data_t *da_data;
+#if defined(MR_USE_DRIVER_DAC_STREAM)
+    const mr_dac_ops_t *da_ops;
+    mr_err_t ret;
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 
     /* Check parameter */
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
 
     /* Get DAC data */
     da_data = (mr_dac_data_t *)MR_DRIVER_DATA(drv);
+
+#if defined(MR_USE_DRIVER_DAC_STREAM)
+    /* Stop the stream before deleting the event */
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+    if (da_ops->stream_stop) {
+        ret = da_ops->stream_stop(drv);
+        if (ret != 0) {
+            return ret;
+        }
+    }
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 
     /* Deinit DAC event */
     mr_waitable_del(&da_data->event);

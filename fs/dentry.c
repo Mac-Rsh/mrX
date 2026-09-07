@@ -6,14 +6,14 @@
  * @date 2024-09-06        MacRsh        First version
  */
 
-#include <mrX/fs/mr_dentry.h>
+#include <mrX/fs/mr_fs_dentry.h>
 #if defined(MR_USE_FS)
+#include <mrX/fs/mr_fs_struct.h>
+#include <mrX/fs/mr_fs_sblock.h>
+#include <mrX/fs/mr_fs_inode.h>
 #include <mrX/libc/mr_sprintf.h>
 #include <mrX/libc/mr_malloc.h>
 #include <mrX/libc/mr_string.h>
-#include <mrX/fs/mr_inode.h>
-#include <mrX/fs/mr_nsp.h>
-#include <mrX/fs/mr_sb.h>
 
 /* Dentry clazzes(static & dynamic) */
 static void dentry_statik_release(mr_object_t *obj);
@@ -21,22 +21,17 @@ static void dentry_dynamic_release(mr_object_t *obj);
 MR_CLAZZES_DEFINE(dentry, dentry_statik_release, dentry_dynamic_release,
                   MR_NULL);
 
-/* Dentry states */
-#define DENTRY_STATE_ACTIVE            (0)
-#define DENTRY_STATE_MOVING            (1)
-#define DENTRY_STATE_UNLINKING         (2)
-#define DENTRY_STATE_DEAD              (3)
+/*  Serialize unbacked-tree moves */
+static mr_uint8_t __dentry_unbacked_moving = MR_FALSE;
 
 /* Prepared dentry move type */
 typedef struct dentry_move {
-    char iname[MR_CFG_FS_DENTRY_INLINE_NAME_LEN];
     mr_dentry_t *dentry;
+    mr_dentry_t *old_upper;
     mr_dentry_t *upper;
     mr_dentry_t *reservation;
-    mr_uint32_t hash;
-    mr_uint32_t len;
+    mr_sblock_t *sb;
     mr_bool_t noop;
-    char *dname;
 } dentry_move_t;
 
 /* Last-word definition */
@@ -159,7 +154,7 @@ static void dentry_name_free(mr_dentry_t *dentry) {
 static mr_err_t dentry_init(mr_dentry_t *dentry, const mr_clazz_t *clazz,
                             const mr_dentry_ops_t *ops, const char *fmt,
                             mr_va_list args) {
-    char istr[MR_CFG_FS_DENTRY_INLINE_NAME_LEN * 2];
+    char istr[MR_CFG_FS_INLINE_NAME_LEN * 2];
     const char *str;
     mr_err_t ret;
 
@@ -178,9 +173,10 @@ static mr_err_t dentry_init(mr_dentry_t *dentry, const mr_clazz_t *clazz,
     mr_list_init(&dentry->lower);
     dentry->mounted = MR_NULL;
     dentry->upper = MR_NULL;
-    dentry->inode = MR_NULL;
     dentry->ops = ops;
-    dentry->state = DENTRY_STATE_ACTIVE;
+    dentry->inode = MR_NULL;
+    dentry->retained = MR_TRUE;
+    dentry->state = MR_DENTRY_STATE_ACTIVE;
 
     /* Init object */
     ret = mr_object_init((mr_object_t *)dentry, clazz);
@@ -243,7 +239,7 @@ static void dentry_remove(mr_dentry_t *dentry) {
     int mask;
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* Remove dentry from sibling list */
     mr_list_del(&dentry->sibling);
@@ -251,7 +247,7 @@ static void dentry_remove(mr_dentry_t *dentry) {
     dentry->upper = MR_NULL;
 
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
 
     /* Put upper */
     if (upper) {
@@ -269,13 +265,13 @@ mr_err_t mr_dentry_remove(mr_dentry_t *dentry) {
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(dentry, dentry));
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* Remove only an active, added dentry */
-    if ((dentry->state == DENTRY_STATE_DEAD) || (!dentry->upper)) {
+    if ((dentry->state == MR_DENTRY_STATE_DEAD) || (!dentry->upper)) {
         ret = -MR_ENOENT;
         upper = MR_NULL;
-    } else if (dentry->state != DENTRY_STATE_ACTIVE) {
+    } else if ((dentry->state != MR_DENTRY_STATE_ACTIVE) || dentry->mounted) {
         ret = -MR_EBUSY;
         upper = MR_NULL;
     } else {
@@ -286,7 +282,7 @@ mr_err_t mr_dentry_remove(mr_dentry_t *dentry) {
     }
 
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
 
     /* Put upper */
     if (upper) {
@@ -297,33 +293,40 @@ mr_err_t mr_dentry_remove(mr_dentry_t *dentry) {
 
 mr_err_t mr_dentry_del(mr_dentry_t *dentry) {
     mr_dentry_t *upper;
+    mr_bool_t retained;
     mr_err_t ret;
     int mask;
 
     /* Check parameter */
     MR_ASSERT((dentry != MR_NULL) && MR_OBJECT_IS_INITED(dentry));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(dentry, dentry));
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* Delete only once */
-    if ((dentry->state == DENTRY_STATE_UNLINKING)
-        || (dentry->state == DENTRY_STATE_MOVING)) {
+    if (dentry->mounted || (dentry->state == MR_DENTRY_STATE_UNLINKING)
+        || (dentry->state == MR_DENTRY_STATE_MOVING)
+        || (dentry->state == MR_DENTRY_STATE_MOUNTING)) {
+        retained = MR_FALSE;
+        upper = MR_NULL;
         ret = -MR_EBUSY;
+    } else if (dentry->state == MR_DENTRY_STATE_DEAD) {
+        retained = MR_FALSE;
         upper = MR_NULL;
-    } else if (dentry->state == DENTRY_STATE_DEAD) {
         ret = -MR_ENOENT;
-        upper = MR_NULL;
     } else {
         mr_list_del(&dentry->sibling);
-        dentry->state = DENTRY_STATE_DEAD;
+        dentry->state = MR_DENTRY_STATE_DEAD;
+        retained = dentry->retained;
+        dentry->retained = MR_FALSE;
         upper = dentry->upper;
         dentry->upper = MR_NULL;
         ret = 0;
     }
 
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
     if (ret != 0) {
         return ret;
     }
@@ -333,8 +336,10 @@ mr_err_t mr_dentry_del(mr_dentry_t *dentry) {
         mr_dentry_put(upper);
     }
 
-    /* Delete object */
-    mr_object_del((mr_object_t *)dentry);
+    /* Drop only a retained creation reference, never a lookup caller's pin */
+    if (retained) {
+        mr_object_del((mr_object_t *)dentry);
+    }
     return 0;
 }
 
@@ -374,6 +379,8 @@ static mr_dentry_t *dentry_lookup(mr_dentry_t *last, mr_dentry_name_t *name) {
 }
 
 static void dentry_add(mr_dentry_t *dentry, mr_dentry_t *upper) {
+    mr_uint32_t lword;
+
     /* Bind dentry to upper and acquire a reference for the binding */
     mr_list_add(&upper->lower, &dentry->sibling);
     dentry->upper = mr_dentry_get(upper);
@@ -384,18 +391,18 @@ static void dentry_add(mr_dentry_t *dentry, mr_dentry_t *upper) {
         dentry->ops = upper->ops;
     }
 
-    /* If the inherited/own ops provide a custom hash, recompute the dentry's
-     * name hash so it matches how siblings are looked up */
-    if (dentry->ops && dentry->ops->hash) {
-        dentry->name.hash
-            = dentry->ops->hash(dentry->name.str, dentry->name.len);
-    }
+    /* A child is always looked up with its parent's ops(dentry_lookup hashes
+     * the query with the parent's hash and compares with the parent's
+     * compare), so the stored hash must come from the parent's ops as well,
+     * even when the dentry carries different ops for its own children. The
+     * default hash applies when the parent has no custom hash */
+    dentry_name_hash(&dentry->name, dentry->name.str, upper->ops, &lword);
 }
 
 mr_err_t mr_dentry_add(mr_dentry_t *dentry, mr_dentry_t *upper) {
     mr_dentry_name_t lookup;
-    mr_dentry_t *p;
     mr_uint32_t lword;
+    mr_dentry_t *p;
     mr_err_t ret;
     int mask;
 
@@ -407,11 +414,11 @@ mr_err_t mr_dentry_add(mr_dentry_t *dentry, mr_dentry_t *upper) {
     MR_ASSERT(dentry != upper);
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* Check dentry states */
-    if ((dentry->state != DENTRY_STATE_ACTIVE)
-        || (upper->state != DENTRY_STATE_ACTIVE)) {
+    if ((dentry->state != MR_DENTRY_STATE_ACTIVE)
+        || (upper->state != MR_DENTRY_STATE_ACTIVE)) {
         ret = -MR_ENOENT;
         goto _exit;
     }
@@ -446,22 +453,22 @@ mr_err_t mr_dentry_add(mr_dentry_t *dentry, mr_dentry_t *upper) {
     ret = 0;
 _exit:
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
     return ret;
 }
 
 static mr_err_t dentry_move_prepare(mr_dentry_t *dentry, mr_dentry_t *upper,
                                     const char *name, dentry_move_t *move) {
-    mr_dentry_name_t lookup;
+    mr_sblock_t *sb, *target;
     mr_uint32_t lword;
-    mr_size_t newlen;
     mr_dentry_t *p;
     mr_err_t ret;
-    char *newbuf;
     int mask;
 
-    /* Init move */
-    mr_memset(move, 0, sizeof(*move));
+    /* Init only fields read before a move has been prepared */
+    move->old_upper = MR_NULL;
+    move->sb = MR_NULL;
+    move->noop = MR_FALSE;
 
     /* Create destination reservation */
     move->reservation = mr_dentry_create(upper->ops, "%s", name);
@@ -469,33 +476,36 @@ static mr_err_t dentry_move_prepare(mr_dentry_t *dentry, mr_dentry_t *upper,
         return -MR_ENOMEM;
     }
 
-    /* Get new name length */
-    newlen = mr_strlen(name);
-
-    /* Pre-allocate dynamic name */
-    if (newlen >= MR_CFG_FS_DENTRY_INLINE_NAME_LEN) {
-        /* Use dynamic name */
-        newbuf = mr_malloc(newlen + 1);
-        if (!newbuf) {
-            mr_dentry_del(move->reservation);
-            move->reservation = MR_NULL;
-            return -MR_ENOMEM;
-        }
-        mr_strncpy(newbuf, name, newlen);
-        newbuf[newlen] = '\0';
-    } else {
-        /* Use inline name */
-        newbuf = MR_NULL;
-    }
-
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* Check source and destination state */
-    if ((dentry->state != DENTRY_STATE_ACTIVE)
-        || (upper->state != DENTRY_STATE_ACTIVE)
+    if (dentry->mounted || (dentry->state == MR_DENTRY_STATE_MOVING)
+        || (dentry->state == MR_DENTRY_STATE_MOUNTING)
+        || (upper->state == MR_DENTRY_STATE_MOVING)) {
+        ret = -MR_EBUSY;
+        goto _exit;
+    }
+    if ((dentry->state != MR_DENTRY_STATE_ACTIVE)
+        || (upper->state != MR_DENTRY_STATE_ACTIVE)
         || (!MR_DENTRY_IS_ADDED(dentry))) {
         ret = -MR_ENOENT;
+        goto _exit;
+    }
+
+    /* Source and destination must belong to the same super-block instance */
+    sb = dentry->upper->inode ? dentry->upper->inode->sb : MR_NULL;
+    target = upper->inode ? upper->inode->sb : MR_NULL;
+    if ((sb != target) || (dentry->inode && (dentry->inode->sb != sb))) {
+        ret = -MR_EXDEV;
+        goto _exit;
+    }
+    if (sb && (sb->state != MR_SBLOCK_STATE_ACTIVE)) {
+        ret = (sb->state == MR_SBLOCK_STATE_OFFLINE) ? -MR_ENODEV : -MR_ENOENT;
+        goto _exit;
+    }
+    if (sb ? sb->move_busy : __dentry_unbacked_moving) {
+        ret = -MR_EBUSY;
         goto _exit;
     }
 
@@ -508,57 +518,76 @@ static mr_err_t dentry_move_prepare(mr_dentry_t *dentry, mr_dentry_t *upper,
         }
     }
 
-    /* Hash the new name with the new parent's ops so the lookup matches how
-     * siblings were hashed */
-    dentry_name_hash(&lookup, name, upper->ops, &lword);
+    /* Hash the owned name snapshot with the current parent's ops */
+    dentry_name_hash(&move->reservation->name,
+                     MR_DENTRY_NAME(move->reservation), upper->ops, &lword);
 
     /* Same parent and same name: nothing to do. This check must come before
      * the EEXIST check below, otherwise dentry_lookup would find the dentry
      * itself(Still in the parent's children at this point) and wrongly report
      * -MR_EEXIST */
     if ((dentry->upper == upper)
-        && (dentry_name_match(&dentry->name, &lookup, upper->ops))) {
+        && (dentry_name_match(&dentry->name, &move->reservation->name,
+                              upper->ops))) {
         move->noop = MR_TRUE;
         ret = 0;
         goto _exit;
     }
 
     /* Reject a name that already exists under the new parent */
-    if (dentry_lookup(upper, &lookup)) {
+    if (dentry_lookup(upper, &move->reservation->name)) {
         ret = -MR_EEXIST;
         goto _exit;
     }
 
-    /* Reserve destination name and source move */
+    /* Pin the source parent as of this moment. The backend rename callback
+     * and the commit both rely on this snapshot instead of re-reading
+     * dentry->upper outside the lock */
+    move->old_upper = mr_dentry_get(dentry->upper);
+    if (!move->old_upper) {
+        ret = -MR_ENOENT;
+        goto _exit;
+    }
+    if (sb) {
+        move->sb = mr_sblock_get(sb);
+        if (!move->sb) {
+            ret = -MR_ENOENT;
+            goto _exit;
+        }
+    }
+
+    /* Reserve destination name and source move. The reservation is a
+     * placeholder without inode: it blocks duplicate names, but path lookup
+     * and readdir must not expose it */
     dentry_add(move->reservation, upper);
-    dentry->state = DENTRY_STATE_MOVING;
+    move->reservation->state = MR_DENTRY_STATE_RESERVED;
+    dentry->state = MR_DENTRY_STATE_MOVING;
+    if (!sb) {
+        __dentry_unbacked_moving = MR_TRUE;
+    } else {
+        sb->move_busy = MR_TRUE;
+    }
 
     /* Save prepared move */
-    move->hash = lookup.hash;
-    move->len = lookup.len;
     move->dentry = dentry;
     move->upper = upper;
-    if (!newbuf) {
-        /* Use the inline name */
-        mr_strncpy(move->iname, name, newlen);
-        move->iname[newlen] = '\0';
-    } else {
-        /* Use the dynamic name */
-        move->dname = newbuf;
-        newbuf = MR_NULL;
-    }
     ret = 0;
 _exit:
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
 
-    /* Free unused name */
+    /* Release unused reservation and pins */
     if ((ret != 0) || move->noop) {
         mr_dentry_del(move->reservation);
         move->reservation = MR_NULL;
-    }
-    if (newbuf) {
-        mr_free(newbuf);
+        if (move->old_upper) {
+            mr_dentry_put(move->old_upper);
+            move->old_upper = MR_NULL;
+        }
+        if (move->sb) {
+            mr_sblock_put(move->sb);
+            move->sb = MR_NULL;
+        }
     }
     return ret;
 }
@@ -567,7 +596,6 @@ static mr_err_t dentry_move_commit(dentry_move_t *move) {
     mr_dentry_t *reservation_upper, *reservation;
     mr_dentry_t *dentry, *old_upper;
     const char *old_name;
-    mr_err_t ret;
     int mask;
 
     /* Ignore no-op move */
@@ -576,18 +604,21 @@ static mr_err_t dentry_move_commit(dentry_move_t *move) {
     }
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* Get prepared objects */
     reservation = move->reservation;
     dentry = move->dentry;
 
-    /* Validate prepared move */
-    if ((dentry->state != DENTRY_STATE_MOVING) || (!dentry->upper)
-        || (!reservation) || (reservation->upper != move->upper)
+    /* Validate prepared move. The source must still hang under the parent
+     * snapshot taken by prepare */
+    if ((dentry->state != MR_DENTRY_STATE_MOVING)
+        || (dentry->upper != move->old_upper) || (!reservation)
+        || (reservation->upper != move->upper)
         || (!MR_DENTRY_IS_ADDED(reservation))) {
-        ret = -MR_EAGAIN;
-        goto _exit;
+        /* Unlock */
+        mr_fs_struct_unlock(mask);
+        return -MR_EAGAIN;
     }
 
     /* Detach from the old parent */
@@ -602,36 +633,44 @@ static mr_err_t dentry_move_commit(dentry_move_t *move) {
 
     /* Install prepared name */
     old_name = dentry->name.str;
-    if (!move->dname) {
-        mr_strncpy(dentry->iname, move->iname, move->len);
-        dentry->iname[move->len] = '\0';
+    if (reservation->name.str == reservation->iname) {
+        /* Copy the short name and its terminator into the source dentry */
+        mr_memcpy(dentry->iname, reservation->iname,
+                  reservation->name.len + 1U);
         dentry->name.str = dentry->iname;
     } else {
-        dentry->name.str = move->dname;
-        move->dname = MR_NULL;
+        /* Transfer the buffer so deleting the reservation can not free it */
+        dentry->name.str = reservation->name.str;
+        reservation->name.str = reservation->iname;
+        reservation->iname[0] = '\0';
+        reservation->name.len = 0;
     }
-    dentry->name.hash = move->hash;
-    dentry->name.len = move->len;
 
-    /* Attach to the prepared parent */
+    /* Attach and recompute name metadata using the prepared parent's ops */
     dentry_add(dentry, move->upper);
-    dentry->state = DENTRY_STATE_ACTIVE;
-    ret = 0;
-_exit:
-    /* Unlock */
-    mr_fs_nsp_unlock(mask);
-
-    /* Check error */
-    if (ret != 0) {
-        return ret;
+    dentry->state = MR_DENTRY_STATE_ACTIVE;
+    if (!move->sb) {
+        __dentry_unbacked_moving = MR_FALSE;
+    } else {
+        move->sb->move_busy = MR_FALSE;
     }
 
-    /* Free the replaced name and drop namespace references */
+    /* Unlock */
+    mr_fs_struct_unlock(mask);
+
+    /* Free the replaced name and drop namespace references. old_upper is put
+     * twice: once for the retired tree binding, once for the prepare pin */
     str_free(old_name, dentry->iname);
     mr_dentry_put(reservation_upper);
     mr_dentry_del(reservation);
     mr_dentry_put(old_upper);
+    mr_dentry_put(move->old_upper);
+    move->old_upper = MR_NULL;
     move->reservation = MR_NULL;
+    if (move->sb) {
+        mr_sblock_put(move->sb);
+        move->sb = MR_NULL;
+    }
     return 0;
 }
 
@@ -641,15 +680,26 @@ static void dentry_move_cancel(dentry_move_t *move) {
     /* Release source reservation */
     if (move->dentry) {
         /* Lock */
-        mask = mr_fs_nsp_lock();
+        mask = mr_fs_struct_lock();
 
         /* Restore dentry state */
-        if (move->dentry->state == DENTRY_STATE_MOVING) {
-            move->dentry->state = DENTRY_STATE_ACTIVE;
+        if (move->dentry->state == MR_DENTRY_STATE_MOVING) {
+            move->dentry->state = MR_DENTRY_STATE_ACTIVE;
+        }
+        if (!move->sb) {
+            __dentry_unbacked_moving = MR_FALSE;
+        } else {
+            move->sb->move_busy = MR_FALSE;
         }
 
         /* Unlock */
-        mr_fs_nsp_unlock(mask);
+        mr_fs_struct_unlock(mask);
+    }
+
+    /* Release the source parent pin */
+    if (move->old_upper) {
+        mr_dentry_put(move->old_upper);
+        move->old_upper = MR_NULL;
     }
 
     /* Delete destination reservation */
@@ -658,10 +708,10 @@ static void dentry_move_cancel(dentry_move_t *move) {
         move->reservation = MR_NULL;
     }
 
-    /* Free prepared name */
-    if (move->dname) {
-        mr_free(move->dname);
-        move->dname = MR_NULL;
+    /* Release the move's super-block pin */
+    if (move->sb) {
+        mr_sblock_put(move->sb);
+        move->sb = MR_NULL;
     }
 }
 
@@ -716,16 +766,18 @@ mr_err_t mr_dentry_rename(mr_dentry_t *dentry, mr_dentry_t *upper,
         return -MR_EINVAL;
     }
 
-    /* Check if old and new parent is valid */
-    old_upper = dentry->upper;
-    if ((!old_upper) || (!old_upper->inode) || (!upper->inode)) {
-        return -MR_ENOENT;
-    }
-
-    /* Prepare move */
+    /* Prepare move. From here the source is MOVING, so no other move can
+     * change its parent; the pinned snapshot is the authoritative old parent */
     ret = dentry_move_prepare(dentry, upper, name, &move);
     if ((ret != 0) || move.noop) {
         return ret;
+    }
+
+    /* Check if old and new parent are backed by inodes */
+    old_upper = move.old_upper;
+    if ((!old_upper->inode) || (!upper->inode)) {
+        ret = -MR_ENOENT;
+        goto _exit;
     }
 
     /* Rename backing node */
@@ -750,6 +802,7 @@ _exit:
 
 mr_err_t mr_dentry_unlink(mr_dentry_t *dentry) {
     mr_dentry_t *parent;
+    mr_bool_t retained;
     mr_inode_t *inode;
     mr_err_t ret;
     int mask;
@@ -759,29 +812,40 @@ mr_err_t mr_dentry_unlink(mr_dentry_t *dentry) {
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(dentry, dentry));
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* Reserve unlink and pin backing objects */
-    if ((dentry->state != DENTRY_STATE_ACTIVE) || (!dentry->upper)
+    if (dentry->mounted || (dentry->state == MR_DENTRY_STATE_MOUNTING)) {
+        /* Unlock */
+        mr_fs_struct_unlock(mask);
+        return -MR_EBUSY;
+    }
+    if ((dentry->state != MR_DENTRY_STATE_ACTIVE) || (!dentry->upper)
         || (!dentry->inode) || (!MR_DENTRY_IS_ADDED(dentry))) {
         /* Unlock */
-        mr_fs_nsp_unlock(mask);
+        mr_fs_struct_unlock(mask);
         return -MR_ENOENT;
+    }
+    if ((!dentry->upper->inode)
+        || (dentry->upper->inode->type != MR_INODE_DIR)) {
+        /* Unlock */
+        mr_fs_struct_unlock(mask);
+        return -MR_ENOTDIR;
     }
     if ((dentry->inode->type == MR_INODE_DIR)
         && (!mr_list_is_empty(&dentry->lower))) {
         /* Unlock */
-        mr_fs_nsp_unlock(mask);
+        mr_fs_struct_unlock(mask);
         return -MR_ENOTEMPTY;
     }
-    dentry->state = DENTRY_STATE_UNLINKING;
+    dentry->state = MR_DENTRY_STATE_UNLINKING;
     parent = mr_dentry_get(dentry->upper);
     inode = mr_inode_get(dentry->inode);
     if ((!parent) || (!inode)) {
-        dentry->state = DENTRY_STATE_ACTIVE;
+        dentry->state = MR_DENTRY_STATE_ACTIVE;
 
         /* Unlock */
-        mr_fs_nsp_unlock(mask);
+        mr_fs_struct_unlock(mask);
         if (parent) {
             mr_dentry_put(parent);
         }
@@ -792,23 +856,22 @@ mr_err_t mr_dentry_unlink(mr_dentry_t *dentry) {
     }
 
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
 
     /* Remove backing entry when the FS provides a callback */
     if (parent->inode->ops && parent->inode->ops->unlink) {
-        ret = parent->inode->ops->unlink(parent->inode,
-                                         MR_DENTRY_NAME(dentry));
+        ret = parent->inode->ops->unlink(parent->inode, MR_DENTRY_NAME(dentry));
         if (ret != 0) {
             /* Lock */
-            mask = mr_fs_nsp_lock();
+            mask = mr_fs_struct_lock();
 
             /* Restore dentry state */
-            if (dentry->state == DENTRY_STATE_UNLINKING) {
-                dentry->state = DENTRY_STATE_ACTIVE;
+            if (dentry->state == MR_DENTRY_STATE_UNLINKING) {
+                dentry->state = MR_DENTRY_STATE_ACTIVE;
             }
 
             /* Unlock */
-            mr_fs_nsp_unlock(mask);
+            mr_fs_struct_unlock(mask);
 
             /* Drop the namespace and temporary references */
             mr_dentry_put(parent);
@@ -818,24 +881,24 @@ mr_err_t mr_dentry_unlink(mr_dentry_t *dentry) {
     }
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* Commit unlink exactly once */
-    if ((dentry->state != DENTRY_STATE_UNLINKING) || (dentry->inode != inode)
-        || (dentry->upper != parent)) {
-        ret = -MR_EAGAIN;
-    } else {
-        if (inode->nlink > 0) {
-            inode->nlink--;
-        }
+    if ((dentry->state == MR_DENTRY_STATE_UNLINKING) && (dentry->inode == inode)
+        && (dentry->upper == parent)) {
         mr_list_del(&dentry->sibling);
         dentry->upper = MR_NULL;
-        dentry->state = DENTRY_STATE_DEAD;
+        dentry->state = MR_DENTRY_STATE_DEAD;
+        retained = dentry->retained;
+        dentry->retained = MR_FALSE;
         ret = 0;
+    } else {
+        retained = MR_FALSE;
+        ret = -MR_EAGAIN;
     }
 
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
 
     /* Check error */
     if (ret != 0) {
@@ -845,7 +908,9 @@ mr_err_t mr_dentry_unlink(mr_dentry_t *dentry) {
     }
 
     /* Drop the namespace and temporary references */
-    mr_object_del((mr_object_t *)dentry);
+    if (retained) {
+        mr_object_del((mr_object_t *)dentry);
+    }
     mr_dentry_put(parent);
     mr_dentry_put(parent);
     mr_inode_put(inode);
@@ -867,19 +932,26 @@ mr_dentry_t *mr_dentry_child_get(mr_dentry_t *parent, mr_size_t index) {
     i = 0;
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
-    /* Find the index-th child */
+    /* Find the index-th child. Rename reservations are placeholders and are
+     * not counted as children */
     MR_LIST_FOR_EACH(l, &parent->lower) {
+        child = MR_LIST_ENTRY(l, struct mr_dentry, sibling);
+        if (child->state == MR_DENTRY_STATE_RESERVED) {
+            child = MR_NULL;
+            continue;
+        }
         if (i == index) {
-            child = mr_dentry_get(MR_LIST_ENTRY(l, struct mr_dentry, sibling));
+            child = mr_dentry_get(child);
             break;
         }
+        child = MR_NULL;
         i++;
     }
 
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
     return child;
 }
 
@@ -892,22 +964,26 @@ mr_bool_t mr_dentry_is_empty(mr_dentry_t *dentry) {
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(dentry, dentry));
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* Check if the dentry has no children */
     empty = mr_list_is_empty(&dentry->lower);
 
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
     return empty;
 }
 
 static mr_dentry_t *dentry_path_lookup(mr_dentry_t **last, const char **path,
-                                       mr_dentry_t *limit, mr_uint32_t *miss) {
+                                       mr_dentry_t *limit, mr_uint32_t *miss,
+                                       mr_err_t *error) {
     mr_dentry_name_t name;
     mr_dentry_t *dentry;
     mr_uint32_t lword;
     const char *str;
+
+    /* Init error */
+    *error = 0;
 
     /* Enter a file-system mounted on the starting dentry */
     while ((*last)->mounted) {
@@ -915,6 +991,12 @@ static mr_dentry_t *dentry_path_lookup(mr_dentry_t **last, const char **path,
     }
 
     for (str = *path; *str != '\0';) {
+        /* Every further component or slash requires a directory inode */
+        if ((*last)->inode && ((*last)->inode->type != MR_INODE_DIR)) {
+            *error = -MR_ENOTDIR;
+            return MR_NULL;
+        }
+
         /* Skip '/' between components */
         while (*str == '/') {
             str++;
@@ -944,9 +1026,10 @@ static mr_dentry_t *dentry_path_lookup(mr_dentry_t **last, const char **path,
                 continue;
             }
             default: {
-                /* Handle 'other' */
+                /* Handle 'other'. A rename reservation only holds the name; it
+                 * is invisible to path resolution */
                 dentry = dentry_lookup(*last, &name);
-                if (!dentry) {
+                if ((!dentry) || (dentry->state == MR_DENTRY_STATE_RESERVED)) {
                     /* Not found */
                     *miss = name.len;
                     return MR_NULL;
@@ -968,24 +1051,24 @@ static mr_dentry_t *dentry_path_lookup(mr_dentry_t **last, const char **path,
 
 static mr_err_t dentry_fs_lookup(mr_dentry_t *parent, const char *name,
                                  mr_uint32_t len, mr_dentry_t **result) {
-    char istr[MR_CFG_FS_DENTRY_INLINE_NAME_LEN * 2];
+    char istr[MR_CFG_FS_INLINE_NAME_LEN * 2];
     mr_dentry_t *existing, *child;
     mr_inode_t *dir_inode, *inode;
     mr_dentry_name_t lookup;
-    mr_super_block_t *sb;
     mr_uint32_t lword;
+    mr_sblock_t *sb;
     mr_err_t ret;
     char *str;
     int mask;
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* Pin the parent inode while the dentry binding is stable */
     dir_inode = parent->inode ? mr_inode_get(parent->inode) : MR_NULL;
 
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
 
     /* Check if the parent is a directory */
     if (!dir_inode) {
@@ -1003,12 +1086,12 @@ static mr_err_t dentry_fs_lookup(mr_dentry_t *parent, const char *name,
     }
 
     /* Protect the backing FS across lookup and cache publication */
-    sb = mr_super_block_get(dir_inode->sb);
+    sb = mr_sblock_get(dir_inode->sb);
     if (!sb) {
         ret = -MR_ENOENT;
         goto _exit_inode;
     }
-    ret = mr_super_block_op_enter(sb);
+    ret = mr_sblock_op_enter(sb);
     if (ret != 0) {
         goto _exit_sb;
     }
@@ -1035,14 +1118,14 @@ static mr_err_t dentry_fs_lookup(mr_dentry_t *parent, const char *name,
     }
 
     /* Inherit the super-block */
-    inode->sb = mr_super_block_get(sb);
+    inode->sb = mr_sblock_get(sb);
     if (!inode->sb) {
         ret = -MR_ENOENT;
         goto _exit;
     }
 
     /* FS dentries inherit the super-block's name operations */
-    child = mr_dentry_create(inode->sb ? inode->sb->dops : MR_NULL, "%s", str);
+    child = mr_dentry_create(inode->sb->dops, "%s", str);
     if (!child) {
         ret = -MR_ENOMEM;
         goto _exit;
@@ -1055,6 +1138,9 @@ static mr_err_t dentry_fs_lookup(mr_dentry_t *parent, const char *name,
         mr_dentry_del(child);
         goto _exit;
     }
+
+    /* Lookup entries have no namespace-owned creation reference */
+    child->retained = MR_FALSE;
     ret = mr_dentry_add(child, parent);
     if (ret == -MR_EEXIST) {
         /* Another thread may have won the race; reuse its entry. Hash with
@@ -1062,25 +1148,32 @@ static mr_err_t dentry_fs_lookup(mr_dentry_t *parent, const char *name,
         dentry_name_hash(&lookup, str, parent->ops, &lword);
 
         /* Lock */
-        mask = mr_fs_nsp_lock();
+        mask = mr_fs_struct_lock();
 
-        /* Lookup the existing entry */
-        existing = mr_dentry_get(dentry_lookup(parent, &lookup));
+        /* Lookup the existing entry. A rename reservation holding the name
+         * is not a resolvable entry yet */
+        existing = dentry_lookup(parent, &lookup);
+        if (existing && (existing->state == MR_DENTRY_STATE_RESERVED)) {
+            existing = MR_NULL;
+            ret = -MR_ENOENT;
+        } else {
+            existing = mr_dentry_get(existing);
+            ret = existing ? 0 : -MR_EAGAIN;
+        }
 
         /* Unlock */
-        mr_fs_nsp_unlock(mask);
+        mr_fs_struct_unlock(mask);
 
         /* Replace the existing entry */
-        mr_dentry_del(child);
+        mr_dentry_put(child);
         child = existing;
-        ret = child ? 0 : -MR_EAGAIN;
     } else if (ret == 0) {
-        /* Get dentry */
-        child = mr_dentry_get(child);
-        ret = child ? 0 : -MR_ENOENT;
+        /* Transfer the create reference to the caller. The directory list
+         * does not pin lookup-filled dentries; they live only while a handle,
+         * cwd, path walk, or child still holds them */
     } else {
         /* Delete failed reservation */
-        mr_dentry_del(child);
+        mr_dentry_put(child);
     }
 
     /* Return resolved dentry */
@@ -1096,9 +1189,9 @@ _exit:
     /* Free the component copy */
     str_free(str, istr);
 _exit_op:
-    mr_super_block_op_exit(sb);
+    mr_sblock_op_exit(sb);
 _exit_sb:
-    mr_super_block_put(sb);
+    mr_sblock_put(sb);
 _exit_inode:
     mr_inode_put(dir_inode);
     return ret;
@@ -1122,16 +1215,18 @@ mr_err_t mr_dentry_lookup(mr_dentry_t *start, mr_dentry_t *limit,
     /* Walk the cache and ask the file-system to fill each miss */
     for (cur = start, held = MR_NULL; MR_TRUE; path += len) {
         /* Lock */
-        mask = mr_fs_nsp_lock();
+        mask = mr_fs_struct_lock();
 
         /* Resolve the cached prefix */
-        resolved = dentry_path_lookup(&cur, &path, limit, &len);
-        if (resolved) {
-            resolved = mr_dentry_get(resolved);
-            ret = resolved ? 0 : -MR_ENOENT;
+        resolved = dentry_path_lookup(&cur, &path, limit, &len, &ret);
+        if (resolved || (ret != 0)) {
+            if (resolved) {
+                resolved = mr_dentry_get(resolved);
+                ret = resolved ? 0 : -MR_ENOENT;
+            }
 
             /* Unlock */
-            mr_fs_nsp_unlock(mask);
+            mr_fs_struct_unlock(mask);
             break;
         }
 
@@ -1139,7 +1234,7 @@ mr_err_t mr_dentry_lookup(mr_dentry_t *start, mr_dentry_t *limit,
         parent = mr_dentry_get(cur);
 
         /* Unlock */
-        mr_fs_nsp_unlock(mask);
+        mr_fs_struct_unlock(mask);
 
         /* Release the previous intermediate dentry */
         if (held) {
@@ -1184,10 +1279,10 @@ mr_err_t mr_dentry_instantiate(mr_dentry_t *dentry, struct mr_inode *inode) {
     MR_ASSERT((inode != MR_NULL) && MR_OBJECT_IS_INITED(inode));
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* The dentry must be active without an inode bound */
-    if (dentry->state != DENTRY_STATE_ACTIVE) {
+    if (dentry->state != MR_DENTRY_STATE_ACTIVE) {
         ret = -MR_ENOENT;
         goto _exit;
     }
@@ -1207,7 +1302,7 @@ mr_err_t mr_dentry_instantiate(mr_dentry_t *dentry, struct mr_inode *inode) {
     ret = 0;
 _exit:
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
     return ret;
 }
 
@@ -1220,24 +1315,24 @@ mr_err_t mr_dentry_uninstantiate(mr_dentry_t *dentry) {
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(dentry, dentry));
 
     /* Lock */
-    mask = mr_fs_nsp_lock();
+    mask = mr_fs_struct_lock();
 
     /* Detach inode from an active dentry */
-    if (dentry->state != DENTRY_STATE_ACTIVE) {
+    if (dentry->state != MR_DENTRY_STATE_ACTIVE) {
         /* Unlock */
-        mr_fs_nsp_unlock(mask);
+        mr_fs_struct_unlock(mask);
         return -MR_ENOENT;
     }
     inode = dentry->inode;
     if (!inode) {
         /* Unlock */
-        mr_fs_nsp_unlock(mask);
+        mr_fs_struct_unlock(mask);
         return -MR_ENOENT;
     }
     dentry->inode = MR_NULL;
 
     /* Unlock */
-    mr_fs_nsp_unlock(mask);
+    mr_fs_struct_unlock(mask);
 
     /* Put inode */
     mr_inode_put(inode);

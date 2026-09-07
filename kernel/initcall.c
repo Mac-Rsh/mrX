@@ -69,9 +69,10 @@ void mr_kernel_init(void) {
 }
 
 void mr_user_init(void) {
-    const mr_initcall_t *start = &__mr_initcall_start;
-    const mr_initcall_t *end = &__mr_initcall_end;
+    mr_uintptr_t start = (mr_uintptr_t)&__mr_initcall_start;
+    mr_uintptr_t end = (mr_uintptr_t)&__mr_initcall_end;
     const mr_initcall_t *call;
+    mr_uintptr_t addr;
 
     /* Check link address */
     MR_ASSERT(start < end);
@@ -80,15 +81,18 @@ void mr_user_init(void) {
     mr_kernel_init();
 
     /* Check user init status */
-    if (__initcall_ustatus) {
+    if (!__initcall_ustatus) {
+        __initcall_ustatus = MR_TRUE;
+    } else {
         /* User already init */
         return;
-    } else {
-        __initcall_ustatus = MR_TRUE;
     }
 
     /* Each init calls */
-    for (call = start; call <= end; call++) {
+    for (addr = start; addr <= end; addr += sizeof(*call)) {
+        call = (const mr_initcall_t *)addr;
+        MR_ASSERT(call->entry != MR_NULL);
+
         /* Call init call entry */
         call->entry();
     }

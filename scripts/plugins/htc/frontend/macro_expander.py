@@ -20,6 +20,7 @@ class MacroExpander:
     MAX_DEPTH = 16
 
     def __init__(self, diagnostics: Diagnostics) -> None:
+        """Create an expander bound to one diagnostic sink."""
         self.diagnostics = diagnostics
 
     def expand_line(

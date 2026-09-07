@@ -93,7 +93,7 @@ class Preprocessor:
             macros: dict[str, str],
             included_from: IncludeSite | None,
     ) -> None:
-        """Scan resolved source text and append the filtered file to the unit."""
+        """Scan source text and append the filtered file to the unit."""
         # Keep the file slot stable so include order is preserved in the unit
         filtered_lines: list[str] = []
         conditional_stack = ConditionalState(self.diagnostics)

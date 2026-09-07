@@ -39,13 +39,13 @@ typedef struct mr_workqueue_hook {
 MR_CLAZZES_EXPORT(workqueue);
 typedef struct mr_workqueue {
     mr_object_t parent;
-    mr_atomic_t depth;
     mr_atomic_t dying;
     mr_timer_t timer;
     mr_list_t tlist;
     mr_list_t list;
 #if defined(MR_USE_WORKQUEUE_HOOK)
     const mr_workqueue_hook_t *hook;
+    mr_atomic_t depth;
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 } mr_workqueue_t;
 

@@ -78,7 +78,7 @@ MR_TEST(driver, del_without_setup) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ret = mr_driver_del(drv);
     drv = MR_NULL;
@@ -95,7 +95,7 @@ MR_TEST(driver, del_after_setup) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ret = mr_driver_setup(drv);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
@@ -115,7 +115,7 @@ MR_TEST(driver, create_default) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
     MR_TEST_EXPECT_EQ_INT(MR_DRIVER_TYPE(drv), MR_DRIVER_TYPE_RAM);
 
     mr_driver_del(drv);
@@ -129,7 +129,7 @@ MR_TEST(driver, setup_twice) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ret = mr_driver_setup(drv);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
@@ -150,7 +150,7 @@ MR_TEST(driver, shutdown_without_setup) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ret = mr_driver_shutdown(drv);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
@@ -167,7 +167,7 @@ MR_TEST(driver, setup_shutdown_cycle) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ret = mr_driver_setup(drv);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
@@ -188,7 +188,7 @@ MR_TEST(driver, setup_shutdown_multiple) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ret = mr_driver_setup(drv);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
@@ -217,7 +217,7 @@ MR_TEST(driver, release_without_setup) {
 
     drv = mr_driver_create(&test_driver_release_clazz, MR_DRIVER_TYPE_RAM,
                            MR_NULL, MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ret = mr_driver_del(drv);
 
@@ -235,7 +235,7 @@ MR_TEST(driver, release_after_shutdown) {
 
     drv = mr_driver_create(&test_driver_release_clazz, MR_DRIVER_TYPE_RAM,
                            MR_NULL, MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ret = mr_driver_setup(drv);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
@@ -263,7 +263,7 @@ MR_TEST(driver, setup_fail) {
 
     drv = mr_driver_create(&test_driver_clazz_fail, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ret = mr_driver_setup(drv);
     MR_TEST_EXPECT_EQ_INT(ret, -1);
@@ -290,7 +290,7 @@ MR_TEST(driver, is_ready_not_setup) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ready = mr_driver_is_ready(drv);
     MR_TEST_EXPECT_EQ_INT(ready, MR_FALSE);
@@ -306,7 +306,7 @@ MR_TEST(driver, is_ready_after_setup) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
     MR_TEST_EXPECT_EQ_INT(mr_driver_setup(drv), 0);
 
     ready = mr_driver_is_ready(drv);
@@ -323,7 +323,7 @@ MR_TEST(driver, is_ready_after_shutdown) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
     MR_TEST_EXPECT_EQ_INT(mr_driver_setup(drv), 0);
     MR_TEST_EXPECT_EQ_INT(mr_driver_shutdown(drv), 0);
 
@@ -341,7 +341,7 @@ MR_TEST(driver, is_ready_setup_fail) {
 
     drv = mr_driver_create(&test_driver_clazz_fail, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
     mr_driver_setup(drv);
 
     ready = mr_driver_is_ready(drv);
@@ -357,7 +357,7 @@ MR_TEST(driver, state_operations) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     MR_TEST_EXPECT_EQ_INT(mr_driver_state(drv), 0);
 
@@ -380,7 +380,7 @@ MR_TEST(driver, type_operations) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_GPIO, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     MR_TEST_EXPECT_EQ_INT((int)mr_driver_type(drv), MR_DRIVER_TYPE_GPIO);
     MR_TEST_EXPECT_EQ_INT(MR_DRIVER_IS_TYPE(drv, MR_DRIVER_TYPE_GPIO), MR_TRUE);
@@ -399,7 +399,7 @@ MR_TEST(driver, data_priv_ops) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, &data_val,
                            &priv_val, &ops_val);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     MR_TEST_EXPECT_EQ_PTR(MR_DRIVER_DATA(drv), &data_val);
     MR_TEST_EXPECT_EQ_PTR(MR_DRIVER_PRIV(drv), &priv_val);
@@ -472,7 +472,7 @@ MR_TEST(driver, get_put) {
 
     drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
                            MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     MR_TEST_EXPECT_EQ_PTR(mr_driver_get(drv), drv);
 
@@ -491,7 +491,7 @@ MR_TEST(driver, setup_without_method) {
 
     drv = mr_driver_create(&test_driver_no_method_clazz, MR_DRIVER_TYPE_RAM,
                            MR_NULL, MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ret = mr_driver_setup(drv);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
@@ -515,7 +515,7 @@ MR_TEST(driver, shutdown_fail_keeps_setup) {
 
     drv = mr_driver_create(&test_driver_deinit_fail_clazz, MR_DRIVER_TYPE_RAM,
                            MR_NULL, MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
 
     ret = mr_driver_setup(drv);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
@@ -527,6 +527,13 @@ MR_TEST(driver, shutdown_fail_keeps_setup) {
     MR_TEST_EXPECT_EQ_INT(mr_driver_state(drv), -1);
     MR_TEST_EXPECT_EQ_INT(MR_DRIVER_IS_SETUP(drv), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(mr_driver_is_ready(drv), MR_FALSE);
+
+    /* Idempotent setup recovers ready without re-running init */
+    ret = mr_driver_setup(drv);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    MR_TEST_EXPECT_EQ_INT(test_driver_init_count, 1);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_state(drv), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_is_ready(drv), MR_TRUE);
 
     ret = mr_driver_shutdown(drv);
     MR_TEST_EXPECT_EQ_INT(ret, -1);
@@ -546,7 +553,7 @@ MR_TEST(driver, delete_with_extra_reference) {
 
     drv = mr_driver_create(&test_driver_release_clazz, MR_DRIVER_TYPE_RAM,
                            MR_NULL, MR_NULL, MR_NULL);
-    MR_TEST_EXPECT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
     MR_TEST_EXPECT_EQ_PTR(mr_driver_get(drv), drv);
 
     ret = mr_driver_del(drv);

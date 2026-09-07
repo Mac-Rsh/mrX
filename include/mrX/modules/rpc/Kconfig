@@ -1,0 +1,63 @@
+menu "RPC: Remote procedure call"
+
+# ==================================
+# RPC
+# ==================================
+config MR_USE_MODULE_RPC
+    depends on MR_USE_MODULE
+    select MR_USE_TIMER
+    bool "Use RPC"
+    default n
+    help
+        Enable the basic remote procedure call object, IO, and command types.
+
+config MR_USE_MODULE_RPC_HOOK
+    depends on MR_USE_MODULE_RPC
+    bool "Use RPC hook"
+    default n
+    help
+        Enable callbacks for RPC executor lifecycle events.
+        wakeup: Called when an executor transitions from idle to running.
+        suspend: Called when an executor transitions from running to idle.
+        Execute and subscription poll events are reported independently.
+        Useful for custom scheduling, power management, or runtime monitoring.
+
+# ==================================
+# CALL
+# ==================================
+config MR_CFG_RPC_CALL_BUCKET_NUM
+    depends on MR_USE_MODULE_RPC
+    int "RPC call hashmap bucket number"
+    default 16
+    range 1 1024
+    help
+        Number of buckets in the static RPC call hashmap. Increase this value
+        when many calls are exported, or reduce it when RAM is tight.
+
+# ==================================
+# SESSION
+# ==================================
+config MR_CFG_MODULE_RPC_SESSION_NUM
+    depends on MR_USE_MODULE_RPC
+    int "RPC session number"
+    default 1
+    range 1 1024
+    help
+        Number of preallocated RPC sessions. Each session owns one fixed receive
+        buffer and one fixed send buffer sized from generated IDL metadata.
+        A new subscription requires one additional free session for ordinary
+        requests. A single-session configuration does not accept subscriptions.
+
+# ==================================
+# FIFO
+# ==================================
+config MR_CFG_MODULE_RPC_FIFO_SIZE
+    depends on MR_USE_MODULE_RPC
+    int "RPC receive FIFO size"
+    default 256
+    range 24 1048576
+    help
+        Size in bytes of the RPC receive FIFO. At least 24 bytes are required
+        to receive a frame header. Payloads and checksums are received separately.
+
+endmenu

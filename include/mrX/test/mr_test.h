@@ -172,12 +172,6 @@ typedef struct mr_testcase {
     mr_testcase_entry *entry;
 } mr_testcase_t;
 
-/* Testcase export macro definition */
-#define __MR_TEST_EXPORT(_suite, _name, _entry, _level)                        \
-    MR_USED const mr_testcase_t MR_CAT(__mr_testcase_, _suite, _, _name)       \
-        MR_SECTION_ALIGN("mr_testcase." _level)                                \
-        = {.suite = MR_STR(_suite), .name = MR_STR(_name), .entry = (_entry)}
-
 /**
  * @brief This macro function defines and exports a testcase.
  *
@@ -193,21 +187,28 @@ typedef struct mr_testcase {
                      "1");                                                     \
     static void MR_CAT(__mr_test_, _suite, _,                                  \
                        _name)(MR_UNUSED volatile mr_uint32_t * __test_status)
+#define __MR_TEST_EXPORT(_suite, _name, _entry, _level)                        \
+    MR_USED const mr_testcase_t MR_CAT(__mr_testcase_, _suite, _, _name)       \
+        MR_SECTION_ALIGN("mr_testcase." _level)                                \
+        = {.suite = MR_STR(_suite), .name = MR_STR(_name), .entry = (_entry)}
 
 /**
  * @brief This function runs a testcase.
  *
  * @param suite The testcase suite name.
  * @param name The testcase name.
+ * @return MR_TRUE when the testcase is found and passes, MR_FALSE otherwise.
  */
-void mr_testcase_run(const char *suite, const char *name);
+mr_bool_t mr_testcase_run(const char *suite, const char *name);
 
 /**
  * @brief This function runs a testsuite.
  *
  * @param suite The testsuite name.
+ * @return MR_TRUE when at least one testcase runs and all pass, MR_FALSE
+ * otherwise.
  */
-void mr_testsuite_run(const char *suite);
+mr_bool_t mr_testsuite_run(const char *suite);
 
 /**
  * @brief This function runs all testcases.

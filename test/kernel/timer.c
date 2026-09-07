@@ -28,6 +28,22 @@ static void test_timer_entry(mr_timer_t *timer, void *param) {
     ctx->last_timer = timer;
 }
 
+static void test_timer_rearm_entry(mr_timer_t *timer, void *param) {
+    int *count = param;
+
+    (*count)++;
+    if (*count == 1) {
+        mr_timer_start(timer);
+    }
+}
+
+static void test_timer_stop_entry(mr_timer_t *timer, void *param) {
+    int *count = param;
+
+    (*count)++;
+    mr_timer_stop(timer);
+}
+
 /* Tests */
 MR_TEST(timer, derive_init) {
     static mr_timer_t timer = MR_TIMER_DERIVE_INIT(
@@ -228,6 +244,48 @@ MR_TEST(timer, restart) {
     ctx.last_timer = MR_NULL;
     mr_clock_increase(3);
     MR_TEST_EXPECT_EQ_PTR(ctx.last_timer, &timer);
+
+    ret = mr_timer_del(&timer);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+
+MR_TEST(timer, oneshot_rearm_from_entry) {
+    mr_timer_t timer;
+    int count = 0;
+    mr_err_t ret;
+
+    ret = mr_timer_init(&timer, test_timer_rearm_entry, &count, 2);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(mr_timer_start(&timer), 0);
+
+    mr_clock_increase(2);
+    MR_TEST_ASSERT_EQ_INT(count, 1);
+    MR_TEST_ASSERT_EQ_INT(MR_TIMER_IS_TIMING(&timer), MR_TRUE);
+    mr_clock_increase(1);
+    MR_TEST_ASSERT_EQ_INT(count, 1);
+    mr_clock_increase(1);
+    MR_TEST_ASSERT_EQ_INT(count, 2);
+    MR_TEST_ASSERT_EQ_INT(MR_TIMER_IS_TIMING(&timer), MR_FALSE);
+
+    ret = mr_timer_del(&timer);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+
+MR_TEST(timer, periodic_stop_from_entry) {
+    mr_timer_t timer;
+    int count = 0;
+    mr_err_t ret;
+
+    ret = mr_timer_init(&timer, test_timer_stop_entry, &count,
+                        1 | MR_TIMER_PERIODIC);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    MR_TEST_ASSERT_EQ_INT(mr_timer_start(&timer), 0);
+
+    mr_clock_increase(1);
+    MR_TEST_ASSERT_EQ_INT(count, 1);
+    MR_TEST_ASSERT_EQ_INT(MR_TIMER_IS_TIMING(&timer), MR_FALSE);
+    mr_clock_increase(3);
+    MR_TEST_ASSERT_EQ_INT(count, 1);
 
     ret = mr_timer_del(&timer);
     MR_TEST_ASSERT_EQ_INT(ret, 0);

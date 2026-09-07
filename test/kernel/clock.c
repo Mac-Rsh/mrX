@@ -84,6 +84,21 @@ MR_TEST(clock, increase_zero) {
 }
 
 #if defined(MR_USE_CLOCK_HIRES)
+/* Test: hires tick is monotonic and setting it to the current value keeps
+ * continuity */
+MR_TEST(clock, hires_tick_set_get) {
+    mr_hires_tick_t before;
+    mr_hires_tick_t after;
+
+    before = mr_clock_hires_tick();
+    mr_clock_hires_tick_set(before);
+    after = mr_clock_hires_tick();
+
+    /* Restoring the current tick must not move time backwards or jump */
+    MR_TEST_ASSERT_GE_UINT(after, before);
+    MR_TEST_ASSERT_LT_UINT(after - before, MR_CFG_HIRES_TICK_PER_SECOND);
+}
+
 MR_TEST(clock, hires_tick2timestamp_frequency) {
     mr_hires_timestamp_t timestamp;
 

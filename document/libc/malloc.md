@@ -1,149 +1,406 @@
-[**中文**](libc_malloc.md) | [**English**](libc_malloc_en.md)
+# 内存分配（Malloc）
+
+> 内存分配模块提供嵌入式友好的通用堆分配器（`mr_malloc` / `mr_free` 等），在编译期
+> 静态预留的堆池上按需分配与释放任意大小的内存块，供内核对象动态创建与上层组件使用。
+
+| 项       | 说明                                                                                                                                                                     |
+|----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 功能宏   | `MR_USE_MALLOC`（默认开启；可选 `MR_USE_MALLOC_STD` 转发标准库、`MR_USE_MALLOC_3RD` 接入第三方分配器）                                                                   |
+| 头文件   | `<mrX/libc/mr_malloc.h>`                                                                                                                                                 |
+| 依赖模块 | [字符串 String](string.md)（内部实现使用 `mr_memcpy` / `mr_memset`）、平台中断接口（`mr_port_irq`，用于临界区保护）、[内核初始化](../kernel/initcall.md)（调用堆初始化） |
+| 参考测试 | `mrX/test/libc/malloc.c`                                                                                                                                                 |
 
 ---
 
-# libc 动态内存
+## 用户指南
 
-`mr_malloc.h` 和 `libc/malloc.c` 提供动态内存分配接口。启用 `MR_USE_MALLOC_STD` 时，分配接口映射到标准库；否则在
-`MR_USE_MALLOC` 下使用 mrX 内置堆实现。内置堆通过空闲块链表管理内存，并在分配和释放期间关闭中断保护堆结构。
+### 1. 模块概述
 
-## 核心数据结构和宏
+内存分配模块解决的问题是： **在没有操作系统堆服务、也不想引入完整 C 库堆的目标板上，
+提供一个确定大小、行为可预期的通用内存分配器**。
 
-### 堆块
+特性：
 
-```c
-#define MR_HEAP_MAGIC (0x6d725800U)
+- 堆池编译期静态预留（`MR_CFG_HEAP_SIZE` 字节的静态数组），不依赖链接脚本或运行期探测。
+- 首次适应（first-fit）分配 + 相邻空闲块双向合并，`mr_free` 与合并为常数级挂载，
+  `mr_malloc` 的开销与空闲块数量成线性。
+- `mr_malloc_usable_size` 可查询任意已分配块的实际可用大小。
+- `mr_calloc`（清零分配）与 `mr_realloc`（扩缩容并保留数据）完备。
+- `mr_heap_region_add` 支持在初始化阶段追加额外的内存区域（如外部 SRAM）。
+- `mr_heap_information` 提供总量、占用、空闲、失败次数、碎片数、最大空闲块等统计信息。
+- 全部 API 失败返回 `MR_NULL` 或安全值，不崩溃；分配失败计数可观测。
 
-typedef struct mr_heap_block {
-    volatile mr_uint32_t magic;
-    struct mr_heap_block *next;
-    mr_size_t size;
-} mr_heap_block_t;
-```
+与 [内核 Slab](../kernel/slab.md) 的分工：两者相互独立、互不依赖。slab 在用户提供的 静态缓冲上按 **固定块大小**
+做无锁分配，零碎片、零块头开销，适合对象池；本模块在通用 堆上按 **任意大小**分配，适合对象数量与大小运行期才确定的场合（如内核定时器、工作
+队列的动态创建）。内核组件的动态创建路径（timer、work、wait、irq、fifo 等）使用的 正是本模块的 `mr_malloc`。
 
-`magic` 用于区分已分配块和空闲块。`next` 用于链接空闲块链表。`size` 表示该块可用负载字节数，不包含块头。
+### 2. 配置与依赖
 
-### 堆区域
+| 配置项              | 类型           | 默认值 | 说明                                                                                                               |
+|---------------------|----------------|--------|--------------------------------------------------------------------------------------------------------------------|
+| `MR_USE_MALLOC`     | bool（choice） | y      | 使用内置堆实现（`mrX/include/mrX/libc/Kconfig:69`）                                                                |
+| `MR_USE_MALLOC_STD` | bool（choice） | n      | 直接宏转发标准库 `malloc` / `free`，需要宿主 OS 支持                                                               |
+| `MR_USE_MALLOC_3RD` | bool（choice） | n      | 接入第三方分配器                                                                                                   |
+| `MR_CFG_HEAP_SIZE`  | 整型           | 4096   | 内置堆池大小（字节），范围 32 ~ 2147483647，仅在非 `MR_USE_MALLOC_STD` 时生效（`mrX/include/mrX/libc/Kconfig:76`） |
 
-```c
-typedef struct mr_heap_region {
-    void *address;
-    mr_size_t size;
-} mr_heap_region_t;
-```
-
-`mr_heap_region_add()` 使用以 `{ .address = MR_NULL }` 结尾的数组添加额外内存区域。
-
-### 堆信息
-
-```c
-typedef struct mr_heap_info {
-    mr_size_t total_bytes;
-    mr_size_t used_bytes;
-    mr_size_t free_bytes;
-    mr_size_t fail_count;
-    mr_size_t frag_num;
-    mr_size_t max_free_bytes;
-    mr_size_t disp_kb_ratio;
-    mr_size_t frag_ratio;
-} mr_heap_info_t;
-```
-
-`total_bytes`、`used_bytes` 和 `free_bytes` 记录堆容量和使用情况。`fail_count` 记录分配失败次数。`frag_num` 记录空闲碎片数量。
-`max_free_bytes`、`disp_kb_ratio` 和 `frag_ratio` 在非 lazy 查询时更新，用于观察最大空闲块和碎片化程度。
-
-## 主要接口
-
-### 分配和释放
-
-```c
-void *mr_malloc(mr_size_t size);
-void mr_free(void *mem);
-mr_size_t mr_malloc_usable_size(void *mem);
-```
-
-`mr_malloc()` 对请求大小按 `MR_ALIGN_SIZE` 对齐，从空闲链表中取第一个满足大小的块；剩余空间大于拆分阈值时会拆分出新的空闲块。
-`mr_free()` 检查块 magic，合法时标记为空闲并按地址插回链表，相邻空闲块会合并。`mr_malloc_usable_size()`
-返回已分配块的可用大小，非法指针或空指针返回 0。
-
-### calloc 和 realloc
-
-```c
-void *mr_calloc(mr_size_t num, mr_size_t size);
-void *mr_realloc(void *mem, mr_size_t size);
-```
-
-`mr_calloc()` 检查乘法溢出，分配成功后用 `mr_memset()` 清零。`mr_realloc()` 先分配新块，再复制 `min(old_size, size)`
-字节，最后释放旧块。
-
-### 堆区域和统计
-
-```c
-void mr_heap_region_add(const mr_heap_region_t *regions);
-mr_heap_info_t mr_heap_information(mr_bool_t lazy);
-```
-
-`mr_heap_region_add()` 可把额外内存区域加入堆。每个区域必须有有效地址和正大小，数组最后一个元素的 `address` 必须为
-`MR_NULL`。`mr_heap_information(MR_TRUE)` 只复制当前统计值；`mr_heap_information(MR_FALSE)` 会遍历空闲链表更新耗时统计字段。
-
-## 初始化
-
-内置实现中，`malloc.c` 定义内部函数：
-
-```c
-void mr_libc_malloc_init(void);
-```
-
-该函数创建默认静态堆 `__heap`，大小由 `MR_CFG_HEAP_SIZE` 决定，默认 4 KiB，且必须不小于 32 字节。源码中 `kernel/initcall.c`
-以 `extern` 方式调用该初始化函数。
-
-## 使用示例
+选择 `MR_USE_MALLOC` 并重新生成 `mr_config.h` 后，包含头文件即可使用：
 
 ```c
 #include <mrX/libc/mr_malloc.h>
-#include <mrX/libc/mr_string.h>
+```
 
-void sample_malloc_usage(void)
-{
-    char *buf = mr_calloc(16, sizeof(char));
-    char *new_buf;
+选择 `MR_USE_MALLOC_STD` 时，`mr_malloc` / `mr_free` / `mr_calloc` / `mr_realloc`
+退化为标准库同名函数的宏；`mr_malloc_usable_size`、`mr_heap_region_add`、
+`mr_heap_information` 及堆统计结构不可用。堆初始化由内核启动序列自动完成 （`MR_USE_MALLOC` 时内核初始化调用
+`mr_libc_malloc_init`），应用无需手动初始化。
 
+### 3. 快速上手
+
+分配、使用、释放一个缓冲：
+
+```c
+#include <mrX/libc/mr_malloc.h>
+
+void example(void) {
+    void *buf;
+
+    buf = mr_malloc(128);
     if (buf == MR_NULL) {
+        /* Allocation failed: heap exhausted */
         return;
     }
 
-    mr_strncpy(buf, "mrX", 16);
-    new_buf = mr_realloc(buf, 32);
-    if (new_buf != MR_NULL) {
-        buf = new_buf;
-    }
+    /* Use buf here */
+
     mr_free(buf);
 }
 ```
 
-添加额外区域示例：
+要点：
+
+- `mr_malloc` 失败返回 `MR_NULL`，使用前必须判空。
+- `mr_malloc(0)` 返回 `MR_NULL`；`mr_free(MR_NULL)` 安全无操作。
+- 释放后的指针不可再使用。
+
+### 4. 使用说明
+
+**分配语义**
+
+- 分配得到的块按机器字长（`sizeof(void *)`）对齐，实际可用大小不小于请求大小， 可用 `mr_malloc_usable_size` 查询。
+- 请求大小为 0 返回 `MR_NULL`；堆空间不足返回 `MR_NULL` 并使失败计数加一。
+- `mr_calloc(num, size)` 分配 `num * size` 字节并全部清零；乘积溢出或乘积为 0 均返回 `MR_NULL`。
+- `mr_realloc(mem, size)` 总是分配新块、拷贝旧数据（拷贝长度为旧可用大小与 新大小的较小者）、释放旧块并返回新指针；
+  `mr_realloc(MR_NULL, size)` 等价于
+  `mr_malloc(size)`；`mr_realloc(mem, 0)` 释放 `mem` 并返回 `MR_NULL`； 扩容失败时旧块保持有效，返回 `MR_NULL`。
+
+**释放语义**
+
+- `mr_free(MR_NULL)` 安全。
+- 对非本分配器返回的指针（块头魔数校验失败）调用 `mr_free` 会被静默忽略， 不修改堆状态；重复释放同一指针同样被魔数校验拦截。
+- `mr_malloc_usable_size` 对 `MR_NULL` 或无效指针返回 0。
+
+**调用上下文**
+
+- 全部 API 通过关中断保护内部状态，可在线程与中断上下文调用（单核假设）； 临界区内只做链表与统计操作，不会长时间关中断。
+- `mr_heap_region_add` 只能在堆初始化之后、并发堆操作开始之前的初始化阶段调用 （见头文件注释），且需调用者自行保证串行。
+
+**堆统计**
+
+`mr_heap_information(lazy)` 返回堆信息快照：`lazy` 传 `MR_TRUE` 时跳过最耗时的 全链扫描（不更新最大空闲块与碎片比例字段），适合在中断或频繁调用场合使用；
+传 `MR_FALSE` 时全部字段完整刷新。
+
+### 5. API 参考
+
+分配与释放：
+
+| API                     | 说明                       |
+|-------------------------|----------------------------|
+| `mr_malloc`             | 分配指定大小的内存块       |
+| `mr_free`               | 释放内存块                 |
+| `mr_calloc`             | 分配并清零                 |
+| `mr_realloc`            | 重新分配大小并保留原有数据 |
+| `mr_malloc_usable_size` | 查询内存块的实际可用大小   |
+
+堆管理与诊断：
+
+| API                   | 说明                                   |
+|-----------------------|----------------------------------------|
+| `mr_heap_region_add`  | 向堆追加额外的内存区域（仅初始化阶段） |
+| `mr_heap_information` | 获取堆统计信息快照                     |
+
+**`mr_malloc`**
 
 ```c
-static mr_uint8_t extra_heap[256];
+void *mr_malloc(mr_size_t size);
+```
 
-static const mr_heap_region_t regions[] = {
-    { .address = extra_heap, .size = sizeof(extra_heap) },
-    { .address = MR_NULL,    .size = 0                  },
-};
+- `size`：请求字节数，为 0 时返回 `MR_NULL`。
+- 返回：成功返回对齐的内存块指针，失败返回 `MR_NULL`。
 
-void sample_add_region(void)
-{
+**`mr_free`**
+
+```c
+void mr_free(void *mem);
+```
+
+- `mem`：待释放指针，`MR_NULL` 安全；无效指针被魔数校验静默忽略。
+- 返回：无。
+
+**`mr_malloc_usable_size`**
+
+```c
+mr_size_t mr_malloc_usable_size(void *mem);
+```
+
+- 返回：有效块的实际可用字节数（不小于当初请求值）；`MR_NULL` 或无效指针返回 0。
+
+**`mr_calloc`**
+
+```c
+void *mr_calloc(mr_size_t num, mr_size_t size);
+```
+
+- `num` / `size`：块数与块大小，乘积溢出（`num * size` 超过 `MR_SIZE_MAX`）或为 0 返回 `MR_NULL`。
+- 返回：成功返回全零内存块指针，失败返回 `MR_NULL`。
+
+**`mr_realloc`**
+
+```c
+void *mr_realloc(void *mem, mr_size_t size);
+```
+
+- `mem`：旧块指针，可为 `MR_NULL`（等价于 `mr_malloc`）。
+- `size`：新大小，为 0 时释放旧块并返回 `MR_NULL`。
+- 返回：成功返回新块指针（原数据前缀被保留），失败返回 `MR_NULL`（旧块不变）。
+
+**`mr_heap_region_add`**
+
+```c
+void mr_heap_region_add(const mr_heap_region_t *regions);
+```
+
+- `regions`：区域数组，以 `address == MR_NULL` 的元素结尾；每个元素提供
+  `address`（区域首地址）与 `size`（字节数）。
+- 约束：每个区域只能添加一次、不得相互重叠、生命周期须覆盖分配器全程；过小的 区域（放不下块头与隔离带）会被跳过；调用者须保证串行调用。
+
+**`mr_heap_information`**
+
+```c
+mr_heap_info_t mr_heap_information(mr_bool_t lazy);
+```
+
+- `lazy`：`MR_TRUE` 跳过全链扫描（不更新 `max_free_bytes`、`disp_kb_ratio`、
+  `frag_ratio`），`MR_FALSE` 完整刷新。
+- 返回：堆信息结构体（按值返回）。
+
+### 6. 完整示例
+
+示例 1：动态缓冲的扩容与校验（改编自 `mrX/test/libc/malloc.c` 的 `realloc_resize`）：
+
+```c
+void realloc_example(void) {
+    void *p;
+
+    p = mr_malloc(64);
+    if (p == MR_NULL) {
+        return;
+    }
+
+    /* Grow to 256 bytes, old data prefix is preserved */
+    p = mr_realloc(p, 256);
+    if (p == MR_NULL) {
+        return;                     /* Old 64-byte block is still valid */
+    }
+
+    mr_free(p);
+}
+```
+
+示例 2：使用堆统计观察占用与碎片：
+
+```c
+void heap_stat_example(void) {
+    mr_heap_info_t info;
+    void *p;
+
+    p = mr_malloc(256);
+    info = mr_heap_information(MR_TRUE);
+
+    /* info.total_bytes / used_bytes / free_bytes / fail_count ... */
+    (void)info;
+
+    mr_free(p);
+    info = mr_heap_information(MR_FALSE);   /* Full scan for frag ratio */
+}
+```
+
+示例 3：初始化阶段追加外部 RAM 区域：
+
+```c
+void region_example(void) {
+    static mr_uint8_t ext_ram[1024];
+    const mr_heap_region_t regions[] = {
+        {.address = ext_ram,    .size = sizeof(ext_ram)},
+        {.address = MR_NULL,    .size = 0}
+    };
+
     mr_heap_region_add(regions);
 }
 ```
 
-## 注意事项
+更多行为参考（清零、碎片复用、失败路径、统计一致性）见 `mrX/test/libc/malloc.c`。
 
-- 启用 `MR_USE_MALLOC_STD` 时，`mr_malloc()`、`mr_free()`、`mr_calloc()` 和 `mr_realloc()` 映射到标准库；
-  `mr_malloc_usable_size()`、`mr_heap_region_add()` 和 `mr_heap_information()` 只在非标准实现中声明。
-- 内置 `mr_malloc(0)` 返回 `MR_NULL`，`mr_free(MR_NULL)` 直接返回。
-- 内置 `mr_realloc(mem, 0)` 会调用 `mr_malloc(0)` 得到 `MR_NULL`，随后仍调用 `mr_memcpy(new, mem, 0)` 和 `mr_free(mem)`
-  ；在未启用字符串安全检查时，空目标指针参与 `mr_memcpy()` 需要谨慎。
-- 堆操作通过关中断保护内部链表，不提供 C11 意义上的跨核同步保证。
-- `mr_heap_region_add()` 未对 `regions` 空指针做检查，调用方必须传入有效且以空地址结尾的数组。
-- 测试覆盖零大小分配、释放空指针、可用大小、calloc 清零、realloc 数据保留、碎片复用和额外区域添加。
+### 7. 常见问题（FAQ）
+
+**Q：`mr_malloc` 返回 `MR_NULL`，但堆明明没满？**
+
+堆是首次适应 + 空闲块合并的分配器：即使空闲总量足够，也可能没有单个空闲块能 容纳请求。用 `mr_heap_information(MR_FALSE)` 查看
+`max_free_bytes`（最大空闲块） 而非 `free_bytes`（空闲总量）；两者差距大说明碎片化严重，可考虑改用
+[内核 Slab](../kernel/slab.md) 池化固定大小的对象。
+
+**Q：为什么 `mr_realloc` 之后地址变了？**
+
+`mr_realloc` 的实现是"分配新块 + 拷贝 + 释放旧块"，不做原地扩展，返回地址通常 与原来不同；持有旧指针的别名必须更新。
+
+**Q：`mr_free` 传了野指针会怎样？**
+
+块头魔数校验失败时释放被静默忽略，堆状态不受影响；但这属于未定义使用， 魔数校验只能兜底，不能替代正确的所有权管理。
+
+**Q：`mr_malloc_usable_size` 为什么比请求值大？**
+
+块大小按机器字长对齐，且块大小不足以拆分时会整块交给调用者，实际可用大小 因此可能大于请求值。写入时不要超过该值，读取该值可用于安全地重分配/拷贝。
+
+**Q：中断里能调用 `mr_malloc` 吗？**
+
+可以。API 内部以关中断保护堆状态；但失败路径与碎片合并的开销在中断上下文 同样存在，中断中建议只分配固定小尺寸或改用静态/slab
+方案。
+
+---
+
+## 开发者指南
+
+### 8. 架构总览
+
+内存分配是 libc 服务层模块，位于内核与各组件之下：
+
+```
+        +------------------------------------------+
+        | 内核组件动态创建（timer/work/wait/irq/fifo）|
+        +---------------------+--------------------+
+                              | mr_malloc()/mr_free()
+        +---------------------v--------------------+
+        | 内存分配 Malloc                           |
+        |  静态堆池 __heap[MR_CFG_HEAP_SIZE]        |
+        |  空闲块单向链表（按地址升序）+ 统计         |
+        +---------------------+--------------------+
+                              | 依赖
+        +---------------------v--------------------+
+        | mr_string（memset/memcpy）、mr_port_irq   |
+        +------------------------------------------+
+```
+
+关键接线：
+
+- 内核启动序列在 `mrX/kernel/initcall.c:53` 调用 `mr_libc_malloc_init()`
+  （`mrX/libc/malloc.c:363`），把静态堆池初始化为第一个空闲块。
+- [内核 Slab](../kernel/slab.md) 不依赖本模块：slab 的位图与块缓冲由调用者静态 提供，分配走原子位操作（
+  `mrX/kernel/slab.c:27`），全程不触碰通用堆。
+- 内核格式化输出（`mrX/kernel/printf.c:36`）在临时缓冲上使用 `mr_malloc`， 是"内核组件经由本模块分配"的典型例子。
+
+### 9. 数据结构
+
+块头（`mrX/include/mrX/libc/mr_malloc.h:40`）：
+
+```c
+typedef struct mr_heap_block {
+    volatile mr_uint32_t magic;     /* Allocated: MR_HEAP_MAGIC, free: ~MR_HEAP_MAGIC */
+    struct mr_heap_block *next;     /* Next free block (free blocks only) */
+    mr_size_t size;                 /* Usable payload size of this block */
+} mr_heap_block_t;
+```
+
+| 字段    | 说明                                                                                                                       |
+|---------|----------------------------------------------------------------------------------------------------------------------------|
+| `magic` | 魔数校验：已分配为 `MR_HEAP_MAGIC`（`0x6d725800`），空闲为其按位取反；`mr_free` / `mr_malloc_usable_size` 依据它识别有效块 |
+| `next`  | 空闲块链表指针；块被分配后置 `MR_NULL` 并从链表摘除                                                                        |
+| `size`  | 本块负载大小（不含块头），即 `mr_malloc_usable_size` 的返回值                                                              |
+
+全局状态（`mrX/libc/malloc.c:21-25`）：
+
+- `__heap[MR_CFG_HEAP_SIZE]`：静态堆池，按 `MR_ALIGN_SIZE`（机器字长）对齐。
+- `__heap_blk_head`：表头哨兵，`next` 指向地址最小的空闲块；链表按地址升序排列， 这是相邻合并能一次遍历完成的前提。
+- `__heap_info`：统计结构（`mr_heap_info_t`，`mr_malloc.h:54`），含
+  `total_bytes` / `used_bytes` / `free_bytes` / `fail_count` / `frag_num` /
+  `max_free_bytes` / `disp_kb_ratio` / `frag_ratio`。
+
+区域描述（`mr_malloc.h:48`）：`mr_heap_region_t { void *address; mr_size_t size; }`， 用于 `mr_heap_region_add`。
+
+### 10. 核心流程
+
+**初始化**：`mr_libc_malloc_init`（`mrX/libc/malloc.c:363`）用 `heap_block_make`
+把整个 `__heap` 包装成一个空闲块（块头之后预留一个对齐隔离带，保证负载对齐）， 挂到 `__heap_blk_head.next`，并初始化统计。
+
+**分配（first-fit）**：`mr_malloc`（`mrX/libc/malloc.c:85`）：
+
+1. 关中断（`mr_port_irq_disable`）。
+2. 请求大小按 `MR_ALIGN_SIZE` 向上对齐；对齐后溢出返回失败。
+3. 从链表头顺序找第一个 `size >= 请求` 的空闲块；找不到返回 `MR_NULL` 并累加
+   `fail_count`。
+4. 摘下该块、写入 `MR_HEAP_MAGIC`；若剩余部分大于拆分阈值
+   `HEAP_SPLIT_THRESHOLD`（4 个块头大小，`malloc.c:29`），则拆出新空闲块插回 链表，否则整块交付（这也是可用大小可能大于请求值的原因）。
+5. 更新 `used_bytes` / `free_bytes`，开中断返回。
+
+**释放与合并**：`mr_free`（`malloc.c:162`）校验魔数后把块标记为空闲，调用
+`heap_insert_block`（`malloc.c:31`）按地址序插回链表，并顺带做 **双向相邻合并**： 与前驱地址相接则并入前驱，与后继地址相接则吞并后继，每合并一次
+`frag_num` 减一。 链表按地址有序 + 一次遍历即可完成两种合并，是本分配器无需额外元数据的关键。
+
+**重分配**：`mr_realloc`（`malloc.c:234`）=`mr_malloc` + `mr_memcpy`（拷贝长度为 新旧可用大小的较小者）+ `mr_free`，无原地扩展路径；
+`mr_calloc`（`malloc.c:208`） = `mr_malloc` + `mr_memset`，入口先做乘积溢出检查。
+
+**追加区域**：`mr_heap_region_add`（`malloc.c:274`）对每个区域用 `heap_block_make`
+构造块头与隔离带（跳过放不下"两个拆分阈值 + 对齐"的区域），再把剩余空间作为一个 空闲块插入链表并累加统计。
+
+**统计刷新**：`mr_heap_information`（`malloc.c:342`）关中断后按 `lazy` 决定是否 调用 `heap_information_full_update`（
+`malloc.c:306`）遍历空闲链求最大空闲块、 按空闲块数与空闲字节数计算离散度 `disp_kb_ratio` 与碎片比 `frag_ratio`
+（均以千分比 ‰ 表示、上限 1000），最后按值拷贝快照返回。
+
+### 11. 并发与中断安全
+
+- `mr_malloc` / `mr_free` / `mr_heap_information` 通过 `mr_port_irq_disable` /
+  `mr_port_irq_enable` 关中断形成临界区，保护空闲链表与统计的一致性；适用于 单核系统的线程与中断并发。
+- 临界区内只有链表遍历（O (空闲块数)）与字段更新，无用户回调、无阻塞；最坏 关中断时长与碎片数量成正比。
+- `mr_calloc` / `mr_realloc` 的拷贝阶段在临界区外（各自内部对 `mr_malloc` /
+  `mr_free` 的调用自带保护），缩短了关中断窗口。
+- `mr_heap_region_add` 无内部锁，仅限初始化阶段串行调用（头文件注释明确约束）。
+- 魔数校验（`magic`）为 `volatile` 读写，用于拦截重复释放与无效指针，不构成 多核同步原语；多核场景需外层串行化。
+
+### 12. 源码导读
+
+| 位置                                  | 职责                                            |
+|---------------------------------------|-------------------------------------------------|
+| `mrX/include/mrX/libc/mr_malloc.h:29` | 两种后端的编译期切换与块头/区域/统计类型        |
+| `mrX/libc/malloc.c:14`                | 堆池定义、`MR_CFG_HEAP_SIZE` 回退值与最小值检查 |
+| `mrX/libc/malloc.c:31`                | 按地址有序插入 + 双向相邻合并                   |
+| `mrX/libc/malloc.c:85`                | first-fit 分配与拆分                            |
+| `mrX/libc/malloc.c:162`               | 释放（魔数校验）                                |
+| `mrX/libc/malloc.c:234`               | `mr_realloc`（分配 + 拷贝 + 释放）              |
+| `mrX/libc/malloc.c:274`               | 追加内存区域                                    |
+| `mrX/libc/malloc.c:306`               | 全量统计刷新（最大空闲块与碎片比例）            |
+| `mrX/libc/malloc.c:363`               | 堆初始化（内核启动序列调用）                    |
+| `mrX/kernel/initcall.c:53`            | 内核初始化中的调用点                            |
+| `mrX/test/libc/malloc.c`              | 分配/释放/清零/扩缩容/区域/统计的行为级测试     |
+
+### 13. 附录
+
+**配置宏**
+
+| 宏                  | 说明                                                                            |
+|---------------------|---------------------------------------------------------------------------------|
+| `MR_USE_MALLOC`     | 内置堆实现开关（choice，默认）                                                  |
+| `MR_USE_MALLOC_STD` | 转发标准库 malloc/free（choice）                                                |
+| `MR_USE_MALLOC_3RD` | 接入第三方分配器（choice）                                                      |
+| `MR_CFG_HEAP_SIZE`  | 堆池字节数，默认 4096，最小 32（`malloc.c:18` 处编译期检查，不满足则 `#error`） |
+| `MR_HEAP_MAGIC`     | 已分配块魔数 `0x6d725800`（内部实现细节）                                       |
+
+**返回值与错误**：本模块 API 通过返回值 `MR_NULL` / `0` 表达失败，不返回负数 错误码；分配失败可通过 `mr_heap_information` 的
+`fail_count` 观测。

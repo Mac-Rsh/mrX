@@ -9,7 +9,7 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST) && defined(MR_USE_FS)
 #include <mrX.h>
-#include "fs_test.h"
+#include <mrX/test/fs/fs_test.h>
 
 static void rootfs_expect(volatile mr_uint32_t *__test_status, const char *name,
                           mr_int64_t actual, mr_int64_t expected) {
@@ -41,7 +41,7 @@ static void rootfs_directory_expect(volatile mr_uint32_t *__test_status) {
     mr_err_t ret;
 
     /* Open the directory */
-    ret = mr_fs_opendir(&directory, "/system");
+    ret = mr_fs_open(&directory, "/system", MR_O_RDONLY | MR_O_DIRECTORY);
     rootfs_expect(__test_status, "open rootfs directory", ret, 0);
     if (ret != 0) {
         return;
@@ -66,11 +66,11 @@ static void rootfs_directory_expect(volatile mr_uint32_t *__test_status) {
     rootfs_expect(__test_status, "find rootfs console", found_console, MR_TRUE);
     rootfs_expect(__test_status, "find rootfs config", found_config, MR_TRUE);
     rootfs_expect(__test_status, "close rootfs directory",
-                  mr_fs_closedir(&directory), 0);
+                  mr_fs_close(&directory), 0);
     return;
 }
 
-static void fs_rootfs_test(volatile mr_uint32_t *__test_status) {
+MR_TEST(fs, rootfs) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_heap_info_t heap_before;
     mr_heap_info_t heap_after;
@@ -112,36 +112,11 @@ static void fs_rootfs_test(volatile mr_uint32_t *__test_status) {
         rootfs_expect(__test_status, "reject rootfs write",
                       mr_fs_write(&file, buffer, sizeof(buffer)), -MR_ENOSYS);
         rootfs_expect(__test_status, "reject rootfs truncate",
-                      mr_fs_truncate(&file, 0), -MR_ENOSYS);
+                      mr_fs_ftruncate(&file, 0), -MR_ENOSYS);
         rootfs_expect(__test_status, "close rootfs node", mr_fs_close(&file),
                       0);
     }
 
-    /* Built-in symbolic links and hard links work without RootFS hooks */
-    rootfs_expect(__test_status, "create rootfs symlink",
-                  mr_fs_symlink("/system/config", "/system/config-link"), 0);
-    ret = mr_fs_open(&file, "/system/config-link", MR_O_RDONLY | MR_O_NOFOLLOW);
-    rootfs_expect(__test_status, "open rootfs symlink", ret, 0);
-    if (ret == 0) {
-        char target[16];
-
-        rootfs_expect(__test_status, "readlink rootfs",
-                      mr_fs_readlink(&file, target, sizeof(target)), 14);
-        if (mr_memcmp(target, "/system/config", 14) != 0) {
-            MR_TEST_EXPECT_EQ_INT(mr_memcmp(target, "/system/config", 14), 0);
-        }
-        rootfs_expect(__test_status, "close rootfs symlink", mr_fs_close(&file),
-                      0);
-    }
-    ret = mr_fs_open(&file, "/system/config", MR_O_RDONLY);
-    rootfs_expect(__test_status, "open rootfs link source", ret, 0);
-    if (ret == 0) {
-        rootfs_expect(__test_status, "hard-link rootfs node",
-                      mr_fs_link(&file, "/system/config-hard"), 0);
-        rootfs_expect(__test_status, "close rootfs link source",
-                      mr_fs_close(&file), 0);
-    }
-    rootfs_stat_expect(__test_status, "/system/config-hard", 0, MR_INODE_REG);
     rootfs_expect(__test_status, "mknod rootfs directory",
                   mr_fs_mknod("/system/devices", MR_INODE_DIR, MR_NULL), 0);
     rootfs_stat_expect(__test_status, "/system/devices", 0, MR_INODE_DIR);
@@ -167,29 +142,25 @@ static void fs_rootfs_test(volatile mr_uint32_t *__test_status) {
                   -MR_ENOSYS);
 
     /* Rename and remove structural nodes */
-    rootfs_expect(__test_status, "unlink rootfs symlink",
-                  mr_fs_unlink_by_path("/system/config-link"), 0);
-    rootfs_expect(__test_status, "unlink rootfs hard link",
-                  mr_fs_unlink_by_path("/system/config-hard"), 0);
-    rootfs_expect(__test_status, "unlink rootfs devices",
-                  fs_test_unlink("/system/devices"), 0);
-    rootfs_expect(__test_status, "unlink rootfs mount point",
-                  fs_test_unlink("/system/mnt"), 0);
+    rootfs_expect(__test_status, "rmdir rootfs devices",
+                  mr_fs_rmdir("/system/devices"), 0);
+    rootfs_expect(__test_status, "rmdir rootfs mount point",
+                  mr_fs_rmdir("/system/mnt"), 0);
     rootfs_expect(__test_status, "rename rootfs node",
-                  fs_test_rename("/system/config", "/system/settings"), 0);
+                  mr_fs_rename("/system/config", "/system/settings"), 0);
     rootfs_stat_expect(__test_status, "/system/config", -MR_ENOENT,
                        MR_INODE_NONE);
     rootfs_stat_expect(__test_status, "/system/settings", 0, MR_INODE_REG);
     rootfs_expect(__test_status, "reject nonempty rootfs directory",
-                  fs_test_unlink("/system"), -MR_ENOTEMPTY);
+                  mr_fs_rmdir("/system"), -MR_ENOTEMPTY);
     rootfs_expect(__test_status, "unlink rootfs settings",
-                  fs_test_unlink("/system/settings"), 0);
+                  mr_fs_unlink("/system/settings"), 0);
     rootfs_expect(__test_status, "unlink rootfs console",
-                  fs_test_unlink("/system/console"), 0);
-    rootfs_expect(__test_status, "unlink rootfs services",
-                  fs_test_unlink("/system/services"), 0);
-    rootfs_expect(__test_status, "unlink rootfs system",
-                  fs_test_unlink("/system"), 0);
+                  mr_fs_unlink("/system/console"), 0);
+    rootfs_expect(__test_status, "rmdir rootfs services",
+                  mr_fs_rmdir("/system/services"), 0);
+    rootfs_expect(__test_status, "rmdir rootfs system",
+                  mr_fs_rmdir("/system"), 0);
 
     /* Unmount and verify all namespace allocations were released */
     rootfs_expect(__test_status, "umount rootfs", mr_fs_umount("/"), 0);
@@ -197,10 +168,6 @@ static void fs_rootfs_test(volatile mr_uint32_t *__test_status) {
     rootfs_expect(__test_status, "rootfs heap restored",
                   heap_after.used_bytes == heap_before.used_bytes, MR_TRUE);
     return;
-}
-
-MR_TEST(fs, rootfs) {
-    fs_rootfs_test(__test_status);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

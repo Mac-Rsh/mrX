@@ -26,7 +26,7 @@ void *mr_memccpy(void *dst, const void *src, int c, mr_size_t size) {
         (*d++) = *s;
 
         /* Match character */
-        if (*s == c) {
+        if ((mr_uint8_t)*s == (mr_uint8_t)c) {
             return d;
         }
         s++;
@@ -51,7 +51,7 @@ int mr_memcmp(const void *m1, const void *m2, mr_size_t size) {
             s2++;
             continue;
         }
-        return *s1 - *s2;
+        return (int)(mr_uint8_t)*s1 - (int)(mr_uint8_t)*s2;
     }
     return 0;
 }
@@ -84,6 +84,76 @@ void *mr_memcpy(void *dst, const void *src, mr_size_t size) {
         }
 
         /* Copy unaligned bytes */
+        while (size--) {
+            (*d++) = (*s++);
+        }
+    }
+    return dst;
+}
+
+void *mr_memmove(void *dst, const void *src, mr_size_t size) {
+    const mr_uintptr_t align = sizeof(mr_uintptr_t) - 1;
+    mr_uintptr_t dst_addr, src_addr;
+    const char *s;
+    char *d;
+
+#if defined(MR_USE_STRING_SAFE)
+    /* Check parameter */
+    if ((!dst) || (!src)) {
+        return MR_NULL;
+    }
+#endif /* defined(MR_USE_STRING_SAFE) */
+
+    /* Check empty or identical range */
+    if ((size == 0) || (dst == src)) {
+        return dst;
+    }
+
+    /* Init addresses and pointers */
+    dst_addr = (mr_uintptr_t)dst;
+    src_addr = (mr_uintptr_t)src;
+    d = dst;
+    s = src;
+
+    /* Copy backward when dst overlaps the end of src */
+    if ((dst_addr > src_addr) && ((dst_addr - src_addr) < size)) {
+        d += size;
+        s += size;
+
+        /* Copy aligned machine words */
+        if (((dst_addr ^ src_addr) & align) == 0) {
+            while ((size > 0) && (((mr_uintptr_t)d & align) != 0)) {
+                (*(--d)) = (*(--s));
+                size--;
+            }
+            while (size >= sizeof(mr_uintptr_t)) {
+                d -= sizeof(mr_uintptr_t);
+                s -= sizeof(mr_uintptr_t);
+                *(mr_uintptr_t *)d = *(mr_uintptr_t *)s;
+                size -= sizeof(mr_uintptr_t);
+            }
+        }
+
+        /* Copy remaining bytes */
+        while (size--) {
+            (*(--d)) = (*(--s));
+        }
+    } else {
+        /* Copy aligned machine words */
+        if (((dst_addr ^ src_addr) & align) == 0) {
+            while ((size > 0) && (((mr_uintptr_t)d & align) != 0)) {
+                (*d++) = (*s++);
+                size--;
+            }
+            while (size >= sizeof(mr_uintptr_t)) {
+                *(mr_uintptr_t *)d = *(mr_uintptr_t *)s;
+                d += sizeof(mr_uintptr_t);
+                s += sizeof(mr_uintptr_t);
+                size -= sizeof(mr_uintptr_t);
+            }
+        }
+
+        /* Copy remaining bytes */
         while (size--) {
             (*d++) = (*s++);
         }
@@ -146,7 +216,7 @@ void *mr_memchr(const void *s, int c, mr_size_t size) {
 
     /* Search bytes */
     for (p = s; size > 0; size--) {
-        if (*p != c) {
+        if ((mr_uint8_t)*p != (mr_uint8_t)c) {
             p++;
             continue;
         }
@@ -172,7 +242,7 @@ int mr_strcmp(const char *s1, const char *s2) {
         }
         return 0;
     }
-    return *s1 - (*s2);
+    return (int)(mr_uint8_t)*s1 - (int)(mr_uint8_t)*s2;
 }
 
 char *mr_strcpy(char *dst, const char *src) {
@@ -211,6 +281,10 @@ char *mr_strerror(int errnum) {
         }
         case MR_EIO: {
             error = "I/O error";
+            break;
+        }
+        case MR_ENODEV: {
+            error = "No such device";
             break;
         }
         case MR_EAGAIN: {
@@ -296,8 +370,8 @@ int mr_strncmp(const char *s1, const char *s2, mr_size_t size) {
 
     /* Compare bytes */
     while (size > 0) {
-        if (*s1 != *s2) {
-            return *s1 - *s2;
+        if ((mr_uint8_t)*s1 != (mr_uint8_t)*s2) {
+            return (int)(mr_uint8_t)*s1 - (int)(mr_uint8_t)*s2;
         }
         if (*s1 == '\0') {
             return 0;

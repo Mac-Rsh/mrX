@@ -15,6 +15,10 @@ static mr_uint8_t last_priority = 0;
 static mr_uint8_t last_type = 0;
 static mr_int32_t last_irq = -1;
 static int handle_count = 0;
+static int enable_count = 0;
+static int disable_count = 0;
+static int unmask_count = 0;
+static int mask_count = 0;
 
 /* Helpers */
 static void test_irq_reset(void) {
@@ -22,6 +26,10 @@ static void test_irq_reset(void) {
     last_type = 0;
     last_irq = -1;
     handle_count = 0;
+    enable_count = 0;
+    disable_count = 0;
+    unmask_count = 0;
+    mask_count = 0;
 }
 
 static void irq_priority_set(mr_uint32_t irq, mr_uint8_t priority, void *priv) {
@@ -42,21 +50,28 @@ static void irq_enable(mr_uint32_t irq, void *priv) {
     MR_IGNORE(priv);
 
     last_irq = (mr_int32_t)irq;
+    enable_count++;
 }
 
 static void irq_unmask(mr_uint32_t irq, void *priv) {
     MR_IGNORE(irq);
     MR_IGNORE(priv);
+
+    unmask_count++;
 }
 
 static void irq_disable(mr_uint32_t irq, void *priv) {
     MR_IGNORE(priv);
+
     last_irq = (mr_int32_t)irq;
+    disable_count++;
 }
 
 static void irq_mask(mr_uint32_t irq, void *priv) {
     MR_IGNORE(irq);
     MR_IGNORE(priv);
+
+    mask_count++;
 }
 
 static mr_irq_ops_t mock_irq_ops = {
@@ -323,6 +338,46 @@ MR_TEST(irq, error_cases) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_irq_free(0, &irq);
     MR_TEST_ASSERT_NE_INT(ret, 0);
+    ret = mr_irq_del(&irq);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+}
+
+/* Test: unregistered irq operations return their documented empty result */
+MR_TEST(irq, unregistered_operations) {
+    static int owner;
+
+    MR_TEST_ASSERT_EQ_INT(mr_irq_free(7, &owner), -MR_ENOENT);
+    MR_TEST_ASSERT_EQ_INT(mr_irq_enable(7), -MR_ENOENT);
+    MR_TEST_ASSERT_EQ_INT(mr_irq_disable(7), -MR_ENOENT);
+    MR_TEST_ASSERT_EQ_INT(mr_irq_priority_set(7, 3), -MR_ENOENT);
+    MR_TEST_ASSERT_EQ_INT(mr_irq_type(7), -MR_ENOENT);
+    MR_TEST_ASSERT_EQ_INT(mr_irq_priority(7), -MR_ENOENT);
+    MR_TEST_ASSERT_EQ_INT(mr_irq_handle(7), MR_IRQ_NONE);
+}
+
+/* Test: repeated enable and disable requests keep the depth within bounds */
+MR_TEST(irq, depth_saturation_without_action) {
+    mr_irq_t irq;
+    mr_err_t ret;
+
+    ret = mr_irq_init(&irq, 9, 9, &mock_irq_ops, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(ret, 0);
+
+    test_irq_reset();
+    MR_TEST_ASSERT_EQ_INT(mr_irq_enable(9), 0);
+    MR_TEST_ASSERT_EQ_INT(enable_count, 1);
+    MR_TEST_ASSERT_EQ_INT(unmask_count, 1);
+    MR_TEST_ASSERT_EQ_INT(mr_irq_enable(9), 0);
+    MR_TEST_ASSERT_EQ_INT(enable_count, 1);
+    MR_TEST_ASSERT_EQ_INT(unmask_count, 1);
+
+    MR_TEST_ASSERT_EQ_INT(mr_irq_disable(9), 0);
+    MR_TEST_ASSERT_EQ_INT(disable_count, 1);
+    MR_TEST_ASSERT_EQ_INT(mask_count, 1);
+    MR_TEST_ASSERT_EQ_INT(mr_irq_disable(9), 0);
+    MR_TEST_ASSERT_EQ_INT(disable_count, 1);
+    MR_TEST_ASSERT_EQ_INT(mask_count, 1);
+
     ret = mr_irq_del(&irq);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }

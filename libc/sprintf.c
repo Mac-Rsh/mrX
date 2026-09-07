@@ -54,7 +54,6 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
                 break;
             }
             case 8: {
-                width--;
                 break;
             }
             default: {
@@ -69,6 +68,15 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
         tmp[i] = digits[num % (mr_uint64_t)base];
         num /= (mr_uint64_t)base;
     }
+
+    /* An octal prefix is needed only when precision does not supply it */
+    if ((mod & MOD_SPECIAL) && (base == 8)) {
+        if (prec <= i) {
+            width--;
+        } else {
+            mod &= ~MOD_SPECIAL;
+        }
+    }
     if (i > prec) {
         prec = i;
     }
@@ -79,7 +87,15 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
         mod &= ~MOD_ZEROPAD;
     }
     fill = (mod & MOD_ZEROPAD) ? '0' : ' ';
-    if (!(mod & (MOD_LEFT | MOD_SPECIAL))) {
+    if ((fill == '0') && sign) {
+        if (str < end) {
+            *str = sign;
+        }
+        str++;
+        sign = 0;
+    }
+    if (!(mod & MOD_LEFT)
+        && ((fill == ' ') || !(mod & MOD_SPECIAL))) {
         for (; width > 0; width--) {
             if (str < end) {
                 *str = fill;
@@ -133,8 +149,8 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
             }
         }
 
-        /* Left fill */
-        if (!(mod & MOD_LEFT)) {
+        /* Zero fill after prefix */
+        if (!(mod & MOD_LEFT) && (fill == '0')) {
             for (; width > 0; width--) {
                 if (str < end) {
                     *str = fill;
@@ -233,14 +249,15 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
         prec = -1;
         if (*fmt == '.') {
             fmt++;
+            prec = 0;
             if ((*fmt >= '0') && (*fmt <= '9')) {
-                for (prec = 0; (*fmt >= '0') && (*fmt <= '9'); fmt++) {
+                for (; (*fmt >= '0') && (*fmt <= '9'); fmt++) {
                     prec = (prec * 10) + (*fmt - '0');
                 }
             } else if (*fmt == '*') {
                 prec = mr_va_arg(args, int);
                 if (prec < 0) {
-                    prec = 0;
+                    prec = -1;
                 }
                 fmt++;
             }
@@ -469,6 +486,9 @@ _default:
                     break;
                 }
             }
+        }
+        if (num == 0) {
+            mod &= ~MOD_SPECIAL;
         }
         str = format_number(str, end, mod, width, prec, base, num);
     }

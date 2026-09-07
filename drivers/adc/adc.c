@@ -86,12 +86,28 @@ static mr_err_t adc_init(const mr_driver_t *drv) {
 
 static mr_err_t adc_deinit(const mr_driver_t *drv) {
     mr_adc_data_t *ad_data;
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+    const mr_adc_ops_t *ad_ops;
+    mr_err_t ret;
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
     /* Check parameter */
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
 
     /* Get ADC data */
     ad_data = (mr_adc_data_t *)MR_DRIVER_DATA(drv);
+
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+    /* Stop the stream before deleting the event */
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+    ad_ops = (const mr_adc_ops_t *)MR_DRIVER_OPS(drv);
+    if (ad_ops->stream_stop) {
+        ret = ad_ops->stream_stop(drv);
+        if (ret != 0) {
+            return ret;
+        }
+    }
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
     /* Deinit ADC event */
     mr_waitable_del(&ad_data->event);

@@ -6,4 +6,15 @@ menu "Platform: Platform abstraction"
 config MR_USE_PLATFORM
     def_bool y
 
+# ==================================
+# IRQ-DEFER
+# ==================================
+config MR_USE_WIN_IRQ_DEFER_HOOK
+    depends on MR_USE_IRQ_DEFER
+    select MR_USE_IRQ_DEFER_HOOK
+    def_bool y
+    help
+        Wake a host thread to run deferred IRQ work.
+        wakeup releases a semaphore; the thread calls mr_irq_defer_execute.
+
 endmenu

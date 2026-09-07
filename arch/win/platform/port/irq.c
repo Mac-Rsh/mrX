@@ -4,10 +4,13 @@
  * @license SPDX-License-Identifier: Apache-2.0
  *
  * @date 2026-01-08        MacRsh        First version
+ * @date 2026-09-07        MacRsh        Restore nest mask on enable
  */
 
 #include <mrX/platform/mr_platform.h>
-#include <mrX/libc/mr_compiler.h>
+
+/* IRQ lock spin count */
+#define IRQ_LOCK_SPIN_COUNT             (4000)
 
 /* Global critical section */
 static CRITICAL_SECTION __irq_lock;
@@ -16,7 +19,10 @@ static int __irq_nest = 0;
 
 void mr_win_platform_irq_init(void) {
     /* Init critical section */
-    InitializeCriticalSection(&__irq_lock);
+    if (!InitializeCriticalSectionAndSpinCount(&__irq_lock,
+                                               IRQ_LOCK_SPIN_COUNT)) {
+        InitializeCriticalSection(&__irq_lock);
+    }
 }
 
 int mr_port_irq_disable(void) {
@@ -31,10 +37,8 @@ int mr_port_irq_disable(void) {
 }
 
 void mr_port_irq_enable(int mask) {
-    MR_IGNORE(mask);
-
-    /* Decrease nest count */
-    __irq_nest--;
+    /* Restore nest count */
+    __irq_nest = mask;
 
     /* Leave critical section */
     LeaveCriticalSection(&__irq_lock);

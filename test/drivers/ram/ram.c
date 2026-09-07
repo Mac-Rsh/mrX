@@ -113,6 +113,39 @@ MR_TEST(ram, mount_unmount_errors) {
     mr_ram_del(drv);
 }
 
+MR_TEST(ram, optional_lifecycle) {
+    mr_driver_t *drv;
+    mr_ram_ops_t empty_ops = {0};
+
+    ram_test_reset();
+    drv = ram_create(&empty_ops);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_is_ready(drv), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(ram_mount_count, 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_shutdown(drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_is_ready(drv), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(ram_unmount_count, 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_del(drv), 0);
+}
+
+MR_TEST(ram, reference_delays_release) {
+    mr_driver_t *drv;
+    mr_driver_t *held;
+
+    ram_test_reset();
+    drv = ram_create(&ram_ops);
+    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(drv), 0);
+    held = mr_ram_get(drv);
+    MR_TEST_ASSERT_EQ_PTR(held, drv);
+
+    MR_TEST_ASSERT_EQ_INT(mr_ram_del(drv), 0);
+    MR_TEST_ASSERT_EQ_INT(ram_unmount_count, 0);
+    MR_TEST_ASSERT_EQ_INT(mr_ram_put(held), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(ram_unmount_count, 1);
+}
+
 MR_TEST(ram, io_and_unsupported) {
     mr_driver_t *drv;
     mr_driver_t *empty;
@@ -140,6 +173,35 @@ MR_TEST(ram, io_and_unsupported) {
     MR_TEST_ASSERT_EQ_INT(mr_ram_read(empty, 0, &output, 1), -MR_ENOSYS);
     mr_driver_del(drv);
     mr_driver_del(empty);
+}
+
+MR_TEST(ram, init_static_and_reference) {
+    mr_driver_t drv;
+    mr_ram_data_t *data;
+
+    ram_test_reset();
+    data = mr_malloc(sizeof(*data));
+    MR_TEST_ASSERT_NE_PTR(data, MR_NULL);
+    *data = (mr_ram_data_t)MR_RAM_DATA_INIT(MR_NULL, 0);
+
+    /* A statically initialized driver mounts through the same core */
+    MR_TEST_ASSERT_EQ_INT(
+        mr_ram_init(&drv, data, MR_NULL, (mr_ram_ops_t *)&ram_ops), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(ram_mount_count, 1);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_is_ready(&drv), MR_TRUE);
+
+    /* A held reference delays the unmount and release until the final put */
+    MR_TEST_ASSERT_EQ_PTR(mr_ram_get(&drv), &drv);
+    MR_TEST_ASSERT_EQ_INT(mr_ram_del(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(ram_unmount_count, 0);
+    MR_TEST_ASSERT_EQ_INT(mr_ram_put(&drv), MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(ram_unmount_count, 1);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_is_ready(&drv), MR_FALSE);
+
+    /* A statically initialized driver does not own the data, the module
+       release hook only runs for dynamically created drivers */
+    mr_free(data);
 }
 
 #endif

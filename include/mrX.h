@@ -68,6 +68,9 @@
 #if defined(MR_USE_DRIVER_GPIO)
 #include <mrX/drivers/gpio/mr_gpio.h>
 #endif /* defined(MR_USE_DRIVER_GPIO) */
+#if defined(MR_USE_DRIVER_UART)
+#include <mrX/drivers/uart/mr_uart.h>
+#endif /* defined(MR_USE_DRIVER_UART) */
 #if defined(MR_USE_DRIVER_ADC)
 #include <mrX/drivers/adc/mr_adc.h>
 #endif /* defined(MR_USE_DRIVER_ADC) */
@@ -84,11 +87,11 @@
  */
 
 #if defined(MR_USE_FS)
-#include <mrX/fs/mr_dentry.h>
-#include <mrX/fs/mr_inode.h>
-#include <mrX/fs/mr_file.h>
-#include <mrX/fs/mr_fs.h>
-#include <mrX/fs/mr_sb.h>
+#include <mrX/fs/mr_fs_system.h>
+#include <mrX/fs/mr_fs_sblock.h>
+#include <mrX/fs/mr_fs_dentry.h>
+#include <mrX/fs/mr_fs_inode.h>
+#include <mrX/fs/mr_fs_file.h>
 #endif /* defined(MR_USE_FS) */
 
 /**
@@ -101,6 +104,9 @@
 #include <mrX/modules/xvm/mr_xvm.h>
 #include <mrX/modules/xvm/mr_xvm_gdb.h>
 #endif /* defined(MR_USE_MODULE_XVM) */
+#if defined(MR_USE_MODULE_RPC)
+#include <mrX/modules/rpc/mr_rpc.h>
+#endif /* defined(MR_USE_MODULE_RPC) */
 #endif /* defined(MR_USE_MODULE) */
 
 /** @} */

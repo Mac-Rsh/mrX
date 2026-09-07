@@ -101,7 +101,7 @@ static void timer_insert(mr_timer_t *timer) {
     mr_list_t *l;
 
     /* Set timeout tick */
-    tick = timer->itick & ~MR_TIMER_PERIODIC;
+    tick = timer->itick & (~MR_TIMER_PERIODIC);
     timer->ttick = mr_clock_tick() + tick;
 
     /* Insert timer into timing list */

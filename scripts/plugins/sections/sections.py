@@ -13,11 +13,14 @@ updates the managed blocks inside one GNU ld style linker script.
 """
 
 from argparse import ArgumentParser, Namespace
-from dock import PluginSpec, export_plugin
 from dataclasses import dataclass
 from pathlib import Path
-import tomllib
 import re
+import tomllib
+
+from framework.completion import FILE_COMPLETION, attach_path_completion
+from framework.command import Command, CommandResult, CommandSpec
+from framework.context import CommandContext
 
 
 @dataclass(slots=True, frozen=True)
@@ -41,161 +44,84 @@ class BlockSpan:
     close_brace: int
 
 
-@dataclass(slots=True, frozen=True)
-class SectionPaths:
-    """Resolved config and linker script paths."""
-
-    config: Path
-    input: Path
-
-
-@export_plugin
-class SectionsCommand:
+class SectionsCommand(Command):
     """Built-in command for updating linker section collection rules."""
 
     DEFAULT_CONFIG_PATH = "sections.toml"
     INDENT = "    "
     TAG_PREFIX = "@mrX: "
     SECTIONS_NAME = "SECTIONS"
-    SECTIONS_ERROR = f"Failed to find `{SECTIONS_NAME} {{ ... }}` in linker script"
-
-    spec = PluginSpec(
-        name="sections",
-        description="Insert managed linker section rules.",
+    SECTIONS_ERROR = (
+        f"Failed to find `{SECTIONS_NAME} {{ ... }}` in linker script"
     )
 
-    def help(self) -> str:
-        """Return detailed help text for the sections command.
+    spec = CommandSpec(
+        name="sections",
+        description="Insert managed linker section rules",
+    )
 
-        Returns:
-            Human-readable help text for the command.
-        """
-        parser = self._build_parser()
-        lines = [
-            "Usage: python ./scripts/cli.py sections -i <input.ld> [options]",
-            "Description: Insert managed linker section rules into one `.ld` file.",
-            "Aliases: (none)",
-            "",
-            parser.format_help().rstrip(),
-            f"Default config: {self.DEFAULT_CONFIG_PATH}",
-        ]
-        return "\n".join(lines)
-
-    def run(self, args: list[str]) -> int:
-        """Execute the linker section update workflow.
-
-        Args:
-            args: Command line arguments passed to the command.
-
-        Returns:
-            Exit code (0 for success, non-zero for error).
-        """
-        # Parse command line arguments
-        options = self._parse_args(args)
-        if options is None:
-            return 1
-
-        # Resolve the config and linker script paths
-        paths = self._parse_paths(options)
-        if paths is None:
-            return 1
-        # Load all configured section entries first
-        try:
-            sections = self._load_sections(paths.config)
-        except ValueError as exc:
-            print(exc)
-            return 1
-
-        # Read the target linker script before applying any updates
-        linker_text = self._read_text(paths.input, "linker script")
-        if linker_text is None:
-            return 1
-
-        # Apply all managed block updates in memory first
-        try:
-            updated_text = self._update_linker_script(linker_text, sections)
-        except ValueError as exc:
-            print(exc)
-            return 1
-
-        # Write the updated linker script back to disk only on success
-        if not self._write_text(paths.input, updated_text, "linker script"):
-            return 1
-
-        print(f"Build: {paths.input}")
-        return 0
-
-    @classmethod
-    def _build_parser(cls) -> ArgumentParser:
-        """Build the sections command line argument parser.
-
-        Returns:
-            Configured argument parser for the sections command.
-        """
-        parser = ArgumentParser(
-            prog="python ./scripts/cli.py sections",
-            add_help=True,
-        )
-        parser.add_argument(
+    def configure(self, parser: ArgumentParser) -> None:
+        """Declare sections command arguments."""
+        attach_path_completion(parser.add_argument(
             "-i",
             "--input",
             required=True,
             help="Target linker script '.ld' file path",
-        )
-        parser.add_argument(
+        ), FILE_COMPLETION)
+        attach_path_completion(parser.add_argument(
             "-c",
             "--config",
-            default=cls.DEFAULT_CONFIG_PATH,
-            help=f"Section TOML file path (default: {cls.DEFAULT_CONFIG_PATH})",
-        )
-        return parser
+            default=None,
+            help=("Section TOML file path "
+                  f"(default: {self.DEFAULT_CONFIG_PATH})"),
+        ), FILE_COMPLETION)
 
-    @classmethod
-    def _parse_args(cls, args: list[str]) -> Namespace | None:
-        """Parse sections command line arguments.
+    def execute(self, context: CommandContext,
+                arguments: Namespace) -> CommandResult:
+        """Execute the linker section update workflow."""
+        config_path = context.resolve_optional_path(
+            arguments.config, self.DEFAULT_CONFIG_PATH)
+        if not config_path.exists():
+            return CommandResult.failure(
+                "Section config file not found: "
+                f"{arguments.config or self.DEFAULT_CONFIG_PATH}"
+            )
 
-        Args:
-            args: Raw command line arguments passed to the command.
-
-        Returns:
-            Parsed argument namespace, or `None` when parsing fails.
-        """
-        parser = cls._build_parser()
+        input_path = context.resolve_path(arguments.input)
+        if not input_path.exists():
+            return CommandResult.failure(
+                f"Linker script file not found: {arguments.input}"
+            )
 
         try:
-            return parser.parse_args(args)
-        except SystemExit:
-            return None
+            sections = self._load_sections(config_path)
+        except ValueError as exc:
+            return CommandResult.failure(str(exc))
 
-    @staticmethod
-    def _parse_paths(args: Namespace) -> SectionPaths | None:
-        """Parse and validate command input paths.
+        linker_text = self._read_text(input_path, "linker script")
+        if linker_text is None:
+            return CommandResult.failure(
+                f"Failed to read linker script: {input_path}"
+            )
 
-        Args:
-            args: Parsed sections command line arguments.
+        try:
+            updated_text = self._update_linker_script(linker_text, sections)
+        except ValueError as exc:
+            return CommandResult.failure(str(exc))
 
-        Returns:
-            Resolved config and linker script paths, or `None` on error.
-        """
-        # Resolve the section config path first
-        config_path = Path(args.config).resolve()
-        if not config_path.exists():
-            print(f"Section config file not found: {args.config}")
-            return None
+        if not self._write_text(input_path, updated_text, "linker script"):
+            return CommandResult.failure(
+                f"Failed to write linker script: {input_path}"
+            )
 
-        # Resolve the linker script input path next
-        input_path = Path(args.input).resolve()
-        if not input_path.exists():
-            print(f"Linker script file not found: {args.input}")
-            return None
-
-        return SectionPaths(config=config_path, input=input_path)
+        context.console.write(f"Build: {input_path}")
+        return CommandResult.success()
 
     @staticmethod
     def _read_text(path: Path, description: str) -> str | None:
         """Read one UTF-8 text file with a consistent error message.
 
-        Args:
+        Arguments:
             path: Target file path.
             description: Human-readable file description.
 
@@ -204,15 +130,14 @@ class SectionsCommand:
         """
         try:
             return path.read_text(encoding="utf-8")
-        except OSError as exc:
-            print(f"Failed to read {description}: {path} ({exc})")
+        except OSError:
             return None
 
     @staticmethod
     def _write_text(path: Path, text: str, description: str) -> bool:
         """Write one UTF-8 text file with a consistent error message.
 
-        Args:
+        Arguments:
             path: Target file path.
             text: File content to write.
             description: Human-readable file description.
@@ -222,8 +147,7 @@ class SectionsCommand:
         """
         try:
             path.write_text(text, encoding="utf-8")
-        except OSError as exc:
-            print(f"Failed to write {description}: {path} ({exc})")
+        except OSError:
             return False
         return True
 
@@ -231,7 +155,7 @@ class SectionsCommand:
     def _load_sections(cls, config_path: Path) -> list[SectionEntry]:
         """Load and validate one section TOML file.
 
-        Args:
+        Arguments:
             config_path: Resolved TOML file path.
 
         Returns:
@@ -267,7 +191,7 @@ class SectionsCommand:
                              item: object) -> SectionEntry:
         """Validate one `[[section]]` entry.
 
-        Args:
+        Arguments:
             config_path: Resolved TOML file path.
             index: One-based entry index.
             item: Raw TOML value.
@@ -339,7 +263,7 @@ class SectionsCommand:
                               sections: list[SectionEntry]) -> str:
         """Update the managed blocks inside one linker script text.
 
-        Args:
+        Arguments:
             linker_text: Original linker script text.
             sections: Validated section entries.
 
@@ -375,7 +299,7 @@ class SectionsCommand:
                              items: list[SectionEntry]) -> str:
         """Insert or replace one managed block for the requested output.
 
-        Args:
+        Arguments:
             linker_text: Current linker script text.
             output: Output section name to update.
             items: Section entries assigned to the output section.
@@ -431,7 +355,7 @@ class SectionsCommand:
     @classmethod
     def _append_output_block(cls, linker_text: str, sections_span: BlockSpan,
                              output: str, items: list[SectionEntry]) -> str:
-        """Append a new output section block before the closing `SECTIONS` brace."""
+        """Append a new output section before the closing `SECTIONS` brace."""
         # Indent the generated output section relative to the `SECTIONS` block
         sections_indent = cls._line_indent(linker_text, sections_span.start)
         output_indent = sections_indent + cls.INDENT
@@ -531,7 +455,7 @@ class SectionsCommand:
                                                                  indent):
                     index += 1
 
-                # Consume one trailing blank separator after the generated entry.
+                # Consume one trailing blank after the generated entry.
                 while index < len(lines) and lines[index].strip() == "":
                     index += 1
                 continue
@@ -549,7 +473,7 @@ class SectionsCommand:
         if not filtered:
             return ""
 
-        # Preserve the original body suffix so the closing brace indentation stays intact
+        # Keep the original suffix so the closing brace indent stays intact
         return "\n".join(filtered) + trailing
 
     @classmethod
@@ -562,7 +486,7 @@ class SectionsCommand:
     @classmethod
     def _build_legacy_lines(cls, items: list[SectionEntry],
                             indent: str) -> set[str]:
-        """Build legacy untagged lines compatible with older generated output."""
+        """Build untagged lines compatible with older generated output."""
         lines: set[str] = set()
 
         # Keep compatibility with the old `/* comment */` plus rule format

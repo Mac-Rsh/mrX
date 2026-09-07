@@ -15,8 +15,8 @@
 
 void *mr_slab_alloc(mr_slab_t *slab) {
     mr_uint32_t i, bit, off, valid;
-    mr_uint64_t mask;
     mr_atomic_t last, desired;
+    mr_uint64_t mask;
 
     for (i = 0; i < SLAB_MAP_NUM(slab->num); i++) {
         /* Get valid bitmap */

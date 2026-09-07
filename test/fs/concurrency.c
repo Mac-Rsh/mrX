@@ -10,7 +10,7 @@
 #if defined(MR_USE_TEST) && defined(MR_USE_FS) && defined(MR_USE_TEST_PTHREAD)
 #include <mrX.h>
 #include <pthread.h>
-#include "fs_test.h"
+#include <mrX/test/fs/fs_test.h>
 
 /* Concurrent namespace test limits */
 #define FS_CONCURRENT_THREADS  (4)
@@ -19,7 +19,7 @@
 
 /* Concurrent worker context */
 typedef struct fs_concurrent_context {
-    volatile mr_uint32_t *__test_status;
+    volatile mr_uint32_t status;
     int index;
 } fs_concurrent_context_t;
 
@@ -65,7 +65,7 @@ static void fs_concurrent_worker_run(volatile mr_uint32_t *__test_status,
 static void *fs_concurrent_worker(void *arg) {
     fs_concurrent_context_t *context = arg;
 
-    fs_concurrent_worker_run(context->__test_status, context->index);
+    fs_concurrent_worker_run(&context->status, context->index);
     return MR_NULL;
 }
 
@@ -74,28 +74,57 @@ MR_TEST(fs, concurrency) {
     pthread_t threads[FS_CONCURRENT_THREADS];
     mr_stat_t stat;
     char path[32];
-    int index, file;
+    int created, index, file;
     mr_err_t ret;
+    mr_bool_t mounted = MR_FALSE;
 
     /* Mount RamFS */
     ret = fs_test_mount_root("ramfs", 0, MR_NULL);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
-    MR_TEST_ASSERT_EQ_INT(mr_fs_mkdir("/concurrent"), 0);
-    MR_TEST_ASSERT_EQ_INT(mr_fs_mkdir("/concurrent/a"), 0);
-    MR_TEST_ASSERT_EQ_INT(mr_fs_mkdir("/concurrent/b"), 0);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    if (ret != 0) {
+        return;
+    }
+    mounted = MR_TRUE;
+    ret = mr_fs_mkdir("/concurrent");
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    if (ret != 0) {
+        goto _exit;
+    }
+    ret = mr_fs_mkdir("/concurrent/a");
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    if (ret != 0) {
+        goto _exit;
+    }
+    ret = mr_fs_mkdir("/concurrent/b");
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    if (ret != 0) {
+        goto _exit;
+    }
 
     /* Start workers */
-    for (index = 0; index < FS_CONCURRENT_THREADS; index++) {
-        contexts[index].__test_status = __test_status;
+    for (created = index = 0; index < FS_CONCURRENT_THREADS; index++) {
+        contexts[index].status = __MR_TEST_MAGIC_PASS;
         contexts[index].index = index;
         ret = pthread_create(&threads[index], MR_NULL, fs_concurrent_worker,
                              &contexts[index]);
-        MR_TEST_ASSERT_EQ_INT(ret, 0);
+        MR_TEST_EXPECT_EQ_INT(ret, 0);
+        if (ret != 0) {
+            break;
+        }
+        created++;
     }
 
     /* Join workers */
-    for (index = 0; index < FS_CONCURRENT_THREADS; index++) {
+    for (index = 0; index < created; index++) {
         MR_TEST_EXPECT_EQ_INT(pthread_join(threads[index], MR_NULL), 0);
+    }
+    if (created != FS_CONCURRENT_THREADS) {
+        goto _exit;
+    }
+
+    /* Merge worker results after all concurrent writes have completed */
+    for (index = 0; index < FS_CONCURRENT_THREADS; index++) {
+        MR_TEST_EXPECT_EQ_UINT(contexts[index].status, __MR_TEST_MAGIC_PASS);
     }
 
     /* Verify every namespace entry */
@@ -106,9 +135,12 @@ MR_TEST(fs, concurrency) {
         }
     }
 
+_exit:
     /* Unmount RamFS */
-    MR_TEST_EXPECT_EQ_INT(mr_fs_chdir("/"), 0);
-    MR_TEST_EXPECT_EQ_INT(mr_fs_umount("/"), 0);
+    if (mounted) {
+        MR_TEST_EXPECT_EQ_INT(mr_fs_chdir("/"), 0);
+        MR_TEST_EXPECT_EQ_INT(mr_fs_umount("/"), 0);
+    }
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS)                           \

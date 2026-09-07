@@ -12,24 +12,25 @@ linemarkers back to original source locations when available.
 @license SPDX-License-Identifier: Apache-2.0
 """
 
-from ..common import Diagnostics, ErrorCode, SourceFile
 from dataclasses import dataclass
 from pathlib import Path
+import os
+import re
 import shutil
 import subprocess
-import re
-import os
 import tempfile
 
+from ..common import Diagnostics, ErrorCode, SourceFile
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, slots=True)
 class CppOptions:
     """Options for one external preprocessor invocation."""
 
     include_dirs: tuple[str, ...] = ()
 
 
-@dataclass
+@dataclass(slots=True)
 class PreprocessedUnit:
     """Text and source mapping produced by the preprocessor stage."""
 
@@ -38,7 +39,7 @@ class PreprocessedUnit:
 
 
 class CppPreprocessor:
-    """Runs an external C preprocessor and returns a single preprocessed text."""
+    """Run an external C preprocessor and return preprocessed text."""
 
     _CPP_CANDIDATES = ("gcc", "clang", "cpp")
     _DTS_V1_PATTERN = re.compile(r"^\s*/\s*dts-v1\s*/\s*;\s*$")
@@ -49,11 +50,14 @@ class CppPreprocessor:
         """Initialize the adapter with a shared diagnostic sink."""
         self.diagnostics = diagnostics
 
-    def preprocess(self, entry_file: str,
-                   options: CppOptions | None = None) -> PreprocessedUnit | None:
+    def preprocess(
+            self,
+            entry_file: str,
+            options: CppOptions | None = None,
+    ) -> PreprocessedUnit | None:
         """Preprocess one entry file with an external C preprocessor.
 
-        Args:
+        Arguments:
             entry_file: Resolved input `.hts` or `.htsi` file path.
             options: Optional preprocessor options.
 
@@ -178,7 +182,7 @@ class CppPreprocessor:
     def _parse_linemarkers(text: str,
                            fallback_path: str,
                            alias_path: str | None = None) -> tuple[
-            str, list[tuple[str, int]]]:
+        str, list[tuple[str, int]]]:
         """Strip GNU cpp linemarkers and build an output line map."""
         clean_lines: list[str] = []
         line_map: list[tuple[str, int]] = []
@@ -199,13 +203,14 @@ class CppPreprocessor:
                 current_line = int(marker.group(1))
                 current_file = marker.group(2)
                 if alias_key is not None \
-                        and CppPreprocessor._path_key(current_file) == alias_key:
+                        and CppPreprocessor._path_key(
+                    current_file) == alias_key:
                     current_file = fallback_path
                 flags = set((marker.group(3) or "").split())
                 if "1" in flags:
                     path_key = CppPreprocessor._path_key(current_file)
                     emit_file = include_frames[-1] \
-                        and path_key not in seen_paths
+                                and path_key not in seen_paths
                     if emit_file:
                         seen_paths.add(path_key)
                     include_frames.append(emit_file)

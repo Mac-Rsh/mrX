@@ -101,9 +101,9 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
         return -MR_EINVAL;
     }
 
-    /* Check if the HC595 is already configured */
+    /* Apply the output level if the HC595 is already configured */
     if (priv->configured) {
-        return 0;
+        return drv_pin_write(drv, pin, config->level);
     }
 
     /* Optional GPIOs(OE, SRCLR) */
@@ -136,11 +136,12 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
         return ret;
     }
 
-    /* Write all chip data */
+    /* Clear all chip data */
     ret = hc595_cascade_write(priv, 0);
     if (ret != 0) {
         return ret;
     }
+    priv->shadow = 0;
 
     /* Enable output */
     if (priv->oe.drv) {
@@ -152,19 +153,26 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
 
     /* Mark the HC595 as configured */
     priv->configured = MR_TRUE;
-    return 0;
+
+    /* Apply the output level */
+    return drv_pin_write(drv, pin, config->level);
 }
 
 static mr_err_t drv_pin_configuration(const mr_driver_t *drv, mr_uint32_t pin,
                                       mr_gpio_config_t *config) {
-    MR_IGNORE(drv);
-    MR_IGNORE(pin);
+    drv_gpio_hc595_priv_t *priv = MR_DRIVER_PRIV(drv);
+
+    /* Check parameter */
+    if (pin >= ((mr_uint32_t)priv->cascade_num * 8U)) {
+        return -MR_EINVAL;
+    }
 
     /* Only support OUTPUT mode */
     config->mode = MR_GPIO_MODE_OUTPUT;
     config->pull = MR_GPIO_PULL_NONE;
     config->otype = MR_GPIO_OTYPE_PP;
     config->alt = MR_FALSE;
+    config->level = (mr_uint8_t)((priv->shadow >> pin) & 0x01U);
     return 0;
 }
 

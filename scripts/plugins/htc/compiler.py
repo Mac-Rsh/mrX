@@ -45,8 +45,9 @@ class CompileResult:
 
     @property
     def ok(self) -> bool:
-        """Return True when compilation produced header text without errors."""
-        return self.header_text is not None and not self.diagnostics.has_errors()
+        """Return True when header text was produced without errors."""
+        return (self.header_text is not None
+                and not self.diagnostics.has_errors())
 
 
 class HTCCompiler:

@@ -8,11 +8,11 @@
 
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
+#if defined(MR_USE_SPRINTF)
 #include <mrX/libc/mr_sprintf.h>
 #include <mrX/libc/mr_string.h>
 #include <limits.h>
 
-/* -------------------------------------------------------------------------- */
 /* Test: sprintf basic integer formatting                                     */
 MR_TEST(sprintf, basic_int) {
     char buf[64];
@@ -31,7 +31,6 @@ MR_TEST(sprintf, basic_int) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "ab"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: sprintf string formatting                                            */
 MR_TEST(sprintf, string) {
     char buf[64];
@@ -46,7 +45,6 @@ MR_TEST(sprintf, string) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "      test"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: sprintf mixed formatting                                             */
 MR_TEST(sprintf, mixed) {
     char buf[128];
@@ -57,7 +55,6 @@ MR_TEST(sprintf, mixed) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "Val: 42, Str: world, Hex: ff"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: snprintf with buffer size limit                                      */
 MR_TEST(sprintf, snprintf_limit) {
     char buf[10];
@@ -68,7 +65,6 @@ MR_TEST(sprintf, snprintf_limit) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "123456789"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: sprintf pointer formatting                                          */
 MR_TEST(sprintf, pointer) {
     const void *ptr = (void *)0x12345678;
@@ -80,7 +76,6 @@ MR_TEST(sprintf, pointer) {
     MR_TEST_ASSERT_NE_PTR(mr_memchr(buf, '1', (mr_size_t)ret), MR_NULL);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: sprintf edge cases                                                  */
 MR_TEST(sprintf, edge_cases) {
     char buf[64];
@@ -99,7 +94,6 @@ MR_TEST(sprintf, edge_cases) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "42   "), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: sprintf char width formatting                                        */
 MR_TEST(sprintf, char_width) {
     char buf[16];
@@ -118,7 +112,6 @@ MR_TEST(sprintf, char_width) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "A  "), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: sprintf hh length modifier                                           */
 MR_TEST(sprintf, hh_modifier) {
     char buf[32];
@@ -133,7 +126,6 @@ MR_TEST(sprintf, hh_modifier) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "255"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: sprintf signed minimum values                                        */
 MR_TEST(sprintf, signed_min) {
     const long long int64_min = LLONG_MIN;
@@ -149,7 +141,6 @@ MR_TEST(sprintf, signed_min) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "-9223372036854775808"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: sprintf exact integer argument types */
 MR_TEST(sprintf, integer_arguments) {
 #if LONG_MAX == 2147483647L
@@ -160,7 +151,7 @@ MR_TEST(sprintf, integer_arguments) {
     const char expected[] = "-2147483648|4294967295|-128|255|-32768|65535|"
                             "-9223372036854775808|18446744073709551615|"
                             "-9223372036854775808|18446744073709551615";
-#endif
+#endif /* LONG_MAX == 2147483647L */
     char buf[192];
     int ret;
 
@@ -192,7 +183,6 @@ MR_TEST(sprintf, integer_arguments) {
         mr_strcmp(buf, "-7|18446744073709551615|-123|123456|250|-99|ab"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: snprintf NULL buffer with zero size                                  */
 MR_TEST(sprintf, snprintf_null_zero) {
     int ret;
@@ -201,7 +191,6 @@ MR_TEST(sprintf, snprintf_null_zero) {
     MR_TEST_ASSERT_EQ_INT(ret, 7);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: sprintf with NULL string */
 MR_TEST(sprintf, null_string) {
     char buf[32];
@@ -212,7 +201,6 @@ MR_TEST(sprintf, null_string) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "(null)"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: unsigned, octal, binary, percent */
 MR_TEST(sprintf, unsigned_octal_bin) {
     char buf[64];
@@ -235,7 +223,6 @@ MR_TEST(sprintf, unsigned_octal_bin) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "%% 50%%"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: uppercase hex */
 MR_TEST(sprintf, hex_upper) {
     char buf[32];
@@ -250,7 +237,6 @@ MR_TEST(sprintf, hex_upper) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "000000FF"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: sign flags (+ and space) */
 MR_TEST(sprintf, sign_flags) {
     char buf[32];
@@ -269,7 +255,6 @@ MR_TEST(sprintf, sign_flags) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, " 42"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: special prefix (#) for hex, octal, binary */
 MR_TEST(sprintf, special_prefix) {
     char buf[32];
@@ -292,7 +277,6 @@ MR_TEST(sprintf, special_prefix) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "0b1010"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: precision for integer and string */
 MR_TEST(sprintf, precision) {
     char buf[32];
@@ -307,7 +291,6 @@ MR_TEST(sprintf, precision) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "hel"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: asterisk width (positive and negative) */
 MR_TEST(sprintf, asterisk_width) {
     char buf[32];
@@ -322,7 +305,6 @@ MR_TEST(sprintf, asterisk_width) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "123     "), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: long modifier (l) */
 MR_TEST(sprintf, long_modifier) {
     char buf[32];
@@ -337,7 +319,6 @@ MR_TEST(sprintf, long_modifier) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "abcdef"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: short modifier (h) */
 MR_TEST(sprintf, short_modifier) {
     char buf[32];
@@ -352,7 +333,6 @@ MR_TEST(sprintf, short_modifier) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "43981"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: mr_snprintf with NULL format */
 MR_TEST(sprintf, snprintf_null_fmt) {
     char buf[32];
@@ -362,7 +342,6 @@ MR_TEST(sprintf, snprintf_null_fmt) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: mr_vsprintf via wrapper helper */
 static int vsprintf_wrapper(char *buf, const char *fmt, ...) {
     mr_va_list args;
@@ -383,7 +362,6 @@ MR_TEST(sprintf, vsprintf) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "42_test_ff"), 0);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: snprintf with size=1 (only null terminator) */
 MR_TEST(sprintf, snprintf_size1) {
     char buf[1];
@@ -394,4 +372,5 @@ MR_TEST(sprintf, snprintf_size1) {
     MR_TEST_ASSERT_EQ_INT(buf[0], '\0');
 }
 
+#endif /* defined(MR_USE_SPRINTF) */
 #endif /* defined(MR_USE_TEST) */

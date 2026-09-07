@@ -9,7 +9,7 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST) && defined(MR_USE_FS)
 #include <mrX.h>
-#include "fs_test.h"
+#include <mrX/test/fs/fs_test.h>
 
 #define ATOMIC_FS_ENTRY_MAX (8)
 #define ATOMIC_FS_NAME_MAX  (16)
@@ -47,9 +47,9 @@ static mr_err_t atomic_fs_inode_rename(mr_inode_t *old_dir,
                                        mr_dentry_t *new_dentry);
 static void atomic_fs_inode_destroy(mr_inode_t *inode);
 static mr_err_t atomic_fs_file_readdir(mr_file_t *file, mr_dirent_t *dirent);
-static mr_err_t atomic_fs_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t atomic_fs_mount(mr_sblock_t *sb, const char *source,
                                 int flags, void *data);
-static void atomic_fs_kill_sb(mr_super_block_t *sb);
+static void atomic_fs_unmount(mr_sblock_t *sb);
 static mr_uint32_t atomic_fs_dentry_hash(const char *name, mr_uint32_t len);
 static mr_bool_t atomic_fs_dentry_compare(const char *a, const char *b,
                                           mr_uint32_t len);
@@ -72,7 +72,7 @@ static const mr_file_ops_t __atomic_fs_file_ops = {
 };
 
 static mr_file_system_t __atomic_fs = MR_FILE_SYSTEM_INIT(
-    "atomicfs", atomic_fs_mount, MR_NULL, atomic_fs_kill_sb);
+    "atomicfs", atomic_fs_mount, atomic_fs_unmount);
 
 static mr_uint8_t atomic_fs_dentry_fold(char ch) {
     if ((ch >= 'A') && (ch <= 'Z')) {
@@ -333,7 +333,7 @@ static mr_err_t atomic_fs_file_readdir(mr_file_t *file, mr_dirent_t *dirent) {
     return 1;
 }
 
-static mr_err_t atomic_fs_mount(mr_super_block_t *sb, const char *source,
+static mr_err_t atomic_fs_mount(mr_sblock_t *sb, const char *source,
                                 int flags, void *data) {
     atomic_fs_context_t *context;
     mr_inode_t *root;
@@ -362,7 +362,7 @@ static mr_err_t atomic_fs_mount(mr_super_block_t *sb, const char *source,
     return 0;
 }
 
-static void atomic_fs_kill_sb(mr_super_block_t *sb) {
+static void atomic_fs_unmount(mr_sblock_t *sb) {
     if (sb->priv) {
         mr_free(sb->priv);
         sb->priv = MR_NULL;
@@ -370,7 +370,7 @@ static void atomic_fs_kill_sb(mr_super_block_t *sb) {
     __atomic_fs_context = MR_NULL;
 }
 
-static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
+MR_TEST(fs, atomic) {
     atomic_fs_context_t *context;
     mr_file_t directory = MR_FILE_INIT(directory);
     mr_heap_info_t heap_before;
@@ -399,8 +399,8 @@ static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
     atomic_fs_expect(__test_status, "mkdir mixed-case",
                      mr_fs_mkdir("MixedCase"), 0);
     atomic_fs_stat_expect(__test_status, "mixedcase", 0);
-    atomic_fs_expect(__test_status, "unlink mixed-case",
-                     fs_test_unlink("mixedcase"), 0);
+    atomic_fs_expect(__test_status, "rmdir mixed-case",
+                     mr_fs_rmdir("mixedcase"), 0);
 
     /* Fail create callback */
     context->create_error = MR_TRUE;
@@ -433,8 +433,8 @@ static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
             : 0,
         1);
     destroy_calls = context->destroy_calls;
-    atomic_fs_expect(__test_status, "unlink lifetime",
-                     fs_test_unlink("lifetime"), 0);
+    atomic_fs_expect(__test_status, "rmdir lifetime",
+                     mr_fs_rmdir("lifetime"), 0);
     atomic_fs_size_expect(__test_status, "destroy unlinked inode",
                           context->destroy_calls, destroy_calls + 1);
     atomic_fs_bool_expect(__test_status, "backing lifetime absent",
@@ -445,7 +445,7 @@ static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
 
     /* Fail rename callback */
     context->rename_error = MR_TRUE;
-    ret = fs_test_rename("old", "renameerror");
+    ret = mr_fs_rename("old", "renameerror");
     context->rename_error = MR_FALSE;
     atomic_fs_expect(__test_status, "rename callback failure", ret, -MR_EIO);
     atomic_fs_bool_expect(__test_status, "backing old preserved",
@@ -456,7 +456,7 @@ static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
     atomic_fs_stat_expect(__test_status, "renameerror", -MR_ENOENT);
 
     /* Commit rename */
-    ret = fs_test_rename("old", "renamed");
+    ret = mr_fs_rename("old", "renamed");
     atomic_fs_expect(__test_status, "rename commit", ret, 0);
     atomic_fs_bool_expect(__test_status, "backing old absent",
                           atomic_fs_has(context, "old"), MR_FALSE);
@@ -465,18 +465,18 @@ static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
     atomic_fs_stat_expect(__test_status, "old", -MR_ENOENT);
     atomic_fs_stat_expect(__test_status, "renamed", 0);
 
-    /* Rename and unlink an open directory */
+    /* Rename and remove an open directory by path */
     atomic_fs_expect(__test_status, "mkdir fopen", mr_fs_mkdir("fopen"), 0);
-    ret = mr_fs_opendir(&directory, "fopen");
+    ret = mr_fs_open(&directory, "fopen", MR_O_RDONLY | MR_O_DIRECTORY);
     atomic_fs_expect(__test_status, "open rename directory", ret, 0);
     if (ret == 0) {
         atomic_fs_expect(__test_status, "stat open directory",
-                         mr_fs_stat(&directory, &stat), 0);
+                         mr_fs_fstat(&directory, &stat), 0);
         atomic_fs_expect(__test_status, "open directory type", stat.type,
                          MR_INODE_DIR);
 
         context->rename_error = MR_TRUE;
-        ret = mr_fs_rename(&directory, "frenameerror");
+        ret = mr_fs_rename("fopen", "frenameerror");
         context->rename_error = MR_FALSE;
         atomic_fs_expect(__test_status, "frename callback failure", ret,
                          -MR_EIO);
@@ -486,45 +486,37 @@ static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
                               atomic_fs_has(context, "frenameerror"), MR_FALSE);
 
         atomic_fs_expect(__test_status, "rename commit",
-                         mr_fs_rename(&directory, "frenamed"), 0);
+                         mr_fs_rename("fopen", "frenamed"), 0);
         atomic_fs_stat_expect(__test_status, "fopen", -MR_ENOENT);
         atomic_fs_stat_expect(__test_status, "frenamed", 0);
 
         context->unlink_error = MR_TRUE;
-        ret = mr_fs_unlink(&directory);
+        ret = mr_fs_rmdir("frenamed");
         context->unlink_error = MR_FALSE;
         atomic_fs_expect(__test_status, "funlink callback failure", ret,
                          -MR_EIO);
         atomic_fs_stat_expect(__test_status, "frenamed", 0);
-        ret = mr_fs_stat(&directory, &stat);
+        ret = mr_fs_fstat(&directory, &stat);
         atomic_fs_expect(__test_status, "stat failed funlink directory", ret,
                          0);
-        if (ret == 0) {
-            atomic_fs_size_expect(__test_status, "failed funlink links",
-                                  stat.nlink, 1);
-        }
 
-        atomic_fs_expect(__test_status, "funlink open directory",
-                         mr_fs_unlink(&directory), 0);
+        atomic_fs_expect(__test_status, "rmdir open directory",
+                         mr_fs_rmdir("frenamed"), 0);
         atomic_fs_stat_expect(__test_status, "frenamed", -MR_ENOENT);
-        ret = mr_fs_stat(&directory, &stat);
+        ret = mr_fs_fstat(&directory, &stat);
         atomic_fs_expect(__test_status, "stat unlinked directory", ret, 0);
-        if (ret == 0) {
-            atomic_fs_size_expect(__test_status, "unlinked directory links",
-                                  stat.nlink, 0);
-        }
         atomic_fs_expect(__test_status, "close unlinked directory",
-                         mr_fs_closedir(&directory), 0);
+                         mr_fs_close(&directory), 0);
     }
 
     /* Read an empty directory */
-    ret = mr_fs_opendir(&directory, "created");
+    ret = mr_fs_open(&directory, "created", MR_O_RDONLY | MR_O_DIRECTORY);
     atomic_fs_expect(__test_status, "open empty directory", ret, 0);
     if (ret == 0) {
         atomic_fs_expect(__test_status, "read empty directory",
                          mr_fs_readdir(&directory, &dirent), 0);
         atomic_fs_expect(__test_status, "close empty directory",
-                         mr_fs_closedir(&directory), 0);
+                         mr_fs_close(&directory), 0);
     }
 
     /* Commit a cross-directory rename */
@@ -533,7 +525,7 @@ static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
     atomic_fs_expect(__test_status, "mkdir from/item", mr_fs_mkdir("from/item"),
                      0);
     atomic_fs_expect(__test_status, "rename across directories",
-                     fs_test_rename("from/item", "to/moved"), 0);
+                     mr_fs_rename("from/item", "to/moved"), 0);
     atomic_fs_bool_expect(__test_status, "backing from/item absent",
                           atomic_fs_has_child(context, "from", "item"),
                           MR_FALSE);
@@ -543,7 +535,7 @@ static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
     atomic_fs_stat_expect(__test_status, "to/moved", 0);
 
     /* Distinguish directory entries, EOF, and callback errors */
-    ret = mr_fs_opendir(&directory, "to");
+    ret = mr_fs_open(&directory, "to", MR_O_RDONLY | MR_O_DIRECTORY);
     atomic_fs_expect(__test_status, "open non-empty directory", ret, 0);
     if (ret == 0) {
         atomic_fs_expect(__test_status, "read directory entry",
@@ -551,10 +543,10 @@ static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
         atomic_fs_expect(__test_status, "read directory EOF",
                          mr_fs_readdir(&directory, &dirent), 0);
         atomic_fs_expect(__test_status, "close non-empty directory",
-                         mr_fs_closedir(&directory), 0);
+                         mr_fs_close(&directory), 0);
     }
 
-    ret = mr_fs_opendir(&directory, "/");
+    ret = mr_fs_open(&directory, "/", MR_O_RDONLY | MR_O_DIRECTORY);
     atomic_fs_expect(__test_status, "open failing directory", ret, 0);
     if (ret == 0) {
         context->readdir_error = MR_TRUE;
@@ -564,13 +556,24 @@ static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
                          mr_fs_readdir(&directory, &dirent), -MR_EIO);
         context->readdir_error = MR_FALSE;
         atomic_fs_expect(__test_status, "close failing directory",
-                         mr_fs_closedir(&directory), 0);
+                         mr_fs_close(&directory), 0);
     }
 
-    /* Keep a root handle across unmount and remount */
-    ret = mr_fs_opendir(&directory, "/");
-    atomic_fs_expect(__test_status, "open stale root directory", ret, 0);
-    atomic_fs_expect(__test_status, "umount atomicfs", mr_fs_umount("/"), 0);
+    /* An open root handle blocks graceful unmount */
+    ret = mr_fs_open(&directory, "/", MR_O_RDONLY | MR_O_DIRECTORY);
+    atomic_fs_expect(__test_status, "open root directory", ret, 0);
+    if (ret == 0) {
+        atomic_fs_expect(__test_status, "reject umount with open root",
+                         mr_fs_umount("/"), -MR_EBUSY);
+        atomic_fs_expect(__test_status, "stat root after busy umount",
+                         mr_fs_fstat(&directory, &stat), 0);
+        atomic_fs_expect(__test_status, "close root directory",
+                         mr_fs_close(&directory), 0);
+    }
+    atomic_fs_expect(__test_status, "umount atomicfs after close",
+                     mr_fs_umount("/"), 0);
+
+    /* A replacement mount uses its own case-sensitive dentry operations */
     atomic_fs_expect(__test_status, "mount replacement ramfs",
                      fs_test_mount_root("ramfs", 0, MR_NULL), 0);
     atomic_fs_expect(__test_status, "mkdir replacement entry",
@@ -579,29 +582,14 @@ static void fs_atomic_test(volatile mr_uint32_t *__test_status) {
                      mr_fs_mkdir("CaseName"), 0);
     atomic_fs_expect(__test_status, "mkdir replacement lower-case",
                      mr_fs_mkdir("casename"), 0);
-    if (ret == 0) {
-        atomic_fs_expect(__test_status, "reject stale root directory",
-                         mr_fs_readdir(&directory, &dirent), -MR_ENOENT);
-        atomic_fs_expect(__test_status, "stat stale root directory",
-                         mr_fs_stat(&directory, &stat), 0);
-        atomic_fs_expect(__test_status, "unlink stale root directory",
-                         mr_fs_unlink(&directory), -MR_ENOENT);
-        atomic_fs_expect(__test_status, "rename stale root directory",
-                         mr_fs_rename(&directory, "/stale-renamed"),
-                         -MR_ENOENT);
-        atomic_fs_expect(__test_status, "close stale root directory",
-                         mr_fs_closedir(&directory), 0);
-    }
     atomic_fs_expect(__test_status, "umount replacement ramfs",
                      mr_fs_umount("/"), 0);
+    atomic_fs_expect(__test_status, "restore rootfs",
+                     fs_test_mount_root("rootfs", 0, MR_NULL), 0);
     heap_after = mr_heap_information(MR_TRUE);
     atomic_fs_size_expect(__test_status, "heap restored", heap_after.used_bytes,
                           heap_before.used_bytes);
     return;
-}
-
-MR_TEST(fs, atomic) {
-    fs_atomic_test(__test_status);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

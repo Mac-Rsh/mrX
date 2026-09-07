@@ -8,17 +8,16 @@
 
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
+#if defined(MR_USE_ATOMIC)
 #include <mrX/libc/mr_atomic.h>
 
-/* -------------------------------------------------------------------------- */
-/* Test: static init                                                          */
+/* Test: static init */
 MR_TEST(atomic, static_init) {
     mr_atomic_t v = MR_ATOMIC_INIT(12345);
 
     MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 12345);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: load/store                                                           */
 MR_TEST(atomic, load_store) {
     mr_atomic_t v;
@@ -28,7 +27,6 @@ MR_TEST(atomic, load_store) {
     MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 42);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: exchange                                                             */
 MR_TEST(atomic, exchange) {
     mr_atomic_t v, old;
@@ -39,7 +37,6 @@ MR_TEST(atomic, exchange) {
     MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 7);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: compare-exchange success/fail                                        */
 MR_TEST(atomic, compare_exchange) {
     mr_atomic_t v, expect;
@@ -54,7 +51,6 @@ MR_TEST(atomic, compare_exchange) {
     MR_TEST_ASSERT_EQ_INT(expect, 9);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: fetch-add                                                            */
 MR_TEST(atomic, fetch_add) {
     mr_atomic_t v;
@@ -64,7 +60,6 @@ MR_TEST(atomic, fetch_add) {
     MR_TEST_ASSERT_EQ_INT(v, 15);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: fetch-sub                                                            */
 MR_TEST(atomic, fetch_sub) {
     mr_atomic_t v;
@@ -74,7 +69,6 @@ MR_TEST(atomic, fetch_sub) {
     MR_TEST_ASSERT_EQ_INT(v, 12);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: bitwise fetch-and/or/xor                                             */
 MR_TEST(atomic, bitwise) {
     mr_atomic_t v;
@@ -90,7 +84,6 @@ MR_TEST(atomic, bitwise) {
     MR_TEST_ASSERT_EQ_INT(v, 0x00);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: zero and negative values                                             */
 MR_TEST(atomic, boundary_values) {
     mr_atomic_t v;
@@ -108,7 +101,6 @@ MR_TEST(atomic, boundary_values) {
     MR_TEST_ASSERT_EQ_INT(mr_atomic_load(&v), 0x5500);
 }
 
-/* -------------------------------------------------------------------------- */
 /* Test: compare-exchange updates the expected value on mismatch              */
 MR_TEST(atomic, compare_exchange_mismatch) {
     mr_atomic_t v;
@@ -237,4 +229,5 @@ MR_TEST(atomic, concurrent_fetch_xor) {
 }
 #endif /* defined(MR_USE_TEST_PTHREAD) */
 
+#endif /* defined(MR_USE_ATOMIC) */
 #endif /* defined(MR_USE_TEST) */
