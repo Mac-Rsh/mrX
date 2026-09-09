@@ -16,7 +16,7 @@ BUILTIN_PLUGINS = (
     "plugins.commands",
     "plugins.kconfig",
     "plugins.htc",
-    "plugins.idl",
+    "plugins.rpc_idl",
     "plugins.platform",
     "plugins.sections",
     "plugins.mdk",

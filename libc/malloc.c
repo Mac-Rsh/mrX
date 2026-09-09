@@ -17,7 +17,7 @@
 #endif /* !defined(MR_CFG_HEAP_SIZE) */
 #if (MR_CFG_HEAP_SIZE < 32)
 #error "Heap size is too small(must >= 32)"
-#endif /* MR_CFG_HEAP_SIZE */
+#endif /* (MR_CFG_HEAP_SIZE < 32) */
 static mr_uint8_t MR_ALIGN(MR_ALIGN_SIZE) __heap[MR_CFG_HEAP_SIZE];
 /* Heap block head */
 static mr_heap_block_t __heap_blk_head = {.next = MR_NULL};

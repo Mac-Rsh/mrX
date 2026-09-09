@@ -53,8 +53,8 @@ static mr_err_t fs_struct_snapshot(mr_fs_struct_t *fs_struct, const char *path,
 }
 
 static mr_err_t fs_op_enter_by_dentry(mr_dentry_t *dentry, mr_sblock_t **out) {
-    mr_sblock_t *sb;
     mr_inode_t *inode;
+    mr_sblock_t *sb;
     mr_err_t ret;
     int mask;
 
@@ -340,8 +340,8 @@ _exit:
 
 mr_err_t mr_fs_mount_root(const char *source, const char *fstype, int flags,
                           void *data) {
-    mr_dentry_t *root;
     mr_file_system_t *fs;
+    mr_dentry_t *root;
 
     /* Initialization-only: does not retarget live structure root/cwd */
     /* Check parameter */
@@ -363,8 +363,8 @@ mr_err_t mr_fs_mount_root(const char *source, const char *fstype, int flags,
 
 mr_err_t mr_fs_mount(const char *source, const char *path, const char *fstype,
                      int flags, void *data) {
-    mr_file_system_t *fs;
     mr_fs_struct_t *fs_struct;
+    mr_file_system_t *fs;
     mr_dentry_t *mnt;
     mr_err_t ret;
 
@@ -460,9 +460,9 @@ static mr_err_t fs_sb_reclaim(mr_sblock_t *sb) {
 }
 
 mr_err_t mr_fs_umount(const char *path) {
+    mr_fs_struct_t *fs_struct;
     mr_dentry_t *dentry;
     mr_sblock_t *sb;
-    mr_fs_struct_t *fs_struct;
     mr_err_t ret;
 
     /* Check parameter */
@@ -501,9 +501,9 @@ mr_err_t mr_fs_umount(const char *path) {
 }
 
 mr_err_t mr_fs_media_detach(const char *path) {
-    mr_dentry_t *dentry;
-    mr_sblock_t *sb, *leaf;
     mr_fs_struct_t *fs_struct;
+    mr_sblock_t *sb, *leaf;
+    mr_dentry_t *dentry;
     mr_err_t ret;
 
     /* Check parameter */
@@ -643,8 +643,8 @@ static mr_err_t fs_create_node_op(mr_dentry_t *parent, const char *name,
                                   mr_inode_type_t type, fs_node_op_t op,
                                   void *priv, mr_dentry_t **dentry) {
     mr_dentry_t *child, *existing;
-    mr_sblock_t *sb;
     mr_inode_t *inode;
+    mr_sblock_t *sb;
     mr_err_t ret;
 
     /* Init inode */
@@ -983,8 +983,8 @@ _exit_refs:
 static mr_err_t fs_open(mr_file_t *file, mr_fs_struct_t *fs_struct,
                         const char *path, int flags) {
     mr_dentry_t *dentry, *parent;
-    mr_sblock_t *sb;
     mr_inode_t *inode;
+    mr_sblock_t *sb;
     mr_err_t ret;
     char *name;
 
@@ -1108,8 +1108,8 @@ mr_err_t mr_fs_close(mr_file_t *file) {
 }
 
 static mr_err_t fs_dentry_readdir(mr_file_t *file, mr_dirent_t *dirent) {
-    mr_dentry_t *child;
     mr_size_t index, len;
+    mr_dentry_t *child;
     int mask;
 
     /* Get child dentry */
@@ -1318,9 +1318,9 @@ static mr_err_t fs_unlink_dentry(mr_dentry_t *dentry, mr_inode_t *inode) {
 }
 
 mr_err_t mr_fs_rmdir(const char *path) {
-    mr_sblock_t *sb;
-    mr_dentry_t *dentry;
     mr_fs_struct_t *fs_struct;
+    mr_dentry_t *dentry;
+    mr_sblock_t *sb;
     mr_err_t ret;
 
     /* Check parameter */
@@ -1355,9 +1355,9 @@ mr_err_t mr_fs_rmdir(const char *path) {
 }
 
 mr_err_t mr_fs_rename(const char *old_path, const char *new_path) {
-    mr_sblock_t *sb;
-    mr_dentry_t *dentry;
     mr_fs_struct_t *fs_struct;
+    mr_dentry_t *dentry;
+    mr_sblock_t *sb;
     mr_err_t ret;
 
     /* Check parameter */
@@ -1387,9 +1387,9 @@ mr_err_t mr_fs_rename(const char *old_path, const char *new_path) {
 }
 
 mr_err_t mr_fs_unlink(const char *path) {
-    mr_sblock_t *sb;
-    mr_dentry_t *dentry;
     mr_fs_struct_t *fs_struct;
+    mr_dentry_t *dentry;
+    mr_sblock_t *sb;
     mr_err_t ret;
 
     /* Check parameter */
@@ -1507,8 +1507,8 @@ mr_ssize_t mr_fs_write(mr_file_t *file, const void *buf, mr_size_t size) {
 }
 
 mr_int64_t mr_fs_lseek(mr_file_t *file, mr_int64_t offset, int whence) {
-    mr_sblock_t *sb;
     mr_int64_t position;
+    mr_sblock_t *sb;
     mr_int64_t base;
     mr_err_t ret;
 
@@ -1678,9 +1678,9 @@ mr_err_t mr_fs_ioctl(mr_file_t *file, int cmd, void *arg) {
 
 mr_err_t mr_fs_chroot(const char *path) {
     mr_dentry_t *dentry, *cwd, *old_root, *old_cwd;
-    mr_sblock_t *sb;
-    mr_inode_t *inode;
     mr_fs_struct_t *fs_struct;
+    mr_inode_t *inode;
+    mr_sblock_t *sb;
     mr_err_t ret;
     int mask;
 
@@ -1759,9 +1759,9 @@ mr_err_t mr_fs_chroot(const char *path) {
 
 mr_err_t mr_fs_chdir(const char *path) {
     mr_dentry_t *dentry, *old_cwd;
-    mr_sblock_t *sb;
-    mr_inode_t *inode;
     mr_fs_struct_t *fs_struct;
+    mr_inode_t *inode;
+    mr_sblock_t *sb;
     mr_err_t ret;
     int mask;
 
@@ -1815,8 +1815,8 @@ mr_err_t mr_fs_chdir(const char *path) {
 
 mr_ssize_t mr_fs_getcwd(char *buf, mr_size_t size) {
     mr_size_t len, pos, name_len;
-    mr_dentry_t *dentry;
     mr_fs_struct_t *fs_struct;
+    mr_dentry_t *dentry;
     mr_ssize_t ret;
     int mask;
 

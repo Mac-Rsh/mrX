@@ -12,6 +12,9 @@
 #include <mrX/libc/mr_string.h>
 
 void mr_xvm_dbg_init(mr_xvm_t *xvm) {
+    /* Check parameter */
+    MR_ASSERT(xvm != MR_NULL);
+
     /* Init XVM debug */
     xvm->dbg.target = mr_xvm_isa_target(xvm->isa);
     xvm->dbg.probe.step_gate = MR_XVM_DBG_GATE_OPEN;

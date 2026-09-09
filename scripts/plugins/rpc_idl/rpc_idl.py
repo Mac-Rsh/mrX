@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-IDL command - Compile `.idl` source files into generated C header and source.
+RPC IDL command - Compile `.idl` source files into generated C header and source.
 
 Runs preprocessing, lexing, parsing, semantic extraction, and C emission.
 
@@ -20,12 +20,12 @@ from framework.command import Command, CommandResult, CommandSpec
 from framework.completion import DIRECTORY_COMPLETION, FILE_COMPLETION
 from framework.completion import PATH_COMPLETION, attach_path_completion
 from framework.context import CommandContext
-from .compiler import CompileOptions, IDLCompiler
+from .compiler import CompileOptions, RpcIdlCompiler
 from ..htc.common import ErrorCode
 
 
-class IDLCommand(Command):
-    """Built-in command for compiling `.idl` files."""
+class RpcIdlCommand(Command):
+    """Built-in command for compiling RPC `.idl` files."""
 
     DEFAULT_HEADER_NAME = "mr_rpc_idl.h"
     DEFAULT_SOURCE_NAME = "idl.c"
@@ -33,12 +33,13 @@ class IDLCommand(Command):
     DEFAULT_SOURCE_PATH = f"./modules/rpc/{DEFAULT_SOURCE_NAME}"
 
     spec = CommandSpec(
-        name="idl",
-        description="Compile an `.idl` file into generated C header and source",
+        name="rpc-idl",
+        description=("Compile an RPC `.idl` file into generated C header and "
+                     "source"),
     )
 
     def configure(self, parser: ArgumentParser) -> None:
-        """Declare IDL command arguments."""
+        """Declare RPC IDL command arguments."""
         attach_path_completion(parser.add_argument(
             "-i",
             "--input",
@@ -74,7 +75,7 @@ class IDLCommand(Command):
 
     def execute(self, context: CommandContext,
                 arguments: Namespace) -> CommandResult:
-        """Execute IDL header and source generation."""
+        """Execute RPC IDL header and source generation."""
         paths = self._paths_from_args(context, arguments)
         if isinstance(paths, str):
             return CommandResult.failure(paths)
@@ -83,7 +84,7 @@ class IDLCommand(Command):
             str(context.resolve_path(path))
             for path in (arguments.include_dirs or ())
         )
-        code, output = self._compile_idl(
+        code, output = self._compile_rpc_idl(
             input_path,
             output_path,
             source_path,
@@ -114,7 +115,7 @@ class IDLCommand(Command):
         else:
             source_path = context.resolve_path(arguments.source)
         if len({input_path, output_path, source_path}) != 3:
-            return "IDL input, header, and source paths must be distinct"
+            return "RPC IDL input, header, and source paths must be distinct"
         return input_path, output_path, source_path
 
     @classmethod
@@ -142,7 +143,7 @@ class IDLCommand(Command):
         return resolved, None
 
     @classmethod
-    def _compile_idl(
+    def _compile_rpc_idl(
             cls,
             input_path: Path,
             output_path: Path,
@@ -150,9 +151,9 @@ class IDLCommand(Command):
             include_dirs: tuple[str, ...],
             use_cpp: bool,
     ) -> tuple[int, str]:
-        """Run the IDL pipeline and return an exit code and output."""
+        """Run the RPC IDL pipeline and return an exit code and output."""
         lines = [f"Parsing: {input_path}"]
-        result = IDLCompiler().compile(
+        result = RpcIdlCompiler().compile(
             CompileOptions(
                 input_path,
                 output_path=output_path,

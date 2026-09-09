@@ -21,8 +21,8 @@ static void dentry_dynamic_release(mr_object_t *obj);
 MR_CLAZZES_DEFINE(dentry, dentry_statik_release, dentry_dynamic_release,
                   MR_NULL);
 
-/*  Serialize unbacked-tree moves */
-static mr_uint8_t __dentry_unbacked_moving = MR_FALSE;
+/* Serialize unbacked-tree moves */
+static mr_bool_t __dentry_unbacked_moving = MR_FALSE;
 
 /* Prepared dentry move type */
 typedef struct dentry_move {
@@ -35,8 +35,8 @@ typedef struct dentry_move {
 } dentry_move_t;
 
 /* Last-word definition */
-#define LWORD_DOT2                      (0x2e2e)
-#define LWORD_DOT                       (0x2e)
+#define DENTRY_LWORD_DOT2               (0x2e2e)
+#define DENTRY_LWORD_DOT                (0x2e)
 
 static const char *dentry_name_hash(mr_dentry_name_t *name, const char *str,
                                     const mr_dentry_ops_t *ops,
@@ -65,7 +65,8 @@ static const char *dentry_name_hash(mr_dentry_name_t *name, const char *str,
     return str;
 }
 
-static char *str_alloc(mr_uint32_t str_len, char *istr, mr_uint32_t istr_len) {
+static char *dentry_str_alloc(mr_uint32_t str_len, char *istr,
+                              mr_uint32_t istr_len) {
     /* Allocate string */
     if (str_len < istr_len) {
         /* Use inline string if possible */
@@ -76,9 +77,9 @@ static char *str_alloc(mr_uint32_t str_len, char *istr, mr_uint32_t istr_len) {
     return mr_malloc(str_len + 1);
 }
 
-static mr_err_t str_varg_alloc(const char *fmt, mr_va_list args,
-                               const char **str, char *istr,
-                               mr_uint32_t istr_len) {
+static mr_err_t dentry_str_varg_alloc(const char *fmt, mr_va_list args,
+                                      const char **str, char *istr,
+                                      mr_uint32_t istr_len) {
     mr_va_list copied_args;
     mr_uint32_t str_len;
     int ret;
@@ -94,7 +95,7 @@ static mr_err_t str_varg_alloc(const char *fmt, mr_va_list args,
     str_len = (mr_uint32_t)ret;
 
     /* Allocate string */
-    *str = str_alloc(str_len, istr, istr_len);
+    *str = dentry_str_alloc(str_len, istr, istr_len);
     if (!(*str)) {
         return -MR_ENOMEM;
     }
@@ -104,7 +105,7 @@ static mr_err_t str_varg_alloc(const char *fmt, mr_va_list args,
     return 0;
 }
 
-static void str_free(const char *str, const char *istr) {
+static void dentry_str_free(const char *str, const char *istr) {
     /* Inline string does not need to be freed */
     if (str == istr) {
         return;
@@ -133,7 +134,8 @@ static mr_err_t dentry_name_alloc(mr_dentry_t *dentry, const char *name,
     }
 
     /* Allocate name */
-    s = str_alloc((mr_uint32_t)len, dentry->iname, sizeof(dentry->iname));
+    s = dentry_str_alloc((mr_uint32_t)len, dentry->iname,
+                         sizeof(dentry->iname));
     if (!s) {
         return -MR_ENOMEM;
     }
@@ -147,7 +149,7 @@ static mr_err_t dentry_name_alloc(mr_dentry_t *dentry, const char *name,
 
 static void dentry_name_free(mr_dentry_t *dentry) {
     /* Free name */
-    str_free(dentry->name.str, dentry->iname);
+    dentry_str_free(dentry->name.str, dentry->iname);
     dentry->name.str = MR_NULL;
 }
 
@@ -159,7 +161,7 @@ static mr_err_t dentry_init(mr_dentry_t *dentry, const mr_clazz_t *clazz,
     mr_err_t ret;
 
     /* Allocate string */
-    ret = str_varg_alloc(fmt, args, &str, istr, sizeof(istr));
+    ret = dentry_str_varg_alloc(fmt, args, &str, istr, sizeof(istr));
     if (ret != 0) {
         return ret;
     }
@@ -186,7 +188,7 @@ static mr_err_t dentry_init(mr_dentry_t *dentry, const mr_clazz_t *clazz,
     }
 _exit:
     /* Free string */
-    str_free(str, istr);
+    dentry_str_free(str, istr);
     return ret;
 }
 
@@ -660,7 +662,7 @@ static mr_err_t dentry_move_commit(dentry_move_t *move) {
 
     /* Free the replaced name and drop namespace references. old_upper is put
      * twice: once for the retired tree binding, once for the prepare pin */
-    str_free(old_name, dentry->iname);
+    dentry_str_free(old_name, dentry->iname);
     mr_dentry_put(reservation_upper);
     mr_dentry_del(reservation);
     mr_dentry_put(old_upper);
@@ -1012,7 +1014,7 @@ static mr_dentry_t *dentry_path_lookup(mr_dentry_t **last, const char **path,
          * lookup hash matches how its children were hashed */
         str = dentry_name_hash(&name, str, (*last)->ops, &lword);
         switch (lword) {
-            case LWORD_DOT2: {
+            case DENTRY_LWORD_DOT2: {
                 /* Handle '..' */
                 if ((*last == limit) || ((*last)->upper == MR_NULL)) {
                     /* Already at root */
@@ -1021,7 +1023,7 @@ static mr_dentry_t *dentry_path_lookup(mr_dentry_t **last, const char **path,
                 dentry = (*last)->upper;
                 break;
             }
-            case LWORD_DOT: {
+            case DENTRY_LWORD_DOT: {
                 /* Handle '.' */
                 continue;
             }
@@ -1098,7 +1100,7 @@ static mr_err_t dentry_fs_lookup(mr_dentry_t *parent, const char *name,
 
     /* Copy the component (name points into the path string, not NUL-terminated
      * at this boundary) so it can be passed to the FS hook */
-    str = str_alloc(len, istr, sizeof(istr));
+    str = dentry_str_alloc(len, istr, sizeof(istr));
     if (!str) {
         ret = -MR_ENOMEM;
         goto _exit_op;
@@ -1187,7 +1189,7 @@ _exit:
     }
 
     /* Free the component copy */
-    str_free(str, istr);
+    dentry_str_free(str, istr);
 _exit_op:
     mr_sblock_op_exit(sb);
 _exit_sb:

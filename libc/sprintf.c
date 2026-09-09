@@ -10,17 +10,18 @@
 #if defined(MR_USE_SPRINTF)
 
 /* Modifier definition */
-#define MOD_ZEROPAD                     (1U << 0)
-#define MOD_SIGN                        (1U << 1)
-#define MOD_PLUS                        (1U << 2)
-#define MOD_SPACE                       (1U << 3)
-#define MOD_LEFT                        (1U << 4)
-#define MOD_SPECIAL                     (1U << 5)
-#define MOD_LARGE                       (1U << 6)
-#define MOD_NEGATIVE                    (1U << 7)
+#define SPRINTF_MOD_ZEROPAD             (1U << 0)
+#define SPRINTF_MOD_SIGN                (1U << 1)
+#define SPRINTF_MOD_PLUS                (1U << 2)
+#define SPRINTF_MOD_SPACE               (1U << 3)
+#define SPRINTF_MOD_LEFT                (1U << 4)
+#define SPRINTF_MOD_SPECIAL             (1U << 5)
+#define SPRINTF_MOD_LARGE               (1U << 6)
+#define SPRINTF_MOD_NEGATIVE            (1U << 7)
 
-static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
-                           int prec, int base, mr_uint64_t num) {
+static char *sprintf_format_number(char *str, char *end, mr_uint32_t mod,
+                                   int width, int prec, int base,
+                                   mr_uint64_t num) {
     const char sdigits[] = "0123456789abcdef";
     const char ldigits[] = "0123456789ABCDEF";
     char fill, sign, tmp[64];
@@ -29,14 +30,14 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
 
     /* Sign */
     sign = 0;
-    if (mod & MOD_SIGN) {
-        if (mod & MOD_NEGATIVE) {
+    if (mod & SPRINTF_MOD_SIGN) {
+        if (mod & SPRINTF_MOD_NEGATIVE) {
             sign = '-';
         }
         if (sign != '-') {
-            if (mod & MOD_PLUS) {
+            if (mod & SPRINTF_MOD_PLUS) {
                 sign = '+';
-            } else if (mod & MOD_SPACE) {
+            } else if (mod & SPRINTF_MOD_SPACE) {
                 sign = ' ';
             }
         }
@@ -46,7 +47,7 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
     }
 
     /* Prefix */
-    if (mod & MOD_SPECIAL) {
+    if (mod & SPRINTF_MOD_SPECIAL) {
         switch (base) {
             case 2:
             case 16: {
@@ -63,18 +64,18 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
     }
 
     /* Number */
-    digits = (mod & MOD_LARGE) ? ldigits : sdigits;
+    digits = (mod & SPRINTF_MOD_LARGE) ? ldigits : sdigits;
     for (i = 0; (num != 0) || (i == 0); i++) {
         tmp[i] = digits[num % (mr_uint64_t)base];
         num /= (mr_uint64_t)base;
     }
 
     /* An octal prefix is needed only when precision does not supply it */
-    if ((mod & MOD_SPECIAL) && (base == 8)) {
+    if ((mod & SPRINTF_MOD_SPECIAL) && (base == 8)) {
         if (prec <= i) {
             width--;
         } else {
-            mod &= ~MOD_SPECIAL;
+            mod &= ~SPRINTF_MOD_SPECIAL;
         }
     }
     if (i > prec) {
@@ -83,10 +84,10 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
     width -= prec;
 
     /* Left fill */
-    if (mod & MOD_LEFT) {
-        mod &= ~MOD_ZEROPAD;
+    if (mod & SPRINTF_MOD_LEFT) {
+        mod &= ~SPRINTF_MOD_ZEROPAD;
     }
-    fill = (mod & MOD_ZEROPAD) ? '0' : ' ';
+    fill = (mod & SPRINTF_MOD_ZEROPAD) ? '0' : ' ';
     if ((fill == '0') && sign) {
         if (str < end) {
             *str = sign;
@@ -94,8 +95,8 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
         str++;
         sign = 0;
     }
-    if (!(mod & MOD_LEFT)
-        && ((fill == ' ') || !(mod & MOD_SPECIAL))) {
+    if (!(mod & SPRINTF_MOD_LEFT)
+        && ((fill == ' ') || !(mod & SPRINTF_MOD_SPECIAL))) {
         for (; width > 0; width--) {
             if (str < end) {
                 *str = fill;
@@ -113,7 +114,7 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
     }
 
     /* Prefix fill */
-    if (mod & MOD_SPECIAL) {
+    if (mod & SPRINTF_MOD_SPECIAL) {
         switch (base) {
             case 2: {
                 if (str < end) {
@@ -139,7 +140,7 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
                 }
                 str++;
                 if (str < end) {
-                    *str = (mod & MOD_LARGE) ? 'X' : 'x';
+                    *str = (mod & SPRINTF_MOD_LARGE) ? 'X' : 'x';
                 }
                 str++;
                 break;
@@ -150,7 +151,7 @@ static char *format_number(char *str, char *end, mr_uint32_t mod, int width,
         }
 
         /* Zero fill after prefix */
-        if (!(mod & MOD_LEFT) && (fill == '0')) {
+        if (!(mod & SPRINTF_MOD_LEFT) && (fill == '0')) {
             for (; width > 0; width--) {
                 if (str < end) {
                     *str = fill;
@@ -216,15 +217,15 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
         /* Get format modifier */
         for (fmt++, mod = 0; *fmt; fmt++) {
             if (*fmt == '-') {
-                mod |= MOD_LEFT;
+                mod |= SPRINTF_MOD_LEFT;
             } else if (*fmt == '+') {
-                mod |= MOD_PLUS;
+                mod |= SPRINTF_MOD_PLUS;
             } else if (*fmt == ' ') {
-                mod |= MOD_SPACE;
+                mod |= SPRINTF_MOD_SPACE;
             } else if (*fmt == '0') {
-                mod |= MOD_ZEROPAD;
+                mod |= SPRINTF_MOD_ZEROPAD;
             } else if (*fmt == '#') {
-                mod |= MOD_SPECIAL;
+                mod |= SPRINTF_MOD_SPECIAL;
             } else {
                 break;
             }
@@ -240,7 +241,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
             width = mr_va_arg(args, int);
             if (width < 0) {
                 width = -width;
-                mod |= MOD_LEFT;
+                mod |= SPRINTF_MOD_LEFT;
             }
             fmt++;
         }
@@ -285,7 +286,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
                 }
 
                 /* Flush right */
-                if (!(mod & MOD_LEFT)) {
+                if (!(mod & SPRINTF_MOD_LEFT)) {
                     while ((width--) > 1) {
                         if (str < end) {
                             *str = ' ';
@@ -326,7 +327,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
                 }
 
                 /* Flush right */
-                if (!(mod & MOD_LEFT)) {
+                if (!(mod & SPRINTF_MOD_LEFT)) {
                     while (len < (width--)) {
                         if (str < end) {
                             *str = ' ';
@@ -356,16 +357,17 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
             case 'p': {
                 if (width == -1) {
                     width = (sizeof(void *) << 1) + 2;
-                    mod |= (MOD_SPECIAL | MOD_ZEROPAD);
+                    mod |= (SPRINTF_MOD_SPECIAL | SPRINTF_MOD_ZEROPAD);
                 }
-                str = format_number(str, end, mod, width, prec, 16,
-                                    (mr_uintptr_t)mr_va_arg(args, void *));
+                str = sprintf_format_number(
+                    str, end, mod, width, prec, 16,
+                    (mr_uintptr_t)mr_va_arg(args, void *));
                 continue;
             }
             /* Decimal */
             case 'd':
             case 'i': {
-                mod |= MOD_SIGN;
+                mod |= SPRINTF_MOD_SIGN;
                 base = 10;
                 break;
             }
@@ -375,7 +377,7 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
             }
             /* Hexadecimal */
             case 'X': {
-                mod |= MOD_LARGE;
+                mod |= SPRINTF_MOD_LARGE;
                 base = 16;
                 break;
             }
@@ -424,7 +426,7 @@ _default:
         }
 
         /* Get number argument */
-        if (mod & MOD_SIGN) {
+        if (mod & SPRINTF_MOD_SIGN) {
             switch (eff) {
                 case 'l': {
                     snum = (mr_int64_t)mr_va_arg(args, long);
@@ -454,7 +456,7 @@ _default:
 
             /* Convert signed magnitude without signed overflow */
             if (snum < 0) {
-                mod |= MOD_NEGATIVE;
+                mod |= SPRINTF_MOD_NEGATIVE;
                 num = 0ULL - (mr_uint64_t)snum;
             } else {
                 num = (mr_uint64_t)snum;
@@ -488,9 +490,9 @@ _default:
             }
         }
         if (num == 0) {
-            mod &= ~MOD_SPECIAL;
+            mod &= ~SPRINTF_MOD_SPECIAL;
         }
-        str = format_number(str, end, mod, width, prec, base, num);
+        str = sprintf_format_number(str, end, mod, width, prec, base, num);
     }
 
     /* Handle end */

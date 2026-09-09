@@ -92,7 +92,6 @@ typedef struct mr_gpio_ops {
                          mr_uint8_t *value);
     mr_err_t (*port_write)(const mr_driver_t *drv, mr_uint32_t mask);
     mr_err_t (*port_read)(const mr_driver_t *drv, mr_uint32_t *mask);
-    /* Optional */
     mr_err_t (*event_attach)(const mr_driver_t *drv, mr_uint32_t pin,
                              mr_waiter_t *entry);
 } mr_gpio_ops_t;

@@ -15,9 +15,6 @@
 #include <mrX/libc/mr_malloc.h>
 #include <mrX/libc/mr_string.h>
 
-/* FS name */
-#define FS_NAME                         "ramfs"
-
 /* RamFS inode operations */
 static mr_err_t ramfs_inode_create(mr_inode_t *dir, const char *name,
                                    mr_inode_type_t type, mr_inode_t **out);
@@ -58,7 +55,7 @@ static const mr_file_ops_t __ramfs_fifo_files = {
 static mr_err_t ramfs_mount(mr_sblock_t *sb, const char *source, int flags,
                             void *data);
 static mr_file_system_t __ramfs
-    = MR_FILE_SYSTEM_INIT(FS_NAME, ramfs_mount, MR_NULL);
+    = MR_FILE_SYSTEM_INIT("ramfs", ramfs_mount, MR_NULL);
 
 /* RamFS node type */
 typedef struct ramfs_node {

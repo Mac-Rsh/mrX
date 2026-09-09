@@ -32,7 +32,7 @@ mr_err_t mr_adc_configure(mr_driver_t *drv, mr_uint32_t channel,
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(ad_ops->channel_configure != MR_NULL);
 
-    /* Check if channel is existed */
+    /* Check whether the channel exists */
     if ((channel >= 32U) || (!(ad_data->exist_mask & (1U << channel)))) {
         return -MR_EINVAL;
     }
@@ -57,7 +57,7 @@ mr_err_t mr_adc_configuration(mr_driver_t *drv, mr_uint32_t channel,
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(ad_ops->channel_configuration != MR_NULL);
 
-    /* Check if channel is existed */
+    /* Check whether the channel exists */
     if ((channel >= 32U) || (!(ad_data->exist_mask & (1U << channel)))) {
         return -MR_EINVAL;
     }

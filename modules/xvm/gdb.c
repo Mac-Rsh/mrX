@@ -149,8 +149,8 @@ mr_err_t mr_xvm_gdb_del(mr_xvm_gdb_t *gdb) {
 
 static mr_size_t gdb_reply_stop(char reply[4], unsigned int signal) {
     reply[0] = 'S';
-    reply[1] = gdb_hex[(signal >> 4) & 0x0f];
-    reply[2] = gdb_hex[signal & 0x0f];
+    reply[1] = gdb_hex[(signal >> 4U) & 0x0fU];
+    reply[2] = gdb_hex[signal & 0x0fU];
     reply[3] = '\0';
     return 3;
 }
@@ -1088,8 +1088,8 @@ static char *gdb_reply_begin(mr_xvm_gdb_t *gdb, mr_size_t *room) {
 }
 
 static void gdb_reply_end(mr_xvm_gdb_t *gdb, mr_size_t length) {
-    char *payload;
     mr_uint8_t checksum;
+    char *payload;
     mr_size_t i;
 
     /* Checksum the payload written after '$' */

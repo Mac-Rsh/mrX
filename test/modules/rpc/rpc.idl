@@ -2,7 +2,7 @@
  * RPC unit-test schema
  *
  * Regenerate the RPC codec from the mrX directory with:
- * python ./scripts/cli.py idl -i ./test/modules/rpc/rpc.idl --no-cpp
+ * python ./scripts/cli.py rpc-idl -i ./test/modules/rpc/rpc.idl --no-cpp
  */
 
 enum status: u8 {

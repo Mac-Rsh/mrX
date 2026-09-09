@@ -53,7 +53,7 @@ IDL 工具链：方法参数与返回值在 `.idl` 文件中描述，用主仓 C
 `include/mrX/modules/rpc/mr_rpc_idl.h` 与 `modules/rpc/idl.c`， 生成文件不可手动编辑）：
 
 ```
-python ./scripts/cli.py idl -i ./test/modules/rpc/rpc.idl --no-cpp
+python ./scripts/cli.py rpc-idl -i ./test/modules/rpc/rpc.idl --no-cpp
 ```
 
 ### 3. 快速上手
@@ -423,7 +423,7 @@ for (;;) {
 
 **Q：方法收到 `-MR_ENOSYS` 应答？**
 
-`service + method` 没有注册：确认 `.idl` 中定义了该方法并用 `cli.py idl` 重新生成 （生成代码与 schema 不同步是最常见原因）；同时确认
+`service + method` 没有注册：确认 `.idl` 中定义了该方法并用 `cli.py rpc-idl` 重新生成 （生成代码与 schema 不同步是最常见原因）；同时确认
 `MR_USE_MODULE_RPC` 已启用， 初始化调用序列在首帧之前已执行。
 
 **Q：订阅请求被拒绝？**
@@ -570,7 +570,7 @@ deadline 重设周期并触发 `POLL` 唤醒； 无到期项时停表。插入�
 
 1. 在 `.idl` 中声明类型与服务（参考 `mrX/test/modules/rpc/rpc.idl` 的
    `enum`/`struct`/`service` 语法；方法缺省响应段即生成无 `response` 的入口签名）。
-2. 执行 `python ./scripts/cli.py idl -i <schema>.idl --no-cpp`，生成
+2. 执行 `python ./scripts/cli.py rpc-idl -i <schema>.idl --no-cpp`，生成
    `mr_rpc_idl.h`（含请求/响应类型、入口签名宏）与 `idl.c`（含 unpack/pack 编解码与 `MR_RPC_EXPORT` 注册）。
 3. 在应用中用 `MR_RPC(service, method) { ... }` 实现入口并返回结果码。
 

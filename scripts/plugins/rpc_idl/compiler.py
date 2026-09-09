@@ -61,8 +61,9 @@ class CompileResult:
                 and not self.diagnostics.has_errors())
 
 
-class IDLCompiler:
-    """Runs preprocessing, parsing, semantic extraction, and C emission."""
+class RpcIdlCompiler:
+    """Runs RPC IDL preprocessing, parsing, semantic extraction, and C
+    emission."""
 
     def compile(self, options: CompileOptions) -> CompileResult:
         """Compile one IDL source into generated C header and source text."""
@@ -89,7 +90,7 @@ class IDLCompiler:
                                  document=document, schema=schema)
 
         # Reject payloads that would unroll too many codec slots
-        IDLCompiler._check_codec_limits(schema, diagnostics)
+        RpcIdlCompiler._check_codec_limits(schema, diagnostics)
         if diagnostics.has_errors():
             return CompileResult(diagnostics=diagnostics, unit=unit,
                                  document=document, schema=schema)
@@ -106,7 +107,7 @@ class IDLCompiler:
     def _parse_document(unit: CompilationUnit,
                         diagnostics: Diagnostics) -> Document | None:
         """Parse preprocessed sources into one IDL document."""
-        files = IDLCompiler._declaration_order(unit.files)
+        files = RpcIdlCompiler._declaration_order(unit.files)
         document = Document()
 
         # Lex and parse each preprocessed file in declaration order
@@ -260,7 +261,7 @@ class IDLCompiler:
             for field in struct.fields:
                 lines.append(
                     f"  {field.name}: "
-                    f"{IDLCompiler._format_type(field.type)}  "
+                    f"{RpcIdlCompiler._format_type(field.type)}  "
                     f"packed={field.type.packed_size}")
 
         # Services and methods
@@ -274,12 +275,12 @@ class IDLCompiler:
                     f"request={method.request_size}  "
                     f"response={method.response_size}")
                 lines.append("    request")
-                IDLCompiler._format_fields(lines, method.request, "    ")
+                RpcIdlCompiler._format_fields(lines, method.request, "    ")
                 if method.oneway:
                     lines.append("    response (none)")
                     continue
                 lines.append("    response")
-                IDLCompiler._format_fields(lines, method.response, "    ")
+                RpcIdlCompiler._format_fields(lines, method.response, "    ")
         return "\n".join(lines)
 
     @staticmethod
@@ -291,14 +292,14 @@ class IDLCompiler:
         for field in fields:
             lines.append(
                 f"{indent}  {field.name}: "
-                f"{IDLCompiler._format_type(field.type)}  "
+                f"{RpcIdlCompiler._format_type(field.type)}  "
                 f"packed={field.type.packed_size}")
 
     @staticmethod
     def _format_type(resolved: ResolvedType) -> str:
         """Format a resolved type as IDL-like text."""
         if isinstance(resolved, ArrayTypeRef):
-            return f"{IDLCompiler._format_type(resolved.element)}" \
+            return f"{RpcIdlCompiler._format_type(resolved.element)}" \
                    f"[{resolved.length}]"
         if isinstance(resolved, InternedTypeRef):
             return f"{resolved.kind}<{resolved.max_len}>"

@@ -34,38 +34,38 @@ static const mr_xvm_isa_ops_t __xvm_riscv32_ops = {
 #if defined(MR_USE_MODULE_XVM_DEBUG)
 /* XVM RISCV32 target */
 static mr_xvm_isa_regdesc_t __xvm_riscv32_regs[] = {
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x0"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x0"},
     {.type = MR_XVM_ISA_REG_CODE, .bit_size = 32,  .name = "x1"},
     {.type = MR_XVM_ISA_REG_DATA, .bit_size = 32,  .name = "x2"},
     {.type = MR_XVM_ISA_REG_DATA, .bit_size = 32,  .name = "x3"},
     {.type = MR_XVM_ISA_REG_DATA, .bit_size = 32,  .name = "x4"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x5"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x6"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x7"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x5"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x6"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x7"},
     {.type = MR_XVM_ISA_REG_DATA, .bit_size = 32,  .name = "x8"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x9"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x10"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x11"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x12"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x13"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x14"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x15"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x16"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x17"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x18"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x19"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x20"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x21"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x22"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x23"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x24"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x25"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x26"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x27"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x28"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x29"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x30"},
-    { .type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x31"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32,  .name = "x9"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x10"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x11"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x12"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x13"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x14"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x15"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x16"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x17"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x18"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x19"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x20"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x21"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x22"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x23"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x24"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x25"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x26"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x27"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x28"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x29"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x30"},
+    {.type = MR_XVM_ISA_REG_INT, .bit_size = 32, .name = "x31"},
     {.type = MR_XVM_ISA_REG_CODE, .bit_size = 32,  .name = "pc"},
 };
 static mr_xvm_isa_target_t __xvm_riscv32_target = {
@@ -110,7 +110,7 @@ static mr_err_t xvm_riscv32_load(mr_xvm_t *xvm) {
     /* Load RISCV32 core */
     core->mem_size = datamem->size - sizeof(*core);
     mr_atomic_init(&core->intr.active, 0);
-    core->regs.misa = 0x40001100;
+    core->regs.misa = 0x40001100U;
     core->bin = MR_XVM_BIN(xvm);
     core->trap_mtval = 0;
     return 0;
@@ -156,10 +156,10 @@ MR_INLINE mr_bool_t trap_enter_cause(core_t *core, mr_uint32_t cause,
     CORE_REG_MSTATUS(core) = mstatus;
 
     /* Switch to trap handler */
-    if ((cause & 0x80000000u) && ((mtvec & 0x3u) == 1)) {
-        CORE_REG_PC(core) = (mtvec & ~0x3u) + ((cause & 0x7fffffffu) << 2);
+    if ((cause & 0x80000000U) && ((mtvec & 0x3U) == 1)) {
+        CORE_REG_PC(core) = (mtvec & ~0x3U) + ((cause & 0x7fffffffU) << 2);
     } else {
-        CORE_REG_PC(core) = mtvec & ~0x3u;
+        CORE_REG_PC(core) = mtvec & ~0x3U;
     }
     return MR_TRUE;
 }
@@ -630,21 +630,21 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
         BCODE_EXECUTE_FUNC(BCODE_SLL) {
             CORE_REG_X(core, instr.R_type.rd)
                 = CORE_REG_X(core, instr.R_type.rs1)
-               << (CORE_REG_X(core, instr.R_type.rs2) & 0x1f);
+               << (CORE_REG_X(core, instr.R_type.rs2) & 0x1fU);
             CORE_REG_PC(core) += 4;
             BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
         }
         BCODE_EXECUTE_FUNC(BCODE_SRL) {
             CORE_REG_X(core, instr.R_type.rd)
                 = CORE_REG_X(core, instr.R_type.rs1)
-               >> (CORE_REG_X(core, instr.R_type.rs2) & 0x1f);
+               >> (CORE_REG_X(core, instr.R_type.rs2) & 0x1fU);
             CORE_REG_PC(core) += 4;
             BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
         }
         BCODE_EXECUTE_FUNC(BCODE_SRA) {
             CORE_REG_X(core, instr.R_type.rd)
                 = (mr_uint32_t)((mr_int32_t)CORE_REG_X(core, instr.R_type.rs1)
-                                >> (CORE_REG_X(core, instr.R_type.rs2) & 0x1f));
+                                >> (CORE_REG_X(core, instr.R_type.rs2) & 0x1fU));
             CORE_REG_PC(core) += 4;
             BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
         }
@@ -694,21 +694,21 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
         BCODE_EXECUTE_FUNC(BCODE_SLLI) {
             CORE_REG_X(core, instr.I_type.rd)
                 = CORE_REG_X(core, instr.I_type.rs1)
-               << (instr.I_type.imm & 0x1f);
+               << (instr.I_type.imm & 0x1fU);
             CORE_REG_PC(core) += 4;
             BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
         }
         BCODE_EXECUTE_FUNC(BCODE_SRLI) {
             CORE_REG_X(core, instr.I_type.rd)
                 = CORE_REG_X(core, instr.I_type.rs1)
-               >> (instr.I_type.imm & 0x1f);
+               >> (instr.I_type.imm & 0x1fU);
             CORE_REG_PC(core) += 4;
             BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
         }
         BCODE_EXECUTE_FUNC(BCODE_SRAI) {
             CORE_REG_X(core, instr.I_type.rd)
                 = (mr_uint32_t)((mr_int32_t)CORE_REG_X(core, instr.I_type.rs1)
-                                >> (instr.I_type.imm & 0x1f));
+                                >> (instr.I_type.imm & 0x1fU));
             CORE_REG_PC(core) += 4;
             BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
         }
@@ -967,7 +967,7 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
         }
         BCODE_EXECUTE_FUNC(BCODE_JALR) {
             tmp0u4 = INSTR_I_TYPE_IMM(instr);
-            tmp1u4 = (CORE_REG_X(core, instr.I_type.rs1) + tmp0u4) & ~1u;
+            tmp1u4 = (CORE_REG_X(core, instr.I_type.rs1) + tmp0u4) & ~1U;
             CORE_REG_X(core, instr.I_type.rd) = CORE_REG_PC(core) + 4;
             CORE_REG_PC(core) = tmp1u4;
             BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);
@@ -1025,13 +1025,13 @@ MR_INLINE int bcode_instr_exec(core_t *core, bcode_t bcode, instr_t instr) {
         BCODE_EXECUTE_FUNC(BCODE_DIV) {
             tmp0u4 = CORE_REG_X(core, instr.R_type.rs1);
             tmp1u4 = CORE_REG_X(core, instr.R_type.rs2);
-            if ((tmp0u4 == 0x80000000) && (((mr_int32_t)tmp1u4) == (-1))) {
-                CORE_REG_X(core, instr.R_type.rd) = 0x80000000;
+            if ((tmp0u4 == 0x80000000U) && (((mr_int32_t)tmp1u4) == (-1))) {
+                CORE_REG_X(core, instr.R_type.rd) = 0x80000000U;
             } else if (tmp1u4 != 0) {
                 CORE_REG_X(core, instr.R_type.rd)
                     = (mr_uint32_t)((mr_int32_t)tmp0u4 / (mr_int32_t)tmp1u4);
             } else {
-                CORE_REG_X(core, instr.R_type.rd) = 0xFFFFFFFF;
+                CORE_REG_X(core, instr.R_type.rd) = 0xffffffffU;
             }
             CORE_REG_PC(core) += 4;
             BCODE_EXECUTE_EXIT(TRAP_TYPE_NONE);

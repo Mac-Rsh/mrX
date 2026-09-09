@@ -1,7 +1,7 @@
 # CLI（scripts/cli.py）
 
 > mrX 命令行工具：无参数进入常驻交互 Shell，带命令时单次执行并退出。用于生成
-> `mr_config.h`、`mr_hardgen.h` 等构建前文件，以及平台、链接脚本、MDK、IDL 等维护命令。
+> `mr_config.h`、`mr_hardgen.h` 等构建前文件，以及平台、链接脚本、MDK、RPC IDL 等维护命令。
 
 | 项       | 说明                                            |
 |----------|-------------------------------------------------|
@@ -40,7 +40,7 @@ python ./scripts/cli.py shell
 ```text
 python ./scripts/cli.py kconfig --no-ui
 python ./scripts/cli.py htc -i board.hts
-python ./scripts/cli.py idl -i file.idl
+python ./scripts/cli.py rpc-idl -i file.idl
 python ./scripts/cli.py list
 python ./scripts/cli.py help kconfig
 ```
@@ -76,7 +76,7 @@ python ./scripts/cli.py htc -i <硬件模板>.hts
 
 ### 4. 维护命令
 
-- `idl`：编译 `.idl` 为 C 头文件与源文件。`-i/--input` 必填；`-o/--output` 为输出目录 或头文件路径（默认
+- `rpc-idl`：编译 RPC `.idl` 为 C 头文件与源文件。`-i/--input` 必填；`-o/--output` 为输出目录 或头文件路径（默认
   `include/mrX/modules/rpc/mr_rpc_idl.h`，只允许改目录，头文件名 固定为 `mr_rpc_idl.h`）；`-c/--source` 为输出 `.c` 路径（默认
   `modules/rpc/idl.c`）；
   `-I` 附加包含搜索目录，可重复；`--no-cpp` 使用内置预处理器代替外部 C 预处理器。 两个输出以临时文件原子替换写入，失败时回滚。
@@ -138,7 +138,7 @@ def create_plugin(services: ApplicationServices) -> Plugin:
     ...
 ```
 
-命令参数只定义一次：`Command.configure()` / `create_parser()`。帮助、解析和 Tab 补全 都从同一个 argparse parser 读取。HTC、IDL
+命令参数只定义一次：`Command.configure()` / `create_parser()`。帮助、解析和 Tab 补全 都从同一个 argparse parser 读取。HTC、RPC IDL
 的 frontend / semantic / backend 不因 CLI 而改写。
 
 单个插件加载失败会留下诊断，但 `help` 和其它插件仍可用。

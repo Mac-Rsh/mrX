@@ -321,20 +321,20 @@ static mr_uint16_t rpc_fletcher16(const void *data, mr_uint32_t size) {
             sum2 += sum1;
             n--;
         }
-        x = (sum1 & 0xffU) + (sum1 >> 8);
-        x = (x & 0xffU) + (x >> 8);
+        x = (sum1 & 0xffU) + (sum1 >> 8U);
+        x = (x & 0xffU) + (x >> 8U);
         if (x >= 255U) {
             x -= 255U;
         }
         sum1 = x;
-        x = (sum2 & 0xffU) + (sum2 >> 8);
-        x = (x & 0xffU) + (x >> 8);
+        x = (sum2 & 0xffU) + (sum2 >> 8U);
+        x = (x & 0xffU) + (x >> 8U);
         if (x >= 255U) {
             x -= 255U;
         }
         sum2 = x;
     }
-    return (mr_uint16_t)((sum2 << 8) | sum1);
+    return (mr_uint16_t)((sum2 << 8U) | sum1);
 }
 
 static void rpc_session_encode_frame(mr_rpc_session_t *session,

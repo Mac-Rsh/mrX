@@ -9,9 +9,6 @@
 #include <mrX/fs/mr_fs_file.h>
 #if defined(MR_USE_FS_ROOTFS)
 
-/* FS name */
-#define FS_NAME                         "rootfs"
-
 /* RootFS inode operations */
 static mr_err_t rootfs_inode_create(mr_inode_t *dir, const char *name,
                                     mr_inode_type_t type, mr_inode_t **out);
@@ -27,7 +24,7 @@ static const mr_inode_ops_t __rootfs_inodes = {
 static mr_err_t rootfs_mount(mr_sblock_t *sb, const char *source, int flags,
                              void *data);
 static mr_file_system_t __rootfs
-    = MR_FILE_SYSTEM_INIT(FS_NAME, rootfs_mount, MR_NULL);
+    = MR_FILE_SYSTEM_INIT("rootfs", rootfs_mount, MR_NULL);
 
 static mr_err_t rootfs_inode_alloc(mr_inode_type_t type, void *priv,
                                    mr_inode_t **out) {

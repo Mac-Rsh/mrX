@@ -157,7 +157,7 @@ mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
     MR_ASSERT(irq_start <= irq_end);
     MR_ASSERT(ops != MR_NULL);
 
-    /* Init workqueue */
+    /* Init irq */
     return irq_init(irq, clazz, irq_start, irq_end, ops, priv);
 }
 
@@ -296,7 +296,7 @@ static mr_irq_action_t *irq_action_alloc(mr_uint32_t irq, mr_irq_entry_t *entry,
 #else
     MR_IGNORE(defer_entry);
     MR_IGNORE(ret);
-#endif /* MR_USE_IRQ_DEFER */
+#endif /* defined(MR_USE_IRQ_DEFER) */
 
     /* Init irq action */
     action->irq = irq & ((1U << 31) - 1U);
