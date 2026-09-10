@@ -228,9 +228,8 @@ void truncation_demo(void) {
 ```
 
 - [日志 Log](log.md) 的时间戳与正文均经由本模块输出。
-- 平台侧 `mr_port_output` 声明于 `mrX/include/mrX/port/mr_port_output.h:32`， 由移植层实现（宿主模拟中对接 `stdio` 的
-  `printf`，见
-  `mrX/platform/port/output.c:13`）。
+- 平台侧 `mr_port_output` 声明于 `mrX/include/mrX/port/mr_port_output.h:32`，由移植层实现（宿主模拟中对接 `stdio` 的
+  `printf`，见 `mrX/arch/win/platform/port/output.c:13`）。
 
 ### 9. 数据结构
 
@@ -271,19 +270,33 @@ void truncation_demo(void) {
   `mr_port_output` 的实现。
 - 模块本身不加锁；跨上下文的输出原子性由移植层负责。
 
-### 12. 源码导读
+### 12. 扩展与派生
 
-| 位置                                    | 职责                                               |
-|-----------------------------------------|----------------------------------------------------|
-| `mrX/include/mrX/kernel/mr_printf.h:30` | 颜色宏定义（含禁用时的空展开）                     |
-| `mrX/include/mrX/kernel/mr_printf.h:54` | API 声明与 Doxygen 约定                            |
-| `mrX/kernel/printf.c:18`                | `mr_vprintf`：检查 → 取缓冲 → 格式化 → 截断 → 输出 |
-| `mrX/kernel/printf.c:36`                | 安全模式的堆缓冲分配                               |
-| `mrX/kernel/printf.c:60`                | `mr_printf`：可变参转发                            |
-| `mrX/platform/port/output.c:13`         | 宿主模拟的输出通道实现示例                         |
-| `mrX/test/kernel/printf.c`              | 非法参数、基础/可变参格式化、超长截断的行为级测试  |
+printf 无 clazz 与派生机制（头文件里没有结构体、没有函数指针成员，只有两个函数声明与颜色宏，
+`mrX/include/mrX/kernel/mr_printf.h:30-63`）。它的定制面是 **分层替换 + 编译期宏**：
 
-### 13. 附录
+- 输出终点由移植层实现的外部函数决定：`extern int mr_port_output(const char *buf, mr_size_t size)`（
+  `mrX/include/mrX/port/mr_port_output.h:32`），printf 只用不定义（调用点 `mrX/kernel/printf.c:52`）。换后端就是换这个实现——宿主模拟写
+  `stdout`（`mrX/arch/win/platform/port/output.c:13`），目标板空实现占位（`mrX/arch/wch/ch32v/platform/port/output.c:13`）。
+- 格式化逻辑不属本模块：由 [格式化 sprintf](../libc/sprintf.md) 的 `mr_vsnprintf` 提供（`printf.c:43`），可在
+  `MR_USE_SPRINTF_STD` 下整体转发标准库（`mrX/include/mrX/libc/mr_sprintf.h:29-33`），这是改变格式能力（如新增说明符）的唯一入口。
+- 编译期开关：`MR_USE_PRINTF`、`MR_CFG_PRINTF_BUF_SIZE`（缺省 64，`printf.c:19-21`）、`MR_USE_PRINTF_COLOR`、
+  `MR_USE_PRINTF_SAFE`（`mrX/include/mrX/kernel/Kconfig:69-105`），仅裁剪颜色与缓冲策略，不改变格式化语义；行为级验证见
+  `mrX/test/kernel/printf.c:65` 的 `vprintf_long_format`。
+
+### 13. 源码导读
+
+| 位置                                     | 职责                                               |
+|------------------------------------------|----------------------------------------------------|
+| `mrX/include/mrX/kernel/mr_printf.h:30`  | 颜色宏定义（含禁用时的空展开）                     |
+| `mrX/include/mrX/kernel/mr_printf.h:54`  | API 声明与 Doxygen 约定                            |
+| `mrX/kernel/printf.c:18`                 | `mr_vprintf`：检查 → 取缓冲 → 格式化 → 截断 → 输出 |
+| `mrX/kernel/printf.c:36`                 | 安全模式的堆缓冲分配                               |
+| `mrX/kernel/printf.c:60`                 | `mr_printf`：可变参转发                            |
+| `mrX/arch/win/platform/port/output.c:13` | 宿主模拟的输出通道实现示例                         |
+| `mrX/test/kernel/printf.c`               | 非法参数、基础/可变参格式化、超长截断的行为级测试  |
+
+### 14. 附录
 
 **配置宏**
 

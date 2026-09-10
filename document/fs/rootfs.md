@@ -280,10 +280,10 @@ RootFS 自身无任何可变状态（没有全局变量、没有锁），并发�
 
 ### 12. 扩展与派生
 
-RootFS 的 `mknod` + `priv` 借用机制是把 **任意对象接入路径命名空间**的通用 手段：以
-`mr_fs_mknod("/dev/xxx", MR_INODE_CHR, &driver_obj)` 把驱动实例、 控制块等挂到固定路径上，服务代码按路径 `open` 后从句柄
-inode 取回对象指针。 需要真正数据读写时，不要扩展 RootFS，而是在其目录上挂载实现 `fops` 的
-文件系统（模板见 [RamFS](ramfs.md) 开发者篇第 12 节）。
+RootFS 的 `mknod` + `priv` 借用机制是把 **任意对象接入路径命名空间** 的通用手段：以
+`mr_fs_mknod("/dev/xxx", MR_INODE_CHR, &driver_obj)` 把驱动实例、控制块等挂到固定路径上，服务代码按路径 `open` 后从句柄
+inode 取回对象指针。需要真正数据读写时，不要扩展 RootFS，而是在其目录上挂载实现 `fops` 的 文件系统（模板见 [RamFS](ramfs.md)
+开发者篇第 12 节）。
 
 ### 13. 源码导读
 

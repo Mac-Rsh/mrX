@@ -396,7 +396,20 @@ index` 限制为连续段；`mr_fifo_read_claim`（`fifo.c:369`）以 `len` 为�
 - 多生产者、多消费者不受支持：游标虽由 CAS 保护，但两个写者会向同一物理 槽位并发拷贝，产生数据竞争。
 - `mr_fifo_init` / `mr_fifo_alloc` / `mr_fifo_free` / `mr_fifo_reset` 不做 并发保护，必须在开始生产/消费之前或两侧都停止之后调用。
 
-### 12. 源码导读
+### 12. 扩展与派生
+
+FIFO 无对象 clazz、无 ops 与回调，也没有任何 `MR_CFG_*` 配置项（`mr_fifo.h` 全部 内容只有一个结构体与一组函数声明），扩展方式是
+**组合 + 参数化**：
+
+- 元素类型由 `elemsz` 参数量化，队列只按字节搬运，结构体形状任意（用例
+  `mrX/test/kernel/fifo.c:16` 的 `test_elem_t`）。
+- 容量由调用方缓冲区推导：`capacity = size / elemsz`（`fifo.c:27`），上限为
+  `FIFO_CAPACITY_MAX`（`fifo.c:15`）；需要“容量宏”时由消费模块自己定义。
+- 外层结构体内嵌 `mr_fifo_t`、并用外部锁把“查长度 + 搬运”合成一个事务，是内核内 既有做法：ramfs 节点内嵌队列（
+  `mrX/fs/ramfs/ramfs.c:68`），容量取自
+  `MR_CFG_FS_RAMFS_FIFO_SIZE`（`ramfs.c:108-111`），读写临界区见 `ramfs.c:362-378`。
+
+### 13. 源码导读
 
 | 位置                                   | 职责                                                  |
 |----------------------------------------|-------------------------------------------------------|
@@ -413,7 +426,7 @@ index` 限制为连续段；`mr_fifo_read_claim`（`fifo.c:369`）以 `len` 为�
 | `mrX/kernel/fifo.c:279`                | 零拷贝 claim/finish 六个接口                          |
 | `mrX/test/kernel/fifo.c`               | 边界、回绕、零拷贝与 SPSC 并发行为测试                |
 
-### 13. 附录：配置宏与错误码
+### 14. 附录：配置宏与错误码
 
 **配置宏**：本模块无功能宏、无 `MR_CFG_*` 配置项，始终编译。实现内部常量
 `FIFO_CAPACITY_MAX`（`MR_INT32_MAX / 2 + 1`）为容量硬上限。

@@ -374,7 +374,25 @@ typedef struct mr_heap_block {
 - `mr_heap_region_add` 无内部锁，仅限初始化阶段串行调用（头文件注释明确约束）。
 - 魔数校验（`magic`）为 `volatile` 读写，用于拦截重复释放与无效指针，不构成 多核同步原语；多核场景需外层串行化。
 
-### 12. 源码导读
+### 12. 扩展与派生
+
+本模块没有对象 clazz，也没有注册式回调，扩展面是 **编译期后端选择 + 运行期堆区域追加**：
+
+- **后端选择**：`MR_USE_MALLOC_STD` 时头文件把整个 API 宏转发标准库（`mrX/include/mrX/libc/mr_malloc.h:29-33`），
+  `MR_USE_MALLOC` 时切换到内置堆（`mr_malloc.h:35-129`）；两种形态下内部实现源文件整体被门控（`mrX/libc/malloc.c:10`
+  ），互斥参与编译。
+- **第三方后端**：`MR_USE_MALLOC_3RD` 已在 choice 中定义（`mrX/include/mrX/libc/Kconfig:64`），但头文件目前只有上述两个分支，代码中没有任何
+  `MR_USE_MALLOC_3RD` 分支——该选项是预留位，当前不存在可用的第三方分配器接入路径。
+- **追加内存区域**：`mr_heap_region_add`（`mrX/libc/malloc.c:274`）是唯一的运行期扩展入口，可在初始化阶段把外部 SRAM
+  等区域并入同一空闲链；区域列表以 `address == MR_NULL` 结尾，每个区域只能加入一次、不得与已有区域重叠且须终身有效，调用方还须自行串行化。
+- **容量与诊断**：`MR_CFG_HEAP_SIZE`（`mr_malloc.h:76` 定义处，`malloc.c:15-20` 回退与最小值检查）决定内建堆池大小；
+  `mr_heap_information` / `mr_malloc_usable_size` 只属于内置后端（声明在 `mr_malloc.h:34` 之后的 `#else` 分支），切到 STD
+  后端这些接口连同统计信息一起消失。
+
+追加区域与统计的可观测性有测试固定：`mrX/test/libc/malloc.c:244`（新增区域后 `total_bytes` / `free_bytes` 增长）、
+`malloc.c:263`（小于阈值的区域被静默跳过）。
+
+### 13. 源码导读
 
 | 位置                                  | 职责                                            |
 |---------------------------------------|-------------------------------------------------|
@@ -390,7 +408,7 @@ typedef struct mr_heap_block {
 | `mrX/kernel/initcall.c:53`            | 内核初始化中的调用点                            |
 | `mrX/test/libc/malloc.c`              | 分配/释放/清零/扩缩容/区域/统计的行为级测试     |
 
-### 13. 附录
+### 14. 附录
 
 **配置宏**
 

@@ -118,8 +118,7 @@ if (drv != MR_NULL) {
 `MR_DRIVER_LEVEL_NORMAL`（"3"）→ `MR_DRIVER_LEVEL_LAST`（"4"）。同级别的
 `MR_DRIVER_LEVEL_PRIO` 子级别字符串越小越先。`MR_DRIVER_LEVEL_DEFER`（"9"） 的驱动 **不会**被自动启动，需查找后手动 `setup`。
 
-**回调上下文**：`init`/`deinit` 回调在调用 `mr_driver_setup`/`shutdown` 的 调用者上下文中执行；系统自动启动阶段它们运行在内核初始化流程中。回调内不应
-阻塞。
+**回调上下文**：`init`/`deinit` 回调在调用 `mr_driver_setup`/`shutdown` 的调用者上下文中执行；系统自动启动阶段它们运行在内核初始化流程中。回调内不应阻塞。
 
 ### 5. API 参考
 
@@ -488,3 +487,21 @@ start（"0.end"）、 defer（"8.end"）、end（"9.end"），用于在段内圈
 `-MR_EPERM`（驱动正在删除）、`-MR_EINVAL`（外设层参数越界）等，定义见
 `mrX/include/mrX/libc/mr_errno.h`；空指针、类型不符等编程错误在断言开启时由
 `MR_ASSERT` 拦截，而非返回错误码。
+
+---
+
+## 本目录其它驱动
+
+驱动框架只提供生命周期、引用计数和硬件树实例化。具体外设的配置项、API 与事件语义 在各自的文档中：
+
+| 驱动           | 文档                           | 对应外设类型                       |
+|----------------|--------------------------------|------------------------------------|
+| GPIO           | [gpio.md](gpio.md)             | `MR_DRIVER_TYPE_GPIO`              |
+| UART           | [uart.md](uart.md)             | `MR_DRIVER_TYPE_UART`              |
+| ADC            | [adc.md](adc.md)               | `MR_DRIVER_TYPE_ADC`               |
+| DAC            | [dac.md](dac.md)               | `MR_DRIVER_TYPE_DAC`               |
+| RAM 设备       | [ram.md](ram.md)               | `MR_DRIVER_TYPE_RAM`（内存块设备） |
+| HC165 输入扩展 | [gpio_hc165.md](gpio_hc165.md) | GPIO 端口（输入扩展芯片）          |
+| HC595 输出扩展 | [gpio_hc595.md](gpio_hc595.md) | GPIO 端口（输出扩展芯片）          |
+
+新增外设驱动时，先按本文的开发者指南实现 `MR_DRIVER_CLAZZES_DEFINE` 与 ops， 再参考类型最接近的上述文档补齐用户指南。

@@ -294,7 +294,22 @@ typedef struct mr_hook {                /* mrX/include/mrX/kernel/mr_hook.h:26 *
 - `MR_HOOK_EACH` 无锁：要求遍历期间没有并发追加。使用者遵循"初始化期注册、 运行期只读分发"即可；若业务确实需要运行期注册，需自行在分发侧加同步。
 - 回调在分发者上下文中同步执行（时钟场景下为 tick 上下文，回调内禁止阻塞， 见 [时钟](clock.md) 的回调上下文约定）。
 
-### 12. 源码导读
+### 12. 扩展与派生
+
+钩子模块不含对象 clazz，也没有派生宏：`mr_hook_t` 内嵌的是通用指针数组 `mr_ptr_t *entry`（
+`mrX/include/mrX/kernel/mr_hook.h:26`，`mr_ptr_t` 即 `void *`），不注册对象类型、不提供 ops
+表或注册回调，扩展语义全部集中在"条目如何被解释"：
+
+- 新增条目类型 = 新增一个函数指针 typedef 并复用同一张表：宿主模块在自己的头文件里声明如
+  `typedef mr_tick_t(mr_clock_hook_t)(void);`（`mrX/include/mrX/kernel/mr_clock.h:64`），分发处用
+  `MR_HOOK_EACH(i, entry, mr_clock_hook_t, &__clock_hook)` 转型调用（`mrX/kernel/clock.c:36`、`:43`）。条目是纯函数指针，注册端与分发端只约定
+  `_type`，模块本身不做类型校验。
+- 条目也可为数据指针：注册接口接受任意 `mr_ptr_t` 原样保存（`mrX/kernel/hook.c:30`），`MR_HOOK_EACH` 再按 `_type` 取回，
+  `mrX/test/kernel/hook_deep.c:184-189` 即以 `deep_hook_data_t *` 条目演示该用法。
+- 新增钩子表实例 = `MR_HOOK_INIT` + 自备 `mr_ptr_t` 数组（容量即数组长度，`mr_hook.h:38`）；多个实例共享 `hook.c:14`
+  的全局自旋锁，无需也不支持逐实例定制锁或 vtable。
+
+### 13. 源码导读
 
 | 位置                                  | 职责                                        |
 |---------------------------------------|---------------------------------------------|
@@ -308,7 +323,7 @@ typedef struct mr_hook {                /* mrX/include/mrX/kernel/mr_hook.h:26 *
 | `mrX/kernel/clock.c:85`               | `mr_clock_hook_add`（时钟侧封装）           |
 | `mrX/test/kernel/hook.c`              | 初始化/追加/容量/遍历行为测试               |
 
-### 13. 附录
+### 14. 附录
 
 **配置宏**
 

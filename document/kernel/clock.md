@@ -72,8 +72,8 @@ void clock_demo(void) {
 
 要点：
 
-- `mr_clock_increase` 由移植层的 tick 源调用（目标板通常是滴答定时器中断， 宿主模拟环境由平台 tick 线程调用，见
-  `mrX/platform/port/clock.c:38`）， 应用代码一般不直接调用。
+- `mr_clock_increase` 由移植层的 tick 源调用（目标板通常是滴答定时器中断，宿主模拟环境由平台 tick 线程调用，见
+  `mrX/arch/win/platform/port/clock.c:93`），应用代码一般不直接调用。
 - 钩子函数类型为 `mr_tick_t (*)(void)`，返回值含义见第 4 节。
 
 ### 4. 使用说明
@@ -90,9 +90,9 @@ void clock_demo(void) {
 
 **高分辨率扩展**（`MR_USE_CLOCK_HIRES`）：
 
-- `mr_hires_tick` 的绝对含义由移植层决定：宿主模拟环境将其初始化为 Unix 纪元（`mrX/platform/port/clock.c:60`），可直接经
-  `mr_hires_tick2timestamp`
-  得到日历时间；目标板需由移植层保证相同语义。
+- `mr_hires_tick` 的绝对含义由移植层决定：宿主模拟环境通过 `mr_win_platform_clock_init` 把它初始化为 Unix 纪元 （
+  `mrX/arch/win/platform/port/clock.c:133`），可直接经 `mr_hires_tick2timestamp` 得到日历时间； 目标板（如 CH32V 平台）的
+  hires tick 复位后自 0 起算，需由移植层保证与宿主一致的语义。
 - `mr_hires_tick2timestamp` 的时区参数为 UTC+n，超出 ±12 会被钳位。
 - `mr_clock_busy_wait(us)` 忙等指定微秒数，期间不让出 CPU，只适合极短延时。
 
@@ -229,7 +229,7 @@ mr_hires_timestamp_t ts = mr_hires_tick2timestamp(1725580800000000ULL, 8);
 **Q：tick / 定时器完全不走？**
 
 排查移植层 tick 源是否已初始化并在周期性调用 `mr_clock_increase`；宿主模拟 环境由平台 tick 线程驱动（
-`mrX/platform/port/clock.c:38`）。
+`mrX/arch/win/platform/port/clock.c:93`）。
 
 **Q：钩子注册失败返回 `-MR_ENOMEM`？**
 
@@ -269,7 +269,7 @@ tick 为 32 位无符号数，长期运行必然回绕，直接比较绝对值�
 ```
    +------------------------------+
    | 平台 tick 源                  |  目标板: 滴答定时器 ISR
-   | (mrX/platform/port/clock.c)  |  宿主: tick 线程
+   | (mrX/arch/win/platform/port/clock.c)  |  宿主: tick 线程
    +---------------+--------------+
                    | mr_clock_increase(1)
    +---------------v--------------+
@@ -369,7 +369,7 @@ tickless，初值为
 | `mrX/kernel/clock.c:119`               | 高分辨率 tick 转日历时间戳                   |
 | `mrX/kernel/clock.c:185`               | uptime 无锁一致性快照                        |
 | `mrX/kernel/timer.c:264`               | 软定时器向时钟注册钩子（消费者示例）         |
-| `mrX/platform/port/clock.c`            | 宿主移植层：tick 线程、hires 基准、busy-wait |
+| `mrX/arch/win/platform/port/clock.c`   | 宿主移植层：tick 线程、hires 基准、busy-wait |
 | `mrX/test/kernel/clock.c`              | 全部用户可见行为的行为级测试                 |
 
 ### 14. 附录：配置宏与错误码

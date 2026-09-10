@@ -298,7 +298,20 @@ mr_snprintf(buf, sizeof(buf), "%10s", "test");/* "      test" */
 - 唯一的外部约定：调用者保证输出缓冲在调用期间有效且足够大（`mr_sprintf`
   无越界保护）。
 
-### 12. 源码导读
+### 12. 扩展与派生
+
+扩展面与 libc 家族其余模块一致，是 **编译期后端 choice**；本模块没有 clazz 与派生机制：
+
+- `MR_USE_SPRINTF_STD` 时头文件把 `mr_sprintf` / `mr_snprintf` / `mr_vsprintf` / `mr_vsnprintf` 整体宏转发标准库（
+  `mrX/include/mrX/libc/mr_sprintf.h:29-33`），`MR_USE_SPRINTF` 时使用内置实现（`mr_sprintf.h:34-76`，实现见
+  `mrX/libc/sprintf.c:10` 起）。
+- `MR_USE_SPRINTF_3RD` 已在 choice 中定义（`mrX/include/mrX/libc/Kconfig:97`），但头文件只有上述两个分支，代码中没有任何
+  `MR_USE_SPRINTF_3RD` 分支——第三方格式化库的接入点当前并不存在，属于预留选项。
+- 切换后端会改变可观测行为：内置实现不支持浮点转换、`%%` 输出两个百分号（`mr_sprintf.h:29-33` 转发后行为由工具链 C
+  库决定），因此"换后端"不是纯粹的实现替换，会连带改变输出。模块未提供自定义说明符或输出回调注册入口，需要不同格式语义只能在调用方组合
+  `mr_snprintf`。
+
+### 13. 源码导读
 
 | 位置                                   | 职责                                    |
 |----------------------------------------|-----------------------------------------|
@@ -312,7 +325,7 @@ mr_snprintf(buf, sizeof(buf), "%10s", "test");/* "      test" */
 | `mrX/test/libc/sprintf.c`              | 说明符、标志、修饰与边界的行为级测试    |
 | `mrX/test/libc/sprintf_matrix.c`       | 组合矩阵测试                            |
 
-### 13. 附录
+### 14. 附录
 
 **配置宏**
 

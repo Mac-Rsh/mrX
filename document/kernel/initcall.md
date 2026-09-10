@@ -236,7 +236,7 @@ MR_INIT_EXPORT(app_late_init, MR_INIT_LEVEL_USER("1"));
 `mr_initcall.9.end` 的字典序执行。`mr_user_init` 通过链接器提供的边界符号
 `__mr_initcall_start` / `__mr_initcall_end` 定界遍历（`initcall.c:72-73`）， 由平台链接脚本与段收集规则配套提供。
 
-`mr_initcall.c` 内部还导出两个空函数作为段边界哨兵：`start`（`"0.end"`，
+`mrX/kernel/initcall.c` 内部还导出两个空函数作为段边界哨兵：`start`（`"0.end"`，
 `initcall.c:20`）与 `end`（`"9.end"`，`initcall.c:25`），保证段首尾至少各有一个 条目、边界符号之间始终包含完整级别区间。
 
 ### 9. 数据结构
@@ -290,7 +290,20 @@ typedef struct mr_initcall {                    /* mr_initcall.h:34 */
   API（此时调度设施是否可用取决于各服务的初始化完成情况， 内核服务在 initcall 之前已就绪）。
 - initcall 之间串行执行，无需自行加锁保护"只在本模块初始化中触碰"的数据。
 
-### 12. 源码导读
+### 12. 扩展与派生
+
+本模块没有对象 clazz 与派生机制；它的"扩展"是 **向初始化序列注入条目**，注入面是编译期与链接期而非运行期继承：
+
+- 组件侧：一行 `MR_INIT_EXPORT(_entry, _level)`（`mrX/include/mrX/kernel/mr_initcall.h:45`）即把自己挂进 `mr_initcall.<级别>`
+  段，级别宏预留的用户区段可用 `MR_INIT_LEVEL_USER("0")`、`"1"` 表达子级与相对顺序（`mr_initcall.h:28`；真实用法见
+  `mrX/test/kernel/initcall.c:34`、`:42`，框架内另有 `MR_INIT_LEVEL_DRIVER` 的 `mrX/drivers/driver.c:319`）。想自定义级别，只能沿用
+  `"<整数>.<子级>"` 命名继续细分（排序由链接器 `SORT` 完成，规则见 `user/linker.lds:64-65` 与 `mrX/sections.toml:2`
+  ），模块不提供级别注册表。
+- 内核侧：新增需要启动接线的内核模块，是在 `kernel_extensions_init` 中按 `MR_USE_*` 守卫追加调用（
+  `mrX/kernel/initcall.c:27-33`、`:67`），而不是派生 `mr_initcall_t`；派生类扩展无从谈起——`mr_initcall_t` 只有 `name`/
+  `entry` 两个字段，无虚表、无钩子、无注销接口（`mr_initcall.h:34`）。
+
+### 13. 源码导读
 
 | 位置                                      | 职责                                     |
 |-------------------------------------------|------------------------------------------|
@@ -305,7 +318,7 @@ typedef struct mr_initcall {                    /* mr_initcall.h:34 */
 | `user/linker.lds:65`                      | 宿主链接脚本的段收集规则                 |
 | `mrX/sections.toml`                       | 段规则模板（`mr_initcall.*` -> `.text`） |
 
-### 13. 附录
+### 14. 附录
 
 **配置宏**
 

@@ -243,7 +243,7 @@ HC165 扩展是 [GPIO 驱动](gpio.md)框架层之下的一个 `ops` 实现，�
         +-------------------+----------------------+
                             | exist/invert 换算、引脚校验
         +-------------------v----------------------+
-        |  GPIO 框架层（mr_gpio.c + mr_gpio.h）      |
+        |  GPIO 框架层（drivers/gpio/gpio.c + mr_gpio.h） |
         +-------------------+----------------------+
                             | mr_gpio_ops_t
         +-------------------v----------------------+
@@ -314,7 +314,24 @@ typedef struct drv_gpio_hc165_priv {
 - 所有回调运行在调用者上下文，内部不阻塞、不睡眠；技术上任一回调可在 中断上下文调用，但位拆时序耗时与上述互斥约束使轮询在中断内并不合适。
 - `configured` 标记使配置路径天然幂等，重复配置不产生并发副作用。
 
-### 12. 源码导读
+### 12. 扩展与派生
+
+本扩展驱动不注册自己的对象类型：`gpio_hc165.c` 内不存在 `MR_DRIVER_CLAZZES_DEFINE`，安装时通过 `MR_HT_GPIO_INSTALL` 借用
+GPIO 框架共享的 clazz（`mrX/include/mrX/drivers/gpio/mr_gpio.h:536`，clazz 实际定义在 `mrX/drivers/gpio/gpio.c:15`
+）。因此"派生子类型"的路径在这里不存在，扩展方式是 **组合与新增实例**：
+
+- **新增派生实例**：在硬件模板中声明 compat 为 `gpio_hc165` 的节点并给出 `clk` / `sh` / `qh`（可选 `clk_inh` / `ser` /
+  `cascade_num` / `exist_mask` / `invert_mask`），使能 `MR_USE_DRIVER_GPIO`、重新生成 `mr_config.h` 后，
+  `MR_HT_DRIVER_FOREACH`（`mrX/drivers/gpio/gpio_hc165.c:211`）会为该 compat 组的每个实例批量展开静态私有数据与安装（
+  `gpio_hc165.c:198`）。
+- **组合出同类端口**：位拆式输入扩展的通用做法是自定义一张 `mr_gpio_ops_t`（`mr_gpio.h:84`），私有数据里保存上游
+  `mr_ht_gpio_spec_t`（`mr_gpio.h:545`）并自行实现时序，再用 `mr_gpio_init`（`mr_gpio.h:148`）或 `mr_gpio_create`（
+  `mr_gpio.h:169`）挂到 GPIO 框架上，框架层换算逻辑自动生效；运行期以 ops 组装端口的参考写法见
+  `mrX/test/drivers/gpio/gpio.c:123-132`。
+- `MR_HT_COMPAT`（`gpio_hc165.c:13`）只用于把本文件绑定到一个 compat 组，新增一种芯片应当新增独立的 compat
+  与驱动文件，而不是在本文件里扩展条件分支。
+
+### 13. 源码导读
 
 | 位置                                         | 职责                                          |
 |----------------------------------------------|-----------------------------------------------|
@@ -331,7 +348,7 @@ typedef struct drv_gpio_hc165_priv {
 | `mrX/include/mrX/drivers/gpio/mr_gpio.h:537` | `MR_HT_GPIO_INSTALL`（生成 `mr_gpio_data_t`） |
 | `mrX/include/mrX/drivers/gpio/mr_gpio.h:546` | 宿主引脚规格 `mr_ht_gpio_spec_t`              |
 
-### 13. 附录：配置宏与错误码
+### 14. 附录：配置宏与错误码
 
 **配置宏**
 

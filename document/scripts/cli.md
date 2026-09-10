@@ -3,6 +3,18 @@
 > mrX 命令行工具：无参数进入常驻交互 Shell，带命令时单次执行并退出。用于生成
 > `mr_config.h`、`mr_hardgen.h` 等构建前文件，以及平台、链接脚本、MDK、RPC IDL 等维护命令。
 
+本页说明 CLI 的共同行为和交互 Shell。各命令的完整输入格式、操作步骤和故障排查见：
+
+| 命令       | 详细教程                               |
+|------------|----------------------------------------|
+| `kconfig`  | [Kconfig 配置与头文件生成](kconfig.md) |
+| `htc`      | [HTC 硬件描述编译](htc.md)             |
+| `rpc-idl`  | [RPC IDL 编译](rpc-idl.md)             |
+| `platform` | [平台文件安装与卸载](platform.md)      |
+| `sections` | [GNU ld 注册段处理](sections.md)       |
+| `mdk`      | [Keil MDK 工程维护](mdk.md)            |
+| `echo`     | [echo 最小插件示例](echo.md)           |
+
 | 项       | 说明                                            |
 |----------|-------------------------------------------------|
 | 功能宏   | 无（主机 Python 工具，不进入固件编译）          |
@@ -22,14 +34,17 @@ pip install -r ./scripts/requirements.txt
 
 ### 1. 交互模式
 
-在 TTY 中不带命令启动，或显式进入 Shell：
+在 TTY 中不带命令启动即可进入常驻交互 Shell：
 
 ```text
 python ./scripts/cli.py
-python ./scripts/cli.py shell
 ```
 
-提示符为 `mrX>`。输入与单次执行相同的命令行，例如 `kconfig --no-ui`。
+`python ./scripts/cli.py shell` 也可以进入交互模式，但 `shell` 不是注册命令：它由顶层分派 单独识别（
+`scripts/framework/application.py:73`），不出现在 `list` 中，`help shell` 会以退出码 2 报未知命令。需要查看命令清单时用不带参数的启动方式或
+`list`。
+
+提示符为 `mrX>`。输入与单次执行相同的命令行，例如 `kconfig`。
 
 若 stdin/stdout 不是 TTY（管道、重定向），无参数或 `shell` 启动不会等待输入，而是打印总帮助并以退出码 0 结束。
 
@@ -38,21 +53,23 @@ python ./scripts/cli.py shell
 带命令时解析 `sys.argv`、执行一次并退出，退出码回传给操作系统：
 
 ```text
-python ./scripts/cli.py kconfig --no-ui
+python ./scripts/cli.py kconfig
 python ./scripts/cli.py htc -i board.hts
 python ./scripts/cli.py rpc-idl -i file.idl
 python ./scripts/cli.py list
 python ./scripts/cli.py help kconfig
 ```
 
-全局选项必须写在命令名之前：`--no-color`、`--verbose`、`--help`、`--version`。
+全局选项必须写在命令名之前：`--no-color`、`--verbose`、`--help`（`-h`）、`--version`。
+`python ./scripts/cli.py -h` 与 `--help` 等价，打印总帮助。命令名之后的 `-h` / `--help` 由该命令 自己的参数解析器处理，显示的是子命令帮助，例如
+`kconfig --help`。
 
-### 3. 构建前生成命令
+### 3. 配置与生成命令
 
 从 `mrX/` 目录运行：
 
 ```text
-python ./scripts/cli.py kconfig --no-ui
+python ./scripts/cli.py kconfig
 python ./scripts/cli.py htc -i <硬件模板>.hts
 ```
 
@@ -113,7 +130,8 @@ python ./scripts/cli.py htc -i <硬件模板>.hts
 - `exit` / `quit`（或 `q`）退出，返回最近一次命令的退出码。
 - 交互里命令失败只更新 `last_exit_code`，不终止 Shell。
 
-其它交互命令：`help [command ...]`、`list`、`history`、`clear`、`pwd`、`cd <directory>`。
+其它交互命令：`help [command ...]`、`list`、`history`、`clear`、`pwd`、`cd <directory>`。 其中 `list` 可写作 `ls`，`help` 可写作
+`h`（`scripts/framework/builtins.py:33,63`）。
 `cd` 只改会话目录，不调用进程级 `os.chdir()`。
 
 ### 7. 退出码
@@ -138,8 +156,8 @@ def create_plugin(services: ApplicationServices) -> Plugin:
     ...
 ```
 
-命令参数只定义一次：`Command.configure()` / `create_parser()`。帮助、解析和 Tab 补全 都从同一个 argparse parser 读取。HTC、RPC IDL
-的 frontend / semantic / backend 不因 CLI 而改写。
+命令参数只定义一次：`Command.configure()` / `create_parser()`。帮助、解析和 Tab 补全 都从同一个 argparse parser 读取。HTC、RPC
+IDL 的 frontend / semantic / backend 不因 CLI 而改写。
 
 单个插件加载失败会留下诊断，但 `help` 和其它插件仍可用。
 

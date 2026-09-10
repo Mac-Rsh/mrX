@@ -291,7 +291,22 @@ void strerror_example(int err) {
 - 不操作目标存储之外的状态，并发安全性由调用者对目标缓冲的所有权保证 （同一缓冲的并发写需调用者串行化，这与标准 C 库一致）。
 - 函数耗时与 `size` 成正比且无上界，长拷贝建议移出中断上下文。
 
-### 12. 源码导读
+### 12. 扩展与派生
+
+扩展面是 **编译期后端 choice + 一个可选安全检查开关**；本模块没有 clazz 与派生机制：
+
+- `MR_USE_STRING_STD` 时头文件把内存/字符串函数整体宏转发标准库（`mrX/include/mrX/libc/mr_string.h:30-44`），
+  `MR_USE_STRING` 时使用内置实现（`mr_string.h:45-179`，实现见 `mrX/libc/string.c:10` 起）。
+- `MR_USE_STRING_3RD` 已在 choice 中定义（`mrX/include/mrX/libc/Kconfig:145`），但头文件只有上述两个分支，代码中没有任何
+  `MR_USE_STRING_3RD` 分支——第三方字符串库的接入点当前并不存在，属于预留选项。
+- `MR_USE_STRING_SAFE`（`Kconfig:157`，依赖 `MR_USE_STRING`）在各内置实现函数入口追加 `MR_NULL` 检查（如
+  `mrX/libc/string.c:64`、`string.c:100`），把"崩溃"换成返回 `MR_NULL` / `0`；STD 后端不受该开关影响。
+- 位查找原语 `mr_ffs32` / `mr_ffs64` / `mr_fls32` / `mr_fls64` 固定内联在头文件、始终可用且不受 choice 控制（
+  `mr_string.h:187` 起），需要位扫描的内核模块直接继承该实现而非依赖所选后端（用例见 `mrX/kernel/slab.c:32`）。
+
+两种扩展开关都有行为测试固定：`mrX/test/libc/string.c:488`（`MR_USE_STRING_SAFE` 下的空指针拒绝）、`string.c:431`（位查找序号语义）。
+
+### 13. 源码导读
 
 | 位置                                   | 职责                                                     |
 |----------------------------------------|----------------------------------------------------------|
@@ -305,7 +320,7 @@ void strerror_example(int err) {
 | `mrX/libc/string.c:386`                | `mr_strncpy`（memccpy + memset 组合）                    |
 | `mrX/test/libc/string.c`               | 内存/字符串/位查找/安全模式的行为级测试                  |
 
-### 13. 附录
+### 14. 附录
 
 **配置宏**
 

@@ -29,12 +29,12 @@
 
 ### 2. 配置与依赖
 
-| 配置项                | 类型     | 默认值        | 说明                                                                                                                                           |
-|-----------------------|----------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------|
-| `MR_USE_TEST`         | bool     | n             | 启用测试框架（`mrX/include/mrX/test/Kconfig`）；自动 `select MR_USE_PRINTF`                                                                    |
-| `MR_USE_TEST_PTHREAD` | 编译定义 | 无 Kconfig 项 | 门控基于 pthread 的多线程并发用例（如 `mrX/test/kernel/fifo.c`、`mrX/test/fs/concurrency.c`）；由根 `CMakeLists.txt` 与 `MR_USE_TEST` 一并定义 |
+| 配置项                | 类型     | 默认值        | 说明                                                                                                                                                                                      |
+|-----------------------|----------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `MR_USE_TEST`         | bool     | n             | 启用测试框架（`mrX/include/mrX/test/Kconfig`）；自动 `select MR_USE_PRINTF`                                                                                                               |
+| `MR_USE_TEST_PTHREAD` | 编译定义 | 无 Kconfig 项 | 门控基于 pthread 的多线程并发用例（如 `mrX/test/kernel/fifo.c`、`mrX/test/fs/concurrency.c`）；由 mrX 上一级项目根的 `CMakeLists.txt` 与 `MR_USE_TEST` 一并定义（`CMakeLists.txt:78-81`） |
 
-注意：根 `CMakeLists.txt` 对宿主可执行文件无条件定义 `MR_USE_TEST` 与
+注意：项目根 `CMakeLists.txt`（位于 `mrX/` 的上一级）对宿主可执行文件无条件定义 `MR_USE_TEST` 与
 `MR_USE_TEST_PTHREAD`，因此 `./build/mrX.exe` 始终编入测试，Kconfig 默认值 n 不影响宿主模拟构建。各用例文件除 `MR_USE_TEST`
 外通常还按被测模块宏二次门控 （如 `mrX/test/kernel/timer.c` 整体包在 `#if defined(MR_USE_TIMER)` 内）。
 
@@ -299,10 +299,10 @@ typedef struct mr_testcase {        /* mrX/include/mrX/test/mr_test.h:169 */
 
 **配置宏**
 
-| 宏                    | 说明                                                            |
-|-----------------------|-----------------------------------------------------------------|
-| `MR_USE_TEST`         | 框架总开关（默认 n），自动选中 `MR_USE_PRINTF`                  |
-| `MR_USE_TEST_PTHREAD` | 多线程并发用例门控（无 Kconfig 项），由根 `CMakeLists.txt` 定义 |
+| 宏                    | 说明                                                                      |
+|-----------------------|---------------------------------------------------------------------------|
+| `MR_USE_TEST`         | 框架总开关（默认 n），自动选中 `MR_USE_PRINTF`                            |
+| `MR_USE_TEST_PTHREAD` | 多线程并发用例门控（无 Kconfig 项），由项目根 `CMakeLists.txt:78-81` 定义 |
 
-**错误码**：运行入口返回 `mr_bool_t`（全过 `MR_TRUE`），不使用 `mr_errno` 体系； 进程级结果经 `user/main.c` 映射为退出码（0 =
-全部通过）。
+**错误码**：运行入口返回 `mr_bool_t`（全过 `MR_TRUE`），不使用 `mr_errno` 体系； 进程级结果经宿主入口 `user/main.c`（位于
+`mrX/` 的上一级）映射为退出码（0 = 全部通过）。

@@ -325,7 +325,7 @@ typedef struct ramfs_node {
 
 ### 12. 扩展与派生
 
-RamFS 的定位是文件系统实现范例（`mrX/include/mrX/fs/ramfs/Kconfig:11-14`）： 实现自定义文件系统时可直接以 `ramfs.c`
+RamFS 的定位是文件系统实现范例（`mrX/include/mrX/fs/ramfs/Kconfig:6`）： 实现自定义文件系统时可直接以 `ramfs.c`
 为模板——只实现 `mount` 回调、
 `mr_inode_ops_t` 的 `create`/`truncate`/`destroy` 与 `mr_file_ops_t` 的
 `read`/`write`，把私有数据挂在 `inode->priv` 上，其余命名空间能力全部交给 VFS。注册与挂载方式见 [文件系统 VFS](fs.md) 开发者篇第

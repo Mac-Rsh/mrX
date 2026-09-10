@@ -285,7 +285,20 @@ int sensor_read(int *val) {
   `mr_port_output` 由移植层保证。
 - 时间戳与正文是两次独立输出调用，多上下文并发时可能交错。
 
-### 12. 源码导读
+### 12. 扩展与派生
+
+日志无对象 clazz、无输出后端回调或 ops 表（`mr_log.h` 只声明 `mr_log` /
+`mr_log_mask_set` / `mr_log_mask` 三个函数），扩展面是以下几处既有开关，且没有可 替换的后端：
+
+- 每个编译单元定义自己的 `MR_LOG_TAG` 字面量，由 `__MR_LOG_FORMAT` 拼进前缀 （`mr_log.h:66-67`，用例
+  `mrX/test/kernel/log_deep.c:16`）；不定义标签时级别宏 整体展开为空。
+- 编译期用 `MR_CFG_LOG_LEVEL` 裁剪（`mr_log.h:38-40`、
+  `mrX/include/mrX/kernel/Kconfig:119`），运行期用 32 位掩码 `mr_log_mask_set` /
+  `mr_log_mask` 开关任意级别组合（`log.c:63`）。
+- 输出终点不归本模块替换：正文经 `mr_vprintf` → `mr_port_output`（`printf.c:52`） 送出，替换点是移植层实现（
+  `mrX/arch/win/platform/port/output.c:13`）；模块既无 颜色宏，也无前缀格式的覆写开关，级别常量与 `__MR_LOG_FORMAT` 均无条件定义。
+
+### 13. 源码导读
 
 | 位置                                 | 职责                                    |
 |--------------------------------------|-----------------------------------------|
@@ -298,7 +311,7 @@ int sensor_read(int *val) {
 | `mrX/kernel/log.c:54`                | `mr_log` 主流程（过滤 + 时间戳 + 输出） |
 | `mrX/test/kernel/log.c`              | 掩码、非法参数、各级别输出的行为级测试  |
 
-### 13. 附录
+### 14. 附录
 
 **配置宏**
 

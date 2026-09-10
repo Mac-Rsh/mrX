@@ -457,7 +457,24 @@ flags 编码：低 4 位为触发类型（`IRQ_FLAG_TYPE_MASK`，`irq.c:35`）�
   回调内释放"两类竞态的安全。
 - `mr_irq_defer_hook_set` 仅写一个全局指针（`irq.c:832`），应在系统启动单线程阶段 调用。
 
-### 12. 源码导读
+### 12. 扩展与派生
+
+中断管理的扩展面是 **控制器操作集**，而非对象派生：控制器驱动实现 `mr_irq_ops_t`
+的六个硬件操作（`mr_irq.h:47-54`），连同私有数据 `priv` 一起交给 `mr_irq_init` /
+`mr_irq_create`（`mr_irq.h:111-124`），框架只按中断号回调它们；测试中的 mock 集即 最小样例（`mrX/test/kernel/irq.c:77`
+）。中断使用者经 `mr_irq_request` /
+`mr_irq_defer_request` + 唯一 `owner` 挂接（`mr_irq.h:143`、`mr_irq.h:157`）。
+
+`mr_irq_t` 虽带对象基类与静态/动态 clazz 对（`mr_irq.h:66`、`irq.c:17`），却没有
+`MR_IRQ_DERIVE_INIT` 一类宏，`mr_irq_init` 固定传入 `MR_CLAZZES_STATIK(irq)`
+（`irq.c:151`），因此不支持自定义 clazz 派生控制器，附加状态请走 `ops` + `priv`。
+
+下半部也不可整体替换：defer 由模块内部工作队列承担（`__irq_defer_queue`，`irq.c:31`）， 执行入口为 `mr_irq_defer_execute`（
+`irq.c:784`），平台只能用 `mr_irq_defer_hook_set`
+提供 suspend / wakeup 调度钩子（`irq.c:832`、`mr_irq.h:260`，推荐以初值 0 的信号量 充当，`mr_irq.h:258`）；树内没有
+`irq_defer.c`。
+
+### 13. 源码导读
 
 | 位置                                 | 职责                                                 |
 |--------------------------------------|------------------------------------------------------|
@@ -474,7 +491,7 @@ flags 编码：低 4 位为触发类型（`IRQ_FLAG_TYPE_MASK`，`irq.c:35`）�
 | `mrX/kernel/initcall.c:64`           | 内核初始化序列中的调用点                             |
 | `mrX/test/kernel/irq.c`              | 全部用户可见行为的行为级测试（含 defer 与共享场景）  |
 
-### 13. 附录
+### 14. 附录
 
 **配置宏**
 

@@ -236,7 +236,7 @@ HC595 扩展是 [GPIO 驱动](gpio.md)框架层之下的一个 `ops` 实现，�
         +-------------------+----------------------+
                             | exist/invert 换算、引脚校验
         +-------------------v----------------------+
-        |  GPIO 框架层（mr_gpio.c + mr_gpio.h）      |
+        |  GPIO 框架层（drivers/gpio/gpio.c + mr_gpio.h） |
         +-------------------+----------------------+
                             | mr_gpio_ops_t
         +-------------------v----------------------+
@@ -313,7 +313,24 @@ typedef struct drv_gpio_hc595_priv {
 - 宿主引脚操作经由平台 GPIO 驱动完成，其自身的并发语义由平台实现保证； 但本驱动的多步时序在框架层不可拆分保护。
 - 所有回调运行在调用者上下文，内部不阻塞、不睡眠；`event_attach` 能力 为空，不存在回调上下文问题。
 
-### 12. 源码导读
+### 12. 扩展与派生
+
+HC595 不注册自己的驱动 clazz：它借用共享的 GPIO clazz，经 `MR_HT_GPIO_INSTALL` 挂到 GPIO 框架上（
+`mrX/drivers/gpio/gpio_hc595.c:226`），因此 **没有 clazz 派生通道**， 只有两条扩展路径：
+
+- **新增同类端口**：自定义一张 `mr_gpio_ops_t`（`mrX/include/mrX/drivers/gpio/mr_gpio.h:84`）， 私有数据里保存上游
+  `mr_ht_gpio_spec_t`（`mr_gpio.h:546`）并自行实现时序，再用
+  `mr_gpio_init`（`mr_gpio.h:148`）或 `mr_gpio_create`（`mr_gpio.h:169`）挂到 GPIO 框架上，
+  `exist_mask`/`invert_mask` 等框架层换算自动生效；运行期以 ops 组装端口的参考写法见
+  `mrX/test/drivers/gpio/gpio.c:123-132`。
+- **新增模板实例**：在硬件模板中增加 compat 为 `gpio_hc595` 的节点并给出 `cascade_num`、 可选引脚等属性，
+  `MR_HT_DRIVER_FOREACH`（`gpio_hc595.c:238`）会逐实例展开安装，无需改代码。 属性为可选，缺失时按 `{0}` 填充并在运行时跳过（
+  `gpio_hc595.c:226`）。
+
+派生或包装 HC595 端口时注意：一次端口写是几十次宿主引脚写的序列， **没有互斥保护**
+（见第 11 节），上层若需要并发安全必须自行序列化。仓库中不存在 `.hts` 模板文件， 板级硬件描述由使用者自行提供。
+
+### 13. 源码导读
 
 | 位置                                         | 职责                                          |
 |----------------------------------------------|-----------------------------------------------|
@@ -331,7 +348,7 @@ typedef struct drv_gpio_hc595_priv {
 | `mrX/include/mrX/drivers/gpio/mr_gpio.h:537` | `MR_HT_GPIO_INSTALL`（生成 `mr_gpio_data_t`） |
 | `mrX/include/mrX/drivers/gpio/mr_gpio.h:546` | 宿主引脚规格 `mr_ht_gpio_spec_t`              |
 
-### 13. 附录：配置宏与错误码
+### 14. 附录：配置宏与错误码
 
 **配置宏**
 

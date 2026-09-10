@@ -1,192 +1,162 @@
-# mrX 文档规范
+# mrX 文档入口
 
-本文档定义 mrX 项目文档的目录组织、标准骨架与写作约定。所有模块文档（用户篇 + 开发者篇）
-均按此规范编写；第一篇示例文档见 [kernel/timer.md](kernel/timer.md)。
+> 这是整套文档的起点，也是唯一的目录页。它只回答三个问题：mrX 是什么、你该从哪篇开始读、其他文档放在哪。
+> 第一次接触 mrX，顺着往下看十分钟就能走通；已经熟悉项目、只想查某个模块，直接跳到下面的索引表即可。
 
----
+## 1. 三分钟认识 mrX
 
-## 1. 文档组织
+mrX 不是那种“下载下来就能跑出一个程序”的工程，而是一套可以直接嵌进你自己工程的内核与组件集合。
 
-文档目录与源码目录一一对应，每篇文档对应一个功能模块：
+- 你的应用工程还是你的，业务代码留在你自己的目录里。
+- mrX 以一个依赖的形式被接进去，提供内核服务、C 库、设备驱动、文件系统、RPC 等能力。
+- 它需要一份运行环境——tick、中断、输出、断言这些底层动作由 **平台适配层**提供。
+- 接入前你会生成两个头文件：`mr_config.h` 记录你启用了哪些功能，`mr_hardgen.h` 描述你的板级硬件。
+- 之后在自己的入口调用一次 `mr_user_init()`，框架就起来了；剩下的按需查模块文档。
 
+把这条线记住就够了： **选平台 → 配置功能 → 描述硬件 → 链接注册段 → 调用 `mr_user_init()`**。
+
+## 2. 选一条阅读路线
+
+### 路线 A：第一次把 mrX 接进应用（最常见）
+
+按顺序读，不要跳：
+
+1. [框架使用指南 Usage](usage.md) —— 完整跑一遍接入流程，这是主菜。
+2. [平台移植层 Platform](platform/platform.md) 的“选择并安装已有平台”一节 —— 挑一个和目标环境匹配的适配。
+3. 回到 [Usage](usage.md)，按 Kconfig → HTC → sections → 启动的顺序做完。
+4. 接入成功之后，再按需要翻对应模块的用户指南。
+
+### 路线 B：目标芯片还没有现成平台
+
+1. 先读 [Platform](platform/platform.md) 的新平台移植部分，把 `mr_port_*` 接口实现出来。
+2. 再走路线 A，用你自己刚做好的平台完成接入。
+
+### 路线 C：给 mrX 加功能或改实现
+
+1. 先看该模块文档的 **用户指南**，确认你理解的是对外约定的行为。
+2. 再进同一篇文档的 **开发者指南**，看架构、数据结构和扩展方式。
+3. 要扩展命令行工具时，读 [CLI 总览](scripts/cli.md)；插件必须在 `scripts/plugins/catalog.py` 里显式登记。
+
+### 路线 D：只是想查一个 API
+
+直接从第 5 节的索引跳进对应模块文档，用页面内搜索找函数名即可，不必从 Usage 读起。
+
+## 3. 按目标找文档
+
+不知道该看哪篇时，从左边一列找你的目标：
+
+| 你的目标                          | 看这篇                                                                 |
+|-----------------------------------|------------------------------------------------------------------------|
+| 第一次把 mrX 接入应用             | [框架使用指南](usage.md)                                               |
+| 选择、安装已有平台                | [平台移植层：使用已有平台](platform/platform.md#11-选择并安装已有平台) |
+| 为新芯片开发平台适配              | [平台移植层：开发新平台](platform/platform.md#13-新平台的移植范围)     |
+| 配置功能、生成 `mr_config.h`      | [框架使用指南：Kconfig](usage.md#3-使用-kconfig-配置功能)              |
+| 描述板级硬件、生成 `mr_hardgen.h` | [框架使用指南：HTC](usage.md#4-htc-硬件描述编译)                       |
+| 处理 initcall、驱动或 RPC 注册段  | [框架使用指南：注册段](usage.md#5-注册段与-sections)                   |
+| 查一个模块的 API                  | 从下面的功能索引进入对应模块文档                                       |
+| 阅读或修改框架实现                | 进入对应模块文档的“开发者指南”                                         |
+| 使用主机端 CLI 工具               | [主机脚本教程](scripts/README.md)                                      |
+| 了解测试框架                      | [测试框架 Test](test/test.md)                                          |
+
+## 4. 文档放在哪
+
+模块文档按源码职责分目录， **文档路径和源码路径是一一对应的**——`kernel/timer.md` 讲的就是 `kernel/timer.c`：
+
+```text
+mrX/document/
+├── README.md         # 你现在看的这篇：入口与索引
+├── usage.md          # 接入与快速开始（主流程都在这）
+├── documentation.md  # 文档编写与维护规范（只给维护者看）
+├── kernel/           # 内核服务：时钟、中断、日志、定时器、对象系统……（有目录入口）
+├── libc/             # C 库：内存分配、字符串、格式化输入输出
+├── drivers/          # 设备驱动：驱动框架、GPIO、UART、ADC/DAC、扩展芯片
+├── fs/               # 文件系统：VFS、RamFS、RootFS
+├── modules/          # 上层组件：RPC、XVM、调试器、GDB 桩
+├── platform/         # 平台移植层：安装已有平台、移植新平台
+├── scripts/          # 主机端 Python 工具（kconfig、htc、sections……）（有目录入口）
+└── test/             # 测试框架
 ```
-document/
-├── README.md            # 本文件：文档规范与总索引
-├── kernel/              # 内核模块
-├── libc/                # C 库
-├── drivers/             # 设备驱动框架
-├── modules/             # 上层组件
-├── fs/                  # 文件系统
-├── platform/            # 平台移植层
-├── test/                # 测试框架
-└── scripts/             # 主机 Python CLI
-```
 
-命名约定：
+部分目录带一个入口文件，从它进目录比直接点某个模块文件更省事：
+[kernel/README.md](kernel/README.md)（内核服务总览）、[scripts/README.md](scripts/README.md)、
+[platform/platform.md](platform/platform.md)、[test/test.md](test/test.md)。
 
-- 文档文件名与对应源文件同名（如 `kernel/timer.md` 对应 `kernel/timer.c`）。
-- 一篇文档对应一个 `MR_USE_*` 功能宏，文档开头必须标注该宏；无功能宏的模块 标注"无（始终编译）"。
-- `README.md` 维护总索引，新增文档后同步更新索引表。
+`libc/`、`drivers/`、`fs/`、`modules/` 没有独立入口文件，直接看第 5 节索引即可； 其中 `drivers/driver.md`
+末尾列有本目录全部驱动，可作为驱动的起点。
 
-### 总索引
+## 5. 完整文档索引
 
-| 目录      | 文档                                             | 对应源码                        |
-|-----------|--------------------------------------------------|---------------------------------|
-| kernel/   | [时钟 Clock](kernel/clock.md)                    | `mrX/kernel/clock.c`            |
-| kernel/   | [入口 Entry](kernel/entry.md)                    | `mrX/kernel/entry.c`            |
-| kernel/   | [FIFO](kernel/fifo.md)                           | `mrX/kernel/fifo.c`             |
-| kernel/   | [哈希表 Hashmap](kernel/hashmap.md)              | `mrX/kernel/hashmap.c`          |
-| kernel/   | [钩子 Hook](kernel/hook.md)                      | `mrX/kernel/hook.c`             |
-| kernel/   | [初始化调用 Initcall](kernel/initcall.md)        | `mrX/kernel/initcall.c`         |
-| kernel/   | [中断 Irq](kernel/irq.md)                        | `mrX/kernel/irq.c`              |
-| kernel/   | [日志 Log](kernel/log.md)                        | `mrX/kernel/log.c`              |
-| kernel/   | [对象系统 Object](kernel/object.md)              | `mrX/kernel/object.c`           |
-| kernel/   | [格式化输出 Printf](kernel/printf.md)            | `mrX/kernel/printf.c`           |
-| kernel/   | [内存块分配器 Slab](kernel/slab.md)              | `mrX/kernel/slab.c`             |
-| kernel/   | [软定时器 Timer](kernel/timer.md)                | `mrX/kernel/timer.c`            |
-| kernel/   | [等待队列 Wait](kernel/wait.md)                  | `mrX/kernel/wait.c`             |
-| kernel/   | [工作队列 Work](kernel/work.md)                  | `mrX/kernel/work.c`             |
-| libc/     | [内存分配 Malloc](libc/malloc.md)                | `mrX/libc/malloc.c`             |
-| libc/     | [格式化 Sprintf](libc/sprintf.md)                | `mrX/libc/sprintf.c`            |
-| libc/     | [格式化解析 Sscanf](libc/sscanf.md)              | `mrX/libc/sscanf.c`             |
-| libc/     | [字符串 String](libc/string.md)                  | `mrX/libc/string.c`             |
-| drivers/  | [ADC 驱动](drivers/adc.md)                       | `mrX/drivers/adc/adc.c`         |
-| drivers/  | [DAC 驱动](drivers/dac.md)                       | `mrX/drivers/dac/dac.c`         |
-| drivers/  | [驱动框架 Driver](drivers/driver.md)             | `mrX/drivers/driver.c`          |
-| drivers/  | [GPIO 驱动](drivers/gpio.md)                     | `mrX/drivers/gpio/gpio.c`       |
-| drivers/  | [HC165 并行输入扩展 GPIO](drivers/gpio_hc165.md) | `mrX/drivers/gpio/gpio_hc165.c` |
-| drivers/  | [HC595 并行输出扩展 GPIO](drivers/gpio_hc595.md) | `mrX/drivers/gpio/gpio_hc595.c` |
-| drivers/  | [RAM 设备](drivers/ram.md)                       | `mrX/drivers/ram/ram.c`         |
-| fs/       | [文件系统 VFS](fs/fs.md)                         | `mrX/fs/file.c` 等              |
-| fs/       | [RAM 文件系统 RamFS](fs/ramfs.md)                | `mrX/fs/ramfs/ramfs.c`          |
-| fs/       | [根文件系统 RootFS](fs/rootfs.md)                | `mrX/fs/rootfs/rootfs.c`        |
-| modules/  | [调试器 Dbg](modules/dbg.md)                     | `mrX/modules/xvm/dbg.c`         |
-| modules/  | [GDB 桩 Gdb](modules/gdb.md)                     | `mrX/modules/xvm/gdb.c`         |
-| modules/  | [远程过程调用 RPC](modules/rpc.md)               | `mrX/modules/rpc/rpc.c` 等      |
-| modules/  | [虚拟机 XVM](modules/xvm.md)                     | `mrX/modules/xvm/xvm.c` 等      |
-| platform/ | [平台移植层 Platform](platform/platform.md)      | `mrX/platform/`                 |
-| test/     | [测试框架 Test](test/test.md)                    | `mrX/test/test.c`               |
-| scripts/  | [命令行 CLI](scripts/cli.md)                     | `mrX/scripts/cli.py`            |
+### 框架接入与工具
 
----
+| 文档                             | 解决的问题                                                                               |
+|----------------------------------|------------------------------------------------------------------------------------------|
+| [Usage](usage.md)                | 框架接入的最短流程、Kconfig UI、HTC、sections、初始化和排查                              |
+| [Platform](platform/platform.md) | 已有平台安装、`install.toml`、新芯片移植和 `mr_port_*` 契约                              |
+| [脚本教程](scripts/README.md)    | CLI 入口及 `kconfig`、`htc`、`platform`、`sections`、`rpc-idl`、`mdk`、`echo` 的详细用法 |
+| [Test](test/test.md)             | 测试框架、测试用例注册和运行方式                                                         |
 
-## 2. 标准骨架
+### 内核服务
 
-每篇模块文档固定分为两大部分： **前半部分面向用户（讲使用），后半部分面向开发者（讲原理）**。 两部分之间以水平分割线与醒目标题隔开，读者可按需停读。
+| 模块              | 文档                          | 模块                | 文档                              |
+|-------------------|-------------------------------|---------------------|-----------------------------------|
+| 时钟 Clock        | [clock.md](kernel/clock.md)   | 入口 Entry          | [entry.md](kernel/entry.md)       |
+| FIFO              | [fifo.md](kernel/fifo.md)     | 哈希表 Hashmap      | [hashmap.md](kernel/hashmap.md)   |
+| 钩子 Hook         | [hook.md](kernel/hook.md)     | 初始化调用 Initcall | [initcall.md](kernel/initcall.md) |
+| 中断 Irq          | [irq.md](kernel/irq.md)       | 日志 Log            | [log.md](kernel/log.md)           |
+| 对象系统 Object   | [object.md](kernel/object.md) | 格式化输出 Printf   | [printf.md](kernel/printf.md)     |
+| 内存块分配器 Slab | [slab.md](kernel/slab.md)     | 软定时器 Timer      | [timer.md](kernel/timer.md)       |
+| 等待队列 Wait     | [wait.md](kernel/wait.md)     | 工作队列 Work       | [work.md](kernel/work.md)         |
 
-````markdown
-# 模块名（英文标识符）
+### C 库
 
-> 一句话概述：本模块是什么、解决什么问题。
+| 模块              | 文档                        | 模块           | 文档                          |
+|-------------------|-----------------------------|----------------|-------------------------------|
+| 内存分配 Malloc   | [malloc.md](libc/malloc.md) | 格式化 Sprintf | [sprintf.md](libc/sprintf.md) |
+| 格式化解析 Sscanf | [sscanf.md](libc/sscanf.md) | 字符串 String  | [string.md](libc/string.md)   |
 
-| 项       | 说明                                         |
-|----------|----------------------------------------------|
-| 功能宏   | `MR_USE_XXX`                                 |
-| 头文件   | `<mrX/xxx/mr_xxx.h>`                         |
-| 依赖模块 | [模块 A](../xxx/a.md)、[模块 B](../xxx/b.md) |
+### 设备驱动
 
----
+| 模块            | 文档                                   | 模块           | 文档                                   |
+|-----------------|----------------------------------------|----------------|----------------------------------------|
+| 驱动框架 Driver | [driver.md](drivers/driver.md)         | GPIO           | [gpio.md](drivers/gpio.md)             |
+| UART            | [uart.md](drivers/uart.md)             | ADC            | [adc.md](drivers/adc.md)               |
+| DAC             | [dac.md](drivers/dac.md)               | RAM 设备       | [ram.md](drivers/ram.md)               |
+| HC165 输入扩展  | [gpio_hc165.md](drivers/gpio_hc165.md) | HC595 输出扩展 | [gpio_hc595.md](drivers/gpio_hc595.md) |
 
-## 用户指南
+### 文件系统
 
-### 1. 模块概述
+| 模块              | 文档                      | 模块               | 文档                    |
+|-------------------|---------------------------|--------------------|-------------------------|
+| 文件系统 VFS      | [fs.md](fs/fs.md)         | RAM 文件系统 RamFS | [ramfs.md](fs/ramfs.md) |
+| 根文件系统 RootFS | [rootfs.md](fs/rootfs.md) |                    |                         |
 
-特性列表、适用场景、与相邻模块的分工边界。
+### 上层模块
 
-### 2. 配置与依赖
+| 模块             | 文档                     | 模块       | 文档                     |
+|------------------|--------------------------|------------|--------------------------|
+| 远程过程调用 RPC | [rpc.md](modules/rpc.md) | 虚拟机 XVM | [xvm.md](modules/xvm.md) |
+| 调试器 Dbg       | [dbg.md](modules/dbg.md) | GDB 桩 Gdb | [gdb.md](modules/gdb.md) |
 
-Kconfig 选项、默认值、相关 `MR_CFG_*` 参数及含义。
+## 6. 阅读方法：每篇模块文档怎么用
 
-### 3. 快速上手
+模块文档统一按 **用户指南 → 开发者指南**组织，所以拿到任何一篇都可以这样读：
 
-一段可直接编译运行的最小示例，覆盖最典型用法。
+- **前半部分（用户指南）**回答“怎么用”：模块做什么、依赖什么、怎么配、API 长什么样、完整例子、常见问题。 只写应用的话，读到这里就够了。
+- **后半部分（开发者指南）**回答“为什么这样做、怎么扩展”：架构、数据结构、核心流程、并发与中断安全、源码导读。
+  只在排查问题或者要改框架时才需要往下读。
+- 文档里出现的 `MR_USE_*` 是功能开关，`MR_CFG_*` 是资源参数，都在 Kconfig 里配置； 每篇文档开头的表格会告诉你它依赖哪个功能宏和哪个头文件。
+- 示例都取自 `mrX/test/` 或能直接按公开 API 编译，看到例子可以直接抄。
 
-### 4. 使用说明
+## 7. 卡住了怎么办
 
-面向使用者的行为约定：工作模式、生命周期、回调上下文、可/不可在回调中做的事。
+- **接入阶段报错**：先看 [Usage 的常见问题排查](usage.md#7-常见问题排查)，它按平台、配置、生成、初始化四个阶段给了排查顺序。
+- **某个模块行为不对**：进对应模块文档的用户指南，先看 FAQ 一节。
+- **命令行工具用不起来**：看 [脚本教程](scripts/README.md)，里面区分了“用户只需执行 `cli.py`”和“库代码不要直接运行”。
+- **文档本身有问题**：修改规则见 [文档编写与维护规范](documentation.md)。
 
-### 5. API 参考
+## 8. 文档维护
 
-按功能分组的 API 表格 + 逐个 API 的原型、参数、返回值、注意事项。 描述必须与头文件 Doxygen 注释一致。
+文档编写规则、模块文档骨架、示例约束和维护要求单独放在
+[文档编写与维护规范](documentation.md)。它是维护者参考，不是 mrX 使用者的入门材料。
 
-### 6. 完整示例
-
-2~3 个典型场景示例（静态 / 动态、常见组合用法），取材或改编自 `mrX/test/`。
-
-### 7. 常见问题（FAQ）
-
-以问答形式列出易错点与排查清单。
-
----
-
-## 开发者指南
-
-### 8. 架构总览
-
-模块在内核中的位置、上下依赖关系、对外提供的内部接口。
-
-### 9. 数据结构
-
-核心结构体逐字段说明（可引用头文件行号），关键宏的编码方式。
-
-### 10. 核心流程
-
-初始化 / 启动 / 到期处理等主要流程的实现，配文字时序或简易图。
-关键实现点（如回绕安全比较、锁粒度）单独小节解释"为什么这样写"。
-
-### 11. 并发与中断安全
-
-锁的保护范围、回调的执行上下文、哪些调用点可重入。
-
-### 12. 扩展与派生
-
-如何基于本模块派生子类/复用机制（若适用）。
-
-### 13. 源码导读
-
-`文件:行号 -> 职责` 对照表，方便直接跳转阅读。
-
-### 14. 附录
-
-配置宏一览、错误码。
-````
-
----
-
-## 3. 写作约定
-
-### 3.1 两部分的措辞边界
-
-- **用户篇**只讲"做什么、怎么调、行为是什么"，禁止暴露内部实现（不出现链表、锁、 源码行号）。用户不需要知道原理也能正确使用。
-- **开发者篇**讲"怎么实现、为什么这样实现"，允许且鼓励引用 `文件:行号`，方便跳转。
-- 行为约定只写一次：若某行为对两类读者都重要（如回调上下文限制），用户篇写"是什么"， 开发者篇解释"为什么"，开发者篇不重复使用说明。
-
-### 3.2 语言与术语
-
-- 正文使用中文，代码、API 名、宏名、配置项保持英文原样，不翻译。
-- API 首次出现给出完整原型，此后使用短名。
-- 术语全项目统一：`tick`（时钟节拍）、`回调`（entry/callback）、`静态初始化`
-  （栈上/全局对象 + `*_INIT` 宏）、`动态创建`（`*_create` 堆分配）。 新术语先查本表，不在表中则在此处补充。
-
-### 3.3 代码示例
-
-- 示例必须来自 `mrX/test/` 或可按现有 API 直接编译，禁止虚构 API。
-- 最小示例只保留说明主题所需的代码，错误处理可省略但需注明。
-- 示例中涉及的 `MR_USE_*` 宏必须在"配置与依赖"一节可查。
-
-### 3.4 API 表格
-
-- 按"初始化与销毁 / 控制 / 参数与查询 / 引用管理"等功能分组，每组一个表格。
-- 表格列固定为：API | 说明；细节（参数、返回值、注意事项）放表格下方的逐个小节。
-- 返回值统一写法：`0` 表示成功；负数错误码表示失败（并给出 `mr_errno` 名称）； 指针返回 `MR_NULL` 表示失败。
-
-### 3.5 交叉引用
-
-- 引用其他模块文档使用相对路径：`[时钟](clock.md)`。
-- 引用源码使用 `` `mrX/kernel/timer.c:98` `` 格式（文件:行号）。
-- 行号随代码演进会失效，开发者篇引用时以函数名为锚、行号仅为辅助。
-
-### 3.6 维护
-
-- 修改模块 API 或行为时，必须同步更新对应文档（视为功能修改的一部分）。
-- 行为未定的实现细节不写入文档；文档中不得出现"大概、可能、应该"等含糊表述描述 已实现行为。
+新增、删除或重命名文档时，请同步更新本文第 4 节的目录说明和第 5 节的索引。
