@@ -187,7 +187,7 @@ MR_INLINE void mr_fifo_reset(mr_fifo_t *fifo) {
 MR_INLINE mr_bool_t mr_fifo_is_empty(mr_fifo_t *fifo) {
     mr_uint32_t ridx, widx;
 
-    /* Check if fifo is empty */
+    /* Check whether fifo is empty */
     ridx = (mr_uint32_t)mr_atomic_load(&fifo->ridx);
     widx = (mr_uint32_t)mr_atomic_load(&fifo->widx);
     return ridx == widx;
@@ -200,7 +200,7 @@ MR_INLINE mr_bool_t mr_fifo_is_empty(mr_fifo_t *fifo) {
  * @return MR_TRUE on full, MR_FALSE otherwise.
  */
 MR_INLINE mr_bool_t mr_fifo_is_full(mr_fifo_t *fifo) {
-    /* Check if fifo is full */
+    /* Check whether fifo is full */
     return mr_fifo_len(fifo) == fifo->capacity;
 }
 

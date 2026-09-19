@@ -5,7 +5,7 @@
 
 | 项       | 说明                                                                                                                                                                     |
 |----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 功能宏   | `MR_USE_MALLOC`（默认开启；可选 `MR_USE_MALLOC_STD` 转发标准库、`MR_USE_MALLOC_3RD` 接入第三方分配器）                                                                   |
+| 功能宏   | `MR_USE_MALLOC`（默认内置实现）；`MR_USE_MALLOC_STD` 转发标准库；`MR_USE_MALLOC_3RD` 目前仅为 Kconfig 预留项，代码尚无后端实现                              |
 | 头文件   | `<mrX/libc/mr_malloc.h>`                                                                                                                                                 |
 | 依赖模块 | [字符串 String](string.md)（内部实现使用 `mr_memcpy` / `mr_memset`）、平台中断接口（`mr_port_irq`，用于临界区保护）、[内核初始化](../kernel/initcall.md)（调用堆初始化） |
 | 参考测试 | `mrX/test/libc/malloc.c`                                                                                                                                                 |
@@ -22,17 +22,14 @@
 特性：
 
 - 堆池编译期静态预留（`MR_CFG_HEAP_SIZE` 字节的静态数组），不依赖链接脚本或运行期探测。
-- 首次适应（first-fit）分配 + 相邻空闲块双向合并，`mr_free` 与合并为常数级挂载，
-  `mr_malloc` 的开销与空闲块数量成线性。
+- 首次适应（first-fit）分配 + 按地址排序的空闲链 + 相邻空闲块双向合并。`mr_malloc` 查找和 `mr_free` 重新插入都需要线性扫描空闲块链，最坏开销与空闲碎片数成正比。
 - `mr_malloc_usable_size` 可查询任意已分配块的实际可用大小。
 - `mr_calloc`（清零分配）与 `mr_realloc`（扩缩容并保留数据）完备。
 - `mr_heap_region_add` 支持在初始化阶段追加额外的内存区域（如外部 SRAM）。
 - `mr_heap_information` 提供总量、占用、空闲、失败次数、碎片数、最大空闲块等统计信息。
-- 全部 API 失败返回 `MR_NULL` 或安全值，不崩溃；分配失败计数可观测。
+- 分配类 API 通过 `MR_NULL` 表示失败，并维护部分分配失败统计；释放/查询接口仍要求调用者传入满足其所有权前置条件的指针，magic 只能发现部分误用，不能把任意野指针变成安全输入。
 
-与 [内核 Slab](../kernel/slab.md) 的分工：两者相互独立、互不依赖。slab 在用户提供的 静态缓冲上按 **固定块大小**
-做无锁分配，零碎片、零块头开销，适合对象池；本模块在通用 堆上按 **任意大小**分配，适合对象数量与大小运行期才确定的场合（如内核定时器、工作
-队列的动态创建）。内核组件的动态创建路径（timer、work、wait、irq、fifo 等）使用的 正是本模块的 `mr_malloc`。
+与 [内核 Slab](../kernel/slab.md) 的分工：两者相互独立、互不依赖。slab 在调用者缓冲上按 **固定块大小** 用原子位图管理，没有每块头部和变长堆的外部碎片问题；本模块在通用堆上按 **任意大小** 分配，适合对象数量与大小运行期才确定的场合（如内核定时器、工作队列的动态创建）。内核组件的动态创建路径（timer、work、wait、irq、fifo 等）使用的 正是本模块的 `mr_malloc`。
 
 ### 2. 配置与依赖
 
@@ -40,7 +37,7 @@
 |---------------------|----------------|--------|--------------------------------------------------------------------------------------------------------------------|
 | `MR_USE_MALLOC`     | bool（choice） | y      | 使用内置堆实现（`mrX/include/mrX/libc/Kconfig:69`）                                                                |
 | `MR_USE_MALLOC_STD` | bool（choice） | n      | 直接宏转发标准库 `malloc` / `free`，需要宿主 OS 支持                                                               |
-| `MR_USE_MALLOC_3RD` | bool（choice） | n      | 接入第三方分配器                                                                                                   |
+| `MR_USE_MALLOC_3RD` | bool（choice） | n      | 第三方分配器预留选项；当前头文件/源码没有对应实现分支                                                              |
 | `MR_CFG_HEAP_SIZE`  | 整型           | 4096   | 内置堆池大小（字节），范围 32 ~ 2147483647，仅在非 `MR_USE_MALLOC_STD` 时生效（`mrX/include/mrX/libc/Kconfig:76`） |
 
 选择 `MR_USE_MALLOC` 并重新生成 `mr_config.h` 后，包含头文件即可使用：
@@ -88,7 +85,7 @@ void example(void) {
 
 - 分配得到的块按机器字长（`sizeof(void *)`）对齐，实际可用大小不小于请求大小， 可用 `mr_malloc_usable_size` 查询。
 - 请求大小为 0 返回 `MR_NULL`；堆空间不足返回 `MR_NULL` 并使失败计数加一。
-- `mr_calloc(num, size)` 分配 `num * size` 字节并全部清零；乘积溢出或乘积为 0 均返回 `MR_NULL`。
+- `mr_calloc(num, size)` 分配 `num * size` 字节，并清零**请求的这部分字节**；若底层分配块的 usable size 因未拆分而更大，额外尾部不在 `mr_calloc` 的清零承诺内。乘积溢出或为 0 返回 `MR_NULL`。
 - `mr_realloc(mem, size)` 总是分配新块、拷贝旧数据（拷贝长度为旧可用大小与 新大小的较小者）、释放旧块并返回新指针；
   `mr_realloc(MR_NULL, size)` 等价于
   `mr_malloc(size)`；`mr_realloc(mem, 0)` 释放 `mem` 并返回 `MR_NULL`； 扩容失败时旧块保持有效，返回 `MR_NULL`。
@@ -96,13 +93,13 @@ void example(void) {
 **释放语义**
 
 - `mr_free(MR_NULL)` 安全。
-- 对非本分配器返回的指针（块头魔数校验失败）调用 `mr_free` 会被静默忽略， 不修改堆状态；重复释放同一指针同样被魔数校验拦截。
-- `mr_malloc_usable_size` 对 `MR_NULL` 或无效指针返回 0。
+- 除 `MR_NULL` 外，`mr_free` 的输入应是当前内置分配器返回且尚未释放的块首地址。实现会先通过 `mem - sizeof(block)` 读取块头，再检查 magic，因此**不能**用它安全探测任意野指针；重复 free 也不属于受保证用法。
+- `mr_malloc_usable_size(MR_NULL)` 返回 0；非空参数同样应是当前有效分配块。magic 不匹配时返回 0，但这不是对任意地址的内存安全校验。
 
 **调用上下文**
 
-- 全部 API 通过关中断保护内部状态，可在线程与中断上下文调用（单核假设）； 临界区内只做链表与统计操作，不会长时间关中断。
-- `mr_heap_region_add` 只能在堆初始化之后、并发堆操作开始之前的初始化阶段调用 （见头文件注释），且需调用者自行保证串行。
+- `mr_malloc`、`mr_free`、`mr_heap_information` 用 `mr_port_irq_disable/enable` 保护内置堆的共享链表/统计；first-fit、按地址插入和完整统计扫描都可能在线性碎片链上运行，因此最坏关中断时间并非常数。
+- `mr_malloc_usable_size` 不加锁；`mr_calloc/realloc` 是由若干基础操作组合而成；`mr_heap_region_add` 完全依赖调用者在初始化阶段外部串行化。模块不能据此统一承诺所有 API 在所有平台都 ISR-safe。
 
 **堆统计**
 
@@ -143,7 +140,7 @@ void *mr_malloc(mr_size_t size);
 void mr_free(void *mem);
 ```
 
-- `mem`：待释放指针，`MR_NULL` 安全；无效指针被魔数校验静默忽略。
+- `mem`：`MR_NULL` 安全；其他值应为当前内置分配器返回且尚未释放的块首地址。magic 检查只在读取推定块头之后发生，不是通用野指针验证。
 - 返回：无。
 
 **`mr_malloc_usable_size`**
@@ -152,7 +149,7 @@ void mr_free(void *mem);
 mr_size_t mr_malloc_usable_size(void *mem);
 ```
 
-- 返回：有效块的实际可用字节数（不小于当初请求值）；`MR_NULL` 或无效指针返回 0。
+- 返回：当前有效分配块的实际可用字节数（通常不小于请求值）；`MR_NULL` 返回 0。非空参数必须满足有效块前置条件，magic 不匹配时实现返回 0。
 
 **`mr_calloc`**
 
@@ -179,9 +176,8 @@ void *mr_realloc(void *mem, mr_size_t size);
 void mr_heap_region_add(const mr_heap_region_t *regions);
 ```
 
-- `regions`：区域数组，以 `address == MR_NULL` 的元素结尾；每个元素提供
-  `address`（区域首地址）与 `size`（字节数）。
-- 约束：每个区域只能添加一次、不得相互重叠、生命周期须覆盖分配器全程；过小的 区域（放不下块头与隔离带）会被跳过；调用者须保证串行调用。
+- `regions`：区域数组。公开约定用 `address == MR_NULL` 终止；当前实现的循环条件还会在遇到 `size == 0` 时直接结束后续遍历。
+- 约束：每个区域只能添加一次、不得与任何堆区域重叠、生命周期须覆盖分配器全程；这些约束由调用者保证，core 不做重叠/重复检测。过小区域会被跳过；调用者须保证串行调用。
 
 **`mr_heap_information`**
 
@@ -200,6 +196,7 @@ mr_heap_info_t mr_heap_information(mr_bool_t lazy);
 ```c
 void realloc_example(void) {
     void *p;
+    void *newp;
 
     p = mr_malloc(64);
     if (p == MR_NULL) {
@@ -207,10 +204,12 @@ void realloc_example(void) {
     }
 
     /* Grow to 256 bytes, old data prefix is preserved */
-    p = mr_realloc(p, 256);
-    if (p == MR_NULL) {
-        return;                     /* Old 64-byte block is still valid */
+    newp = mr_realloc(p, 256);
+    if (newp == MR_NULL) {
+        mr_free(p);                 /* realloc failure keeps the old block valid */
+        return;
     }
+    p = newp;
 
     mr_free(p);
 }
@@ -264,7 +263,7 @@ void region_example(void) {
 
 **Q：`mr_free` 传了野指针会怎样？**
 
-块头魔数校验失败时释放被静默忽略，堆状态不受影响；但这属于未定义使用， 魔数校验只能兜底，不能替代正确的所有权管理。
+不要这样调用。实现会先根据传入地址向前定位并读取块头，然后才检查 magic；真正的野指针可能连块头读取都不安全。magic 只能辅助发现某些错误（例如仍可访问的非活动块），不能替代指针所有权和生命周期管理。
 
 **Q：`mr_malloc_usable_size` 为什么比请求值大？**
 
@@ -272,8 +271,7 @@ void region_example(void) {
 
 **Q：中断里能调用 `mr_malloc` 吗？**
 
-可以。API 内部以关中断保护堆状态；但失败路径与碎片合并的开销在中断上下文 同样存在，中断中建议只分配固定小尺寸或改用静态/slab
-方案。
+不建议把它当作统一 ISR-safe API。内置 `malloc/free` 确实通过平台 IRQ 屏蔽保护共享状态，但查找/插入可能线性扫描碎片链，且能否在 ISR 嵌套语义下正确使用取决于 `mr_port_irq_disable/enable` 的平台实现。中断路径更适合预分配或固定块池。
 
 ---
 
@@ -305,7 +303,7 @@ void region_example(void) {
   （`mrX/libc/malloc.c:363`），把静态堆池初始化为第一个空闲块。
 - [内核 Slab](../kernel/slab.md) 不依赖本模块：slab 的位图与块缓冲由调用者静态 提供，分配走原子位操作（
   `mrX/kernel/slab.c:27`），全程不触碰通用堆。
-- 内核格式化输出（`mrX/kernel/printf.c:36`）在临时缓冲上使用 `mr_malloc`， 是"内核组件经由本模块分配"的典型例子。
+- 内核格式化输出只在启用 `MR_USE_PRINTF_SAFE` 时为每次调用使用 `mr_malloc` 取得独立缓冲；默认 Printf 使用静态缓冲。
 
 ### 9. 数据结构
 
@@ -350,9 +348,7 @@ typedef struct mr_heap_block {
    `HEAP_SPLIT_THRESHOLD`（4 个块头大小，`malloc.c:29`），则拆出新空闲块插回 链表，否则整块交付（这也是可用大小可能大于请求值的原因）。
 5. 更新 `used_bytes` / `free_bytes`，开中断返回。
 
-**释放与合并**：`mr_free`（`malloc.c:162`）校验魔数后把块标记为空闲，调用
-`heap_insert_block`（`malloc.c:31`）按地址序插回链表，并顺带做 **双向相邻合并**： 与前驱地址相接则并入前驱，与后继地址相接则吞并后继，每合并一次
-`frag_num` 减一。 链表按地址有序 + 一次遍历即可完成两种合并，是本分配器无需额外元数据的关键。
+**释放与合并**：`mr_free`（`malloc.c:162`）由传入 payload 指针反推块头并检查 magic；有效块标记为空闲后，`heap_insert_block`（`malloc.c:31`）线性扫描到按地址排序的位置，再检查前后两个相邻块是否可合并。定位是 O(空闲碎片数)，定位后的双向邻接合并本身是常数次判断。
 
 **重分配**：`mr_realloc`（`malloc.c:234`）=`mr_malloc` + `mr_memcpy`（拷贝长度为 新旧可用大小的较小者）+ `mr_free`，无原地扩展路径；
 `mr_calloc`（`malloc.c:208`） = `mr_malloc` + `mr_memset`，入口先做乘积溢出检查。
@@ -366,13 +362,11 @@ typedef struct mr_heap_block {
 
 ### 11. 并发与中断安全
 
-- `mr_malloc` / `mr_free` / `mr_heap_information` 通过 `mr_port_irq_disable` /
-  `mr_port_irq_enable` 关中断形成临界区，保护空闲链表与统计的一致性；适用于 单核系统的线程与中断并发。
-- 临界区内只有链表遍历（O (空闲块数)）与字段更新，无用户回调、无阻塞；最坏 关中断时长与碎片数量成正比。
-- `mr_calloc` / `mr_realloc` 的拷贝阶段在临界区外（各自内部对 `mr_malloc` /
-  `mr_free` 的调用自带保护），缩短了关中断窗口。
-- `mr_heap_region_add` 无内部锁，仅限初始化阶段串行调用（头文件注释明确约束）。
-- 魔数校验（`magic`）为 `volatile` 读写，用于拦截重复释放与无效指针，不构成 多核同步原语；多核场景需外层串行化。
+- `mr_malloc` / `mr_free` / `mr_heap_information` 通过 `mr_port_irq_disable/enable` 串行化内置堆共享状态；这是单核 IRQ 临界区设计，不等价于多核互斥。
+- `mr_malloc` 的 first-fit、`mr_free` 的按地址插入以及 `mr_heap_information(MR_FALSE)` 的完整扫描都可能遍历空闲链，因此最坏关中断时长与碎片数量成正比。
+- `mr_malloc_usable_size` 没有锁，只应在调用者独占该活动块生命周期时查询；`mr_calloc/realloc` 的 memset/memcpy 在基础分配临界区之外完成。
+- `mr_heap_region_add` 无内部锁，仅限堆已初始化且并发堆操作开始前调用，并由调用者外部串行化。
+- `magic` 是 `volatile` 状态标志而非原子同步或地址验证机制；多核和同一块的并发生命周期操作需要更高层同步。
 
 ### 12. 扩展与派生
 
@@ -385,7 +379,7 @@ typedef struct mr_heap_block {
   `MR_USE_MALLOC_3RD` 分支——该选项是预留位，当前不存在可用的第三方分配器接入路径。
 - **追加内存区域**：`mr_heap_region_add`（`mrX/libc/malloc.c:274`）是唯一的运行期扩展入口，可在初始化阶段把外部 SRAM
   等区域并入同一空闲链；区域列表以 `address == MR_NULL` 结尾，每个区域只能加入一次、不得与已有区域重叠且须终身有效，调用方还须自行串行化。
-- **容量与诊断**：`MR_CFG_HEAP_SIZE`（`mr_malloc.h:76` 定义处，`malloc.c:15-20` 回退与最小值检查）决定内建堆池大小；
+- **容量与诊断**：`MR_CFG_HEAP_SIZE`（`malloc.c:15-20` 回退与最小值检查）决定内建堆池大小；
   `mr_heap_information` / `mr_malloc_usable_size` 只属于内置后端（声明在 `mr_malloc.h:34` 之后的 `#else` 分支），切到 STD
   后端这些接口连同统计信息一起消失。
 
@@ -416,7 +410,7 @@ typedef struct mr_heap_block {
 |---------------------|---------------------------------------------------------------------------------|
 | `MR_USE_MALLOC`     | 内置堆实现开关（choice，默认）                                                  |
 | `MR_USE_MALLOC_STD` | 转发标准库 malloc/free（choice）                                                |
-| `MR_USE_MALLOC_3RD` | 接入第三方分配器（choice）                                                      |
+| `MR_USE_MALLOC_3RD` | 第三方分配器预留 choice；当前无头文件/源码实现分支                              |
 | `MR_CFG_HEAP_SIZE`  | 堆池字节数，默认 4096，最小 32（`malloc.c:18` 处编译期检查，不满足则 `#error`） |
 | `MR_HEAP_MAGIC`     | 已分配块魔数 `0x6d725800`（内部实现细节）                                       |
 

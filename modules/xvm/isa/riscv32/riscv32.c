@@ -117,7 +117,7 @@ static mr_err_t xvm_riscv32_load(mr_xvm_t *xvm) {
 }
 
 MR_INLINE void syscall_writeback(core_t *core) {
-    /* Check if syscall is pending */
+    /* Check whether syscall is pending */
     if (!core->syscall.pending) {
         return;
     }
@@ -174,12 +174,12 @@ MR_INLINE void interrupt_update(core_t *core) {
 }
 
 MR_INLINE mr_bool_t interrupt_enter(core_t *core) {
-    /* Check if global interrupt status is enabled */
+    /* Check whether global interrupt status is enabled */
     if (!(CORE_REG_MSTATUS(core) & REG_MSTATUS_MIE)) {
         return MR_FALSE;
     }
 
-    /* Check if machine external interrupt is enabled */
+    /* Check whether machine external interrupt is enabled */
     if ((!(CORE_REG_MIE(core) & REG_MIE_MEIE)) || (core->intr.enable == 0)) {
         return MR_FALSE;
     }
@@ -187,7 +187,7 @@ MR_INLINE mr_bool_t interrupt_enter(core_t *core) {
     /* Refresh pending interrupt only when it can be taken */
     interrupt_update(core);
 
-    /* Check if machine external interrupt is pending */
+    /* Check whether machine external interrupt is pending */
     if (!(CORE_REG_MIP(core) & REG_MIP_MEIP)) {
         return MR_FALSE;
     }

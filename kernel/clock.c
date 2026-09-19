@@ -157,7 +157,7 @@ mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
     /* Year */
     timestamp.year = 1970;
     while (1) {
-        /* Check if year is leap year */
+        /* Check whether year is leap year */
         is_leap = ((timestamp.year % 4 == 0) && (timestamp.year % 100 != 0))
                || (timestamp.year % 400 == 0);
         day_of_year = is_leap ? 366 : 365;

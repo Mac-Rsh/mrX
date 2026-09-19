@@ -16,5 +16,13 @@ from .symbols import CSymbolChecker
 from .source import SourceBuilder
 from .header import HeaderBuilder
 from .names import CNames
+from .schema import SchemaEncoder, SchemaSourceBuilder
 
-__all__ = ["CNames", "CSymbolChecker", "HeaderBuilder", "SourceBuilder"]
+__all__ = [
+    "CNames",
+    "CSymbolChecker",
+    "HeaderBuilder",
+    "SchemaEncoder",
+    "SchemaSourceBuilder",
+    "SourceBuilder",
+]

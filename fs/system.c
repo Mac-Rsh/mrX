@@ -27,7 +27,7 @@ mr_err_t mr_file_system_register(mr_file_system_t *fs) {
     /* Lock */
     mask = mr_fs_struct_lock();
 
-    /* Check if file-system already registered */
+    /* Check whether file-system already registered */
     for (link = &__fs_list; *link; link = &(*link)->next) {
         if ((*link == fs) || (mr_strcmp((*link)->name, fs->name) == 0)) {
             /* Unlock */

@@ -100,7 +100,7 @@ static mr_err_t drv_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
         return -MR_EINVAL;
     }
 
-    /* Check if the HC165 is already configured */
+    /* Check whether the HC165 is already configured */
     if (priv->configured) {
         return 0;
     }

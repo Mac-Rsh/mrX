@@ -59,7 +59,7 @@ void mr_log(mr_uint32_t level, const char *fmt, ...) {
         return;
     }
 
-    /* Check if log level is enabled */
+    /* Check whether log level is enabled */
     if (!((1U << level) & __log_level)) {
         /* Output is disabled */
         return;

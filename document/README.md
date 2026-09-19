@@ -35,7 +35,7 @@ mrX 不是那种“下载下来就能跑出一个程序”的工程，而是一�
 
 1. 先看该模块文档的 **用户指南**，确认你理解的是对外约定的行为。
 2. 再进同一篇文档的 **开发者指南**，看架构、数据结构和扩展方式。
-3. 要扩展命令行工具时，读 [CLI 总览](scripts/cli.md)；插件必须在 `scripts/plugins/catalog.py` 里显式登记。
+3. 要扩展命令行工具时，读 [CLI 总览](scripts/cli/cli.md)；插件必须在 `scripts/plugins/catalog.py` 里显式登记。
 
 ### 路线 D：只是想查一个 API
 
@@ -50,6 +50,8 @@ mrX 不是那种“下载下来就能跑出一个程序”的工程，而是一�
 | 第一次把 mrX 接入应用             | [框架使用指南](usage.md)                                               |
 | 选择、安装已有平台                | [平台移植层：使用已有平台](platform/platform.md#11-选择并安装已有平台) |
 | 为新芯片开发平台适配              | [平台移植层：开发新平台](platform/platform.md#13-新平台的移植范围)     |
+| 为平台实现某个外设 backend         | [设备驱动移植入口](#设备驱动)                                         |
+| 验收自研平台适配                  | [平台移植层：适配验收清单](platform/platform.md#121-适配验收清单)      |
 | 配置功能、生成 `mr_config.h`      | [框架使用指南：Kconfig](usage.md#3-使用-kconfig-配置功能)              |
 | 描述板级硬件、生成 `mr_hardgen.h` | [框架使用指南：HTC](usage.md#4-htc-硬件描述编译)                       |
 | 处理 initcall、驱动或 RPC 注册段  | [框架使用指南：注册段](usage.md#5-注册段与-sections)                   |
@@ -60,7 +62,7 @@ mrX 不是那种“下载下来就能跑出一个程序”的工程，而是一�
 
 ## 4. 文档放在哪
 
-模块文档按源码职责分目录， **文档路径和源码路径是一一对应的**——`kernel/timer.md` 讲的就是 `kernel/timer.c`：
+模块文档按源码职责分目录，通常与源码目录保持对应——`kernel/timer.md` 讲的就是 `kernel/timer.c`；RPC 和 XVM 文档集中在 `modules/` 下的对应目录：
 
 ```text
 mrX/document/
@@ -71,7 +73,7 @@ mrX/document/
 ├── libc/             # C 库：内存分配、字符串、格式化输入输出
 ├── drivers/          # 设备驱动：驱动框架、GPIO、UART、ADC/DAC、扩展芯片
 ├── fs/               # 文件系统：VFS、RamFS、RootFS
-├── modules/          # 上层组件：RPC、XVM、调试器、GDB 桩
+├── modules/          # 上层组件：RPC、XVM（含调试器、GDB 桩）
 ├── platform/         # 平台移植层：安装已有平台、移植新平台
 ├── scripts/          # 主机端 Python 工具（kconfig、htc、sections……）（有目录入口）
 └── test/             # 测试框架
@@ -118,10 +120,16 @@ mrX/document/
 
 | 模块            | 文档                                   | 模块           | 文档                                   |
 |-----------------|----------------------------------------|----------------|----------------------------------------|
-| 驱动框架 Driver | [driver.md](drivers/driver.md)         | GPIO           | [gpio.md](drivers/gpio.md)             |
-| UART            | [uart.md](drivers/uart.md)             | ADC            | [adc.md](drivers/adc.md)               |
-| DAC             | [dac.md](drivers/dac.md)               | RAM 设备       | [ram.md](drivers/ram.md)               |
-| HC165 输入扩展  | [gpio_hc165.md](drivers/gpio_hc165.md) | HC595 输出扩展 | [gpio_hc595.md](drivers/gpio_hc595.md) |
+| 驱动框架 Driver | [driver.md](drivers/driver.md)         | GPIO           | [gpio.md](drivers/gpio/gpio.md)             |
+| UART            | [uart.md](drivers/uart/uart.md)       | I2C            | [i2c.md](drivers/i2c/i2c.md)                |
+| ADC             | [adc.md](drivers/adc/adc.md)         | DAC            | [dac.md](drivers/dac/dac.md)                |
+| RAM 设备        | [ram.md](drivers/ram/ram.md)         | DMA            | [dma.md](drivers/dma/dma.md)                |
+| TMR             | [tmr.md](drivers/tmr/tmr.md)         | WDT            | [wdt.md](drivers/wdt/wdt.md)                |
+| FLASH           | [flash.md](drivers/flash/flash.md)   |                |                                              |
+| HC165 输入扩展  | [gpio_hc165.md](drivers/gpio/gpio_hc165.md) | HC595 输出扩展 | [gpio_hc595.md](drivers/gpio/gpio_hc595.md) |
+
+平台 backend 开发请阅读对应驱动目录下的 `porting.md`：
+[GPIO](drivers/gpio/porting.md)、[UART](drivers/uart/porting.md)、[I2C](drivers/i2c/porting.md)、[ADC](drivers/adc/porting.md)、[DAC](drivers/dac/porting.md)、[DMA](drivers/dma/porting.md)、[TMR](drivers/tmr/porting.md)、[WDT](drivers/wdt/porting.md)、[RAM](drivers/ram/porting.md)、[FLASH](drivers/flash/porting.md)。
 
 ### 文件系统
 
@@ -134,12 +142,14 @@ mrX/document/
 
 | 模块             | 文档                     | 模块       | 文档                     |
 |------------------|--------------------------|------------|--------------------------|
-| 远程过程调用 RPC | [rpc.md](modules/rpc.md) | 虚拟机 XVM | [xvm.md](modules/xvm.md) |
-| 调试器 Dbg       | [dbg.md](modules/dbg.md) | GDB 桩 Gdb | [gdb.md](modules/gdb.md) |
+| 远程过程调用 RPC | [rpc.md](modules/rpc/rpc.md) | 虚拟机 XVM | [xvm.md](modules/xvm/xvm.md) |
+| 调试器 Dbg       | [dbg.md](modules/xvm/dbg.md) | GDB 桩 Gdb | [gdb.md](modules/xvm/gdb.md) |
 
 ## 6. 阅读方法：每篇模块文档怎么用
 
 模块文档统一按 **用户指南 → 开发者指南**组织，所以拿到任何一篇都可以这样读：
+
+驱动目录下的 `porting.md` 是例外：它只面向平台 backend 开发者，直接按移植步骤组织，不再重复用户指南。
 
 - **前半部分（用户指南）**回答“怎么用”：模块做什么、依赖什么、怎么配、API 长什么样、完整例子、常见问题。 只写应用的话，读到这里就够了。
 - **后半部分（开发者指南）**回答“为什么这样做、怎么扩展”：架构、数据结构、核心流程、并发与中断安全、源码导读。

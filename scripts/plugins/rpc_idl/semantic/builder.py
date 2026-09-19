@@ -161,6 +161,12 @@ class SemanticBuilder:
         if service_id is None:
             self._kinds.pop(decl.name, None)
             return
+        if service_id == self.ID_MAX:
+            self._error(ErrorCode.INVALID_PROPERTY,
+                        f"service ID {service_id} is unavailable", decl.span)
+            self._kinds.pop(decl.name, None)
+            self._service_ids.pop(service_id, None)
+            return
         self._next_service_id = service_id + 1
         methods: list[Method] = []
         method_names: set[str] = set()

@@ -50,6 +50,9 @@ typedef enum mr_driver_type {
     MR_DRIVER_TYPE_ADC = 0x0500,
     MR_DRIVER_TYPE_DAC = 0x0600,
     MR_DRIVER_TYPE_DMA = 0x0700,
+    MR_DRIVER_TYPE_TMR = 0x0800,
+    MR_DRIVER_TYPE_WDT = 0x0900,
+    MR_DRIVER_TYPE_FLASH = 0x0a00,
     MR_DRIVER_TYPE_MASK = 0xff00,
 } mr_driver_type_t;
 
@@ -362,12 +365,36 @@ mr_err_t mr_driver_del(mr_driver_t *drv);
     (mr_atomic_load(&((mr_driver_t *)(_drv))->flags) & MR_DRIVER_FLAG_SETUP)
 
 /**
+ * @brief This macro function checks if a driver is being deleted.
+ *
+ * @param _drv The driver.
+ * @return Non-zero if the driver is dying, zero otherwise.
+ */
+#define MR_DRIVER_IS_DYING(_drv)                                               \
+    (mr_atomic_load(&((mr_driver_t *)(_drv))->flags) & MR_DRIVER_FLAG_DYING)
+
+/**
  * @brief This function sets up a driver.
  *
  * @param drv The driver.
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_driver_setup(mr_driver_t *drv);
+
+/**
+ * @brief This macro function checks a driver object and major type.
+ *
+ * @param _drv The driver.
+ * @param _type The driver major type.
+ *
+ * @note It does not require the driver to be set up.
+ */
+#define MR_DRIVER_ASSERT_TYPE(_drv, _type)                                     \
+    do {                                                                       \
+        MR_ASSERT(((_drv) != MR_NULL) && MR_OBJECT_IS_INITED(_drv));           \
+        MR_ASSERT(MR_OBJECT_IS_CLAZZES((_drv), driver));                       \
+        MR_ASSERT((MR_DRIVER_TYPE(_drv) & MR_DRIVER_TYPE_MASK) == (_type));    \
+    } while (0)
 
 /**
  * @brief This macro function checks a driver.
@@ -377,10 +404,8 @@ mr_err_t mr_driver_setup(mr_driver_t *drv);
  */
 #define MR_DRIVER_ASSERT(_drv, _type)                                          \
     do {                                                                       \
-        MR_ASSERT(((_drv) != MR_NULL) && MR_OBJECT_IS_INITED(_drv));           \
-        MR_ASSERT(MR_OBJECT_IS_CLAZZES((_drv), driver));                       \
+        MR_DRIVER_ASSERT_TYPE((_drv), (_type));                                \
         MR_ASSERT(MR_DRIVER_IS_SETUP(_drv));                                   \
-        MR_ASSERT((MR_DRIVER_TYPE(_drv) & MR_DRIVER_TYPE_MASK) == (_type));    \
     } while (0)
 
 /**

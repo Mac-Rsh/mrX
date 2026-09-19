@@ -22,7 +22,7 @@
 
 - 单次触发与周期触发两种模式，由周期参数中的一个标志位区分。
 - 支持静态初始化（栈上/全局对象）与动态创建（堆分配）两种生命周期管理方式。
-- 任意数量的定时器共用一次到期扫描，定时器数量不影响每 tick 的固定开销。
+- 运行中的定时器按到期点有序排列；普通 tick 只需检查表头直到遇到第一个未到期项，但 `start` 的有序插入最坏需遍历现有定时器，同一时刻到期的多个回调也会逐个处理。
 - 回调中允许重新启动、停止自身，便于实现"自重启"与"条件停止"模式。
 - 到期检查作为时钟钩子运行，返回距下次到期的剩余 tick 数，可供低功耗 tickless 调度使用。
 
@@ -87,7 +87,7 @@ static int led_timer_setup(void) {
 **触发模式**
 
 - 单次模式：周期参数不带 `MR_TIMER_PERIODIC`，到期触发一次回调后自动停止 （`MR_TIMER_IS_TIMING` 变为假）。
-- 周期模式：周期参数按位或 `MR_TIMER_PERIODIC`，每次到期后自动按下一次周期重新装载， 直至调用 `mr_timer_stop`。
+- 周期模式：周期参数按位或 `MR_TIMER_PERIODIC`。若回调没有移动/停止/删除该定时器，回调返回后会以**当时的当前 tick**为基准重新计算下一次到期点；因此回调耗时或 tick 推进会影响相位，并非固定绝对时间轴追赶。
 
 **生命周期**
 
@@ -106,8 +106,7 @@ static int led_timer_setup(void) {
 | 在回调中调用 `mr_timer_stop`         | 支持，周期定时器不再重新装载                    |
 | 周期参数（去掉标志位）为 0           | 非法，断言开启时被 `MR_ASSERT` 拦截             |
 
-**回调上下文**：回调在时钟 tick 处理上下文中执行（目标板上通常为滴答定时器中断）。 回调内禁止阻塞、禁止长时间循环；应尽快返回，只做置标志、入队等轻量操作，
-耗时处理交给主循环或 [工作队列 Work](work.md)。
+**回调上下文**：回调由时钟 hook 同步执行，因此处于调用 `mr_clock_increase()` 的同一上下文；目标板常见实现是在 tick ISR 中，宿主也可能在线程中推进时钟。为避免阻塞整个时钟 hook 链，回调应尽量短；若平台在 ISR 中推进 tick，则其中尤其不能执行阻塞操作。耗时工作可转交 [工作队列 Work](work.md)。
 
 ### 5. API 参考
 
@@ -164,7 +163,7 @@ mr_timer_t *mr_timer_create(mr_timer_entry_t *entry, void *param, mr_tick_t tick
 mr_err_t mr_timer_del(mr_timer_t *timer);
 ```
 
-将定时器从计时链表摘除并删除对象：静态对象被反初始化（可再次 `init` 复用）， 动态对象内存被释放（此后指针不可再用）。运行中删除是安全的。
+先把定时器从当前链表摘除，再对对象执行 `mr_object_del`。若这是最后一个引用，静态对象进入生命周期终点且可在适当时机重新 `init`；动态对象由 release 释放内存。若仍有额外引用，对象生命周期会继续，因此 `del` 不是强制立即销毁。回调内自删除由当前到期处理流程显式兼容。
 
 **`mr_timer_start` / `mr_timer_stop`**
 
@@ -200,7 +199,7 @@ mr_timer_t *mr_timer_get(mr_timer_t *timer);
 mr_bool_t mr_timer_put(mr_timer_t *timer);
 ```
 
-跨模块持有定时器指针时先 `get` 增加引用，用完 `put` 归还；引用归零即到达生命周期 终点。一般应用代码不需要使用。
+跨模块持有定时器指针时可用 `get`/`put` 管理额外引用；`mr_timer_del` 只是归还组件持有的一次对象引用，真正的生命周期终点仍由最后一次 `put` 决定。一般应用代码不需要直接使用这些接口。
 
 ### 6. 完整示例
 
@@ -261,7 +260,7 @@ void poll_example(void) {
 
 **Q：定时有误差吗？**
 
-粒度为 1 个 tick，实际触发最晚滞后约 1 个 tick；同一 tick 内到期的多个回调串行执行， 前面的回调耗时会计入后面的触发延迟。对时间敏感的处理建议在回调中只做通知。
+定时判断只在时钟 hook 被执行时发生，因此分辨率受 tick 推进频率影响；若平台稳定地每 1 tick 调用一次 `mr_clock_increase(1)`，量化误差通常在一个 tick 量级。同一次 hook 中到期的多个回调串行执行，前面回调的耗时会延后后面的回调。若一次 `mr_clock_increase()` 跨过多个 tick，逾期定时器会在该次调用中集中处理。
 
 **Q：最长能定时多久？**
 
@@ -360,20 +359,15 @@ typedef struct mr_timer {
 1. 建立局部"操作链表" `oplist`。
 2. 加锁检查表头：未到期（差值小于 `MR_TICK_MAX / 2`）则记录 `tless = ttick - tick`
    并退出；已到期则将该定时器移入 `oplist`。
-3. **解锁后调用用户回调，再重新加锁**（`timer.c:235-241`）：回调执行期间不持锁、 不关中断，这是回调内可以调用 timer API 的前提。
+3. **恢复进入函数前的中断状态并解锁后调用用户回调，再重新加锁**（`timer.c:235-241`）：Timer 锁本身不跨用户回调持有，这是回调内可重入 Timer 控制 API 的关键。若调用者原本就在 ISR，回调仍处于 ISR 上下文。
 4. 回调返回后检查 `oplist` 是否为空（`timer.c:244`）：为空说明回调内部已对本定时器 执行了 `start`/`stop`/`del`
    ，所有权已转移，本次流程放弃处理。
-5. 否则按模式收尾：单次定时器从 `oplist` 摘除（生命周期结束）；周期定时器调用
-   `timer_insert` 重新装载。
+5. 否则按模式收尾：单次定时器仅从 `oplist` 摘除，**对象本身并未删除**；周期定时器调用 `timer_insert`，以此刻 `mr_clock_tick()` + period 计算新的 `ttick`。
 6. 循环直至表头未到期或链表为空，返回 `tless`。
 
 该流程使同一 tick 内到期的任意多个定时器在一次钩子调用中被串行处理，且每一步 链表操作都在锁内、每一处用户回调都在锁外——临界区内没有任何不可预期的用户代码。
 
-**停止与删除**：`mr_timer_stop` 调用 `timer_remove`（锁内 `mr_list_del`，对未在 链上的节点安全）。`mr_timer_del`
-先摘链再走对象删除通道：静态 clazz 的
-`statik_release` 仅摘链（"未初始化"标记由对象层 `put` 在释放链执行前清除， 对象内存归调用者），动态 clazz 的
-`dynamic_release` 额外
-`mr_free`（`mrX/kernel/timer.c:187-200`）。
+**停止与删除**：`mr_timer_stop` 调用 `timer_remove`（锁内 `mr_list_del`，自指空链也可删除）。`mr_timer_del` 先摘链再执行一次 `mr_object_del`；只有该次 put 把引用计数降到 0 时才进入 timer release。release 又会再次执行一次安全摘链；动态通道随后 `mr_free`（`mrX/kernel/timer.c:176-200`）。
 
 **修改周期**：`mr_timer_tick_set` 在锁内摘链（等效停止）后更新 `itick`
 （`mrX/kernel/timer.c:154`），因此"改周期即停止、需重新 start"是结构性结果， 不是附加逻辑。
@@ -384,9 +378,8 @@ typedef struct mr_timer {
   `ttick` 的一致性；临界区内只做链表搬移与字段读写。
 - 所有 API（`init`/`create` 除外）入口通过 `MR_ASSERT` 校验对象已初始化 （`MR_OBJECT_IS_INITED`）且类型为 timer（
   `MR_OBJECT_IS_CLAZZES`），传入错误 类型指针在断言开启时立即失败。
-- 回调运行在时钟钩子上下文（目标板通常为滴答中断，宿主模拟环境为调用
-  `mr_clock_increase` 的线程上下文）。回调内允许调用 timer API（由第 10 节的 所有权检查保证安全），但不允许任何阻塞调用。
-- API 可在中断与线程上下文调用；锁内的操作均为常数时间，不会造成长时间关中断。
+- 回调运行在 `mr_clock_increase` 调用者上下文。Timer 锁在调用用户回调前已经释放，因此回调内的 `start/stop/tick_set/del` 路径被实现兼容；是否允许阻塞取决于该时钟推进上下文，但长时间回调都会阻塞后续时钟 hooks。
+- `start/stop/tick_set` 的共享链表操作由 irqsave 自旋锁保护；但不能据此把所有 API 统一标成 ISR-safe：动态 `create` 和动态对象最后一次 `del/put` 可能进入 `mr_malloc/mr_free`，其上下文约束由内存实现决定。
 
 ### 12. 扩展与派生
 
@@ -423,5 +416,4 @@ clazz 的静态/动态双释放通道（`MR_CLAZZES_DEFINE`，`mrX/kernel/timer.
 | `MR_CFG_TICK_PER_SECOND`        | tick 频率（时钟模块），决定定时粒度      |
 | `MR_TICK_MSEC` / `MR_TICK_USEC` | 毫秒/微秒转 tick 的换算宏（时钟模块）    |
 
-**错误码**：本模块 API 失败返回负数错误码（见 `mrX/include/mrX/libc/mr_errno.h`）； 参数非法（空指针、周期为 0）在断言开启时由
-`MR_ASSERT` 拦截，而非返回错误码。
+**错误约定**：`mr_timer_init/start/stop/tick_set/del` 的正常公共路径当前均返回 0；`mr_timer_create` 可能因内存分配/初始化失败返回 `MR_NULL`。空指针、错误对象类型、有效周期为 0 等由 `MR_ASSERT` 约束，而不是转换成 `mr_errno` 返回值。

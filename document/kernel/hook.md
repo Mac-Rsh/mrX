@@ -1,7 +1,6 @@
 # 钩子（Hook）
 
-> 钩子提供一个容量固定、加锁追加的函数指针表，用于把"一个执行点上要做的多件事"
-> 组织成可注册的回调链；内核时钟子系统每 tick 的回调分发就建立在它之上。
+> 钩子提供一个容量固定、加锁追加的通用指针表；使用者可以把条目解释为函数指针形成回调链。时钟子系统用它保存 clock hook。
 
 | 项       | 说明                                                         |
 |----------|--------------------------------------------------------------|
@@ -23,15 +22,13 @@
 特性：
 
 - 零分配：数组由使用者提供，钩子本体不引用堆。
-- 加锁追加：`mr_hook_add` 内部经自旋锁保护，可在线程与中断上下文注册。
-- 顺序保证：按注册先后顺序遍历执行。
+- 加锁追加：`mr_hook_add` 用一个全局 `mr_spinlock_lock_irqsave` 串行化所有 hook 实例的追加操作。
+- 顺序保存：条目按成功 `add` 的先后写入数组；同一指针可以重复注册，没有去重。
 
 不适用于：需要移除回调的场合（本模块只提供 `add`，无 remove）；回调数量不确定且 可能很大的场合（容量固定，超出返回
 `-MR_ENOMEM`）。
 
-**与时钟的关系**：本模块是通用容器，时钟子系统是它最大的使用方——时钟内部用一个
-`mr_hook_t` 维护每 tick 回调表，`mr_clock_hook_add` 就是对 `mr_hook_add` 的封装 （见 [时钟](clock.md)）。应用注册"每 tick
-回调"请使用 `mr_clock_hook_add`，而不是 直接操作 `mr_hook_t`。
+**与时钟的关系**：本模块是通用容器，时钟内部用一个 `mr_hook_t` 保存 `mr_clock_hook_t`，`mr_clock_hook_add` 是对 `mr_hook_add` 的封装。clock 在每次 `mr_clock_increase()` 和每次 `mr_clock_tickless()` 计算时遍历该表；详见 [时钟](clock.md)。
 
 ### 2. 配置与依赖
 
@@ -91,13 +88,13 @@ void my_hook_example(void) {
 | 操作                                  | 行为                                   |
 |---------------------------------------|----------------------------------------|
 | `mr_hook_add` 成功                    | 回调追加到表尾，`0` 返回               |
+| 重复添加同一个 `entry`               | 允许，占用新的槽位并在遍历时再次出现   |
 | 容量已满时 `mr_hook_add`              | 返回 `-MR_ENOMEM`，表内容不变          |
 | `entry` 为 `MR_NULL` 时 `mr_hook_add` | 非法，断言开启时被 `MR_ASSERT` 拦截    |
 | 容量为 0（`entry` 数组为 `MR_NULL`）  | 合法构造，所有 `add` 返回 `-MR_ENOMEM` |
 | `MR_HOOK_EACH` 遍历                   | 按注册顺序访问 0 ~ 已注册数-1 的条目   |
 
-**遍历期间的限制**：`MR_HOOK_EACH` 遍历的依据是"已注册数"，遍历期间不应再执行
-`mr_hook_add`（新条目不会被本次遍历覆盖，但请避免在回调内对本表注册，保持语义清晰）。 回调按注册顺序串行同步执行，一个回调阻塞会阻塞整条链。
+**遍历期间的限制**：`MR_HOOK_EACH` 是无锁 `for` 宏，每轮条件都会读取当前 `hook->next`。因此遍历过程中若有追加，新条目是否被当前遍历看到取决于追加发生的时机，而且遍历端与写端之间没有共同的读写锁契约。推荐在进入稳定分发阶段前完成注册。若条目被解释为回调，回调会由调用者按数组顺序同步执行。
 
 ### 5. API 参考
 
@@ -202,8 +199,7 @@ void full_example(void) {
 
 **Q：想注册"每 tick 执行一次"的回调，该用哪个 API？**
 
-用 [时钟](clock.md) 的 `mr_clock_hook_add`，不要自建 `mr_hook_t`。时钟钩子表容量 由 `MR_CFG_CLOCK_HOOK_SIZE` 决定（默认
-2，已被软定时器等内核服务占用， 扩容见时钟模块文档）。
+使用 [时钟](clock.md) 的 `mr_clock_hook_add`。时钟钩子表容量由 `MR_CFG_CLOCK_HOOK_SIZE` 决定（默认 2）；具体启用了哪些内核模块、注册了多少 clock hook，决定剩余槽位。
 
 **Q：`mr_hook_add` 返回 `-MR_ENOMEM` 怎么办？**
 
@@ -281,18 +277,15 @@ typedef struct mr_hook {                /* mrX/include/mrX/kernel/mr_hook.h:26 *
 3. `next < size` 则写入 `entry[next++]`，返回 0；否则返回 `-MR_ENOMEM`（`hook.c:29-35`）。
 4. 解锁（`hook.c:38`）。
 
-**为什么用全局锁**：钩子是轻量容器，不值得为每个实例配一把锁；追加操作是低频
-初始化期动作，全局锁把临界区压缩到一条数组写入，代价可忽略。时钟的注册路径 （`mr_clock_hook_add`）因此天然中断安全。
+**锁的实际范围**：实现只有一把全局 `__hook_lock`，所有 hook 实例的 `mr_hook_add` 都经过它。锁内只检查容量、写 `entry[next]` 并递增 `next`。代码没有为 `MR_HOOK_EACH` 提供配套锁，因此这把锁只串行化多个 add 调用，不构成 add 与遍历之间的完整互斥。
 
-**分发**：`MR_HOOK_EACH`（`mr_hook.h:75`）是无锁的普通 for 循环，读 `next` 与
-`entry[i]`。分发（遍历执行）不加锁是刻意设计：回调在事件源上下文（如 tick 中断） 中运行，若在锁内执行任意用户回调，将把不可预期的代码拖入临界区。正确性由使用
-约定保证——注册发生在初始化期，分发发生在稳定运行期，二者不相交（时钟场景中 钩子在启动阶段注册，之后只读）。
+**遍历**：`MR_HOOK_EACH`（`mr_hook.h:75`）只是普通 `for` 宏：索引从 0 开始，每轮检查 `_i < hook->next`，再读取 `entry[_i]` 并按 `_type *` 转型。它本身既不加锁，也不调用条目；是否调用以及调用上下文完全由宏外的循环体决定。稳定用法是在初始化期完成追加、运行期只遍历。
 
 ### 11. 并发与中断安全
 
-- `mr_hook_add` 可在任意上下文调用，由全局自旋锁（关中断型）保护，临界区为 常数时间。
-- `MR_HOOK_EACH` 无锁：要求遍历期间没有并发追加。使用者遵循"初始化期注册、 运行期只读分发"即可；若业务确实需要运行期注册，需自行在分发侧加同步。
-- 回调在分发者上下文中同步执行（时钟场景下为 tick 上下文，回调内禁止阻塞， 见 [时钟](clock.md) 的回调上下文约定）。
+- `mr_hook_add` 使用 `mr_spinlock_lock_irqsave`；它能否在某个具体中断/多核场景安全使用，取决于平台 spinlock/irqsave 实现，Hook 层不再额外声明“任意上下文”。
+- `MR_HOOK_EACH` 无锁。若与 add 并发，`next` 和新槽位的可见性没有由 Hook 模块建立配套同步；推荐“初始化期 add、运行期只读”。
+- 如果使用者在循环体中调用函数条目，函数就在遍历者当前上下文同步执行；Hook 模块不会切换上下文，也不会限制回调是否阻塞。
 
 ### 12. 扩展与派生
 
@@ -319,7 +312,7 @@ typedef struct mr_hook {                /* mrX/include/mrX/kernel/mr_hook.h:26 *
 | `mrX/kernel/hook.c:14`                | 全局自旋锁                                  |
 | `mrX/kernel/hook.c:16`                | `mr_hook_add`：断言 + 锁内追加              |
 | `mrX/kernel/clock.c:23`               | 时钟钩子表（`MR_CFG_CLOCK_HOOK_SIZE` 容量） |
-| `mrX/kernel/clock.c:34`               | 时钟 tick 分发与 tickless 聚合              |
+| `mrX/kernel/clock.c:34`               | clock hook 遍历与 tickless 聚合              |
 | `mrX/kernel/clock.c:85`               | `mr_clock_hook_add`（时钟侧封装）           |
 | `mrX/test/kernel/hook.c`              | 初始化/追加/容量/遍历行为测试               |
 

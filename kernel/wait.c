@@ -73,7 +73,7 @@ static void waiter_remove_locked(mr_waiter_t *wait) {
     wait_cursor_t *cursor;
     mr_list_t *node;
 
-    /* Check if waiter is removed */
+    /* Check whether waiter is removed */
     if (!wait->able) {
         return;
     }
@@ -156,7 +156,7 @@ static void waitable_handle(mr_waitable_t *able, mr_wait_event_t event,
         }
         waiter->last = event;
 
-        /* Check if waiter is triggered */
+        /* Check whether waiter is triggered */
         if (!(waiter->event & event_edge)) {
             continue;
         }
@@ -320,7 +320,7 @@ mr_err_t mr_waiter_wait(mr_waiter_t *wait, mr_waitable_t *able) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__wait_lock);
 
-    /* Check if waiter is waiting */
+    /* Check whether waiter is waiting */
     if (MR_WAITER_IS_WAITING(wait)) {
         ret = -MR_EBUSY;
         goto _exit;

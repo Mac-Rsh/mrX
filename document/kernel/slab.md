@@ -1,8 +1,7 @@
 # 内存块分配器（Slab）
 
-> 内存块分配器在用户提供的静态缓冲上按固定块大小做无锁分配：位图跟踪每个块的
-> 占用状态，分配/释放均为原子位操作，适合数量与大小固定的对象池，避免通用堆的
-> 碎片与加锁开销。
+> 内存块分配器在调用者提供的缓冲上按固定块大小分配：位图跟踪每个块的占用状态，
+> 分配/释放通过原子位操作协调，适合数量与大小固定的对象池，避免变长堆的外部碎片与块头开销。
 
 | 项       | 说明                                                                                                                            |
 |----------|---------------------------------------------------------------------------------------------------------------------------------|
@@ -17,13 +16,13 @@
 
 ### 1. 模块概述
 
-内存块分配器解决的问题是： **为一类大小固定的对象提供零碎片、零块头开销、 无锁的快速分配**。
+内存块分配器解决的问题是： **为一类大小固定的对象提供无变长块外部碎片、零块头开销的快速分配**。固定块仍可能因为对象小于块大小而产生块内剩余空间。
 
 特性：
 
 - 固定块大小：一个 slab 内所有块等长（`size`），按位图逐块占用管理。
 - 存储由用户提供：位图与块缓冲都由调用者分配（通常是静态数组），模块本身不 申请内存。
-- 无锁并发安全：`mr_slab_alloc` 以原子 CAS 抢占位图位，`mr_slab_free` 以原子 位清除释放，多线程/中断上下文并发调用无需外层加锁。
+- 分配器本身不使用互斥锁：`mr_slab_alloc` 以原子 CAS 抢占位图位，`mr_slab_free` 以原子位清除释放；并发能力依赖底层 `mr_atomic_*` 实现以及调用者正确的块所有权管理。
 - 与 libc 的 `malloc` 相互独立：`malloc`（`MR_USE_MALLOC`）在 `MR_CFG_HEAP_SIZE`
   指定的通用堆上按需分配任意大小（见 [内存分配 malloc](../libc/malloc.md)）， slab 不使用该堆、不使用 `mr_malloc`
   ，两者可并存并按场景选用。
@@ -44,7 +43,7 @@
 
 | 宏                       | 说明                                                  |
 |--------------------------|-------------------------------------------------------|
-| `MR_SLAB_MAP_BITS`       | 每个 `mr_atomic_t` 位图字管理的块数（32 位平台为 32） |
+| `MR_SLAB_MAP_BITS`       | 每个 `mr_atomic_t` 位图字管理的块数：`sizeof(mr_atomic_t) * 8` |
 | `MR_SLAB_MAP_SIZE(_num)` | 管理 `_num` 个块所需的位图字节数，用于声明位图数组    |
 
 使用前需准备两块存储：位图数组（大小 `MR_SLAB_MAP_SIZE(num)`，且按
@@ -61,7 +60,7 @@
 #define OBJ_NUM    16
 #define MAP_SIZE   MR_SLAB_MAP_SIZE(OBJ_NUM)
 
-static mr_uint8_t pool_map[MAP_SIZE];
+static mr_atomic_t pool_map[MAP_SIZE / sizeof(mr_atomic_t)];
 static mr_uint8_t pool_buf[OBJ_SIZE * OBJ_NUM];
 static mr_slab_t  pool = MR_SLAB_INIT(pool_map, pool_buf, OBJ_SIZE, OBJ_NUM);
 
@@ -81,16 +80,14 @@ void demo(void) {
 
 - `MR_SLAB_INIT` 直接以字段初始化填好 `mr_slab_t`，位图清零可用 `mr_memset`
   复位整个池（测试中的 `slab_reset` 即如此）。
-- 位图数组必须按 `sizeof(mr_atomic_t)` 对齐：静态数组天然满足，
-  `mr_slab_init` 会校验并对齐错误返回 0。
+- 位图存储必须满足 `mr_atomic_t` 的对齐要求。使用 `mr_atomic_t` 数组最直接；普通 `mr_uint8_t` 数组即使是静态存储，C 类型本身也不保证具备 `mr_atomic_t` 对齐。`mr_slab_init` 会检查位图地址对齐，`MR_SLAB_INIT` 宏则不会。
 
 ### 4. 使用说明
 
 **初始化方式**
 
-- 静态初始化宏 `MR_SLAB_INIT(_map, _buf, _size, _num)`：编译期填好描述符， 前提是位图存储已清零。
-- 运行时 `mr_slab_init`：清零位图并填写描述符，同时把 `num` 钳位到位图容量 （
-  `map_size / sizeof(mr_atomic_t) * MR_SLAB_MAP_BITS`），返回实际管理的块数； 位图未对齐返回 0 表示初始化失败。
+- 静态初始化宏 `MR_SLAB_INIT(_map, _buf, _size, _num)`：只填描述符，不清零位图、不检查对齐，也不校验 `buf/size/num`；调用者必须自行保证这些前置条件。
+- 运行时 `mr_slab_init`：检查位图地址是否按 `sizeof(mr_atomic_t)` 对齐，随后清零 `map_size` 覆盖的全部位图字，并把 `num` 钳位到位图容量 `map_size / sizeof(mr_atomic_t) * MR_SLAB_MAP_BITS`。返回值是实际管理块数，因此返回 0 既可能是位图未对齐，也可能只是最终可管理块数为 0。
 
 **分配与释放**
 
@@ -99,7 +96,7 @@ void demo(void) {
 | `mr_slab_alloc`                        | 取最低空闲块，返回其地址；池满返回 `MR_NULL`               |
 | `mr_slab_free(slab, mem)`              | 归还块；`mem` 越界、非块起始地址时静默忽略，不返回错误     |
 | 对同一块重复 `mr_slab_free`            | 位图位幂等清除，无损坏；但该块可能被再次分配给他人，见 FAQ |
-| `mr_slab_free(MR_NULL)` 或任意外部指针 | 安全，被范围校验拦截                                       |
+| `mr_slab_free` 传入非本池地址             | 实现会先做地址范围/块边界判断；公共约定仍应只传本 slab 的块地址或 `MR_NULL` |
 
 **块地址约定**
 
@@ -108,8 +105,7 @@ void demo(void) {
 - `mr_slab_ptr2index` / `mr_slab_index2ptr` 提供地址与块号的双向换算： 越界或未对齐时前者返回 -1、后者返回 `MR_NULL`
   ，可用于诊断与索引化存储。
 
-**并发约定**：`alloc`/`free` 可在多线程与中断上下文并发调用，无需外层锁；
-`mr_slab_init` 不是并发安全的，须在池投入使用前单独完成。
+**并发约定**：位图修改使用原子操作，因此正常的“不同所有者分配/释放各自块”场景不需要 slab 自身再加互斥锁；`mr_slab_init` 必须在池投入使用前完成。是否可在 ISR 使用还取决于目标平台 `mr_atomic_*` 的实现与调用环境，Slab 层不单独作统一保证。
 
 ### 5. API 参考
 
@@ -144,10 +140,10 @@ mr_uint32_t mr_slab_init(mr_slab_t *slab, void *map, mr_uint32_t map_size,
 ```
 
 - `slab`：待初始化的描述符。
-- `map`：位图存储，必须按 `sizeof(mr_atomic_t)` 对齐，否则返回 0。
-- `map_size`：位图字节数，`num` 超出其容量时被钳位。
-- `buf`：块缓冲起始地址；`size`：单块字节数；`num`：期望块数。
-- 返回：实际管理的块数；位图未对齐返回 0。
+- `map`：位图存储，必须满足 `mr_atomic_t` 对齐；函数只显式检查这一项。
+- `map_size`：位图字节数，先按 `sizeof(mr_atomic_t)` 向下折算为完整位图字数量，`num` 超出容量时被钳位。
+- `slab`、`map`、`buf` 必须是有效存储，`size` 应大于 0；这些前置条件当前实现不会完整校验。
+- 返回：实际管理的块数；位图未对齐或最终管理块数本来就是 0 时都可能返回 0。
 
 **`mr_slab_alloc`**
 
@@ -156,7 +152,7 @@ void *mr_slab_alloc(mr_slab_t *slab);
 ```
 
 - 返回：成功为块地址（`buf + index * size`）；池满返回 `MR_NULL`。
-- 注意：可并发调用；块内容不清零，敏感数据自行处理。
+- 块内容不清零，敏感数据需调用者自行处理。并发分配通过位图 CAS 协调，但块生命周期/所有权仍由调用者负责。
 
 **`mr_slab_free`**
 
@@ -165,7 +161,7 @@ void mr_slab_free(mr_slab_t *slab, void *mem);
 ```
 
 - `mem`：必须是 `mr_slab_alloc` 返回的地址。
-- 返回：无。`mem` 为 `MR_NULL`、越界或未落在块边界上时静默忽略。
+- 返回：无。实现对地址范围和块边界做检查，不匹配时直接返回；调用者仍应把该接口限定在本 slab 产生的块指针上，不应把任意伪造地址当作可移植输入契约。
 
 **`mr_slab_ptr2index` / `mr_slab_index2ptr`**
 
@@ -174,8 +170,7 @@ int mr_slab_ptr2index(mr_slab_t *slab, void *mem);
 void *mr_slab_index2ptr(mr_slab_t *slab, int index);
 ```
 
-`ptr2index`：块号从 0 计，`mem` 不在池内或不是块起始地址返回 -1。
-`index2ptr`：`index` 越界（含负数）返回 `MR_NULL`。
+`ptr2index`：在 slab 配置有效且 `size > 0` 的前提下，块号从 0 计；地址不在池内或不是块起始地址返回 -1。`index2ptr`：`index` 越界（含负数）返回 `MR_NULL`。两者都假定 `slab` 本身已正确初始化。
 
 ### 6. 完整示例
 
@@ -186,7 +181,7 @@ void *mr_slab_index2ptr(mr_slab_t *slab, int index);
 #define MSG_NUM    16
 #define MSG_MAP    MR_SLAB_MAP_SIZE(MSG_NUM)
 
-static mr_uint8_t msg_map[MSG_MAP];
+static mr_atomic_t msg_map[MSG_MAP / sizeof(mr_atomic_t)];
 static mr_uint8_t msg_buf[MSG_SIZE * MSG_NUM];
 static mr_slab_t  msg_pool = MR_SLAB_INIT(msg_map, msg_buf, MSG_SIZE, MSG_NUM);
 
@@ -238,13 +233,11 @@ void exhaust_demo(void) {
 
 **Q：`mr_slab_alloc` 返回 `MR_NULL` 但我确定没满？**
 
-检查位图是否被意外置位：`MR_SLAB_INIT` 静态初始化的前提是位图存储为零， 全局/静态数组天然为零，但栈上或复用内存需先
-`mr_memset` 清零。也确认
-`mr_slab_init` 的返回值等于预期块数（可能被位图容量钳位）。
+检查位图是否被意外置位：`MR_SLAB_INIT` 不会清零位图；具有静态存储期且未显式初始化的位图对象由 C 规则零初始化，栈上或复用存储则需自行清零。也确认位图容量和对齐满足要求，或直接改用 `mr_slab_init` 完成清零。
 
 **Q：`mr_slab_init` 返回 0？**
 
-位图地址未按 `sizeof(mr_atomic_t)` 对齐。使用 `mr_atomic_t` 数组或对齐的静态 数组作位图。
+首先检查位图地址是否按 `sizeof(mr_atomic_t)` 对齐；此外，`map_size` 太小或传入的 `num` 为 0 也会使最终管理块数为 0。建议直接使用 `mr_atomic_t` 数组作为位图存储。
 
 **Q：对同一个块 free 了两次会怎样？**
 
@@ -253,11 +246,11 @@ void exhaust_demo(void) {
 
 **Q：free 一个不是本池的指针会怎样？**
 
-被范围与对齐校验拦截，静默忽略，无任何效果。这也是测试 `invalid_free` 覆盖的 行为。
+当前实现会先用地址范围与块边界条件过滤，现有测试也覆盖了若干外部地址输入。但接口设计上仍应只归还本池分配出的块；对任意无关/伪造指针做关系比较并不是应依赖的可移植 C 契约。
 
 **Q：块大小需要对齐吗？**
 
-模块按 `buf + index * size` 寻址，不做对齐处理；若块内要存放需要对齐的类型， 把 `size` 设为对齐值的整数倍。
+模块按 `buf + index * size` 寻址，不做对齐处理。若块内要存放有对齐要求的类型，既要保证 `buf` 基址满足该对齐，也要让 `size` 步长保持该对齐（通常取对齐值的整数倍）。
 
 **Q：和 `malloc` 怎么选？**
 
@@ -335,8 +328,7 @@ typedef struct mr_slab {
 4. 成功则块号 `off = i * MR_SLAB_MAP_BITS + bit - 1`，返回
    `buf + off * size`（`slab.c:48-51`）。全池无空位返回 `MR_NULL`。
 
-"最低位优先 + CAS 重试"使分配结果确定（低号块先发），测试
-`alloc_free_cycle` / `unaligned_free` 依赖该性质验证复用顺序。
+单线程/无竞争时，“最低位优先”会优先返回低号空闲块，测试 `alloc_free_cycle` / `unaligned_free` 用这一点验证复用顺序；并发竞争时各调用的完成顺序由 CAS 竞争决定，不能据此推导跨线程的确定分配顺序。
 
 **释放**：`mr_slab_free`（`slab.c:56`）：
 
@@ -349,12 +341,10 @@ typedef struct mr_slab {
 
 ### 11. 并发与中断安全
 
-- `mr_slab_alloc`：无锁。每个位图字是独立的 CAS 域，同一字的竞争者经 do-while 重试收敛，不同字互不干扰；`mr_slab_free`
-  的位清除与分配的位设置同为原子操作， 两者并发亦安全。测试 `concurrent_alloc_free` 以 4 线程 × 2000 次压测覆盖 （
-  `mrX/test/kernel/slab.c:323`）。
-- `mr_slab_init`：非并发安全，须在池投入使用前完成；运行期重建位图需使用者 自行保证互斥。
-- 中断上下文：`alloc`/`free` 只含原子位操作，可在 ISR 中调用；但"分配后持有、 中断中再分配"等策略属使用者约定，模块不做重入计数。
-- 无锁的代价：释放不校验"该块是否真的被分配过"，误用（重复 free、伪造地址） 不报错，见 FAQ。
+- `mr_slab_alloc` 以每个位图字为 CAS 竞争域；`mr_slab_free` 用原子清位。现有 `concurrent_alloc_free` 测试用 4 个 pthread 并发执行正常“分配→使用→释放”循环。
+- 这些原子位操作只保护分配元数据，不替调用者解决块所有权：同一块被两个执行流重复 free、或 free 后继续使用，都可能造成重新分配后的别名问题。
+- `mr_slab_init` 非并发安全，须在池投入使用前完成；运行期重建位图需调用者自行同步。
+- ISR 可用性取决于目标平台 `mr_atomic_*` 是否适合该上下文；Slab 本身不调用 malloc 或阻塞原语，但不据此额外承诺所有平台都 ISR-safe。
 
 ### 12. 扩展与派生
 

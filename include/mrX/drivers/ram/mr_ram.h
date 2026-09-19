@@ -24,40 +24,34 @@ extern "C" {
  */
 
 #if defined(MR_USE_DRIVER_RAM)
+/* RAM information type */
+typedef struct mr_ram_info {
+    mr_uint64_t size;
+    mr_uint32_t regions_num;
+} mr_ram_info_t;
+
 /* RAM region type */
 typedef struct mr_ram_region {
     void *address;
-    mr_uint32_t size;
+    mr_size_t size;
 } mr_ram_region_t;
 
 /* RAM data type */
 MR_DRIVER_CLAZZES_EXPORT(ram);
 typedef struct mr_ram_data {
-    mr_ram_region_t *regions;
-    mr_uint32_t regions_num;
+    mr_ram_info_t info;
 } mr_ram_data_t;
 
 /* RAM operations type */
 typedef struct mr_ram_ops {
-    mr_err_t (*mount)(const mr_driver_t *drv);
-    mr_err_t (*unmount)(const mr_driver_t *drv);
-    mr_ssize_t (*write)(const mr_driver_t *drv, mr_ssize_t offset,
-                        const mr_uint8_t *buf, mr_size_t size);
-    mr_ssize_t (*read)(const mr_driver_t *drv, mr_ssize_t offset,
+    mr_err_t (*probe)(const mr_driver_t *drv, mr_ram_info_t *info);
+    mr_err_t (*region)(const mr_driver_t *drv, mr_uint32_t index,
+                       mr_ram_region_t *region);
+    mr_ssize_t (*read)(const mr_driver_t *drv, mr_uint64_t offset,
                        mr_uint8_t *buf, mr_size_t size);
+    mr_ssize_t (*write)(const mr_driver_t *drv, mr_uint64_t offset,
+                        const mr_uint8_t *buf, mr_size_t size);
 } mr_ram_ops_t;
-
-/**
- * @brief This macro function initializes a RAM data.
- *
- * @param _regions The RAM regions.
- * @param _regions_num The RAM regions number.
- */
-#define MR_RAM_DATA_INIT(_regions, _regions_num)                               \
-    {                                                                          \
-        .regions = (void *)(_regions),                                         \
-        .regions_num = (_regions_num),                                         \
-    }
 
 /**
  * @brief This macro function defines a RAM driver.
@@ -134,45 +128,74 @@ MR_INLINE mr_driver_t *mr_ram_create(mr_ram_data_t *data, void *priv,
  */
 MR_INLINE mr_err_t mr_ram_del(mr_driver_t *drv) {
     /* Check parameter */
-    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_RAM);
+    MR_DRIVER_ASSERT_TYPE(drv, MR_DRIVER_TYPE_RAM);
 
     /* Delete driver */
     return mr_driver_del(drv);
 }
 
 /**
- * @brief This function writes a RAM data.
+ * @brief This function gets RAM information discovered during setup.
  *
  * @param drv The RAM driver.
- * @param offset The offset address.
- * @param buf The buffer.
- * @param size The size.
- * @return The actual size of written data on success, a negative error code on
- * failure.
+ * @param info The RAM information output.
+ * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_ssize_t mr_ram_write(mr_driver_t *drv, mr_ssize_t offset,
-                                  const void *buf, mr_size_t size) {
-    const mr_ram_ops_t *rm_ops;
+MR_INLINE mr_err_t mr_ram_info(mr_driver_t *drv, mr_ram_info_t *info) {
+    mr_ram_data_t *ram_data;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_RAM);
-    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
-    MR_ASSERT((buf != MR_NULL) || (size == 0));
+    MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
+    MR_ASSERT(info != MR_NULL);
 
-    /* Get RAM operations */
-    rm_ops = (mr_ram_ops_t *)MR_DRIVER_OPS(drv);
+    /* Get RAM data */
+    ram_data = (mr_ram_data_t *)MR_DRIVER_DATA(drv);
 
-    /* Check if operation is supported */
-    if (!rm_ops->write) {
-        return -MR_ENOSYS;
-    }
-
-    /* Write RAM data */
-    return rm_ops->write(drv, offset, buf, size);
+    /* Get RAM information */
+    *info = ram_data->info;
+    return 0;
 }
 
 /**
- * @brief This function reads a RAM data.
+ * @brief This function gets a directly addressable RAM region.
+ *
+ * @param drv The RAM driver.
+ * @param index The region index.
+ * @param region The region information output.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_ram_region(mr_driver_t *drv, mr_uint32_t index,
+                                 mr_ram_region_t *region) {
+    const mr_ram_ops_t *rm_ops;
+    mr_ram_data_t *ram_data;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_RAM);
+    MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+    MR_ASSERT(region != MR_NULL);
+
+    /* Get RAM operations and data */
+    rm_ops = (const mr_ram_ops_t *)MR_DRIVER_OPS(drv);
+    ram_data = (mr_ram_data_t *)MR_DRIVER_DATA(drv);
+
+    /* Check whether operation is supported */
+    if (!rm_ops->region) {
+        return -MR_ENOSYS;
+    }
+
+    /* Check region index */
+    if (index >= ram_data->info.regions_num) {
+        return -MR_EINVAL;
+    }
+
+    /* Get RAM region */
+    return rm_ops->region(drv, index, region);
+}
+
+/**
+ * @brief This function reads RAM data.
  *
  * @param drv The RAM driver.
  * @param offset The offset address.
@@ -181,25 +204,74 @@ MR_INLINE mr_ssize_t mr_ram_write(mr_driver_t *drv, mr_ssize_t offset,
  * @return The actual size of read data on success, a negative error code on
  * failure.
  */
-MR_INLINE mr_ssize_t mr_ram_read(mr_driver_t *drv, mr_ssize_t offset, void *buf,
-                                 mr_size_t size) {
+MR_INLINE mr_ssize_t mr_ram_read(mr_driver_t *drv, mr_uint64_t offset,
+                                 void *buf, mr_size_t size) {
     const mr_ram_ops_t *rm_ops;
+    mr_ram_data_t *ram_data;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_RAM);
+    MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
-    MR_ASSERT((buf != MR_NULL) || (size == 0));
+    MR_ASSERT((buf != MR_NULL) || (size == 0U));
 
-    /* Get RAM operations */
-    rm_ops = (mr_ram_ops_t *)MR_DRIVER_OPS(drv);
+    /* Get RAM operations and data */
+    rm_ops = (const mr_ram_ops_t *)MR_DRIVER_OPS(drv);
+    ram_data = (mr_ram_data_t *)MR_DRIVER_DATA(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!rm_ops->read) {
         return -MR_ENOSYS;
     }
 
+    /* Check range */
+    if ((offset > ram_data->info.size)
+        || ((mr_uint64_t)size > (ram_data->info.size - offset))) {
+        return -MR_EINVAL;
+    }
+
     /* Read RAM data */
     return rm_ops->read(drv, offset, buf, size);
+}
+
+/**
+ * @brief This function writes RAM data.
+ *
+ * @param drv The RAM driver.
+ * @param offset The offset address.
+ * @param buf The buffer.
+ * @param size The size.
+ * @return The actual size of written data on success, a negative error code on
+ * failure.
+ */
+MR_INLINE mr_ssize_t mr_ram_write(mr_driver_t *drv, mr_uint64_t offset,
+                                  const void *buf, mr_size_t size) {
+    const mr_ram_ops_t *rm_ops;
+    mr_ram_data_t *ram_data;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_RAM);
+    MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+    MR_ASSERT((buf != MR_NULL) || (size == 0U));
+
+    /* Get RAM operations and data */
+    rm_ops = (const mr_ram_ops_t *)MR_DRIVER_OPS(drv);
+    ram_data = (mr_ram_data_t *)MR_DRIVER_DATA(drv);
+
+    /* Check whether operation is supported */
+    if (!rm_ops->write) {
+        return -MR_ENOSYS;
+    }
+
+    /* Check range */
+    if ((offset > ram_data->info.size)
+        || ((mr_uint64_t)size > (ram_data->info.size - offset))) {
+        return -MR_EINVAL;
+    }
+
+    /* Write RAM data */
+    return rm_ops->write(drv, offset, buf, size);
 }
 
 /**
@@ -234,19 +306,10 @@ MR_INLINE mr_bool_t mr_ram_put(mr_driver_t *drv) {
  * @param _ops The RAM operations.
  */
 #define MR_HT_RAM_INSTALL(_id, _priv, _ops)                                    \
-    static mr_ram_region_t MR_CAT(__mr_ram_region_, _id)[] = {                 \
-        MR_HT_DRIVER_PROP_ELEM_FOREACH(_id, region, __MR_HT_RAM_REGION_IMPL)}; \
-    static mr_ram_data_t MR_CAT(__mr_ram_data_, _id)                           \
-        = MR_RAM_DATA_INIT(MR_CAT(__mr_ram_region_, _id),                      \
-                           MR_ARRAY_SIZE(MR_CAT(__mr_ram_region_, _id)));      \
+    static mr_ram_data_t MR_CAT(__mr_ram_data_, _id) = {0};                    \
     MR_HT_DRIVER_INSTALL(_id, MR_DRIVER_CLAZZES_STATIK(ram),                   \
                          MR_DRIVER_TYPE_RAM, &MR_CAT(__mr_ram_data_, _id),     \
                          _priv, _ops)
-#define __MR_HT_RAM_REGION_IMPL(_elem, _node, _prop)                           \
-    {                                                                          \
-        .address = (void *)MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0),       \
-        .size = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 1),                  \
-    }
 #endif /* defined(MR_USE_DRIVER_RAM) */
 
 /** @} */

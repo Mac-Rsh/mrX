@@ -90,7 +90,7 @@ mr_hashnode_t *mr_hashmap_find(mr_hashmap_t *map, mr_uint32_t key);
 MR_INLINE mr_bool_t mr_hashmap_is_empty(mr_hashmap_t *map) {
     mr_uint32_t i;
 
-    /* Check if any bucket is not empty */
+    /* Check whether any bucket is not empty */
     for (i = 0; i < map->bucket_num; i++) {
         if (mr_list_is_empty(&map->buckets[i]) == MR_FALSE) {
             return MR_FALSE;

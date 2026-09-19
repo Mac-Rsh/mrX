@@ -76,14 +76,14 @@ static void queue_timer_entry(mr_timer_t *timer, void *param) {
         mr_list_move(&work->list, &queue->list);
     }
 
-    /* Check if workqueue need set timer tick */
+    /* Check whether workqueue need set timer tick */
     timer_tick = mr_timer_tick(&queue->timer) & (~MR_TIMER_PERIODIC);
     if ((tickless != 0) && (tickless != timer_tick)) {
         /* Set to optimal tick */
         mr_timer_tick_set(&queue->timer, tickless | MR_TIMER_PERIODIC);
         mr_timer_start(&queue->timer);
 
-        /* Check if workqueue is stopped(timing) for the last time */
+        /* Check whether workqueue is stopped(timing) for the last time */
     } else if (mr_list_is_empty(&queue->tlist)) {
         /* Don't need timer */
         mr_timer_stop(&queue->timer);
@@ -249,7 +249,7 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
     }
 
 #if defined(MR_USE_WORKQUEUE_HOOK)
-    /* Check if the callback commits the next batch */
+    /* Check whether the callback commits the next batch */
     pending = !mr_list_is_empty(&queue->list);
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
 
@@ -275,7 +275,7 @@ mr_err_t mr_workqueue_work(mr_workqueue_t *queue, mr_work_t *work) {
     MR_ASSERT((work != MR_NULL) && MR_OBJECT_IS_INITED(work));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(work, work));
 
-    /* Check if workqueue is dying */
+    /* Check whether workqueue is dying */
     if (mr_atomic_load(&queue->dying)) {
         return -MR_ENOENT;
     }
@@ -283,7 +283,7 @@ mr_err_t mr_workqueue_work(mr_workqueue_t *queue, mr_work_t *work) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__work_lock);
 
-    /* Check if work is running */
+    /* Check whether work is running */
     if (MR_WORK_IS_RUNNING(work)) {
         ret = -MR_EBUSY;
         goto _exit;
@@ -321,13 +321,13 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(work, work));
     MR_ASSERT(tick < (MR_TICK_MAX / 2));
 
-    /* Check if tick is zero */
+    /* Check whether tick is zero */
     if (tick == 0) {
         /* No delay */
         return mr_workqueue_work(queue, work);
     }
 
-    /* Check if workqueue is dying */
+    /* Check whether workqueue is dying */
     if (mr_atomic_load(&queue->dying)) {
         return -MR_ENOENT;
     }
@@ -335,7 +335,7 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__work_lock);
 
-    /* Check if work is running */
+    /* Check whether work is running */
     if (MR_WORK_IS_RUNNING(work)) {
         ret = -MR_EBUSY;
         goto _exit;
@@ -362,7 +362,7 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
     /* It is the last work */
     mr_list_move(&work->list, &queue->tlist);
 _set:
-    /* Check if work is first */
+    /* Check whether work is first */
     if (&work->list == queue->tlist.next) {
         /* Set to optimal tick */
         tick = work->tick - mr_clock_tick();

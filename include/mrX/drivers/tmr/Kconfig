@@ -1,0 +1,14 @@
+menu "TMR: Hardware timer"
+
+# ==================================
+# TMR
+# ==================================
+config MR_USE_DRIVER_TMR
+    depends on MR_USE_DRIVER
+    bool "Use hardware timer"
+    default n
+    help
+        Enable the basic hardware timer driver framework.
+        Platform backends provide hardware-specific timer operations.
+
+endmenu

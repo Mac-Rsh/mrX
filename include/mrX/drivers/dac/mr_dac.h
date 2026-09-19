@@ -26,7 +26,8 @@ extern "C" {
 #if defined(MR_USE_DRIVER_DAC)
 /* DAC wait event type definition */
 #define MR_DAC_WAIT_STREAM_HALF         (1U << 0)
-#define MR_DAC_WAIT_STREAM_FULL         (1U << 1)
+#define MR_DAC_WAIT_STREAM_DONE         (1U << 1)
+#define MR_DAC_WAIT_STREAM_ERROR        (1U << 2)
 
 /* DAC reference definition */
 typedef enum mr_dac_ref {
@@ -48,9 +49,17 @@ typedef struct mr_dac_config {
 typedef struct mr_dac_seq {
     mr_uint32_t channels;
     mr_uint8_t resolution;
-    const void *buf;
     mr_size_t size;
+    const void *buf;
 } mr_dac_seq_t;
+
+#if defined(MR_USE_DRIVER_DAC_STREAM)
+/* DAC stream configuration type */
+typedef struct mr_dac_stream_config {
+    mr_uint64_t update_rate;
+    mr_bool_t circular;
+} mr_dac_stream_config_t;
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 
 /* DAC data type */
 MR_DRIVER_CLAZZES_EXPORT(dac);
@@ -70,11 +79,13 @@ typedef struct mr_dac_ops {
     mr_ssize_t (*write)(const mr_driver_t *drv, mr_dac_seq_t *seq);
 #if defined(MR_USE_DRIVER_DAC_STREAM)
     mr_err_t (*stream_start)(const mr_driver_t *drv, mr_dac_seq_t *seq,
-                             mr_bool_t circular);
+                             const mr_dac_stream_config_t *config);
     mr_err_t (*stream_stop)(const mr_driver_t *drv);
     mr_err_t (*stream_is_busy)(const mr_driver_t *drv, mr_bool_t *busy);
     mr_err_t (*stream_offset)(const mr_driver_t *drv, mr_size_t *offset);
 #endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
+    mr_err_t (*event_control)(const mr_driver_t *drv, mr_uint32_t events,
+                              mr_bool_t enable);
 } mr_dac_ops_t;
 
 /**
@@ -164,7 +175,7 @@ MR_INLINE mr_driver_t *mr_dac_create(mr_dac_data_t *data, void *priv,
  */
 MR_INLINE mr_err_t mr_dac_del(mr_driver_t *drv) {
     /* Check parameter */
-    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_DAC);
+    MR_DRIVER_ASSERT_TYPE(drv, MR_DRIVER_TYPE_DAC);
 
     /* Delete driver */
     return mr_driver_del(drv);
@@ -179,7 +190,7 @@ MR_INLINE mr_err_t mr_dac_del(mr_driver_t *drv) {
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_dac_configure(mr_driver_t *drv, mr_uint32_t channel,
-                          mr_dac_config_t *config);
+                          const mr_dac_config_t *config);
 
 /**
  * @brief This function gets a DAC channel configuration.
@@ -211,7 +222,7 @@ MR_INLINE mr_ssize_t mr_dac_write(mr_driver_t *drv, mr_dac_seq_t *seq) {
     MR_ASSERT((seq->buf != MR_NULL) || (seq->size == 0));
 
     /* Get DAC operations */
-    da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(da_ops->write != MR_NULL);
 
     /* Write DAC sequence */
@@ -224,11 +235,11 @@ MR_INLINE mr_ssize_t mr_dac_write(mr_driver_t *drv, mr_dac_seq_t *seq) {
  *
  * @param drv The DAC driver.
  * @param seq The DAC sequence.
- * @param circular The circular mode.
+ * @param config The DAC stream configuration.
  * @return 0 on success, a negative error code on failure.
  */
 MR_INLINE mr_err_t mr_dac_stream_start(mr_driver_t *drv, mr_dac_seq_t *seq,
-                                       mr_bool_t circular) {
+                                       const mr_dac_stream_config_t *config) {
     const mr_dac_ops_t *da_ops;
 
     /* Check parameter */
@@ -237,17 +248,18 @@ MR_INLINE mr_err_t mr_dac_stream_start(mr_driver_t *drv, mr_dac_seq_t *seq,
     MR_ASSERT(seq != MR_NULL);
     MR_ASSERT((seq->resolution > 0U) && (seq->resolution <= 32U));
     MR_ASSERT((seq->buf != MR_NULL) || (seq->size == 0));
+    MR_ASSERT(config != MR_NULL);
 
     /* Get DAC operations */
-    da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!da_ops->stream_start) {
         return -MR_ENOSYS;
     }
 
     /* Start DAC stream */
-    return da_ops->stream_start(drv, seq, circular);
+    return da_ops->stream_start(drv, seq, config);
 }
 
 /**
@@ -266,9 +278,9 @@ MR_INLINE mr_err_t mr_dac_stream_is_busy(mr_driver_t *drv, mr_bool_t *busy) {
     MR_ASSERT(busy != MR_NULL);
 
     /* Get DAC operations */
-    da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!da_ops->stream_is_busy) {
         return -MR_ENOSYS;
     }
@@ -291,9 +303,9 @@ MR_INLINE mr_err_t mr_dac_stream_stop(mr_driver_t *drv) {
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
 
     /* Get DAC operations */
-    da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!da_ops->stream_stop) {
         return -MR_ENOSYS;
     }
@@ -318,9 +330,9 @@ MR_INLINE mr_err_t mr_dac_stream_offset(mr_driver_t *drv, mr_size_t *offset) {
     MR_ASSERT(offset != MR_NULL);
 
     /* Get DAC operations */
-    da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!da_ops->stream_offset) {
         return -MR_ENOSYS;
     }
@@ -329,6 +341,58 @@ MR_INLINE mr_err_t mr_dac_stream_offset(mr_driver_t *drv, mr_size_t *offset) {
     return da_ops->stream_offset(drv, offset);
 }
 #endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
+
+/**
+ * @brief This function enables DAC events.
+ *
+ * @param drv The DAC driver.
+ * @param events The DAC event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_dac_event_enable(mr_driver_t *drv, mr_uint32_t events) {
+    const mr_dac_ops_t *da_ops;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_DAC);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+
+    /* Get DAC operations */
+    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Check whether event control is supported */
+    if (!da_ops->event_control) {
+        return -MR_ENOSYS;
+    }
+
+    /* Enable DAC events */
+    return da_ops->event_control(drv, events, MR_TRUE);
+}
+
+/**
+ * @brief This function disables DAC events.
+ *
+ * @param drv The DAC driver.
+ * @param events The DAC event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_dac_event_disable(mr_driver_t *drv, mr_uint32_t events) {
+    const mr_dac_ops_t *da_ops;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_DAC);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+
+    /* Get DAC operations */
+    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Check whether event control is supported */
+    if (da_ops->event_control == MR_NULL) {
+        return -MR_ENOSYS;
+    }
+
+    /* Disable DAC events */
+    return da_ops->event_control(drv, events, MR_FALSE);
+}
 
 /**
  * @brief This function attaches a DAC event.
@@ -359,8 +423,7 @@ MR_INLINE mr_err_t mr_dac_event_attach(mr_driver_t *drv, mr_waiter_t *entry) {
  * @param events The DAC events.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_dac_event_raise(mr_driver_t *drv,
-                                      mr_wait_event_t events) {
+MR_INLINE mr_err_t mr_dac_event_raise(mr_driver_t *drv, mr_uint32_t events) {
     mr_dac_data_t *da_data;
 
     /* Check parameter */
@@ -371,7 +434,7 @@ MR_INLINE mr_err_t mr_dac_event_raise(mr_driver_t *drv,
     da_data = (mr_dac_data_t *)MR_DRIVER_DATA(drv);
 
     /* Raise DAC events */
-    return mr_waitable_raise(&da_data->event, events, MR_NULL);
+    return mr_waitable_raise(&da_data->event, (mr_wait_event_t)events, MR_NULL);
 }
 
 /**
@@ -555,17 +618,17 @@ MR_INLINE mr_ssize_t mr_ht_dac_write(mr_ht_dac_spec_t *spec,
  *
  * @param spec The DAC specification.
  * @param seq The DAC sequence.
- * @param circular The circular mode.
+ * @param config The DAC stream configuration.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_ht_dac_stream_start(mr_ht_dac_spec_t *spec,
-                                          mr_dac_seq_t *seq,
-                                          mr_bool_t circular) {
+MR_INLINE mr_err_t
+    mr_ht_dac_stream_start(mr_ht_dac_spec_t *spec, mr_dac_seq_t *seq,
+                           const mr_dac_stream_config_t *config) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
     /* Start DAC stream */
-    return mr_dac_stream_start(spec->drv, seq, circular);
+    return mr_dac_stream_start(spec->drv, seq, config);
 }
 
 /**
@@ -614,6 +677,38 @@ MR_INLINE mr_err_t mr_ht_dac_stream_offset(mr_ht_dac_spec_t *spec,
     return mr_dac_stream_offset(spec->drv, offset);
 }
 #endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
+
+/**
+ * @brief This function enables DAC events for a HardTree specification.
+ *
+ * @param spec The DAC specification.
+ * @param events The DAC event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_ht_dac_event_enable(mr_ht_dac_spec_t *spec,
+                                          mr_uint32_t events) {
+    /* Check parameter */
+    MR_ASSERT(spec != MR_NULL);
+
+    /* Enable DAC events */
+    return mr_dac_event_enable(spec->drv, events);
+}
+
+/**
+ * @brief This function disables DAC events for a HardTree specification.
+ *
+ * @param spec The DAC specification.
+ * @param events The DAC event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_ht_dac_event_disable(mr_ht_dac_spec_t *spec,
+                                           mr_uint32_t events) {
+    /* Check parameter */
+    MR_ASSERT(spec != MR_NULL);
+
+    /* Disable DAC events */
+    return mr_dac_event_disable(spec->drv, events);
+}
 
 /**
  * @brief This function converts a DAC specification millivolt value to raw.

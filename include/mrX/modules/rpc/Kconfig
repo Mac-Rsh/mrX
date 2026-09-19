@@ -22,6 +22,25 @@ config MR_USE_MODULE_RPC_HOOK
         Execute and subscription poll events are reported independently.
         Useful for custom scheduling, power management, or runtime monitoring.
 
+config MR_USE_MODULE_RPC_SELF_DESC
+    depends on MR_USE_MODULE_RPC
+    bool "Use RPC self description"
+    default n
+    help
+        Embed the compiled RPC description in ROM and export the generated
+        self-description RPC method. Disable this option to remove both the
+        description bytes and self-description workspace from the firmware.
+
+config MR_CFG_RPC_SELF_DESC_CHUNK_SIZE
+    depends on MR_USE_MODULE_RPC_SELF_DESC
+    int "RPC self-description chunk size"
+    default 128
+    range 16 1024
+    help
+        Maximum number of description bytes returned by one self-description
+        request. Increasing this value reduces round trips but may increase each
+        RPC session response workspace when user responses are smaller.
+
 # ==================================
 # CALL
 # ==================================

@@ -116,12 +116,12 @@ MR_INLINE void fifo_cursor_add(mr_fifo_t *fifo, volatile mr_atomic_t *cursor,
 mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data) {
     mr_uint32_t cursor, index;
 
-    /* Check if fifo is not initialized */
+    /* Check whether fifo is not initialized */
     if (!fifo->buf) {
         return 0;
     }
 
-    /* Check if fifo is full */
+    /* Check whether fifo is full */
     if (mr_fifo_is_full(fifo)) {
         return 0;
     }
@@ -142,12 +142,12 @@ mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data) {
 mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data) {
     mr_uint32_t cursor, index;
 
-    /* Check if fifo is not initialized */
+    /* Check whether fifo is not initialized */
     if (!fifo->buf) {
         return 0;
     }
 
-    /* Check if fifo is empty */
+    /* Check whether fifo is empty */
     if (mr_fifo_is_empty(fifo)) {
         return 0;
     }
@@ -168,7 +168,7 @@ mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data) {
 mr_uint32_t mr_fifo_write(mr_fifo_t *fifo, const void *buf, mr_uint32_t num) {
     mr_uint32_t avail, num2, cursor, index, size, n;
 
-    /* Check if fifo is not initialized */
+    /* Check whether fifo is not initialized */
     if (!fifo->buf) {
         return 0;
     }
@@ -205,7 +205,7 @@ mr_uint32_t mr_fifo_overwrite(mr_fifo_t *fifo, const void *buf,
                               mr_uint32_t num) {
     mr_uint32_t cap, avail;
 
-    /* Check if fifo is not initialized */
+    /* Check whether fifo is not initialized */
     if (!fifo->buf) {
         return 0;
     }
@@ -230,7 +230,7 @@ mr_uint32_t mr_fifo_overwrite(mr_fifo_t *fifo, const void *buf,
 mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
     mr_uint32_t avail, num2, cursor, index, size, n;
 
-    /* Check if fifo is not initialized */
+    /* Check whether fifo is not initialized */
     if (!fifo->buf) {
         return 0;
     }
@@ -280,7 +280,7 @@ mr_uint32_t mr_fifo_write_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
                                 mr_uint32_t want) {
     mr_uint32_t avail, cursor, index;
 
-    /* Check if fifo is not initialized */
+    /* Check whether fifo is not initialized */
     if (!fifo->buf) {
         return 0;
     }
@@ -307,7 +307,7 @@ mr_uint32_t mr_fifo_write_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
 }
 
 mr_uint32_t mr_fifo_write_finish(mr_fifo_t *fifo, mr_uint32_t num) {
-    /* Check if fifo is not initialized */
+    /* Check whether fifo is not initialized */
     if (!fifo->buf) {
         return 0;
     }
@@ -322,7 +322,7 @@ mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
                                     void **buf, mr_uint32_t want) {
     mr_uint32_t cap, cursor, index;
 
-    /* Check if fifo is not initialized */
+    /* Check whether fifo is not initialized */
     if (!fifo->buf) {
         return 0;
     }
@@ -351,7 +351,7 @@ mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
 mr_uint32_t mr_fifo_overwrite_finish(mr_fifo_t *fifo, mr_uint32_t num) {
     mr_uint32_t avail;
 
-    /* Check if fifo is not initialized */
+    /* Check whether fifo is not initialized */
     if (!fifo->buf) {
         return 0;
     }
@@ -370,7 +370,7 @@ mr_uint32_t mr_fifo_read_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
                                mr_uint32_t want) {
     mr_uint32_t avail, cursor, index;
 
-    /* Check if fifo is not initialized */
+    /* Check whether fifo is not initialized */
     if (!fifo->buf) {
         return 0;
     }
@@ -397,7 +397,7 @@ mr_uint32_t mr_fifo_read_claim(mr_fifo_t *fifo, mr_uint32_t off, void **buf,
 }
 
 void mr_fifo_read_finish(mr_fifo_t *fifo, mr_uint32_t num) {
-    /* Check if fifo is not initialized */
+    /* Check whether fifo is not initialized */
     if (!fifo->buf) {
         return;
     }

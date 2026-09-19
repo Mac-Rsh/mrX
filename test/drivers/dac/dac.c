@@ -17,7 +17,9 @@ static int dac_stream_stop_count;
 static mr_uint32_t dac_last_channel;
 static mr_dac_config_t dac_last_config;
 static mr_dac_seq_t dac_last_seq;
-static mr_bool_t dac_last_circular;
+#if defined(MR_USE_DRIVER_DAC_STREAM)
+static mr_dac_stream_config_t dac_last_stream_config;
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 static mr_bool_t dac_busy;
 static mr_size_t dac_offset;
 static mr_err_t dac_configure_ret;
@@ -37,7 +39,9 @@ static void dac_test_reset(void) {
     dac_last_channel = 0;
     dac_last_config = (mr_dac_config_t){0};
     dac_last_seq = (mr_dac_seq_t){0};
-    dac_last_circular = MR_FALSE;
+#if defined(MR_USE_DRIVER_DAC_STREAM)
+    dac_last_stream_config = (mr_dac_stream_config_t){0};
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
     dac_busy = MR_FALSE;
     dac_offset = 0;
     dac_configure_ret = 0;
@@ -78,12 +82,13 @@ static mr_ssize_t dac_write(const mr_driver_t *drv, mr_dac_seq_t *seq) {
     return dac_write_ret;
 }
 
+#if defined(MR_USE_DRIVER_DAC_STREAM)
 static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
-                                 mr_bool_t circular) {
+                                 const mr_dac_stream_config_t *config) {
     MR_IGNORE(drv);
     dac_stream_start_count++;
     dac_last_seq = *seq;
-    dac_last_circular = circular;
+    dac_last_stream_config = *config;
     return dac_stream_start_ret;
 }
 
@@ -104,6 +109,7 @@ static mr_err_t dac_stream_offset(const mr_driver_t *drv, mr_size_t *offset) {
     *offset = dac_offset;
     return dac_stream_offset_ret;
 }
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 
 static const mr_dac_ops_t dac_ops = {
     .channel_configure = dac_channel_configure,
@@ -152,6 +158,7 @@ MR_TEST(dac, configuration_and_reference) {
     mr_dac_del(drv);
 }
 
+#if defined(MR_USE_DRIVER_DAC_STREAM)
 MR_TEST(dac, write_and_stream) {
     mr_driver_t *drv;
     mr_bool_t busy;
@@ -161,6 +168,10 @@ MR_TEST(dac, write_and_stream) {
         .resolution = 12,
         .buf = samples,
         .size = sizeof(samples),
+    };
+    mr_dac_stream_config_t config = {
+        .update_rate = 44100U,
+        .circular = MR_TRUE,
     };
     mr_size_t offset;
 
@@ -172,9 +183,10 @@ MR_TEST(dac, write_and_stream) {
     MR_TEST_ASSERT_EQ_INT(mr_dac_write(drv, &seq), sizeof(samples));
     MR_TEST_ASSERT_EQ_INT(dac_write_count, 1);
     MR_TEST_ASSERT_EQ_UINT(dac_last_seq.channels, seq.channels);
-    MR_TEST_ASSERT_EQ_INT(mr_dac_stream_start(drv, &seq, MR_TRUE), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_dac_stream_start(drv, &seq, &config), 0);
     MR_TEST_ASSERT_EQ_INT(dac_stream_start_count, 1);
-    MR_TEST_ASSERT_EQ_INT(dac_last_circular, MR_TRUE);
+    MR_TEST_ASSERT_EQ_UINT(dac_last_stream_config.update_rate, 44100U);
+    MR_TEST_ASSERT_EQ_INT(dac_last_stream_config.circular, MR_TRUE);
     dac_busy = MR_TRUE;
     MR_TEST_ASSERT_EQ_INT(mr_dac_stream_is_busy(drv, &busy), 0);
     MR_TEST_ASSERT_EQ_INT(busy, MR_TRUE);
@@ -191,6 +203,10 @@ MR_TEST(dac, stream_errors_and_conversions) {
     mr_bool_t busy;
     mr_dac_ops_t empty_ops = dac_ops;
     mr_dac_seq_t seq = {.resolution = 8, .buf = MR_NULL, .size = 0};
+    mr_dac_stream_config_t config = {
+        .update_rate = 1000U,
+        .circular = MR_FALSE,
+    };
     mr_size_t offset = 99;
 
     dac_test_reset();
@@ -210,12 +226,13 @@ MR_TEST(dac, stream_errors_and_conversions) {
     dac_stream_offset_ret = -MR_EIO;
     MR_TEST_ASSERT_EQ_INT(mr_dac_stream_offset(drv, &offset), -MR_EIO);
     dac_stream_start_ret = -MR_EIO;
-    MR_TEST_ASSERT_EQ_INT(mr_dac_stream_start(drv, &seq, MR_FALSE), -MR_EIO);
+    MR_TEST_ASSERT_EQ_INT(mr_dac_stream_start(drv, &seq, &config), -MR_EIO);
     MR_TEST_ASSERT_EQ_INT(mr_dac_millivolt2raw(3300, 12, 1650), 2047);
     MR_TEST_ASSERT_EQ_INT(mr_dac_microvolt2raw(3300, 12, 1650000), 2047);
     MR_TEST_ASSERT_EQ_INT(mr_dac_volt2raw(3300, 12, 3.3f), 4095);
     mr_dac_del(drv);
 }
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 
 static void dac_waiter_entry(mr_waiter_t *waiter, void *param,
                              mr_wait_event_t event, const void *data) {
@@ -265,7 +282,7 @@ MR_TEST(dac, event_attach_and_raise) {
     MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
     MR_TEST_ASSERT_EQ_INT(mr_driver_setup(drv), 0);
     MR_TEST_ASSERT_EQ_INT(mr_waiter_init(&waiter, dac_waiter_entry,
-                                         &event_count, MR_DAC_WAIT_STREAM_FULL),
+                                         &event_count, MR_DAC_WAIT_STREAM_DONE),
                           0);
 
     /* Raising without any waiter is not an error */
@@ -278,7 +295,7 @@ MR_TEST(dac, event_attach_and_raise) {
     MR_TEST_ASSERT_EQ_INT(event_count, 0);
 
     /* The matching event wakes the waiter exactly once */
-    MR_TEST_ASSERT_EQ_INT(mr_dac_event_raise(drv, MR_DAC_WAIT_STREAM_FULL), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_dac_event_raise(drv, MR_DAC_WAIT_STREAM_DONE), 0);
     MR_TEST_ASSERT_EQ_INT(event_count, 1);
     MR_TEST_ASSERT_EQ_INT(mr_waiter_del(&waiter), 0);
     mr_dac_del(drv);

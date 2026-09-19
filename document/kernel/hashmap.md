@@ -126,8 +126,7 @@ void mr_hashmap_init(mr_hashmap_t *map, mr_list_t *buckets,
                      mr_uint32_t bucket_num);
 ```
 
-`buckets` 为调用者提供的 `mr_list_t` 数组，`bucket_num` 为其长度；函数会逐一 初始化每个桶。`bucket_num` 为 0 时后续 `find`/
-`add` 返回失败/错误。
+`buckets` 为调用者提供的 `mr_list_t` 数组，`bucket_num` 为其长度；函数会逐一初始化每个桶。`map` 必须有效，且 `bucket_num > 0` 时 `buckets` 必须指向至少这么多有效元素，函数本身不做空指针检查。`bucket_num == 0` 时允许 `buckets == MR_NULL`，此后 `find` 返回空、`add` 返回 `-MR_EINVAL`、`is_empty` 返回真。
 
 **`mr_hashmap_add`**
 
@@ -135,7 +134,7 @@ void mr_hashmap_init(mr_hashmap_t *map, mr_list_t *buckets,
 mr_err_t mr_hashmap_add(mr_hashmap_t *map, mr_hashnode_t *node);
 ```
 
-成功 `0`；`bucket_num` 为 0 返回 `-MR_EINVAL`；节点已链入返回 `-MR_EBUSY`； 同键节点已存在返回 `-MR_EEXIST`。
+成功 `0`；`bucket_num` 为 0 返回 `-MR_EINVAL`；节点已链入返回 `-MR_EBUSY`；同键节点已存在返回 `-MR_EEXIST`。`map` 与 `node` 指针本身必须有效，公共实现不做空指针保护。
 
 **`mr_hashmap_del`**
 
@@ -151,7 +150,7 @@ mr_err_t mr_hashmap_del(mr_hashnode_t *node);
 mr_hashnode_t *mr_hashmap_find(mr_hashmap_t *map, mr_uint32_t key);
 ```
 
-命中返回节点指针，未命中或表为空返回 `MR_NULL`。
+命中返回节点指针，未命中或 `bucket_num == 0` 返回 `MR_NULL`。`map` 指针必须有效；当 `bucket_num > 0` 时，`buckets` 也必须是有效桶数组。
 
 ### 6. 完整示例
 
@@ -262,6 +261,7 @@ typedef struct mr_hashnode {        /* mr_hashmap.h:31 */
 设计要点：
 
 - 表结构只存桶数组指针与桶数， **不拥有任何内存**——桶数组寿命必须覆盖表寿命。
+- 结构体 API 普遍假定 `map`/`node` 指针有效；`mr_hashmap_init` 也不会替调用者验证非零 bucket 数对应的 `buckets` 指针。
 - 节点以 `list` 字段链入桶的冲突链，因此一个节点同一时刻只能属于一张表；
   `MR_HASHNODE_IS_ADDED` 即"list 不为自指空链"。
 - 链入状态与键共同维持不变量：节点的散列桶由 `key` 决定，故链入期间键不可变。
@@ -291,7 +291,7 @@ typedef struct mr_hashnode {        /* mr_hashmap.h:31 */
 
 - 单一所有者上下文（单线程或始终同一中断级）内使用无需额外保护。
 - 跨上下文共享时，调用者必须用自旋锁等原语将 `add`/`del`/`find`/遍历整体置于 临界区；接口内部均为纯链表操作，临界区时长可控。
-- `mr_hashnode_value_set`/`value` 只触碰节点自身字段，在"节点已链入且调用者 持有该节点"的前提下与表操作并发是安全的（值不属于表的不变量）。
+- `mr_hashnode_value_set` / `mr_hashnode_value` 只触碰节点自身的普通 `void *value` 字段，确实不会改变散列桶不变量，但它们也没有原子或锁保护；如果多个执行流同时读写 value，仍需由调用者同步以避免数据竞争。
 
 ### 12. 扩展与派生
 

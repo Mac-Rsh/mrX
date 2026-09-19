@@ -1,8 +1,8 @@
 # 工作队列（Work）
 
-> 工作队列提供可延迟执行的回调（work）调度：立即工作由下一次 `execute` 排空，
-> 延时工作由内嵌软定时器到点转入执行链表，用于把耗时处理从定时器/中断上下文
-> 转移到线程上下文。
+> 工作队列提供可延迟执行的回调（work）调度：立即工作由后续 `execute` 批次处理，
+> 延时工作由内嵌软定时器到点转入执行链表。回调最终运行在 `mr_workqueue_execute()`
+> 的调用者上下文；模块本身不创建线程。
 
 | 项       | 说明                                                                                    |
 |----------|-----------------------------------------------------------------------------------------|
@@ -24,13 +24,11 @@
   工作按到期时间有序排队，队列内嵌一个 [软定时器](timer.md) 管理。
 - 回调执行在 `mr_workqueue_execute` **调用者的上下文**：队列不创建线程， 用户可自由选择主循环轮询或专用线程（配合 hook）驱动。
 - 回调允许链式提交新工作，新工作在下一轮 `execute` 执行。
-- 可选的唤醒/挂起钩子（`MR_USE_WORKQUEUE_HOOK`）：队列从空闲转为有待处理 工作时调用 `wakeup`，排空后调用 `suspend`
-  ，用于衔接信号量 + 线程等自定义 执行机制。
+- 可选的唤醒/挂起钩子（`MR_USE_WORKQUEUE_HOOK`）：以原子 `depth` 抑制重复 wakeup，并在 execute 批次结束时按当前状态决定是否调用 suspend，可用于衔接信号量 + 线程等自定义执行机制。
 - 内核内已有使用者：[中断 irq](irq.md) 模块的延迟下半部（`MR_USE_IRQ_DEFER`
   自动选中本模块，`mrX/kernel/irq.c`）。
 
-与 [软定时器 Timer](timer.md) 的分工：定时器回调运行在 tick 中断上下文， 必须快速返回；工作回调运行在 `execute`
-调用者上下文，可以执行耗时处理。
+与 [软定时器 Timer](timer.md) 的分工：定时器回调运行在 `mr_clock_increase()` 调用者上下文；工作队列把真正的 work 回调推迟到 `execute` 调用者上下文。若应用选择在线程中调用 execute，就可以把处理从 ISR/tick 路径移出，但这不是 Work 模块自动创建的上下文切换。
 
 ### 2. 配置与依赖
 
@@ -80,17 +78,14 @@ void work_demo(void) {
 
 要点：
 
-- `work` 提交后被队列引用，须用静态存储或保证生命周期。
+- work 入队只是建立链表关系，队列不会自动增加 work 的对象引用；调用者必须保证 work 至少存活到取消或回调执行完成。
 - `mr_work_bind` 必须在 `mr_work_schedule` 之前调用，未绑定的工作调度返回
   `-MR_ENOENT`。
 - `mr_workqueue_execute` 是执行点：不调用它，回调永远不会运行。
 
 ### 4. 使用说明
 
-**生命周期**：静态方式定义对象后 `*_init` 初始化（work 亦可用 `MR_WORK_INIT`
-编译期初始化），用完 `*_del` 反初始化（不释放内存）；动态方式 `*_create` /
-`*_del` 堆上创建销毁。`mr_work_del` 自动取消排队中的工作；
-`mr_workqueue_del` 自动摘除其上全部工作并停用内嵌定时器。
+**生命周期**：静态方式定义对象后 `*_init` 初始化（work 亦可用 `MR_WORK_INIT`），动态方式用 `*_create`。`mr_work_del` 会先取消该 work，再执行一次对象 `del`；动态内存只在最后一个引用释放时归还。`mr_workqueue_del` 会先置 `dying`，真正停用内嵌 timer、摘除队列中的 work 和释放动态内存同样发生在 workqueue 的最后一个引用释放路径。
 
 **运行期行为约定**
 
@@ -100,18 +95,18 @@ void work_demo(void) {
 | 已排队（立即或延时）的工作再次调度                               | 返回 `-MR_EBUSY`，不重复排队                   |
 | `MR_WORK_IS_RUNNING`                                             | 已入队即返回真（含延时等待期，回调运行中为假） |
 | `mr_work_delayed_schedule` 的 `tick` 为 0                        | 等价立即调度                                   |
-| 队列删除后（dying）再提交                                        | 返回 `-MR_ENOENT`                              |
+| 提交时观察到队列 `dying`                                        | 返回 `-MR_ENOENT`                              |
 | `mr_work_cancel`                                                 | 把工作从排队/延时链表摘除；对空闲工作安全      |
 | 回调内 `mr_work_schedule` 新工作                                 | 支持，新工作在下一轮 `execute` 执行            |
 | 回调内 `mr_work_cancel` 自身                                     | 无效果且安全（回调开始时工作已出队）           |
 
-**回调上下文**：回调运行在 `mr_workqueue_execute` 调用者的上下文——由用户 决定它是主循环还是专用线程。回调内允许调用本模块
-API 与其他内核服务 （相比定时器回调宽松）。
+`MR_WORK_IS_RUNNING` 实际只表示 `work->list` 是否挂链：work 被 execute 从批次链摘下、即将进入或正在执行回调时它已经为假，因此不能把该宏当作“回调正在运行”的状态位。
+
+**回调上下文**：回调运行在 `mr_workqueue_execute` 调用者上下文——由集成方决定它是主循环、专用线程还是其他上下文。Work 层本身不授予“可以阻塞”的能力；回调可做什么仍取决于 execute 的调用环境。回调期间不持 `__work_lock`，因此可重新 schedule/cancel，但对象最终释放仍需遵守生命周期约束。
 
 **钩子集成模式**（`MR_USE_WORKQUEUE_HOOK`）：推荐用初值为 0 的信号量作钩子 （`mrX/include/mrX/kernel/mr_work.h:125` 注释）——
 `wakeup` 中释放信号量唤醒 执行线程，线程循环 `mr_workqueue_execute`；`suspend` 中等待下一次唤醒。
-`wakeup` 在队列深度 0 到 1 时恰好调用一次（连续提交不重复调用），`suspend`
-在排空且无新提交时调用一次。
+`queue_wakeup` 仅在 `depth` 的 `fetch_add` 观察到旧值为 0 时调用 `wakeup`；execute 开始时会把 depth 重置为 1，批次结束且没有下一批立即工作时再通过 `queue_suspend` 做一次 `fetch_sub`，只有旧值为 1 才调用 `suspend`。因此它是通知抑制机制，不应解释成精确的待处理 work 数量。
 
 ### 5. API 参考
 
@@ -147,8 +142,7 @@ mr_workqueue_t *mr_workqueue_create(void);
 mr_err_t mr_workqueue_del(mr_workqueue_t *queue);
 ```
 
-`init` 初始化调用者分配的存储（内含内嵌定时器初始化）；`create` 堆分配 （内存不足返回 `MR_NULL`）；`del` 标记队列
-dying、停用定时器并摘除全部 挂接的工作。
+`init` 初始化调用者分配的存储（含内嵌 timer）；`create` 堆分配（内存不足返回 `MR_NULL`）。`del` 立即把 `dying` 置真并执行一次对象 `del`；只有引用计数真正到 0 时，release 才停用内嵌 timer 并摘除 `tlist/list` 上的 work。
 
 **`mr_workqueue_execute`**
 
@@ -156,7 +150,7 @@ dying、停用定时器并摘除全部 挂接的工作。
 mr_err_t mr_workqueue_execute(mr_workqueue_t *queue);
 ```
 
-排空当前待处理工作并逐个调用回调，返回 `0`。队列无待处理工作（且未启用 suspend 钩子）时直接返回；执行期间新提交的工作留到下一轮。
+把调用开始时的 `queue->list` 整体换到局部批次并逐个执行，返回 `0`。执行期间新提交到 `queue->list` 的 work 留给下一次 `execute`。调用者必须保证 queue 在整个 execute 期间存活；函数自身不会额外 get queue。
 
 **`mr_workqueue_work` / `mr_workqueue_delayed_work`**
 
@@ -179,7 +173,7 @@ mr_err_t mr_work_bind(mr_work_t *work, mr_workqueue_t *queue);
 
 - `entry`：回调，类型 `void (*)(struct mr_work *work, void *param)`，不可为
   `MR_NULL`；`param`：透传给回调的用户参数。
-- `bind` 记录工作归属的队列，重复绑定以最后一次为准，`schedule` 系列按此 提交。
+- `bind` 只是直接覆盖 `work->queue` 指针，不持有 queue 引用、也不检查 work 是否正在挂链。应只在 work 空闲且目标 queue 生命周期明确时绑定/重新绑定。
 
 **`mr_work_schedule` / `mr_work_delayed_schedule` / `mr_work_cancel`**
 
@@ -190,9 +184,7 @@ mr_err_t mr_work_cancel(mr_work_t *work);
 #define MR_WORK_IS_RUNNING(_work)       (!mr_list_is_empty(&(_work)->list))
 ```
 
-向绑定的队列提交；未绑定或队列已删除返回 `-MR_ENOENT`，重复排队返回
-`-MR_EBUSY`。`cancel` 从立即链表或延时链表摘除工作，对空闲工作安全；
-`MR_WORK_IS_RUNNING` 在"已入队等待执行或等待到期"期间为 `MR_TRUE`。
+向 `work->queue` 指向的队列提交；未绑定、绑定对象已不再能成功 `get`，或提交路径观察到 `dying` 时返回 `-MR_ENOENT`，重复挂链返回 `-MR_EBUSY`。`cancel` 只负责从当前链表摘除，不清空 `work->queue`；`MR_WORK_IS_RUNNING` 仅在“节点仍挂在立即/延时链表”期间为真。
 
 **`mr_workqueue_hook_set`**（需 `MR_USE_WORKQUEUE_HOOK`）
 
@@ -201,8 +193,7 @@ mr_err_t mr_workqueue_hook_set(mr_workqueue_t *queue,
                                const mr_workqueue_hook_t *hook);
 ```
 
-`mr_workqueue_hook_t` 含 `suspend`、`wakeup` 两个回调与 `param`，回调均可为
-`MR_NULL`（跳过该侧通知）。
+`mr_workqueue_hook_t` 含 `suspend`、`wakeup` 两个回调与 `param`，成员回调可为 `MR_NULL`。`mr_workqueue_hook_set` 只保存传入 hook 指针，不复制结构体，因此 hook 存储必须覆盖 queue 使用期；设置过程也没有并发同步，建议在队列开始工作前配置。
 
 **`*_get` / `*_put`**：跨模块持有 queue/work 指针时先 `get` 后 `put`；
 `put` 返回 `MR_TRUE` 表示引用归零。一般应用代码不需要使用。
@@ -247,8 +238,12 @@ void threaded_setup(void) {
 
     sem_init(&sem, 0, 0);
     mr_workqueue_init(&queue);
-    mr_workqueue_hook_set(&queue, &(mr_workqueue_hook_t){
-        .suspend = MR_NULL, .wakeup = queue_wakeup_cb, .param = &sem});
+    static mr_workqueue_hook_t hook;
+
+    hook.suspend = MR_NULL;
+    hook.wakeup = queue_wakeup_cb;
+    hook.param = &sem;
+    mr_workqueue_hook_set(&queue, &hook);
 
     /* Worker thread: wait(sem); mr_workqueue_execute(&queue); in a loop */
 }
@@ -298,7 +293,7 @@ tick（断言开启时超出直接失败）， 默认 1000 tick/s 下约 24.8 �
 
 **Q：`wakeup` 为什么只调用了一次？**
 
-唤醒/挂起按"空闲到忙碌"的边沿通知：深度计数从 0 变 1 时 `wakeup` 一次， 排空且无新提交时 `suspend` 一次；中间的连续提交与连续排空不重复通知。
+`wakeup` 只在 `queue_wakeup()` 看到 depth 旧值为 0 时触发；后续提交会继续增加 depth 但不重复 wakeup。execute 会把 depth 重置为 1，并在没有下一批立即工作时尝试 suspend。这个字段用于合并通知，不是严格的 queue length；集成线程应按自身循环/信号量协议使用，而不要依赖它表示精确工作数。
 
 **Q：回调执行中 `mr_work_cancel` 它自己有用吗？**
 
@@ -307,8 +302,7 @@ tick（断言开启时超出直接失败）， 默认 1000 tick/s 下约 24.8 �
 
 **Q：队列删除时，挂接在它上面的工作怎么办？**
 
-`mr_workqueue_del` 会停用内嵌定时器并摘除全部立即/延时工作，工作对象本身 不被销毁，`MR_WORK_IS_RUNNING`
-恢复为假，之后可绑定其他队列复用 （`mrX/test/kernel/work.c:283` 验证）。
+当 `mr_workqueue_del` 最终导致 queue 引用归零时，release 会停用内嵌 timer 并摘除全部立即/延时 work；work 对象本身不会被销毁，但其 `work->queue` 指针**不会自动清空**。若要复用，必须先显式 `mr_work_bind` 到仍然有效的新队列。若 queue 还有额外引用，`del` 只先置 dying 并归还一次引用，实际清理推迟到最后一个引用释放。
 
 **Q：静态和动态方式怎么选？**
 
@@ -363,8 +357,8 @@ typedef struct mr_workqueue {
     mr_list_t tlist;
     mr_list_t list;
     /* The following fields exist only with MR_USE_WORKQUEUE_HOOK */
-    mr_atomic_t depth;
     const mr_workqueue_hook_t *hook;
+    mr_atomic_t depth;
 } mr_workqueue_t;
 ```
 
@@ -375,7 +369,7 @@ typedef struct mr_workqueue {
 | `timer`  | 内嵌软定时器（每队列一个），驱动延时工作到期                                                                          |
 | `tlist`  | 延时工作有序链表（按到期 tick 升序，表头最早到期）                                                                    |
 | `list`   | 待处理（立即）工作链表                                                                                                |
-| `depth`  | 原子深度计数（仅 `MR_USE_WORKQUEUE_HOOK` 时存在）：提交 +1（0 到 1 触发 `wakeup`）、排空归位（1 到 0 触发 `suspend`） |
+| `depth`  | Hook 通知抑制计数：`queue_wakeup` 加一且仅旧值 0 时 wakeup；execute 会重置为 1，随后视批次状态尝试减一/suspend；不是实际 work 数量 |
 | `hook`   | 唤醒/挂起钩子（仅 `MR_USE_WORKQUEUE_HOOK` 时存在）                                                                    |
 
 工作（`mr_work.h:54`）：
@@ -429,20 +423,15 @@ MR_TICK_MAX / 2`）则记录剩余 tick 并停止扫描，到期者 `mr_list_mov
    `hook->suspend`
    （`work.c:174-190`）。
 
-**删除**：`mr_workqueue_del` 置 `dying` 后走对象删除通道，`queue_del`
-（`work.c:382`）停用内嵌定时器并摘除 `tlist`/`list` 上全部工作；工作的
-`mr_work_del` 先 `mr_work_cancel` 再删对象，静态/动态双释放通道 （`MR_CLAZZES_DEFINE`，`work.c:17`、`work.c:23`）决定是否
-`mr_free`。
+**删除**：`mr_workqueue_del` 先置 `dying`，再执行一次 `mr_object_del`；`queue_del` 只在对象 release 阶段运行，因此若还有额外引用，timer 与链表清理会延后。`queue_del` 摘链时不会把各 work 的 `queue` 字段清空。`mr_work_del` 则会立即先 cancel 自己，再归还一次对象引用；动态对象仅在最后引用归零时 `mr_free`。
 
 ### 11. 并发与中断安全
 
 - `__work_lock` 为关中断自旋锁，保护 `list`/`tlist` 与工作挂接字段；临界区 内只有链表搬移。
-- 全部提交/取消 API 可在中断与线程上下文调用；`execute` 在用户选择的执行者 上下文调用，与提交并发安全（整批交换 + 锁外回调）。
-- 回调运行时 **不持锁**：回调内可调用全部 work API（含 `schedule`/`cancel`/
-  `del`），由第 10 节的批次交换保证一致。
-- `depth` 为原子量：`wakeup`/`suspend` 的边沿各恰好通知一次，且在锁外调用 钩子——钩子实现（如信号量 post）自身需可中断上下文安全。
-- `dying` 检查与置位无锁：提交路径先查 `dying` 再入队，队列删除后不再有新的 挂接；对象引用计数（`get`/`put`
-  ）消除定时器回调与队列删除之间的竞态。
+- 提交/取消与 execute 的链表交换由 `__work_lock` 协调；work 回调在锁外执行，因此回调内重新 schedule/cancel 不会递归持有该锁。
+- `execute` 从批次链摘下 work 后不会为正在执行的 work 额外持有对象引用，queue 自身也不在 execute 入口自动 get。调用方必须用更高层生命周期规则保证：不要让另一个上下文在回调即将/正在执行时 final-delete 动态 work，也不要在 execute 尚未返回时 final-delete queue。
+- 动态 create/final-release 涉及 malloc/free；hook 也会在触发它的调用者上下文同步执行。因此不能把所有 Work API 统一标为 ISR-safe，ISR 可用性取决于具体调用路径、原子/锁实现和 hook。
+- `dying` 是原子拒绝标志，但“检查 dying”和“把 work 入链”不是与删除组合成同一个锁内事务；并发删除/提交应由调用方的对象引用和更高层同步定义语义，不应把 dying 理解成完整的删除线性化屏障。
 
 ### 12. 扩展与派生
 

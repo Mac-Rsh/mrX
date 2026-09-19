@@ -19,6 +19,7 @@ from .layout import Layout, VarSlot, bool_index_name, bool_paths
 from ..semantic.model import Field, Method, Schema, Service
 from .codec import CodecBuilder
 from .names import CNames
+from .schema import SchemaSourceBuilder
 from .emit import CEmit
 
 _BoolErrorHandler = Callable[[str], list[str]]
@@ -30,6 +31,7 @@ class SourceBuilder:
     def __init__(self) -> None:
         """Create a source builder with a shared codec emitter."""
         self._codec = CodecBuilder()
+        self._schema = SchemaSourceBuilder()
 
     def build(self, schema: Schema) -> str:
         """Render and wrap one generated source file."""
@@ -37,7 +39,8 @@ class SourceBuilder:
 
     def render(self, schema: Schema) -> str:
         """Render the source body for one schema."""
-        lines: list[str] = []
+        lines: list[str] = self._schema.render(schema)
+        lines.append("")
         layouts = Layout.map_schema(schema)
         if self._need_empty_decode(schema):
             lines.extend(self._empty_decode_lines())

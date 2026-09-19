@@ -53,8 +53,10 @@ mr_config.h
 mr_hardgen.h
 /platform/*
 !/platform/.gitkeep
+modules/rpc/idl.c
 include/mrX/mr_config.h
 include/mrX/mr_hardgen.h
+include/mrX/modules/rpc/mr_rpc_idl.h
 include/mrX/platform/*
 !include/mrX/platform/.gitkeep
 

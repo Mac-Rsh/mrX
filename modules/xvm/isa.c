@@ -54,7 +54,7 @@ static mr_bool_t xvm_isa_is_registered(mr_xvm_isa_t *isa) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__xvm_isa_lock);
 
-    /* Check if XVM ISA already registered */
+    /* Check whether XVM ISA already registered */
     for (cur = __xvm_isa_list; cur; cur = cur->next) {
         if (cur == isa) {
             /* Unlock */
@@ -75,7 +75,7 @@ mr_err_t mr_xvm_isa_del(mr_xvm_isa_t *isa) {
     MR_ASSERT((isa != MR_NULL) && MR_OBJECT_IS_INITED(isa));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(isa, xvm_isa));
 
-    /* Check if XVM ISA already registered */
+    /* Check whether XVM ISA already registered */
     if (xvm_isa_is_registered(isa)) {
         return -MR_EBUSY;
     }
@@ -93,7 +93,7 @@ static mr_err_t xvm_isa_add(mr_xvm_isa_t *isa) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__xvm_isa_lock);
 
-    /* Check if XVM ISA already registered */
+    /* Check whether XVM ISA already registered */
     for (link = &__xvm_isa_list; *link; link = &(*link)->next) {
         existing = *link;
 

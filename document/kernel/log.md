@@ -37,8 +37,7 @@
 | `MR_CFG_LOG_LEVEL`     | 整型 | 4      | 编译期最高日志级别，范围 0~4（`Kconfig:119`）                                  |
 | `MR_CFG_LOG_TIME_ZONE` | 整型 | 8      | 高分辨率时间戳的时区（UTC 偏移小时数），范围 -12~12（`Kconfig:133`）           |
 
-`MR_CFG_LOG_LEVEL` 取值对应：0 = 仅 `ERR`，1 = `WRN` 及以上，2 = `INF` 及以上， 3 = `DBG` 及以上，4 = 全部（含 `TRC`
-）。仅当编译单元定义了 `MR_LOG_TAG` 时该裁剪 才生效（见第 4 节）。
+`MR_CFG_LOG_LEVEL` 的实际代码语义由 `mr_log.h` 定义：0 = 仅 `ERR`，1 = `WRN` 及以上，2 = `INF` 及以上，3 = `DBG` 及以上，4 = 全部（含 `TRC`）。仅当编译单元定义了 `MR_LOG_TAG` 时这些级别宏才会生成调用。当前 Kconfig help 中的文字标签仍是旧定义，应以头文件常量为准。
 
 `MR_CFG_LOG_TIME_ZONE` 仅在高分辨率时钟路径（`MR_USE_CLOCK_HIRES`）下参与换算， Kconfig 中也依赖该选项。
 
@@ -64,7 +63,7 @@ void demo(void) {
 }
 ```
 
-典型输出（时间戳格式见第 4 节）：
+典型输出（以下为未启用高分辨率时钟时的 uptime 格式；时间戳格式见第 4 节）：
 
 ```
 [   1.234] [INF/demo] value is 42
@@ -96,8 +95,7 @@ void demo(void) {
 
 **时间戳**
 
-- 高分辨率路径（`MR_USE_CLOCK_HIRES`）：`[年-月-日-时:分:秒:毫秒:微秒]`，由
-  `mr_hires_tick2timestamp` 按 `MR_CFG_LOG_TIME_ZONE` 换算墙钟时间。
+- 高分辨率路径（`MR_USE_CLOCK_HIRES`）：`[年-月-日-时:分:秒:毫秒:微秒]`。`mr_log` 把 `mr_clock_hires_tick()` 直接交给 `mr_hires_tick2timestamp`，后者按“自 Unix epoch 起的 tick”解释；只有平台 hires tick 本身采用该基准时，这个结果才是真实墙钟时间。
 - 普通路径：`[运行秒.毫秒]`（秒占 9 位右对齐），来自时钟模块 uptime。
 
 **调用约束**
@@ -121,6 +119,8 @@ void demo(void) {
 | `MR_LOG_DBG(_fmt, ...)` | 以 `MR_LOG_LEVEL_DBG` 输出   |
 | `MR_LOG_TRC(_fmt, ...)` | 以 `MR_LOG_LEVEL_TRC` 输出   |
 | `MR_LOG_MASK(_level)`   | 生成级别掩码：`1U << _level` |
+
+`MR_LOG_MASK` 本身不做范围保护，调用者应保证 `_level < 32`。
 
 核心函数：
 
@@ -207,8 +207,7 @@ int sensor_read(int *val) {
 
 **Q：时间戳怎么从 uptime 变成了日期时间？**
 
-启用了高分辨率时钟（`MR_USE_CLOCK_HIRES`）：日志自动切换为墙钟时间戳，时区由
-`MR_CFG_LOG_TIME_ZONE`（默认 UTC+8）决定。
+启用了高分辨率时钟（`MR_USE_CLOCK_HIRES`）后，日志会切换到日期时间格式，时区由 `MR_CFG_LOG_TIME_ZONE` 决定。但日期是否对应真实墙钟时间仍取决于平台提供的 hires tick 是否以 Unix epoch 为基准。
 
 **Q：输出内容交错/乱码？**
 
@@ -278,11 +277,8 @@ int sensor_read(int *val) {
 
 ### 11. 并发与中断安全
 
-- 模块内部无锁：掩码是单个 32 位全局变量，读写各为单条访问，不存在部分更新， 但多线程同时 `mr_log_mask_set`
-  不同值时后写者胜出（常见约定：掩码在初始化阶段 设置）。
-- `mr_log` 可在中断上下文调用，安全性取决于下游：格式化缓冲的并发行为见
-  [格式化输出 Printf](printf.md)（`MR_USE_PRINTF_SAFE`），平台输出通道
-  `mr_port_output` 由移植层保证。
+- 模块内部无锁：`__log_level` 是普通 `mr_uint32_t`，`mr_log_mask_set` / `mr_log_mask` 只是直接写读，没有原子或锁语义。存在并发读写时应由调用者提供同步；常见做法是在初始化或受控配置阶段修改掩码。
+- `mr_log` 本身没有阻止中断上下文调用，但能否安全这样使用取决于下游 Printf、动态内存模式以及 `mr_port_output` 的平台实现，框架没有给出统一 ISR-safe 保证。
 - 时间戳与正文是两次独立输出调用，多上下文并发时可能交错。
 
 ### 12. 扩展与派生
@@ -324,5 +320,4 @@ int sensor_read(int *val) {
 | `MR_LOG_MASK(_level)`                   | 级别位掩码生成宏                                 |
 | `MR_LOG_TAG`                            | 编译单元自定标签（用户侧定义，非 Kconfig 项）    |
 
-**错误码**：本模块 API 无返回值、不产生错误码；非法输入（级别越界、空格式串） 被静默忽略。时间戳换算失败不存在——时钟模块保证
-`uptime`/`hires tick` 单调可用。
+**错误码**：本模块 API 无返回值、不产生错误码；`mr_log` 对 `level >= 32`、空指针格式串和空格式串静默忽略。时间戳路径没有错误返回通道；其绝对时间含义由底层时钟基准决定。

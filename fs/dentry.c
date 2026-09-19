@@ -434,13 +434,13 @@ mr_err_t mr_dentry_add(mr_dentry_t *dentry, mr_dentry_t *upper) {
         }
     }
 
-    /* Check if dentry is added */
+    /* Check whether dentry is added */
     if (MR_DENTRY_IS_ADDED(dentry)) {
         ret = -MR_EBUSY;
         goto _exit;
     }
 
-    /* Check if dentry is existed. Hash the name with the upper's ops so the
+    /* Check whether dentry is existed. Hash the name with the upper's ops so the
      * lookup matches how the siblings were hashed, even when this dentry was
      * created with different(or NULL) ops. dentry is not mutated here, so a
      * failed add leaves it untouched */
@@ -730,7 +730,7 @@ mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
     MR_ASSERT((name != MR_NULL) && (name[0] != '\0'));
     MR_ASSERT(MR_DENTRY_IS_ADDED(dentry));
 
-    /* Check if dentry is moved to itself or has a slash in the name */
+    /* Check whether dentry is moved to itself or has a slash in the name */
     if ((dentry == upper) || mr_strchr(name, '/')) {
         return -MR_EINVAL;
     }
@@ -763,7 +763,7 @@ mr_err_t mr_dentry_rename(mr_dentry_t *dentry, mr_dentry_t *upper,
     MR_ASSERT((name != MR_NULL) && (name[0] != '\0'));
     MR_ASSERT(MR_DENTRY_IS_ADDED(dentry));
 
-    /* Check if dentry is moved to itself or has a slash in the name */
+    /* Check whether dentry is moved to itself or has a slash in the name */
     if ((dentry == upper) || mr_strchr(name, '/')) {
         return -MR_EINVAL;
     }
@@ -775,7 +775,7 @@ mr_err_t mr_dentry_rename(mr_dentry_t *dentry, mr_dentry_t *upper,
         return ret;
     }
 
-    /* Check if old and new parent are backed by inodes */
+    /* Check whether old and new parent are backed by inodes */
     old_upper = move.old_upper;
     if ((!old_upper->inode) || (!upper->inode)) {
         ret = -MR_ENOENT;
@@ -968,7 +968,7 @@ mr_bool_t mr_dentry_is_empty(mr_dentry_t *dentry) {
     /* Lock */
     mask = mr_fs_struct_lock();
 
-    /* Check if the dentry has no children */
+    /* Check whether the dentry has no children */
     empty = mr_list_is_empty(&dentry->lower);
 
     /* Unlock */
@@ -1072,7 +1072,7 @@ static mr_err_t dentry_fs_lookup(mr_dentry_t *parent, const char *name,
     /* Unlock */
     mr_fs_struct_unlock(mask);
 
-    /* Check if the parent is a directory */
+    /* Check whether the parent is a directory */
     if (!dir_inode) {
         return -MR_ENOENT;
     }

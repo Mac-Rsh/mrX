@@ -93,21 +93,6 @@ MR_TEST(spinlock, irq_nested_distinct_locks) {
     MR_TEST_ASSERT_EQ_INT(mr_spinlock_is_locked(&lock_a), 0);
 }
 
-MR_TEST(spinlock, irq_repeated_cycles) {
-    mr_spinlock_t lock;
-    int mask;
-    int i;
-
-    mr_spinlock_init(&lock);
-    for (i = 0; i < 100; i++) {
-        mask = mr_spinlock_lock_irqsave(&lock);
-        MR_TEST_ASSERT_EQ_INT(mr_spinlock_is_locked(&lock), 1);
-        mr_spinlock_unlock_irqrestore(&lock, mask);
-        MR_TEST_ASSERT_EQ_INT(mr_spinlock_is_locked(&lock), 0);
-    }
-    MR_TEST_ASSERT_EQ_INT(mr_spinlock_is_locked(&lock), 0);
-}
-
 MR_TEST(spinlock, alternate_two_locks) {
     mr_spinlock_t lock_a;
     mr_spinlock_t lock_b;

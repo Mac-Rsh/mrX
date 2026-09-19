@@ -116,12 +116,12 @@ static mr_err_t xvm_lock(mr_xvm_t *xvm) {
     flags = mr_atomic_load(&xvm->flags);
 
     do {
-        /* Check if xvm is dying */
+        /* Check whether xvm is dying */
         if (flags & MR_XVM_FLAG_DYING) {
             return -MR_ENOENT;
         }
 
-        /* Check if xvm is locked */
+        /* Check whether xvm is locked */
         if (flags & MR_XVM_FLAG_LOCK) {
             return -MR_EBUSY;
         }
@@ -192,7 +192,7 @@ mr_xvm_return_t mr_xvm_execute(mr_xvm_t *xvm, mr_xvm_event_t *event,
     /* Lock */
     ret = xvm_lock(xvm);
     if (ret != 0) {
-        /* Check if XVM is dying */
+        /* Check whether XVM is dying */
         if (ret == (-MR_ENOENT)) {
             return MR_XVM_EXIT;
         }
@@ -200,7 +200,7 @@ mr_xvm_return_t mr_xvm_execute(mr_xvm_t *xvm, mr_xvm_event_t *event,
         return MR_XVM_NONE;
     }
 
-    /* Check if xvm is ready */
+    /* Check whether xvm is ready */
     if (mr_atomic_load(&xvm->status) != MR_XVM_STATUS_RUNNING) {
         event->none.step = 0;
         exec_ret = MR_XVM_NONE;
@@ -282,7 +282,7 @@ mr_ssize_t mr_xvm_datamem_store(mr_xvm_t *xvm, mr_uint64_t addr,
         return ret;
     }
 
-    /* Check if the data memory region is writable */
+    /* Check whether the data memory region is writable */
     if (!writable) {
         return -MR_EPERM;
     }

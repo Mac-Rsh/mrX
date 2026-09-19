@@ -6,7 +6,7 @@
 
 | 项       | 说明                                                                                                                                                                     |
 |----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 功能宏   | `MR_USE_STRING`（默认开启；可选 `MR_USE_STRING_STD` 转发标准库、`MR_USE_STRING_3RD` 接入第三方库）；可选安全开关 `MR_USE_STRING_SAFE`（默认 n）                          |
+| 功能宏   | `MR_USE_STRING`（默认内置实现）；`MR_USE_STRING_STD` 转发标准库；`MR_USE_STRING_3RD` 当前仅为预留项；`MR_USE_STRING_SAFE` 为内置实现增加 NULL 检查 |
 | 头文件   | `<mrX/libc/mr_string.h>`                                                                                                                                                 |
 | 依赖模块 | 头文件工具集（`mr_compiler.h` / `mr_types.h` / `mr_errno.h`，见附录 14）；[内存分配 Malloc](malloc.md) 与本模块为上下游关系（malloc 内部使用 `mr_memcpy` / `mr_memset`） |
 | 参考测试 | `mrX/test/libc/string.c`                                                                                                                                                 |
@@ -28,7 +28,7 @@
 - `mr_strerror` 将 `MR_E*` 错误码映射为固定英文描述字符串。
 - 头文件内置 `mr_ffs32` / `mr_ffs64` / `mr_fls32` / `mr_fls64` 位查找原语 （`MR_INLINE`，始终编译，不受 `MR_USE_STRING`
   控制）。
-- 可选 `MR_USE_STRING_SAFE`：对 `MR_NULL` 参数返回安全值而非崩溃。
+- 可选 `MR_USE_STRING_SAFE`：只对部分 API 的 `MR_NULL` 参数做提前返回。它不是通用内存安全检查，不能识别悬空、越界或其他非空非法指针。
 
 ### 2. 配置与依赖
 
@@ -36,7 +36,7 @@
 |----------------------|----------------|--------|--------------------------------------------------------------------------------|
 | `MR_USE_STRING`      | bool（choice） | y      | 使用内置实现（`mrX/include/mrX/libc/Kconfig:150`）                             |
 | `MR_USE_STRING_STD`  | bool（choice） | n      | 宏转发标准库 `string.h` 同名函数                                               |
-| `MR_USE_STRING_3RD`  | bool（choice） | n      | 接入第三方字符串库                                                             |
+| `MR_USE_STRING_3RD`  | bool（choice） | n      | 第三方字符串库预留选项；当前头文件/源码没有对应实现                             |
 | `MR_USE_STRING_SAFE` | bool           | n      | 空指针安全检查开关，依赖 `MR_USE_STRING`（`mrX/include/mrX/libc/Kconfig:157`） |
 
 选择 `MR_USE_STRING` 并重新生成 `mr_config.h` 后，包含头文件即可使用：
@@ -45,8 +45,7 @@
 #include <mrX/libc/mr_string.h>
 ```
 
-选择 `MR_USE_STRING_STD` 时全部内存/字符串函数宏转发标准库（位查找原语仍为 内置实现）。`MR_USE_STRING_SAFE` 开启后各函数入口检查
-`MR_NULL` 参数： 内存/查找类返回 `MR_NULL`，比较/长度类返回 `0`（行为表见第 4 节）。
+选择 `MR_USE_STRING_STD` 时内存/字符串 API 宏转发标准库（位查找原语仍为 mrX 头文件实现），`MR_USE_STRING_SAFE` 不作用于 STD 后端。内置 SAFE 模式只检查 NULL，并按各函数既定返回类型提前返回；详细行为见第 4 节。
 
 ### 3. 快速上手
 
@@ -80,7 +79,7 @@ void example(void) {
 | `mr_memcmp`  | 无符号字节序比较（`0x80 > 0x7F`），返回首个差异字节的差值            |
 | `mr_memchr`  | 在 `size` 字节内查找字节值，找不到返回 `MR_NULL`                     |
 | `mr_memccpy` | 拷贝至遇到 `c`（含该字节）为止，返回其后继指针；未遇到返回 `MR_NULL` |
-| 零长度       | `size == 0` 的内存操作均为无操作，返回 `dst`（查找类返回 `MR_NULL`） |
+| 零长度       | 对有效非空指针：`memcpy/memmove/memset` 返回 `dst`，`memcmp` 返回 0，`memchr/memccpy` 返回 `MR_NULL`；SAFE 模式的 NULL 检查会先于这些零长度语义执行 |
 
 **字符串函数语义**
 
@@ -98,12 +97,11 @@ void example(void) {
 | 函数                                                                  | `MR_NULL` 输入时返回 |
 |-----------------------------------------------------------------------|----------------------|
 | `mr_memcpy` / `mr_memmove` / `mr_memset` / `mr_memccpy` / `mr_memchr` | `MR_NULL`            |
-| `mr_strcmp` / `mr_memcmp` / `mr_strncmp`                              | `0`                  |
+| `mr_strcmp` / `mr_memcmp` / `mr_strncmp`                              | `0`（会把 NULL 输入表现成“相等”，调用者不可据此判断输入合法） |
 | `mr_strcpy`                                                           | `MR_NULL`            |
 | `mr_strlen` / `mr_strnlen`                                            | `0`                  |
 
-`mr_strncpy` / `mr_strchr` 自身不检查，但其内部依赖的 `mr_memccpy` /
-`mr_strlen` / `mr_memchr` 已被保护，等效安全。该开关有少量运行时开销， 生产环境可按需开启。
+`mr_strncpy` / `mr_strchr` 自身没有入口检查，而是间接依赖被保护的 helper：SAFE 下 `mr_strncpy(dst, MR_NULL, size)` 会原样返回 `dst` 且不复制，`mr_strchr(MR_NULL, c)` 返回 `MR_NULL`。这些只是 NULL 特例，不能推广成对任意错误指针“安全”。
 
 ### 5. API 参考
 
@@ -155,6 +153,8 @@ mr_size_t mr_strlen(const char *s);
 
 返回值约定：拷贝/填充类成功返回 `dst`，安全模式空指针失败返回 `MR_NULL`； 比较类相等返回 `0`，不等返回非 0 差值；查找类未命中返回
 `MR_NULL`。
+
+字符串拷贝 API 与标准 C 一样要求目标空间足够，`strcpy/strncpy` 的源与目标也不应依赖重叠语义；`MR_USE_STRING_SAFE` 不提供容量检查。
 
 ### 6. 完整示例
 
@@ -221,12 +221,16 @@ void strerror_example(int err) {
 
 **Q：`mr_strerror` 的返回值需要释放吗？**
 
-不需要，返回的是只读静态字符串，生命周期贯穿程序全程。
+不需要。内置实现返回字符串字面量，应按只读内容使用，生命周期贯穿程序全程。STD 后端则直接继承工具链 `strerror` 的返回缓冲语义。
 
 **Q：`mr_ffs32` 与 `mr_fls32` 的序号从几开始？**
 
 从 1 开始：bit0 置位返回 1，bit31 置位返回 32；入参为 0 返回 0（无置位位）。 内核位图（如 [内核 Slab](../kernel/slab.md)
 的空闲位查找）即使用该原语。
+
+**Q：`mr_strerror` 应该传 `-MR_ENOMEM` 还是 `MR_ENOMEM`？**
+
+内置错误表按正的 `MR_E*` 常量匹配。若某个 API 返回 `-MR_ENOMEM`，转换文本时应传 `MR_ENOMEM`（或对负返回值取相反数）；直接传负值会落入 `"Unknown error"`。
 
 ---
 
@@ -263,10 +267,7 @@ void strerror_example(int err) {
   `dst` / `src` 按 `sizeof(mr_uintptr_t)` 的对齐位（`align = sizeof(mr_uintptr_t) - 1`）， 对齐匹配时按机器字整块搬运、余量逐字节；不匹配则整段逐字节。
 - **`memset` 填充模式**（`string.c:164`）：把字节值扩展为机器字宽的模式字 （32 位扩展 4 次，`MR_USE_ARCH_64B` 时再扩展 4 次到
   64 位），先处理头部 非对齐字节，再整字写入，尾部逐字节。
-- **De Bruijn 表**（`mrX/include/mrX/libc/mr_string.h:188`、`mr_string.h:209`）：
-  `mr_ffs32` / `mr_ffs64` 以 `x & (-x)` 分离最低置位位后查表得序号；
-  `mr_fls*` 先将高位折叠（`x |= x >> n` 级联）化为"仅最低位为原最高位"再复用
-  `ffs`。全部为 `MR_INLINE`，无函数调用开销。
+- **De Bruijn 表**（`mrX/include/mrX/libc/mr_string.h:188`、`mr_string.h:209`）：`mr_ffs32` / `mr_ffs64` 以 `x & (-x)` 分离最低置位位后查表得序号；`mr_fls*` 先折叠高位再复用 `ffs`。函数以 `MR_INLINE` 声明，但是否真正内联、局部 const 查表数组如何落栈/只读区由编译器优化决定，文档不假定零调用或零栈开销。
 
 ### 10. 核心流程
 
@@ -287,9 +288,9 @@ void strerror_example(int err) {
 
 ### 11. 并发与中断安全
 
-- 全部函数无全局状态、无堆、无锁，天然可重入，线程与中断上下文均可调用。
-- 不操作目标存储之外的状态，并发安全性由调用者对目标缓冲的所有权保证 （同一缓冲的并发写需调用者串行化，这与标准 C 库一致）。
-- 函数耗时与 `size` 成正比且无上界，长拷贝建议移出中断上下文。
+- **内置实现**没有可变全局状态、堆分配或锁；不同且互不冲突的缓冲可并发处理。同一存储存在并发读写时仍由调用者负责同步。
+- 内存/字符串扫描和搬运耗时随处理长度增长；位查找虽是固定步数，但其具体代码/栈布局受编译器影响。是否放进 ISR 应由目标延迟预算决定，而不是仅凭“无锁”判断。
+- STD 后端直接继承工具链 libc 的实现与并发/上下文属性，mrX 不额外保证。
 
 ### 12. 扩展与派生
 
@@ -328,7 +329,7 @@ void strerror_example(int err) {
 |---------------------------------------|------------------------------------------------|
 | `MR_USE_STRING`                       | 内置实现开关（choice，默认）                   |
 | `MR_USE_STRING_STD`                   | 转发标准库 string.h（choice）                  |
-| `MR_USE_STRING_3RD`                   | 接入第三方字符串库（choice）                   |
+| `MR_USE_STRING_3RD`                   | 第三方字符串库预留 choice；当前无实现           |
 | `MR_USE_STRING_SAFE`                  | 空指针安全检查，默认 n（依赖 `MR_USE_STRING`） |
 | `MR_USE_ARCH_32B` / `MR_USE_ARCH_64B` | 架构字长选择，影响 `mr_memset` 模式字宽度      |
 

@@ -27,6 +27,7 @@ extern "C" {
 /* ADC wait event type definition */
 #define MR_ADC_WAIT_STREAM_HALF         (1U << 0)
 #define MR_ADC_WAIT_STREAM_FULL         (1U << 1)
+#define MR_ADC_WAIT_STREAM_ERROR        (1U << 2)
 
 /* ADC differential mode definition */
 typedef enum mr_adc_diff {
@@ -78,9 +79,17 @@ typedef struct mr_adc_seq {
     mr_uint32_t channels;
     mr_uint8_t resolution;
     mr_uint8_t oversample;
-    void *buf;
     mr_size_t size;
+    void *buf;
 } mr_adc_seq_t;
+
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+/* ADC stream configuration type */
+typedef struct mr_adc_stream_config {
+    mr_uint64_t sample_rate;
+    mr_bool_t circular;
+} mr_adc_stream_config_t;
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
 /* ADC data type */
 MR_DRIVER_CLAZZES_EXPORT(adc);
@@ -100,11 +109,13 @@ typedef struct mr_adc_ops {
     mr_ssize_t (*read)(const mr_driver_t *drv, mr_adc_seq_t *seq);
 #if defined(MR_USE_DRIVER_ADC_STREAM)
     mr_err_t (*stream_start)(const mr_driver_t *drv, mr_adc_seq_t *seq,
-                             mr_bool_t circular);
+                             const mr_adc_stream_config_t *config);
     mr_err_t (*stream_stop)(const mr_driver_t *drv);
     mr_err_t (*stream_is_busy)(const mr_driver_t *drv, mr_bool_t *busy);
     mr_err_t (*stream_offset)(const mr_driver_t *drv, mr_size_t *offset);
 #endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
+    mr_err_t (*event_control)(const mr_driver_t *drv, mr_uint32_t events,
+                              mr_bool_t enable);
 } mr_adc_ops_t;
 
 /**
@@ -194,7 +205,7 @@ MR_INLINE mr_driver_t *mr_adc_create(mr_adc_data_t *data, void *priv,
  */
 MR_INLINE mr_err_t mr_adc_del(mr_driver_t *drv) {
     /* Check parameter */
-    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_ADC);
+    MR_DRIVER_ASSERT_TYPE(drv, MR_DRIVER_TYPE_ADC);
 
     /* Delete driver */
     return mr_driver_del(drv);
@@ -209,7 +220,7 @@ MR_INLINE mr_err_t mr_adc_del(mr_driver_t *drv) {
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_adc_configure(mr_driver_t *drv, mr_uint32_t channel,
-                          mr_adc_config_t *config);
+                          const mr_adc_config_t *config);
 
 /**
  * @brief This function gets an ADC channel configuration.
@@ -254,11 +265,11 @@ MR_INLINE mr_ssize_t mr_adc_read(mr_driver_t *drv, mr_adc_seq_t *seq) {
  *
  * @param drv The ADC driver.
  * @param seq The ADC sequence.
- * @param circular The circular mode.
+ * @param config The ADC stream configuration.
  * @return 0 on success, a negative error code on failure.
  */
 MR_INLINE mr_err_t mr_adc_stream_start(mr_driver_t *drv, mr_adc_seq_t *seq,
-                                       mr_bool_t circular) {
+                                       const mr_adc_stream_config_t *config) {
     const mr_adc_ops_t *ad_ops;
 
     /* Check parameter */
@@ -267,17 +278,18 @@ MR_INLINE mr_err_t mr_adc_stream_start(mr_driver_t *drv, mr_adc_seq_t *seq,
     MR_ASSERT(seq != MR_NULL);
     MR_ASSERT((seq->resolution > 0U) && (seq->resolution <= 32U));
     MR_ASSERT((seq->buf != MR_NULL) || (seq->size == 0));
+    MR_ASSERT(config != MR_NULL);
 
     /* Get ADC operations */
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!ad_ops->stream_start) {
         return -MR_ENOSYS;
     }
 
     /* Start ADC stream */
-    return ad_ops->stream_start(drv, seq, circular);
+    return ad_ops->stream_start(drv, seq, config);
 }
 
 /**
@@ -298,7 +310,7 @@ MR_INLINE mr_err_t mr_adc_stream_is_busy(mr_driver_t *drv, mr_bool_t *busy) {
     /* Get ADC operations */
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!ad_ops->stream_is_busy) {
         return -MR_ENOSYS;
     }
@@ -323,7 +335,7 @@ MR_INLINE mr_err_t mr_adc_stream_stop(mr_driver_t *drv) {
     /* Get ADC operations */
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!ad_ops->stream_stop) {
         return -MR_ENOSYS;
     }
@@ -350,7 +362,7 @@ MR_INLINE mr_err_t mr_adc_stream_offset(mr_driver_t *drv, mr_size_t *offset) {
     /* Get ADC operations */
     ad_ops = (mr_adc_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!ad_ops->stream_offset) {
         return -MR_ENOSYS;
     }
@@ -359,6 +371,58 @@ MR_INLINE mr_err_t mr_adc_stream_offset(mr_driver_t *drv, mr_size_t *offset) {
     return ad_ops->stream_offset(drv, offset);
 }
 #endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
+
+/**
+ * @brief This function enables ADC events.
+ *
+ * @param drv The ADC driver.
+ * @param events The ADC event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_adc_event_enable(mr_driver_t *drv, mr_uint32_t events) {
+    const mr_adc_ops_t *ad_ops;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_ADC);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+
+    /* Get ADC operations */
+    ad_ops = (const mr_adc_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Check whether event control is supported */
+    if (!ad_ops->event_control) {
+        return -MR_ENOSYS;
+    }
+
+    /* Enable ADC events */
+    return ad_ops->event_control(drv, events, MR_TRUE);
+}
+
+/**
+ * @brief This function disables ADC events.
+ *
+ * @param drv The ADC driver.
+ * @param events The ADC event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_adc_event_disable(mr_driver_t *drv, mr_uint32_t events) {
+    const mr_adc_ops_t *ad_ops;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_ADC);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+
+    /* Get ADC operations */
+    ad_ops = (const mr_adc_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Check whether event control is supported */
+    if (!ad_ops->event_control) {
+        return -MR_ENOSYS;
+    }
+
+    /* Disable ADC events */
+    return ad_ops->event_control(drv, events, MR_FALSE);
+}
 
 /**
  * @brief This function attaches an ADC event.
@@ -389,8 +453,7 @@ MR_INLINE mr_err_t mr_adc_event_attach(mr_driver_t *drv, mr_waiter_t *entry) {
  * @param events The ADC events.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_adc_event_raise(mr_driver_t *drv,
-                                      mr_wait_event_t events) {
+MR_INLINE mr_err_t mr_adc_event_raise(mr_driver_t *drv, mr_uint32_t events) {
     mr_adc_data_t *ad_data;
 
     /* Check parameter */
@@ -401,7 +464,7 @@ MR_INLINE mr_err_t mr_adc_event_raise(mr_driver_t *drv,
     ad_data = (mr_adc_data_t *)MR_DRIVER_DATA(drv);
 
     /* Raise ADC events */
-    return mr_waitable_raise(&ad_data->event, events, MR_NULL);
+    return mr_waitable_raise(&ad_data->event, (mr_wait_event_t)events, MR_NULL);
 }
 
 /**
@@ -605,17 +668,17 @@ MR_INLINE mr_ssize_t mr_ht_adc_read(mr_ht_adc_spec_t *spec, mr_adc_seq_t *seq) {
  *
  * @param spec The ADC specification.
  * @param seq The ADC sequence.
- * @param circular The circular mode.
+ * @param config The ADC stream configuration.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_ht_adc_stream_start(mr_ht_adc_spec_t *spec,
-                                          mr_adc_seq_t *seq,
-                                          mr_bool_t circular) {
+MR_INLINE mr_err_t
+    mr_ht_adc_stream_start(mr_ht_adc_spec_t *spec, mr_adc_seq_t *seq,
+                           const mr_adc_stream_config_t *config) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
     /* Start ADC stream */
-    return mr_adc_stream_start(spec->drv, seq, circular);
+    return mr_adc_stream_start(spec->drv, seq, config);
 }
 
 /**
@@ -664,6 +727,38 @@ MR_INLINE mr_err_t mr_ht_adc_stream_offset(mr_ht_adc_spec_t *spec,
     return mr_adc_stream_offset(spec->drv, offset);
 }
 #endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
+
+/**
+ * @brief This function enables ADC events for a HardTree specification.
+ *
+ * @param spec The ADC specification.
+ * @param events The ADC event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_ht_adc_event_enable(mr_ht_adc_spec_t *spec,
+                                          mr_uint32_t events) {
+    /* Check parameter */
+    MR_ASSERT(spec != MR_NULL);
+
+    /* Enable ADC events */
+    return mr_adc_event_enable(spec->drv, events);
+}
+
+/**
+ * @brief This function disables ADC events for a HardTree specification.
+ *
+ * @param spec The ADC specification.
+ * @param events The ADC event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_ht_adc_event_disable(mr_ht_adc_spec_t *spec,
+                                           mr_uint32_t events) {
+    /* Check parameter */
+    MR_ASSERT(spec != MR_NULL);
+
+    /* Disable ADC events */
+    return mr_adc_event_disable(spec->drv, events);
+}
 
 /**
  * @brief This function converts an ADC specification raw value to millivolts.

@@ -17,17 +17,16 @@
 
 ### 1. 模块概述
 
-等待队列解决的问题是： **某个事件发生时，通知所有关心该事件的对象，且不阻塞 事件发起方**。特性：
+等待队列解决的问题是： **某个事件发生时，在事件发起方当前上下文同步通知关心该事件的 waiter**。它不是睡眠等待机制，也不会把回调自动搬到其他执行上下文。特性：
 
 - 事件源 `mr_waitable_t` 可挂接任意数量的等待者 `mr_waiter_t`。
 - 事件为 32 位位图：高 4 位为类型与触发方式标志，低 28 位为自定义事件位。
 - 每个等待者独立声明关注的事件位集合，支持电平（level）与边沿（edge）两种 触发语义。
-- 通知通过用户回调完成，`raise` 调用方不被阻塞；等待是 **持续**的，触发后 等待者仍留在等待列表，可反复接收事件，直到 `cancel`
-  或 `del`。
-- 回调中允许取消自身/他人、挂接新等待者、递归 `raise`、删除事件源本身， 全部由实现保证安全。
+- 通知通过用户回调同步完成；`mr_waitable_raise` 会等本轮匹配回调执行完才返回。等待是 **持续订阅**，触发后 waiter 默认仍留在列表，可反复接收事件，直到 `cancel` 或 `del`。
+- 分发游标机制允许回调中取消自身/其他 waiter、挂接 waiter、递归 `raise`，也支持当前 waiter 自删除。删除 waitable 时则必须额外保证外层 `raise` 返回前其存储不会被释放。
 
-与相邻模块的分工：阻塞式"等待并睡眠"语义不属于本模块，本模块是回调式分发。 内核内已有使用者：[ADC 驱动](../drivers/adc.md) 与
-[DAC 驱动](../drivers/dac.md)（`mrX/drivers/adc/adc.c`、
+与相邻模块的分工：阻塞式"等待并睡眠"语义不属于本模块，本模块是回调式分发。 内核内已有使用者：[ADC 驱动](../drivers/adc/adc.md) 与
+[DAC 驱动](../drivers/dac/dac.md)（`mrX/drivers/adc/adc.c`、
 `mrX/drivers/dac/dac.c`）以 waitable 向异步调用者通知完成/错误事件。
 
 ### 2. 配置与依赖
@@ -64,7 +63,7 @@ static int count;
 
 static void on_event(mr_waiter_t *waiter, void *param,
                      mr_wait_event_t event, const void *data) {
-    (*(int *)param)++;      /* event carries matched bits, data is payload */
+    (*(int *)param)++;      /* event is the level/edge event set; data is payload */
 }
 
 void wait_demo(void) {
@@ -84,20 +83,20 @@ void wait_demo(void) {
 
 要点：
 
-- `waiter` 与 `able` 在等待期间被事件分发引用，须用静态存储或保证生命周期。
-- `mr_waiter_wait` 之后才算挂接；`raise` 的事件位与等待者的关注位有交集时 回调被触发。
+- `mr_waiter_wait` 只建立链表关系，**不会自动增加 waiter 或 waitable 的对象引用计数**；调用者必须保证两者在挂接和分发期间仍然存活。
+- `mr_waiter_wait` 之后才算挂接；`raise` 的有效事件位与等待者关注位有交集时回调被触发。
 
 ### 4. 使用说明
 
 **事件模型**
 
-- `mr_waitable_raise(able, event, data)` 的 `event` 是本次发生的事件位 （`MR_WAIT_EDGE` 位在分发时被忽略）；`data` 是附加载荷指针。
-- 等待者的 `event` 参数声明关注位（`MR_WAIT_IN | MR_WAIT_OUT | ...`，可含 低 28 位自定义位），按位或 `MR_WAIT_EDGE`
-  表示该等待者按边沿触发。
+- `mr_waitable_raise(able, event, data)` 的 `event` 是本次事件位；实现首先清掉 `MR_WAIT_EDGE` 位。`data` 是附加载荷指针。
+- waiter 的 `event` 字段是关注位集合，`MR_WAIT_EDGE` 仅作为边沿模式标志。`MR_WAIT_IN/OUT/ERR` 与低 28 位自定义位是公共命名约定，core 的匹配逻辑本质上只是按位求交，并不会额外校验事件位分类。
 - 电平触发（默认）：`raise` 的事件与关注位有交集即触发。
 - 边沿触发（`MR_WAIT_EDGE`）：只有本次事件相对 **上一次 raise 的事件**出现了 新的关注位才触发，连续相同的 raise 不重复触发；全
   0 的 raise 会把边沿基准 清零，使下一次 raise 的同一位重新成为"新边沿"
   （`mrX/test/kernel/wait.c:531` 覆盖该行为）。
+- 回调参数中的 `event` **不会再按 waiter 的关注掩码裁剪**：level waiter 收到本次完整事件集合（已去掉 EDGE），edge waiter 收到 `event & ~last` 的完整新出现位集合。只要其中至少一位与 waiter 关注位相交就会触发。
 
 **运行期行为约定**
 
@@ -111,9 +110,7 @@ void wait_demo(void) {
 | `mr_waitable_del`                       | 自动取消该事件源上的全部等待者            |
 | `mr_waiter_del`                         | 自动从事件源摘除（挂接中删除安全）        |
 
-**回调上下文**：回调运行在 `mr_waitable_raise` 调用者的上下文——驱动在 ISR 中上报事件时即为中断上下文，线程代码 raise
-时即为线程上下文。回调内禁止 阻塞与耗时操作；回调内允许调用本模块全部 API（`cancel`/`wait`/`raise`/
-`del` 等），分发过程对删除与递归有专门保护。
+**回调上下文**：回调运行在 `mr_waitable_raise` 调用者上下文——若驱动在 ISR 中 raise，就在 ISR 中执行；线程中 raise 就在线程中同步执行。长时间或阻塞回调会直接拖住 raise 调用者。分发游标明确支持回调内 `cancel`、重新 `wait`、递归 `raise` 和 waiter 删除；涉及动态对象创建/最后一次释放时仍须遵守 malloc/free 的上下文约束。
 
 **载荷借用语义**：`data` 指针由所有被触发的回调共享，必须按只读对待，且仅在
 `mr_waitable_raise` 返回前有效；需要更长生命周期时由回调自行复制。
@@ -152,8 +149,7 @@ mr_waitable_t *mr_waitable_create(void);
 mr_err_t mr_waitable_del(mr_waitable_t *able);
 ```
 
-`init` 初始化调用者分配的存储；`create` 堆分配（内存不足返回 `MR_NULL`）；
-`del` 先取消全部等待者再删除对象，静态对象可重新 `init`，动态对象内存被 释放。
+`init` 初始化调用者分配的存储；`create` 堆分配（内存不足返回 `MR_NULL`）；`del` 先取消全部 waiter，再执行一次对象 `del`。只有最后一个对象引用被释放时才真正到达生命周期终点；动态对象也只有此时才由 release 归还内存。
 
 **`mr_waitable_raise`**
 
@@ -162,9 +158,8 @@ mr_err_t mr_waitable_raise(mr_waitable_t *able, mr_wait_event_t event,
                            const void *data);
 ```
 
-- `event`：本次事件位（`MR_WAIT_EDGE` 位被忽略）；`data`：载荷指针，所有被 触发的回调共享、只读、`raise` 返回后失效，可为
-  `MR_NULL`。
-- 返回：成功 `0`。同步执行全部匹配回调后返回。
+- `event`：本次事件位；bit31 的 `MR_WAIT_EDGE` 会在分发入口被清除。`data`：载荷指针，所有被触发回调共享，按借用只读数据处理，可为 `MR_NULL`。
+- 返回：当前实现成功路径固定返回 0；所有匹配回调都在返回前同步执行完。回调收到的是 level/edge 计算后的事件集合，而不是再与 waiter mask 相与后的结果。
 
 **`mr_waiter_init` / `mr_waiter_create`**
 
@@ -206,8 +201,7 @@ mr_wait_event_t mr_waiter_event(mr_waiter_t *wait);
 mr_err_t mr_waitable_cancel_all(mr_waitable_t *able);
 ```
 
-摘除该事件源上的全部等待者，等待者对象本身不被销毁，可再次 `wait`。
-`*_get` / `*_put` 用于跨模块持有指针时增减引用，`put` 返回 `MR_TRUE` 表示 引用归零、生命周期结束；一般应用代码不需要使用。
+摘除该事件源上的全部 waiter，waiter 对象本身不被销毁，可再次 `wait`。挂接动作本身不隐式 get 任何一端；`*_get` / `*_put` 由需要跨作用域持有对象的调用方显式使用。生命周期语义与 Object 模块一致。
 
 ### 6. 完整示例
 
@@ -295,7 +289,7 @@ static void remove_cb(mr_waiter_t *waiter, void *param,
 
 **Q：怎么定义自己的事件位？**
 
-使用低 28 位（`MR_WAIT_EVENT_MASK` 范围内）自定义；高 4 位中 IN/OUT/ERR 是 约定的类型位，`MR_WAIT_EDGE` 仅用于等待者的触发方式声明。
+为避免与公共位冲突，建议在低 28 位（`MR_WAIT_EVENT_MASK`）定义自有事件；bit28~30 的 IN/OUT/ERR 是公共约定，bit31 的 EDGE 是 waiter 模式标志。当前 core 不会强制验证自定义位是否落在低 28 位，只会在 raise 时清除 EDGE。
 
 **Q：为什么电平等待者对连续两次相同的 raise 都触发，而边沿等待者只触发一次？**
 
@@ -309,8 +303,7 @@ static void remove_cb(mr_waiter_t *waiter, void *param,
 
 **Q：能在等待者回调里删除事件源吗？**
 
-可以。`mr_waitable_del` 会先取消全部等待者再删除对象，分发过程对"回调中删除 自身事件源"有专门保护（
-`mrX/test/kernel/wait.c:434` 验证）；但删除后不得再 使用该 waitable 指针。
+现有游标修复允许回调中对**仍有有效存储**的 waitable 执行 `mr_waitable_del`；测试覆盖的是栈上/静态存储语义。若是动态 waitable，必须保证外层 `mr_waitable_raise` 返回前还有额外引用使其内存不被最后一次 `put` 释放，否则外层分发仍需要访问其链表头。不能把“回调内删除事件源”理解成动态对象可无条件立即 free。
 
 **Q：静态和动态方式怎么选？**
 
@@ -338,13 +331,13 @@ static void remove_cb(mr_waiter_t *waiter, void *param,
    +------+-----------------------+
           | 逐个回调（锁外执行）
    +------v-----------------------+
-   | mr_waiter_t 回调              |  可调本模块全部 API
+   | mr_waiter_t 回调              |  同步执行；可安全重入的范围见正文
    +------------------------------+
         依赖：对象系统(类型检查/引用计数/静态动态双释放通道)、
               双向链表(容器)、自旋锁(并发保护)、malloc(仅动态方式)
 ```
 
-内核内使用者：[ADC 驱动](../drivers/adc.md)、[DAC 驱动](../drivers/dac.md)
+内核内使用者：[ADC 驱动](../drivers/adc/adc.md)、[DAC 驱动](../drivers/dac/dac.md)
 以 waitable 为设备对象的事件出口。
 
 ### 9. 数据结构
@@ -389,7 +382,7 @@ typedef struct mr_waiter {
 
 内部游标结构（`mrX/kernel/wait.c:28`）：`typedef struct wait_cursor
 { mr_list_t list; mr_list_t *next; } wait_cursor_t;`。事件位编码见第 2 节 表格，`MR_WAIT_TYPE_MASK` 与
-`MR_WAIT_EVENT_MASK`（`mr_wait.h:33-34`）供 实现区分类型位与自定义位。
+`MR_WAIT_EVENT_MASK`（`mr_wait.h:33-34`）是供使用者组织事件编号的公共掩码；当前 `wait.c` 分发实现并不按 TYPE/EVENT 两类拆分处理，只特殊处理 `MR_WAIT_EDGE`。
 
 ### 10. 核心流程
 
@@ -405,8 +398,7 @@ typedef struct mr_waiter {
 2. 锁内在 `able->cursors` 上注册一个栈上游标，`cursor.next` 指向等待者链表 的第一个节点。
 3. 循环：取 `cursor.next` 指向的 waiter， **先把游标推进到下一个节点再触发 回调**——回调删除当前 waiter 时，
    `waiter_remove_locked` 能据此修复游标。
-4. 触发判定：边沿等待者取 `event & ~waiter->last`，电平等待者取 `event`
-   本身；随后 `waiter->last = event`。关注位与该值有交集才触发。
+4. 触发判定：边沿 waiter 计算 `event_edge = event & ~waiter->last`，level waiter 直接取 `event`；随后无论是否命中都会执行 `waiter->last = event`。仅用 `waiter->event & event_edge` 判断是否触发，传给回调的仍是完整 `event_edge`。
 5. **解锁后调用回调，再重新加锁**（`wait.c:169-175`）：回调期间不持锁，这是 回调内可调用全部 wait API 的前提。
 6. 循环结束摘除游标并解锁。递归 `raise` 只会注册新的游标，互不干扰 （`mrX/test/kernel/wait.c:393` 验证递归场景）。
 
@@ -414,9 +406,7 @@ typedef struct mr_waiter {
 `able->cursors`，把所有 `next` 指向该 waiter 的游标改指其后的节点。该机制使
 "回调中 `cancel`/`del` 任意等待者"不会破坏进行中的分发，是全部回调内操作 安全性的核心。
 
-**删除**：`mr_waitable_del`（`wait.c:111`）先 `waitable_cancel_all`（锁内 循环摘除全部 waiter，`wait.c:94`
-）再走对象删除通道；waitable/waiter 的静态/ 动态双释放通道（`MR_CLAZZES_DEFINE`，`wait.c:17`、`wait.c:22`）决定 `del`
-是否 `mr_free`，动态对象引用计数归零路径同样先取消挂接再释放 （`wait.c:207-231`、`wait.c:371-395`）。
+**删除**：`mr_waitable_del`（`wait.c:111`）先取消全部 waiter，再调用 `mr_object_del`；`mr_waiter_del` 同理先摘除挂接。静态/动态 clazz 只决定**最后一个引用释放时**是否 `mr_free`。需要注意，外层正在执行的 `raise` 没有自动持有 waitable 引用，因此动态 waitable 在回调中删除时必须由调用方另外保证存储寿命。
 
 **修改关注位**：`mr_waiter_event_set`（`wait.c:350`）锁内先摘除再改 `event`，
 "改位即取消等待"是结构性结果。
@@ -424,10 +414,9 @@ typedef struct mr_waiter {
 ### 11. 并发与中断安全
 
 - `__wait_lock` 为关中断自旋锁（`mr_spinlock_lock_irqsave`），保护等待者 链表、游标链表与 `able`/`last` 字段；临界区内只有链表搬移与字段读写。
-- 全部 API 可在中断与线程上下文调用；`raise` 与 `wait`/`cancel` 并发安全。
-- 回调运行在 `raise` 调用者上下文（目标板驱动常为中断）；回调内允许调用本 模块
-  API（游标修复与"先推进后触发"保证），但不允许阻塞——阻塞会卡住
-  `raise` 方与其他等待者的分发。
+- `raise` 与链表侧 `wait/cancel/event_set/cancel_all` 通过同一 irqsave 自旋锁协调；游标修复让删除/摘除不会留下悬空遍历位置。
+- 不能据此把**全部** API 统一标成 ISR-safe：`*_create` 与动态对象最后一次 `*_del/put` 会进入 malloc/free；具体上下文能力取决于内存实现。
+- 回调运行在 `raise` 调用者上下文且在 wait 锁外同步执行；阻塞是否允许取决于调用上下文，但任何耗时都会延迟本次 raise 的剩余分发。
 - 同一次 raise 内回调串行执行；递归 raise 时内层回调先于外层剩余部分执行， 语义上相当于函数调用嵌套。
 
 ### 12. 扩展与派生
@@ -438,7 +427,7 @@ waitable 与 waiter 均通过对象 clazz 支持派生：在自定义结构体�
 `MR_CONTAINER_OF` 取回外层结构。参考用例：`mrX/test/kernel/wait.c:125`
 （`test_waitable_clazz` 继承 waitable 静态 clazz）、`wait.c:132`（waiter
 同理）。派生模块可注册自己的释放函数，在"取消挂接"之外完成资源归还。典型
-派生方向：把设备对象（如 [ADC 驱动](../drivers/adc.md)）内嵌 waitable，向 异步调用者暴露事件订阅接口。
+派生方向：把设备对象（如 [ADC 驱动](../drivers/adc/adc.md)）内嵌 waitable，向 异步调用者暴露事件订阅接口。
 
 ### 13. 源码导读
 
@@ -467,7 +456,4 @@ waitable 与 waiter 均通过对象 clazz 支持派生：在自定义结构体�
 | `MR_WAIT_EDGE`                               | 等待者边沿触发标志（bit31）           |
 | `MR_WAIT_TYPE_MASK` / `MR_WAIT_EVENT_MASK`   | 类型位掩码 / 自定义位掩码（低 28 位） |
 
-**错误码**：本模块 API 失败返回负数错误码（见
-`mrX/include/mrX/libc/mr_errno.h`）：`-MR_EBUSY`，仅由 `mr_waiter_wait`
-在等待者已在等待时返回（`wait.c:325`）。传入错误类型指针、空回调等参数问题 在断言开启时由 `MR_ASSERT` 拦截，而非返回错误码；
-`mr_waitable_create` / `mr_waiter_create` 内存不足返回 `MR_NULL`。
+**错误约定**：普通控制 API 当前唯一显式业务错误是 `mr_waiter_wait` 对已挂接 waiter 返回 `-MR_EBUSY`；其余成功路径通常返回 0。错误类型指针、空回调等参数问题由 `MR_ASSERT` 约束；`mr_waitable_create` / `mr_waiter_create` 内存不足返回 `MR_NULL`。动态对象最终释放的上下文约束不通过错误码表达。

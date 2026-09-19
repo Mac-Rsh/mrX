@@ -42,7 +42,7 @@ static mr_err_t irq_table_insert(mr_irq_t *irq, mr_uint32_t irq_start,
 
     /* Add irq to table */
     for (i = irq_start; i <= irq_end; i++) {
-        /* Check if irq is conflict */
+        /* Check whether irq is conflict */
         if (__irq_table[i].irq) {
             /* Irq conflict */
             for (irq_end = i, i = irq_start; i < irq_end; i++) {
@@ -349,14 +349,14 @@ static mr_err_t irq_request(mr_uint32_t irq, mr_uint16_t flags,
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
-    /* Check if irq is dying */
+    /* Check whether irq is dying */
     desc = &__irq_table[irq];
     if ((!desc->irq) || mr_atomic_load(&desc->irq->dying)) {
         ret = -MR_ENOENT;
         goto _exit;
     }
 
-    /* Check if irq descriptor action is exist */
+    /* Check whether irq descriptor action is exist */
     if (!desc->action) {
         /* Set irq type */
         irq_type_set(irq, desc, flags & IRQ_FLAG_TYPE_MASK);
@@ -383,7 +383,7 @@ static mr_err_t irq_request(mr_uint32_t irq, mr_uint16_t flags,
 
     /* Insert irq action to irq descriptor */
     for (a = &desc->action; *a; a = &(*a)->next) {
-        /* Check if irq action is exist */
+        /* Check whether irq action is exist */
         if ((*a)->owner != action->owner) {
             continue;
         }
@@ -472,7 +472,7 @@ mr_err_t mr_irq_free(mr_uint32_t irq, void *owner) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
-    /* Check if irq is dying */
+    /* Check whether irq is dying */
     desc = &__irq_table[irq];
     if ((!desc->irq) || mr_atomic_load(&desc->irq->dying)) {
         ret = -MR_ENOENT;
@@ -486,7 +486,7 @@ mr_err_t mr_irq_free(mr_uint32_t irq, void *owner) {
             continue;
         }
 
-        /* Check if irq action is pending */
+        /* Check whether irq action is pending */
         if ((*a)->pending > 0) {
             /* Mark irq action, defer free */
             (*a)->owner = MR_NULL;
@@ -537,7 +537,7 @@ mr_err_t mr_irq_enable(mr_uint32_t irq) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
-    /* Check if irq is dying */
+    /* Check whether irq is dying */
     desc = &__irq_table[irq];
     if ((!desc->irq) || mr_atomic_load(&desc->irq->dying)) {
         ret = -MR_ENOENT;
@@ -564,7 +564,7 @@ mr_err_t mr_irq_disable(mr_uint32_t irq) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
-    /* Check if irq is dying */
+    /* Check whether irq is dying */
     desc = &__irq_table[irq];
     if ((!desc->irq) || mr_atomic_load(&desc->irq->dying)) {
         ret = -MR_ENOENT;
@@ -590,7 +590,7 @@ int mr_irq_type(mr_uint32_t irq) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
-    /* Check if irq is not exist */
+    /* Check whether irq is not exist */
     desc = &__irq_table[irq];
     if (!desc->irq) {
         ret = -MR_ENOENT;
@@ -616,7 +616,7 @@ mr_err_t mr_irq_priority_set(mr_uint32_t irq, mr_uint8_t priority) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
-    /* Check if irq is dying */
+    /* Check whether irq is dying */
     desc = &__irq_table[irq];
     if ((!desc->irq) || mr_atomic_load(&desc->irq->dying)) {
         ret = -MR_ENOENT;
@@ -642,7 +642,7 @@ int mr_irq_priority(mr_uint32_t irq) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
-    /* Check if irq is not exist */
+    /* Check whether irq is not exist */
     desc = &__irq_table[irq];
     if (!desc->irq) {
         ret = -MR_ENOENT;
@@ -672,7 +672,7 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__irq_lock);
 
-    /* Check if irq is dying */
+    /* Check whether irq is dying */
     desc = &__irq_table[irq];
     if ((!desc->irq) || mr_atomic_load(&desc->irq->dying)) {
         irq_ret = MR_IRQ_NONE;
@@ -692,7 +692,7 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
     /* Handle irq action */
     for (irq_ret = MR_IRQ_NONE, action = desc->action; action;
          action = action->next) {
-        /* Check if irq action is being freed */
+        /* Check whether irq action is being freed */
         if (!action->owner) {
             continue;
         }
@@ -716,7 +716,7 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
         /* Mark irq action not pending */
         action->pending--;
 
-        /* Check if irq action is being freed */
+        /* Check whether irq action is being freed */
         if ((!action->owner) && (action->pending == 0U)) {
             /* Free irq action */
             for (a = &desc->action; *a; a = &(*a)->next) {
@@ -738,15 +738,15 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
             }
         }
 
-        /* Check if irq action is handled */
+        /* Check whether irq action is handled */
         if (irq_ret == MR_IRQ_HANDLED) {
             break;
         }
 
-        /* Check if irq action is deferred */
+        /* Check whether irq action is deferred */
         if (irq_ret == MR_IRQ_DEFERRED) {
 #if defined(MR_USE_IRQ_DEFER)
-            /* Check if irq action supports deferring */
+            /* Check whether irq action supports deferring */
             if (action->defer_entry) {
                 /* Add irq action to the defer workqueue */
                 ret = mr_workqueue_work(&__irq_defer_queue, &action->defer);

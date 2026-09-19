@@ -94,12 +94,12 @@ static mr_err_t driver_lock(mr_driver_t *drv) {
     flags = mr_atomic_load(&drv->flags);
 
     do {
-        /* Check if driver is dying */
+        /* Check whether driver is dying */
         if (flags & MR_DRIVER_FLAG_DYING) {
             return -MR_EPERM;
         }
 
-        /* Check if driver is locked */
+        /* Check whether driver is locked */
         if (flags & MR_DRIVER_FLAG_LOCK) {
             return -MR_EBUSY;
         }
@@ -128,14 +128,14 @@ mr_err_t mr_driver_setup(mr_driver_t *drv) {
         return ret;
     }
 
-    /* Check if driver is setup */
+    /* Check whether driver is setup */
     if (mr_atomic_load(&drv->flags) & MR_DRIVER_FLAG_SETUP) {
         mr_driver_state_set(drv, 0);
         ret = 0;
         goto _exit;
     }
 
-    /* Check if driver need init */
+    /* Check whether driver need init */
     if ((!drv->clazz) || (!drv->clazz->init)) {
         ret = 0;
         goto _set;
@@ -168,7 +168,7 @@ mr_bool_t mr_driver_is_ready(mr_driver_t *drv) {
         return MR_FALSE;
     }
 
-    /* Check if driver is setup and available */
+    /* Check whether driver is setup and available */
     flags = mr_atomic_load(&drv->flags);
     if (!(flags & MR_DRIVER_FLAG_SETUP) || (flags & MR_DRIVER_FLAG_DYING)) {
         return MR_FALSE;
@@ -191,13 +191,13 @@ mr_err_t mr_driver_shutdown(mr_driver_t *drv) {
         return ret;
     }
 
-    /* Check if driver is setup */
+    /* Check whether driver is setup */
     if (!(mr_atomic_load(&drv->flags) & MR_DRIVER_FLAG_SETUP)) {
         ret = 0;
         goto _exit;
     }
 
-    /* Check if driver need deinit */
+    /* Check whether driver need deinit */
     if ((!drv->clazz) || (!drv->clazz->deinit)) {
         ret = 0;
         goto _unset;
@@ -251,12 +251,12 @@ mr_driver_t *mr_driver_find(const char *name) {
 }
 
 static void driver_del(mr_driver_t *drv) {
-    /* Check if driver is setup */
+    /* Check whether driver is setup */
     if (!(mr_atomic_load(&drv->flags) & MR_DRIVER_FLAG_SETUP)) {
         return;
     }
 
-    /* Check if driver need deinit */
+    /* Check whether driver need deinit */
     if ((!drv->clazz) || (!drv->clazz->deinit)) {
         return;
     }

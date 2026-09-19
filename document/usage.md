@@ -10,7 +10,7 @@
 | 适用对象 | 已有应用工程、准备接入并使用 mrX 的开发者                               |
 | mrX 目录 | 框架源码及生成文件；应用代码由使用者自己的工程管理                      |
 | 主机工具 | Python 3.11+，依赖见 `mrX/scripts/requirements.txt`                     |
-| 相关文档 | [CLI](scripts/cli.md)、[Platform](platform/platform.md)、各模块用户指南 |
+| 相关文档 | [CLI](scripts/cli/cli.md)、[Platform](platform/platform.md)、各模块用户指南 |
 
 ---
 
@@ -48,14 +48,14 @@
 | 1    | 准备平台             | `platform/` 下出现目标平台的适配文件            | [Platform](platform/platform.md)    |
 | 2    | 配置功能             | 生成 `include/mrX/mr_config.h`                  | [第 3 节](#3-使用-kconfig-配置功能) |
 | 3    | 编译硬件描述（可选） | 生成 `include/mrX/mr_hardgen.h`                 | [第 4 节](#4-htc-硬件描述编译)      |
-| 4    | 确认注册段处理       | 链接脚本保留、聚合了注册段（或 MDK 自动处理）   | [第 5 节](#5-注册段与-sections)     |
+| 4    | 确认注册段处理       | 链接脚本保留、聚合了注册段（MDK 无需额外处理）  | [第 5 节](#5-注册段与-sections)     |
 | 5    | 启动框架             | `mr_user_init()` 返回，初始化函数按注册顺序执行 | [第 6 节](#6-启动框架)              |
 | 6    | 按需接入模块         | 外设、文件系统、RPC 等工作起来                  | [模块文档](README.md)               |
 
 几个不那么明显但很重要的前提：
 
 - **第 3 步是可选的**。只有用硬件树驱动或板级描述时才需要 HTC；不写硬件描述也能正常用 mrX。
-- **第 4 步的分工取决于工具链**。GNU ld 风格链接器需要手工处理；Keil MDK 会自动识别，你可以跳过。
+- **第 4 步的分工取决于工具链**。GNU ld 风格链接器需要手工处理；Keil MDK 不运行本节的 `sections` 脚本，armlink 默认即按名字连续放置这些注册段，无需额外配置。
 - **换了平台或改了硬件描述之后**，第 2、3 步要重新执行，并让应用工程用上最新生成的头文件。 生成文件是产物，不要手动去改它——改了下次生成就被覆盖。
 
 ---
@@ -80,7 +80,7 @@ python ./scripts/cli.py kconfig
 命令会打开 menuconfig 界面。用方向键移动、回车进入子菜单、空格切换选项，改完保存退出即可。 脚本会自动维护 `.config`，并生成
 `include/mrX/mr_config.h`。想接着上次改，直接再运行一次同样命令。
 
-第一次就卡在打不开界面上？多半是缺依赖或终端不支持。按 [CLI](scripts/cli.md) 检查 menuconfig 依赖。
+第一次就卡在打不开界面上？多半是缺依赖或终端不支持。按 [CLI](scripts/cli/cli.md) 检查 menuconfig 依赖。
 
 怎么选才不容易出错：
 
@@ -101,7 +101,7 @@ python ./scripts/cli.py kconfig --no-ui
 直接编辑 `.config` 是非交互场景的备用手段。改完之后仍然要重新运行命令， 让 Kconfig 解析依赖关系并重新生成 `mr_config.h`
 ；遇到依赖冲突时还是得回到 UI 里修正。 正常使用不需要手工维护配置文本。
 
-常用路径可以用 `-k/--kconfig`、`-c/--config` 和 `-o/--output` 覆盖，具体选项见 [CLI](scripts/cli.md)。
+常用路径可以用 `-k/--kconfig`、`-c/--config` 和 `-o/--output` 覆盖，具体选项见 [CLI](scripts/cli/cli.md)。
 
 ---
 
@@ -158,7 +158,8 @@ python ./scripts/cli.py sections -i <用户链接脚本>.lds
 
 ### 5.2 Keil MDK 等特殊环境
 
-Keil MDK 工程不需要手工执行 `sections`：MDK 工具链会自动识别 mrX 的注册信息并完成相应处理， 其余配置遵循 MDK 自身的集成方式。
+Keil MDK 工程不需要手工执行 `sections`：注册段常量带有 `used` 属性，armlink 默认会保留并按名字连续、有序放置它们，无需 scatter 或链接器选项；其余配置遵循 MDK 自身的集成方式。机理与注意事项详见
+[Keil MDK 工程维护](scripts/mdk/mdk.md) 的"注册段与链接器"一节。
 
 顺带说明一个容易混淆的点：`mdk` 命令是用来维护 MDK 工程文件的， **和注册段处理无关**。 其他工具链或工程管理器如果有自己的段收集机制，优先遵循那套环境的做法。
 
@@ -221,4 +222,4 @@ Keil MDK 工程不需要手工执行 `sections`：MDK 工具链会自动识别 m
 `python ./scripts/cli.py` 即可进入交互模式（全局选项如 `-h`、`--version`
 要写在命令名之前）。
 
-更多参数和交互式 shell 用法见 [CLI](scripts/cli.md)。
+更多参数和交互式 shell 用法见 [CLI](scripts/cli/cli.md)。

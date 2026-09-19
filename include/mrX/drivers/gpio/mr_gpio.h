@@ -94,10 +94,9 @@ typedef struct mr_gpio_ops {
     mr_err_t (*port_read)(const mr_driver_t *drv, mr_uint32_t *mask);
     mr_err_t (*event_attach)(const mr_driver_t *drv, mr_uint32_t pin,
                              mr_waiter_t *entry);
+    mr_err_t (*event_control)(const mr_driver_t *drv, mr_uint32_t pin,
+                              mr_uint32_t events, mr_bool_t enable);
 } mr_gpio_ops_t;
-
-/* GPIO event type */
-typedef mr_uint32_t                     mr_gpio_event_exti_data_t;
 
 /**
  * @brief This macro function initializes a GPIO data.
@@ -186,7 +185,7 @@ MR_INLINE mr_driver_t *mr_gpio_create(mr_gpio_data_t *data, void *priv,
  */
 MR_INLINE mr_err_t mr_gpio_del(mr_driver_t *drv) {
     /* Check parameter */
-    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
+    MR_DRIVER_ASSERT_TYPE(drv, MR_DRIVER_TYPE_GPIO);
 
     /* Delete driver */
     return mr_driver_del(drv);
@@ -201,7 +200,7 @@ MR_INLINE mr_err_t mr_gpio_del(mr_driver_t *drv) {
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_gpio_configure(mr_driver_t *drv, mr_uint32_t pin,
-                           mr_gpio_config_t *config);
+                           const mr_gpio_config_t *config);
 
 /**
  * @brief This function gets a GPIO pin configuration.
@@ -235,9 +234,9 @@ MR_INLINE mr_ssize_t mr_gpio_write(mr_driver_t *drv, mr_uint32_t pin,
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT(pin < 32U);
 
-    /* Get GPIO data and operations */
+    /* Get GPIO operations and data */
+    gp_ops = (const mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
-    gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(gp_ops->pin_write != MR_NULL);
 
     /* Write pin value */
@@ -271,9 +270,9 @@ MR_INLINE mr_ssize_t mr_gpio_read(mr_driver_t *drv, mr_uint32_t pin,
     MR_ASSERT(value != MR_NULL);
     MR_ASSERT(pin < 32U);
 
-    /* Get GPIO data and operations */
+    /* Get GPIO operations and data */
+    gp_ops = (const mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
-    gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(gp_ops->pin_read != MR_NULL);
 
     /* Read pin value */
@@ -303,9 +302,9 @@ MR_INLINE mr_ssize_t mr_gpio_port_write(mr_driver_t *drv, mr_uint32_t mask) {
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
 
-    /* Get GPIO data and operations */
+    /* Get GPIO operations and data */
+    gp_ops = (const mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
-    gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(gp_ops->port_write != MR_NULL);
 
     /* Write port value mask */
@@ -337,9 +336,9 @@ MR_INLINE mr_ssize_t mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask) {
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT(mask != MR_NULL);
 
-    /* Get GPIO data and operations */
+    /* Get GPIO operations and data */
+    gp_ops = (const mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
-    gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(gp_ops->port_read != MR_NULL);
 
     /* Read port value mask */
@@ -371,22 +370,94 @@ MR_INLINE mr_err_t mr_gpio_event_attach(mr_driver_t *drv, mr_uint32_t pin,
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT(entry != MR_NULL);
 
-    /* Get GPIO data and operations */
+    /* Get GPIO operations and data */
+    gp_ops = (const mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
-    gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if pin is existed */
+    /* Check whether pin is existed */
     if ((pin >= 32U) || (!(gp_data->exist_mask & (1U << pin)))) {
         return -MR_EINVAL;
     }
 
-    /* Check if event attach is supported */
+    /* Check whether event attach is supported */
     if (!gp_ops->event_attach) {
         return -MR_ENOSYS;
     }
 
     /* Attach GPIO pin event */
     return gp_ops->event_attach(drv, pin, entry);
+}
+
+/**
+ * @brief This function enables GPIO pin events.
+ *
+ * @param drv The GPIO driver.
+ * @param pin The GPIO pin.
+ * @param events The GPIO event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_gpio_event_enable(mr_driver_t *drv, mr_uint32_t pin,
+                                        mr_uint32_t events) {
+    const mr_gpio_ops_t *gp_ops;
+    mr_gpio_data_t *gp_data;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
+    MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+
+    /* Get GPIO operations and data */
+    gp_ops = (const mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
+    gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
+
+    /* Check whether pin is existed */
+    if ((pin >= 32U) || (!(gp_data->exist_mask & (1U << pin)))) {
+        return -MR_EINVAL;
+    }
+
+    /* Check whether event control is supported */
+    if (!gp_ops->event_control) {
+        return -MR_ENOSYS;
+    }
+
+    /* Enable GPIO pin events */
+    return gp_ops->event_control(drv, pin, events, MR_TRUE);
+}
+
+/**
+ * @brief This function disables GPIO pin events.
+ *
+ * @param drv The GPIO driver.
+ * @param pin The GPIO pin.
+ * @param events The GPIO event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_gpio_event_disable(mr_driver_t *drv, mr_uint32_t pin,
+                                         mr_uint32_t events) {
+    const mr_gpio_ops_t *gp_ops;
+    mr_gpio_data_t *gp_data;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_GPIO);
+    MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+
+    /* Get GPIO operations and data */
+    gp_ops = (const mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
+    gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
+
+    /* Check whether pin is existed */
+    if ((pin >= 32U) || (!(gp_data->exist_mask & (1U << pin)))) {
+        return -MR_EINVAL;
+    }
+
+    /* Check whether event control is supported */
+    if (!gp_ops->event_control) {
+        return -MR_ENOSYS;
+    }
+
+    /* Disable GPIO pin events */
+    return gp_ops->event_control(drv, pin, events, MR_FALSE);
 }
 
 /**
@@ -452,7 +523,7 @@ MR_INLINE mr_err_t mr_gpio_toggle(mr_driver_t *drv, mr_uint32_t pin) {
     MR_ASSERT(pin < 32U);
 
     /* Get GPIO operations */
-    gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
+    gp_ops = (const mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Read pin value */
     ret = gp_ops->pin_read(drv, pin, &value);
@@ -485,7 +556,7 @@ MR_INLINE mr_err_t mr_gpio_port_toggle(mr_driver_t *drv) {
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
 
     /* Get GPIO operations */
-    gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
+    gp_ops = (const mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
 
     /* Get port value */
     ret = gp_ops->port_read(drv, &mask);
@@ -555,12 +626,28 @@ typedef struct mr_ht_gpio_spec {
  * @return 0 on success, a negative error code on failure.
  */
 MR_INLINE mr_err_t mr_ht_gpio_configure(mr_ht_gpio_spec_t *spec,
-                                        mr_gpio_config_t *config) {
+                                        const mr_gpio_config_t *config) {
     /* Check parameter */
     MR_ASSERT(spec != MR_NULL);
 
     /* Configure GPIO pin */
     return mr_gpio_configure(spec->drv, spec->pin, config);
+}
+
+/**
+ * @brief This function gets a GPIO specification configuration.
+ *
+ * @param spec The GPIO specification.
+ * @param config The GPIO pin configuration.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_ht_gpio_configuration(mr_ht_gpio_spec_t *spec,
+                                            mr_gpio_config_t *config) {
+    /* Check parameter */
+    MR_ASSERT(spec != MR_NULL);
+
+    /* Get GPIO pin configuration */
+    return mr_gpio_configuration(spec->drv, spec->pin, config);
 }
 
 /**
@@ -658,6 +745,38 @@ MR_INLINE mr_err_t mr_ht_gpio_event_attach(mr_ht_gpio_spec_t *spec,
 
     /* Attach GPIO pin event */
     return mr_gpio_event_attach(spec->drv, spec->pin, entry);
+}
+
+/**
+ * @brief This function enables a GPIO specification event.
+ *
+ * @param spec The GPIO specification.
+ * @param mask The GPIO event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_ht_gpio_event_enable(mr_ht_gpio_spec_t *spec,
+                                           mr_uint32_t mask) {
+    /* Check parameter */
+    MR_ASSERT(spec != MR_NULL);
+
+    /* Enable GPIO pin event */
+    return mr_gpio_event_enable(spec->drv, spec->pin, mask);
+}
+
+/**
+ * @brief This function disables a GPIO specification event.
+ *
+ * @param spec The GPIO specification.
+ * @param mask The GPIO event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_ht_gpio_event_disable(mr_ht_gpio_spec_t *spec,
+                                            mr_uint32_t mask) {
+    /* Check parameter */
+    MR_ASSERT(spec != MR_NULL);
+
+    /* Disable GPIO pin event */
+    return mr_gpio_event_disable(spec->drv, spec->pin, mask);
 }
 
 /**

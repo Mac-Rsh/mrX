@@ -9,7 +9,7 @@
 | 功能宏   | `MR_USE_FS`（默认关闭，自动选中 `MR_USE_REF_LONG_COUNT`）                                                          |
 | 头文件   | `<mrX/fs/mr_fs_file.h>`                                                                                            |
 | 依赖模块 | [对象 Object](../kernel/object.md)、[初始化 Initcall](../kernel/initcall.md)、[动态内存 malloc](../libc/malloc.md) |
-| 参考测试 | `mrX/test/fs/`（file.c、mount.c、dir_policy.c、path_resolve.c 等）                                                 |
+| 参考测试 | `mrX/test/fs/`（file.c、file_ops.c、dentry.c、mount.c 等）                                                 |
 
 ---
 
@@ -36,7 +36,7 @@
 | 配置项                      | 类型 | 默认值 | 说明                                                                                      |
 |-----------------------------|------|--------|-------------------------------------------------------------------------------------------|
 | `MR_USE_FS`                 | bool | n      | 启用文件系统框架（`mrX/include/mrX/fs/Kconfig:6`）                                        |
-| `MR_USE_FS_MULTIUSER`       | bool | n      | 为每个调用者提供独立文件系统结构（root/cwd）；启用后平台必须实现 `mr_fs_struct_current()` |
+| `MR_USE_FS_MULTIUSER`       | bool | n      | 为每个调用者提供独立文件系统结构（root/cwd）；启用后平台必须实现 `mr_fs_struct_current()`，并确保返回的结构已通过 `mr_fs_struct_init()` 初始化 |
 | `MR_CFG_FS_PATH_LEN`        | 整型 | 260    | 绝对路径最大长度（含结尾符的推荐缓冲区大小），也是 `mr_dirent_t.name` 的尺寸              |
 | `MR_CFG_FS_INLINE_NAME_LEN` | 整型 | 8      | 目录项对象内联短名缓冲区长度；更长的名字改为堆分配。它不是文件名长度上限                  |
 
@@ -121,8 +121,7 @@ static int fs_demo(void) {
 - 路径长度（不含结尾符）必须小于 `MR_CFG_FS_PATH_LEN`，否则 `-MR_ENAMETOOLONG`。
 - 创建类操作（`mkdir`/`mknod`/`mkfifo` 的目标）不接受以 `/` 结尾 的路径，末段名字不能为空、`.` 或 `..`（`-MR_EINVAL`）。
 - `..` 不会越过当前命名空间根：`chroot` 之后 `..` 无法逃出新根。
-- 单用户模式下全局只有一份 root/cwd；`MR_USE_FS_MULTIUSER` 启用后由平台按任务 提供 `mr_fs_struct_current()`，各任务的
-  root/cwd 互不影响。
+- 单用户模式下全局只有一份 root/cwd，由 `mr_fs_file_init()` 自动调用 `mr_fs_struct_init()` 初始化。`MR_USE_FS_MULTIUSER` 启用后，这个自动初始化分支被编译掉；平台需为每个调用者提供 `mr_fs_struct_current()`，并负责让对应 `mr_fs_struct_t` 在使用前完成 `mr_fs_struct_init()`。
 
 **目录操作**
 
@@ -226,8 +225,7 @@ mr_ssize_t mr_fs_write(mr_file_t *file, const void *buf, mr_size_t size);
 mr_int64_t mr_fs_lseek(mr_file_t *file, mr_int64_t offset, int whence);
 ```
 
-`whence` 取 `MR_SEEK_SET` / `MR_SEEK_CUR` / `MR_SEEK_END`。成功返回新位置； 结果为负返回 `-MR_EINVAL`，溢出 `mr_int64_t` 返回
-`-MR_ERANGE`，位置保持不变。 FIFO 等不可定位对象由后端返回 `-MR_ESPIPE`。
+`whence` 取 `MR_SEEK_SET` / `MR_SEEK_CUR` / `MR_SEEK_END`。若后端提供 `fops->llseek`，VFS 直接调用并原样返回其结果，位置语义也由后端负责。只有在没有自定义 `llseek` 时才使用默认实现：负目标位置返回 `-MR_EINVAL`，有符号加法溢出返回 `-MR_ERANGE`，失败时 `file->pos` 保持不变。FIFO 等不可定位对象通常由后端 `llseek` 返回 `-MR_ESPIPE`。
 
 **`mr_fs_mknod`**
 
@@ -235,9 +233,7 @@ mr_int64_t mr_fs_lseek(mr_file_t *file, mr_int64_t offset, int whence);
 mr_err_t mr_fs_mknod(const char *path, mr_inode_type_t type, void *priv);
 ```
 
-`type` 为 `MR_INODE_REG`/`MR_INODE_DIR`/`MR_INODE_CHR`/`MR_INODE_BLK`/
-`MR_INODE_FIFO` 之一；`priv` 透传给文件系统的 mknod 回调 （例如 RootFS 将它保存在 inode
-上，供打开后取回）。父目录必须已存在 （`-MR_ENOENT`），同名节点已存在返回 `-MR_EEXIST`。
+`type` 为 `MR_INODE_REG`/`MR_INODE_DIR`/`MR_INODE_CHR`/`MR_INODE_BLK`/`MR_INODE_FIFO` 之一。若父 inode 实现 `mknod`，`priv` 会原样透传；若没有 `mknod` 但实现了 `create`，VFS 会退化为 `create(dir, name, type, &inode)`，此时没有 `priv` 参数，调用者不能依赖私有数据被传递。父目录必须已存在（`-MR_ENOENT`），同名节点返回 `-MR_EEXIST`。
 
 **`mr_fs_mount` / `mr_fs_umount`**
 
@@ -260,12 +256,12 @@ mr_err_t mr_fs_media_detach(const char *path);
 ```
 
 - 仅用于后端介质已经消失的异常摘除，不是通用强制卸载。
-- 将目标挂载及全部子挂载永久标记为 `OFFLINE` 并移出命名空间，打开句柄此后的 操作返回 `-MR_ENODEV`，状态不可恢复。
-- 有在途操作时本次调用返回 `-MR_EBUSY`，可用同一路径重试完成回收；该调用不 调用后端、不执行设备 I/O，最终内存清理由最后一次引用释放触发。
+- 将目标挂载及全部子挂载永久标记为 `OFFLINE` 并从可见命名空间摘除，打开句柄此后的新操作返回 `-MR_ENODEV`，状态不可恢复。
+- 有在途操作或其他不可回收状态时本次调用可返回 `-MR_EBUSY`，可用同一路径重试。OFFLINE 摘除逻辑本身不访问已消失设备；当某个 super-block 的最后引用在此过程中或之后释放时，仍会同步进入文件系统的 `unmount` 清理钩子。该钩子的公共契约要求只释放内存资源、不得访问设备且不能失败。
 
 ### 6. 完整示例
 
-示例 1：目录创建、遍历与删除（取材自 `mrX/test/fs/dir_policy.c`）：
+示例 1：目录创建、遍历与删除（取材自 `mrX/test/fs/file_ops.c`）：
 
 ```c
 static void dir_walk_demo(void) {
@@ -315,8 +311,8 @@ static void mount_demo(void) {
 }
 ```
 
-更多行为参考：打开标志与边界见 `mrX/test/fs/open_flags.c`，路径解析见
-`mrX/test/fs/path_resolve.c`，挂载/卸载与 chroot 见 `mrX/test/fs/mount.c`。
+更多行为参考：打开标志、路径解析与目录策略见
+`mrX/test/fs/file_ops.c`，挂载/卸载与 chroot 见 `mrX/test/fs/mount.c`。
 
 ### 7. 常见问题（FAQ）
 
@@ -414,16 +410,15 @@ VFS 位于路径 API 与具体文件系统之间，由五个对象层组成：
 `state`、`move_busy`（rename 串行化标志）、`flags`（挂载标志）、`op_cnt` 与
 `open_cnt`（卸载和介质摘除屏障）、`priv`。
 
-`mr_fs_struct_t`（`mrX/include/mrX/fs/mr_fs_struct.h:26`）——文件系统结构：`root` 与 `cwd`
-两个 dentry 指针。`mr_dirent_t` 与 `mr_stat_t` 是 API 层的值结构 （`mrX/include/mrX/fs/mr_fs_inode.h:44,53`）。
+`mr_fs_struct_t`（`mrX/include/mrX/fs/mr_fs_struct.h:26`）——文件系统结构：`root` 与 `cwd` 两个 dentry 指针。单用户实例由 VFS 初始化；多用户模式下平台提供 current 选择机制并负责各实例初始化。`mr_dirent_t` 与 `mr_stat_t` 是 API 层的值结构（`mrX/include/mrX/fs/mr_fs_inode.h:44,53`）。
 
 ### 10. 核心流程
 
 **路径解析（两级流水）**：`fs_lookup`（`mrX/fs/file.c:114`）先把路径复制到可写 缓冲区并固定文件系统结构快照：绝对路径从
 `fs_struct->root` 开始，否则从
 `fs_struct->cwd` 开始，同时记录解析上限 `root`。随后逐组件调用
-`mr_dentry_lookup`（`mrX/fs/dentry.c:1200`）。后者先走缓存
-`dentry_path_lookup`（`mrX/fs/dentry.c:977`）：`.`/`..` 由路径组件处理，`..`
+`mr_dentry_lookup`（`mrX/fs/dentry.c:1202`）。后者先走缓存
+`dentry_path_lookup`（`mrX/fs/dentry.c:979`）：`.`/`..` 由路径组件处理，`..`
 在 `limit`（文件系统结构根）处停住；命中 `mounted` 则进入挂载链。缓存缺失时
 `dentry_fs_lookup`（`mrX/fs/dentry.c`）调用父目录 inode 的 `ops->lookup` 回填。 lookup 填出的 dentry
 把创建引用交给这次查找，树不钉死它；句柄、cwd、未走完的 路径或其子节点仍持有引用时留在树上，最后一次 `put`
@@ -431,7 +426,7 @@ VFS 位于路径 API 与具体文件系统之间，由五个对象层组成：
 
 **挂载**：`mr_fs_mount_root`/`mr_fs_mount` 汇合到 `fs_mount_dentry`
 （`mrX/fs/file.c:228`）：查重（已挂载 `-MR_EBUSY`）、校验挂载点为目录，然后
-`mr_sblock_create`（`mrX/fs/sblock.c:114`）分配超级块并调用文件系统的
+`mr_sblock_create`（`mrX/fs/sblock.c:113`）分配超级块并调用文件系统的
 `mount` 回调填充 `sb->root`（必须是目录 inode）；mount 回调失败由后端自行清理， mount 成功但根 inode 校验失败则调用
 `unmount` 收尾。子挂载新建一个与挂载点同名的"已挂载根"dentry 并绑 定根 inode；全局根则原位绑定（`mrX/fs/file.c:288`）。
 `mr_sblock_attach`
@@ -444,9 +439,7 @@ VFS 位于路径 API 与具体文件系统之间，由五个对象层组成：
 的创建引用。最后一个超级块引用释放时才调用无 I/O、无失败的后端
 `unmount` 回调释放内存资源，不存在准备、回滚或可失败的卸载事务。
 
-**介质移除**：`mr_fs_media_detach` 把目标及全部子挂载永久标记为 `OFFLINE`，阻止新操作并让旧句柄返回 `-MR_ENODEV`；随后按
-leaf-first 顺序摘除空闲挂载。打开句柄不会阻止异常摘除，但在途操作会让本次调用返回 `-MR_EBUSY`
-，调用者可用同一路径重试完成回收。该路径不调用后端、不执行设备 I/O，最终内存清理仍由最后一次引用释放触发。
+**介质移除**：`mr_fs_media_detach` 把目标及全部子挂载永久标记为 `OFFLINE`，阻止新操作并让旧句柄的新操作返回 `-MR_ENODEV`；随后按 leaf-first 顺序尝试回收。OFFLINE 状态下 `open_cnt` 不阻止 detach，但 `op_cnt`、move 或子挂载关系仍可能让回收返回 `-MR_EBUSY`，调用者可重试。摘除阶段不会再执行设备 I/O；super-block 最后引用释放时仍会调用 `unmount`，因此文件系统实现必须遵守“只做内存清理、设备可能已经离线、不得失败”的契约。
 
 **节点创建**：`fs_create_node_op`（`mrX/fs/file.c:642`）采用"先占位、后提交"：先 在父目录下预留 dentry（`mr_dentry_add`），再调用后端
 `create`/`mknod` 生成 inode，校验类型并将超级块引用转移给 inode，最后 `mr_dentry_instantiate` 提交 绑定；任一步失败回滚预留。
@@ -472,7 +465,7 @@ leaf-first 顺序摘除空闲挂载。打开句柄不会阻止异常摘除，但
   `dentry->upper`；`fs_rename_dentry` 同样在锁内 固定源父目录后再做目录类型与 `-MR_EXDEV` 校验。
 - `fs_purge_children` 遇到无法删除的子项（处于 `MOVING`/`UNLINKING`）会立即停止 遍历而不是反复重试同一子项，剩余对象由引用计数保活直到释放。
 - API 设计为线程上下文调用；文件系统结构锁临界区内禁止阻塞或调用文件系统实现回调 （
-  `mrX/include/mrX/fs/mr_fs_struct.h:34-39` 的约定）。
+  `mrX/include/mrX/fs/mr_fs_struct.h:59-66` 的约定）。
 
 ### 12. 扩展与派生
 
@@ -498,14 +491,14 @@ dentry 的 `ops->hash`/`ops->compare` 可用于大小写不敏感等名字策略
 | `mrX/include/mrX/fs/mr_fs_system.h` / `mr_fs_struct.h` / `mr_fs_sblock.h` / `mr_fs_dentry.h` / `mr_fs_inode.h` | 各层数据结构与内部接口                                          |
 | `mrX/fs/system.c:18`                                                                                           | 文件系统注册与按名查找                                          |
 | `mrX/fs/struct.c:15`                                                                                           | 全局根 dentry、文件系统结构锁、root/cwd 获取                    |
-| `mrX/fs/dentry.c:977` / `:1052` / `:1200`                                                                      | 缓存步进解析 / 缺失回填 / 解析入口                              |
-| `mrX/fs/dentry.c:294` / `:402` / `:718` / `:750` / `:803`                                                      | dentry 删除/加入/移动/重命名/摘除                               |
+| `mrX/fs/dentry.c:979` / `:1054` / `:1202`                                                                      | 缓存步进解析 / 缺失回填 / 解析入口                              |
+| `mrX/fs/dentry.c:296` / `:404` / `:720` / `:752` / `:805`                                                      | dentry 删除/加入/移动/重命名/摘除                               |
 | `mrX/fs/sblock.c:46` / `:195` / `:305` / `:560`                                                                | 超级块初始化/挂载/卸载/最后引用释放（unmount 钩子）             |
 | `mrX/fs/inode.c:39` / `:52` / `:76`                                                                            | inode 静态初始化/动态创建/释放（destroy 钩子）                  |
 | `mrX/fs/file.c:114` / `:228` / `:642` / `:901` / `:983`                                                        | 路径解析与挂载/节点创建/打开/打开校验                           |
 | `mrX/fs/file.c:1897`                                                                                           | `mr_fs_file_init`：单用户文件系统结构初始化入口                 |
 | `mrX/kernel/initcall.c:31`                                                                                     | 内核初始化序列中的 FS 初始化调用点                              |
-| `mrX/test/fs/`                                                                                                 | 按主题划分的行为级测试（file/mount/dir_policy/path_resolve 等） |
+| `mrX/test/fs/`                                                                                                 | 按主题划分的行为级测试（file/file_ops/dentry/mount/concurrency/ramfs/rootfs 等） |
 
 ### 14. 附录
 

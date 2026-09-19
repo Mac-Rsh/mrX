@@ -1,14 +1,14 @@
 # 入口（Entry）
 
-> 入口模块为内核提供标准化的启动接线：在用户 `main` 之前自动完成内核初始化，
-> 使"上电即有内核服务"成为默认行为，应用代码无需关心启动顺序。
+> 入口模块把工具链/板级入口接到 `mr_kernel_init()`：在用户 `main` 之前完成内核级初始化。
+> 用户 `MR_INIT_EXPORT` 项仍由 `mr_user_init()` 执行，不属于 Entry 自动阶段。
 
 | 项       | 说明                                                                                         |
 |----------|----------------------------------------------------------------------------------------------|
 | 功能宏   | `MR_USE_ENTRY`（默认关闭，`mrX/include/mrX/kernel/Kconfig:6`）                               |
-| 头文件   | 无独立头文件（对外接口为 `<mrX/kernel/mr_initcall.h>` 的 `mr_kernel_init` / `mr_user_init`） |
+| 头文件   | 无独立头文件；`mr_kernel_init` / `mr_user_init` 声明于 `<mrX/kernel/mr_initcall.h>`，`mr_entry` 当前没有公共声明 |
 | 依赖模块 | [初始化调用 Initcall](initcall.md)（启动序列的执行者）                                       |
-| 参考测试 | 无独立测试文件（宿主应用入口见工作区根 `user/main.c`，调用点 `user/main.c:836`）             |
+| 参考测试 | 无独立测试文件（宿主应用入口见工作区根 `user/main.c`，调用点 `user/main.c:1251`）             |
 
 ---
 
@@ -16,16 +16,14 @@
 
 ### 1. 模块概述
 
-入口模块解决的问题是： **内核服务的初始化应该在应用代码运行前自动完成**。启用
-`MR_USE_ENTRY` 后，内核在工具链的入口机制上"抢先"执行启动序列，再交还控制权给 用户 `main`；未启用时，应用需在 `main`
-中自行调用初始化接口。
+入口模块解决的问题是：**把 `mr_kernel_init()` 接到用户 `main` 之前**。启用 `MR_USE_ENTRY` 后，Entry 先执行内核初始化，再进入用户 `main`；它不会执行 `mr_user_init()` 的用户 initcall 遍历。未启用时，应用或启动代码需要自行决定何时调用 `mr_kernel_init()` / `mr_user_init()`。
 
 特性：
 
 - 对 ARMCC（`__ARMCC_VERSION`）通过 `$Sub$$main` / `$Super$$main` 自动包裹用户
   `main`，应用零改动。
 - 对其他工具链提供 `mr_entry()` 函数，由板级启动代码在跳转 `main` 前调用。
-- 宿主模拟环境（如本仓库的 x64 主机框架）`main` 即真实入口，由它在 `main` 开头 调用 `mr_user_init` 达到相同效果。
+- 手工入口场景可以在真实 `main` 中调用 `mr_user_init()`；该函数会先补做 `mr_kernel_init()`，再执行用户 initcall。
 
 适用场景：目标板固件（希望内核服务先于应用就绪）、需要统一启动流程的产品工程。 不适用于：完全不用内核服务的纯应用（保持
 `MR_USE_ENTRY` 关闭即可，不引入任何 启动开销）。
@@ -53,7 +51,7 @@
  * For other toolchains, call mr_entry() from the board startup code
  * before jumping to main. */
 int main(void) {
-    /* Kernel services (heap, timer, irq, ...) are ready here */
+    /* mr_kernel_init() has run; user MR_INIT_EXPORT entries have not. */
     return 0;
 }
 ```
@@ -84,10 +82,11 @@ int main(void) {
 
 | 操作                                            | 行为                                                                   |
 |-------------------------------------------------|------------------------------------------------------------------------|
-| `mr_entry()` 重复调用                           | 内核初始化幂等（由 [初始化调用 Initcall](initcall.md) 保证），无副作用 |
-| 未启用 `MR_USE_ENTRY` 且不手工初始化            | 内核服务不可用（堆、定时器等未就绪）                                   |
-| `main` 中再调 `mr_user_init` / `mr_kernel_init` | 安全，幂等                                                             |
-| 启用 `MR_USE_ENTRY` 后 `main` 返回              | 内核不接管 `main` 返回后的行为，与无内核时一致                         |
+| `mr_entry()` 重复调用                           | 每次都会再次调用 `main()`；只有其中的 `mr_kernel_init()` 有状态短路 |
+| 未启用 `MR_USE_ENTRY` 且不手工初始化            | 不会自动执行 `mr_kernel_init()`；依赖显式初始化的服务不会被启动       |
+| `main` 中再调 `mr_kernel_init`                  | 已初始化时直接返回（启动期单线程假设）                                |
+| `main` 中调用 `mr_user_init`                    | 先确保 kernel init，再且仅一次遍历用户 initcall                       |
+| `main` 返回                                     | `$Sub$$main` / `mr_entry` 都忽略真实 `main` 返回值并返回 0             |
 
 **与初始化调用的分工**：入口模块只负责"在正确时机点火"；启动内容（内核服务顺序、
 `MR_INIT_EXPORT` 导出的应用初始化）由 [初始化调用 Initcall](initcall.md) 定义。
@@ -98,9 +97,9 @@ int main(void) {
 
 | API              | 说明                                                                               |
 |------------------|------------------------------------------------------------------------------------|
-| `mr_entry`       | 内核入口函数：执行内核启动后调用用户 `main`（非 ARMCC 工具链，由板级启动代码调用） |
-| `mr_kernel_init` | 执行内核初始化序列（被 `mr_entry` 调用）                                           |
-| `mr_user_init`   | 执行内核初始化与全部 initcall（宿主/手工路径使用）                                 |
+| `mr_entry`       | 非 ARMCC 分支定义的入口符号：执行 kernel init 后调用 `main`；当前无公共头文件声明 |
+| `mr_kernel_init` | 执行内核初始化序列（被 Entry 调用）                                               |
+| `mr_user_init`   | 先执行/确认 kernel init，再遍历链接区中的全部 initcall                            |
 
 **`mr_entry`**
 
@@ -109,10 +108,8 @@ int mr_entry(void);
 ```
 
 - 无参数。
-- 行为：执行内核启动（`mr_kernel_init`），随后调用用户 `main` 并返回其结果语境下的
-  `0`（`mrX/kernel/entry.c:31-38`）。
-- 注意：仅在启用 `MR_USE_ENTRY` 且工具链非 ARMCC 时存在；ARMCC 工具链改用
-  `$Sub$$main` 包裹，无需（也不应）调用 `mr_entry`。
+- 行为：调用 `mr_kernel_init()`，随后调用用户 `main()`，忽略 `main` 的返回值并固定返回 0。
+- 注意：仅在启用 `MR_USE_ENTRY` 且工具链非 ARMCC 时定义；当前公共头文件没有声明该符号，属于启动接线接口而不是普通应用 API。ARMCC 分支改用 `$Sub$$main`。
 
 **`mr_kernel_init` / `mr_user_init`**
 
@@ -120,7 +117,7 @@ int mr_entry(void);
 
 ### 6. 完整示例
 
-示例 1：宿主模拟环境的完整启动（取自工作区根 `user/main.c` 的实际结构，`user/main.c:833-844`）：
+示例 1：宿主模拟环境的完整启动（取自工作区根 `user/main.c` 的实际结构，`user/main.c:1248-1267`）：
 
 ```c
 #include <stdlib.h>
@@ -130,20 +127,29 @@ int main(void) {
     int ret;
 
     mr_user_init();     /* Kernel init + all MR_INIT_EXPORT initcalls */
-
+    ret = 0;
+#if defined(MR_USE_DRIVER_DMA)
+    ret = demo_dma_run();
+#endif /* defined(MR_USE_DRIVER_DMA) */
 #if defined(MR_USE_MODULE_RPC)
-    ret = demo_rpc_run();       /* Application body */
+    if (ret == 0) {
+        ret = demo_rpc_run();
+    }
 #else
+#if !defined(MR_USE_DRIVER_DMA)
+    mr_printf("RPC is disabled
+");
     ret = 1;
+#endif /* !defined(MR_USE_DRIVER_DMA) */
 #endif /* defined(MR_USE_MODULE_RPC) */
     exit(ret);
 }
 ```
 
-宿主入口是完整应用入口，而不是测试专用入口：`mr_user_init()` 之后由应用自己决定做什么， 这份示例工程跑的是 RPC
-回环演示。启用测试框架时，测试用例通过 `MR_INIT_EXPORT` 或应用 自己调用测试运行入口执行，与入口模块无关。
+宿主入口是完整应用入口，而不是测试专用入口：`mr_user_init()` 之后由应用自己决定做什么， 这份示例工程按配置运行
+DMA 与 RPC 演示。启用测试框架时，测试用例通过 `MR_INIT_EXPORT` 或应用 自己调用测试运行入口执行，与入口模块无关。
 
-示例 2：配合自动初始化的目标板应用（启用 `MR_USE_ENTRY`，应用只写业务）：
+示例 2：Entry 自动完成 kernel init 后，在 `main` 中显式执行用户 initcall：
 
 ```c
 #include <mrX/kernel/mr_initcall.h>
@@ -155,7 +161,9 @@ static void app_init(void) {
 MR_INIT_EXPORT(app_init, MR_INIT_LEVEL_USER("0"));
 
 int main(void) {
-    /* Kernel and app_init are already done here (ARMCC path) */
+    /* Entry has already called mr_kernel_init(). */
+    mr_user_init();     /* Executes app_init and other exported initcalls once. */
+
     for (;;) {
         /* Main loop */
     }
@@ -167,9 +175,7 @@ int main(void) {
 
 **Q：启用 `MR_USE_ENTRY` 后 `main` 里还要调 `mr_user_init` 吗？**
 
-ARMCC 目标板不需要（`$Sub$$main` 已在 `main` 前完成启动）；其他工具链取决于板级 启动代码是否调用了 `mr_entry`；宿主模拟环境的
-`main` 即真实入口，需要按
-`user/main.c` 的方式手工调用。
+如果应用需要执行 `MR_INIT_EXPORT` 的用户 initcall，仍然需要某处调用 `mr_user_init()`。`$Sub$$main` / `mr_entry` 只调用 `mr_kernel_init()`；它们并不会替你运行用户 initcall。
 
 **Q：不启用 `MR_USE_ENTRY` 会缺什么？**
 
@@ -178,8 +184,7 @@ ARMCC 目标板不需要（`$Sub$$main` 已在 `main` 前完成启动）；其�
 
 **Q：`mr_entry` 和 `mr_user_init` 是什么关系？**
 
-`mr_entry` 面向工具链入口机制（启动代码/入口包裹调用），内部执行内核启动后转入
-`main`；`mr_user_init` 面向已进入 `main` 之后的场景。二者都最终触发同一条幂等的 内核初始化序列。
+`mr_entry` 面向非 ARMCC 的启动接线：先 kernel init，再直接调用 `main`。`mr_user_init` 则先确保 kernel init，然后遍历 initcall 链接区。二者共享 `mr_kernel_init()`，但只有后者执行用户 initcall。
 
 **Q：`main` 之前的启动代码里能调用内核 API 吗？**
 
@@ -221,7 +226,7 @@ ARMCC 目标板不需要（`$Sub$$main` 已在 `main` 前完成启动）；其�
   `main` 前调用；`entry()` 只执行 `mr_kernel_init()`，随后由 `main` 决定是否继续
   `mr_user_init` 跑应用 initcall。
 - 宿主模拟（本仓库）不使用工具链包裹，`main` 开头调用 `mr_user_init`
-  （`user/main.c:836`），等价于"入口 + 用户初始化"一步完成。
+  （`user/main.c:1251`），等价于"入口 + 用户初始化"一步完成。
 
 ### 9. 数据结构
 
@@ -247,8 +252,8 @@ ARMCC 目标板不需要（`$Sub$$main` 已在 `main` 前完成启动）；其�
 
 ### 11. 并发与中断安全
 
-- 入口函数设计为单线程启动前提下的最早执行点，只做一次幂等的内核初始化调用， 与中断无交互。
-- `mr_entry` / `$Sub$$main` 均不可重入语义：应在启动上下文调用且仅调用一次 （重复调用因初始化幂等而无害，但没有意义）。
+- Entry 设计基于启动阶段的单执行流假设。`mr_kernel_init` 的状态只是 `volatile mr_bool_t`，不是并发一次性初始化原语。
+- `mr_entry` / `$Sub$$main` 都应只作为一次启动入口使用。重复调用 `mr_entry` 虽然不会重复 kernel init，但会再次进入用户 `main()`，不能描述为“无副作用”。
 - 启动完成后的并发安全性由被调用的内核模块自身保证，与本模块无关。
 
 ### 12. 扩展与派生
@@ -263,7 +268,7 @@ ARMCC 目标板不需要（`$Sub$$main` 已在 `main` 前完成启动）；其�
 `MR_INIT_EXPORT(_entry, _level)`（`mr_initcall.h:45`）挂接、由
 `mr_user_init` 遍历（`initcall.c:92-98`），级别常量见 `mr_initcall.h:24-28`（用例
 `mrX/test/kernel/initcall.c:34`）。宿主/手工路径即在 `main` 中直接调用
-`mr_user_init`（`user/main.c:836`）。
+`mr_user_init`（`user/main.c:1251`）。
 
 ### 13. 源码导读
 
@@ -275,7 +280,7 @@ ARMCC 目标板不需要（`$Sub$$main` 已在 `main` 前完成启动）；其�
 | `mrX/kernel/entry.c:19-28`         | ARMCC `$Sub$$main` 自动包裹分支          |
 | `mrX/kernel/entry.c:30-38`         | 非 ARMCC `mr_entry()` 分支               |
 | `mrX/kernel/initcall.c:35`         | `mr_kernel_init`：实际启动序列           |
-| `user/main.c:836`                  | 宿主模拟的手工启动调用点（工作区根目录） |
+| `user/main.c:1251`                  | 宿主模拟的手工启动调用点（工作区根目录） |
 
 ### 14. 附录
 
@@ -286,4 +291,4 @@ ARMCC 目标板不需要（`$Sub$$main` 已在 `main` 前完成启动）；其�
 | `MR_USE_ENTRY`    | 模块开关，默认 n；启用后 `entry.c` 提供自动启动接线          |
 | `__ARMCC_VERSION` | 工具链探测宏（编译器预定义），选择包裹分支或 `mr_entry` 分支 |
 
-**错误码**：本模块无返回值语义（`mr_entry` 恒以 `0` 收尾进入/转出 `main`）， 启动失败路径表现为被调用模块的错误码或断言。
+**返回值**：`mr_entry` 与 `$Sub$$main` 都固定返回 0，并不会传播用户 `main()` 的返回值。`mr_kernel_init` / `mr_user_init` 为 `void`，内核初始化子步骤也没有通过 Entry 聚合错误码。

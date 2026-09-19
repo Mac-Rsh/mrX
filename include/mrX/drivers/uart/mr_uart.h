@@ -25,18 +25,19 @@ extern "C" {
 
 #if defined(MR_USE_DRIVER_UART)
 /* UART wait event type definition */
-#define MR_UART_WAIT_RX_STREAM_HALF     (1U << 0)
-#define MR_UART_WAIT_RX_STREAM_FULL     (1U << 1)
-#define MR_UART_WAIT_RX_IDLE            (1U << 2)
-#define MR_UART_WAIT_TX_STREAM_HALF     (1U << 3)
-#define MR_UART_WAIT_TX_STREAM_FULL     (1U << 4)
-#define MR_UART_WAIT_TX_COMPLETE        (1U << 5)
-#define MR_UART_WAIT_RX_ERROR           (1U << 6)
-#define MR_UART_WAIT_TX_ERROR           (1U << 7)
+#define MR_UART_WAIT_RX_IDLE            (1U << 0)
+#define MR_UART_WAIT_RX_READY           (1U << 1)
+#define MR_UART_WAIT_TX_DONE            (1U << 2)
+#define MR_UART_WAIT_RX_ERROR           (1U << 3)
+#define MR_UART_WAIT_TX_ERROR           (1U << 4)
+#define MR_UART_WAIT_RX_STREAM_HALF     (1U << 5)
+#define MR_UART_WAIT_RX_STREAM_FULL     (1U << 6)
+#define MR_UART_WAIT_TX_STREAM_HALF     (1U << 7)
+#define MR_UART_WAIT_TX_STREAM_DONE     (1U << 8)
 
 /* UART data bits definition */
 typedef enum mr_uart_data_bits {
-    MR_UART_DATA_BITS_5 = 5,
+    MR_UART_DATA_BITS_5,
     MR_UART_DATA_BITS_6,
     MR_UART_DATA_BITS_7,
     MR_UART_DATA_BITS_8,
@@ -58,20 +59,40 @@ typedef enum mr_uart_parity {
 
 /* UART flow control definition */
 typedef enum mr_uart_flow_control {
-    MR_UART_FLOW_CONTROL_NONE,
-    MR_UART_FLOW_CONTROL_RTS,
-    MR_UART_FLOW_CONTROL_CTS,
-    MR_UART_FLOW_CONTROL_RTS_CTS,
+    MR_UART_FLOW_CTRL_NONE,
+    MR_UART_FLOW_CTRL_RTS,
+    MR_UART_FLOW_CTRL_CTS,
+    MR_UART_FLOW_CTRL_RTS_CTS,
 } mr_uart_flow_control_t;
+
+/* UART mode definition */
+typedef enum mr_uart_mode {
+    MR_UART_MODE_RX,
+    MR_UART_MODE_TX,
+    MR_UART_MODE_TX_RX,
+} mr_uart_mode_t;
 
 /* UART configuration type */
 typedef struct mr_uart_config {
     mr_uint32_t baud_rate;
-    mr_uint8_t data_bits;
-    mr_uint8_t stop_bits;
-    mr_uint8_t parity;
-    mr_uint8_t flow_control;
+    mr_uint8_t data_bits: 2;
+    mr_uint8_t stop_bits: 2;
+    mr_uint8_t parity: 2;
+    mr_uint8_t flow_ctrl: 2;
+    mr_uint8_t mode: 2;
 } mr_uart_config_t;
+
+#if defined(MR_USE_DRIVER_UART_STREAM)
+/* UART RX stream configuration type */
+typedef struct mr_uart_rx_stream_config {
+    mr_bool_t circular;
+} mr_uart_rx_stream_config_t;
+
+/* UART TX stream configuration type */
+typedef struct mr_uart_tx_stream_config {
+    mr_bool_t circular;
+} mr_uart_tx_stream_config_t;
+#endif /* defined(MR_USE_DRIVER_UART_STREAM) */
 
 /* UART data type */
 MR_DRIVER_CLAZZES_EXPORT(uart);
@@ -89,16 +110,20 @@ typedef struct mr_uart_ops {
                         mr_size_t size);
 #if defined(MR_USE_DRIVER_UART_STREAM)
     mr_err_t (*rx_stream_start)(const mr_driver_t *drv, void *buf,
-                                mr_size_t size, mr_bool_t circular);
+                                mr_size_t size,
+                                const mr_uart_rx_stream_config_t *config);
     mr_err_t (*rx_stream_stop)(const mr_driver_t *drv);
     mr_err_t (*rx_stream_is_busy)(const mr_driver_t *drv, mr_bool_t *busy);
     mr_err_t (*rx_stream_offset)(const mr_driver_t *drv, mr_size_t *offset);
     mr_err_t (*tx_stream_start)(const mr_driver_t *drv, const void *buf,
-                                mr_size_t size, mr_bool_t circular);
+                                mr_size_t size,
+                                const mr_uart_tx_stream_config_t *config);
     mr_err_t (*tx_stream_stop)(const mr_driver_t *drv);
     mr_err_t (*tx_stream_is_busy)(const mr_driver_t *drv, mr_bool_t *busy);
     mr_err_t (*tx_stream_offset)(const mr_driver_t *drv, mr_size_t *offset);
 #endif /* defined(MR_USE_DRIVER_UART_STREAM) */
+    mr_err_t (*event_control)(const mr_driver_t *drv, mr_uint32_t events,
+                              mr_bool_t enable);
 } mr_uart_ops_t;
 
 /**
@@ -176,7 +201,7 @@ MR_INLINE mr_driver_t *mr_uart_create(mr_uart_data_t *data, void *priv,
  */
 MR_INLINE mr_err_t mr_uart_del(mr_driver_t *drv) {
     /* Check parameter */
-    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_UART);
+    MR_DRIVER_ASSERT_TYPE(drv, MR_DRIVER_TYPE_UART);
 
     /* Delete driver */
     return mr_driver_del(drv);
@@ -297,11 +322,12 @@ MR_INLINE mr_ssize_t mr_uart_getchar(mr_driver_t *drv, mr_uint8_t *ch) {
  * @param drv The UART driver.
  * @param buf The RX buffer.
  * @param size The buffer size in bytes.
- * @param circular The circular mode.
+ * @param config The UART stream configuration.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_uart_rx_stream_start(mr_driver_t *drv, void *buf,
-                                           mr_size_t size, mr_bool_t circular) {
+MR_INLINE mr_err_t
+    mr_uart_rx_stream_start(mr_driver_t *drv, void *buf, mr_size_t size,
+                            const mr_uart_rx_stream_config_t *config) {
     const mr_uart_ops_t *ua_ops;
 
     /* Check parameter */
@@ -313,14 +339,13 @@ MR_INLINE mr_err_t mr_uart_rx_stream_start(mr_driver_t *drv, void *buf,
     /* Get UART operations */
     ua_ops = (const mr_uart_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if stream operations are supported */
-    if ((!ua_ops->rx_stream_start) || (!ua_ops->rx_stream_stop)
-        || (!ua_ops->rx_stream_is_busy) || (!ua_ops->rx_stream_offset)) {
+    /* Check whether operation is supported */
+    if (!ua_ops->rx_stream_start) {
         return -MR_ENOSYS;
     }
 
     /* Start UART stream */
-    return ua_ops->rx_stream_start(drv, buf, size, circular);
+    return ua_ops->rx_stream_start(drv, buf, size, config);
 }
 
 /**
@@ -342,7 +367,7 @@ MR_INLINE mr_err_t mr_uart_rx_stream_is_busy(mr_driver_t *drv,
     /* Get UART operations */
     ua_ops = (const mr_uart_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!ua_ops->rx_stream_is_busy) {
         return -MR_ENOSYS;
     }
@@ -367,7 +392,7 @@ MR_INLINE mr_err_t mr_uart_rx_stream_stop(mr_driver_t *drv) {
     /* Get UART operations */
     ua_ops = (const mr_uart_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!ua_ops->rx_stream_stop) {
         return -MR_ENOSYS;
     }
@@ -395,7 +420,7 @@ MR_INLINE mr_err_t mr_uart_rx_stream_offset(mr_driver_t *drv,
     /* Get UART operations */
     ua_ops = (const mr_uart_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!ua_ops->rx_stream_offset) {
         return -MR_ENOSYS;
     }
@@ -410,11 +435,12 @@ MR_INLINE mr_err_t mr_uart_rx_stream_offset(mr_driver_t *drv,
  * @param drv The UART driver.
  * @param buf The TX buffer.
  * @param size The buffer size in bytes.
- * @param circular The circular mode.
+ * @param config The UART stream configuration.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_uart_tx_stream_start(mr_driver_t *drv, const void *buf,
-                                           mr_size_t size, mr_bool_t circular) {
+MR_INLINE mr_err_t
+    mr_uart_tx_stream_start(mr_driver_t *drv, const void *buf, mr_size_t size,
+                            const mr_uart_tx_stream_config_t *config) {
     const mr_uart_ops_t *ua_ops;
 
     /* Check parameter */
@@ -426,14 +452,13 @@ MR_INLINE mr_err_t mr_uart_tx_stream_start(mr_driver_t *drv, const void *buf,
     /* Get UART operations */
     ua_ops = (const mr_uart_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if stream operations are supported */
-    if ((!ua_ops->tx_stream_start) || (!ua_ops->tx_stream_stop)
-        || (!ua_ops->tx_stream_is_busy) || (!ua_ops->tx_stream_offset)) {
+    /* Check whether operation is supported */
+    if (!ua_ops->tx_stream_start) {
         return -MR_ENOSYS;
     }
 
     /* Start UART stream */
-    return ua_ops->tx_stream_start(drv, buf, size, circular);
+    return ua_ops->tx_stream_start(drv, buf, size, config);
 }
 
 /**
@@ -455,7 +480,7 @@ MR_INLINE mr_err_t mr_uart_tx_stream_is_busy(mr_driver_t *drv,
     /* Get UART operations */
     ua_ops = (const mr_uart_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!ua_ops->tx_stream_is_busy) {
         return -MR_ENOSYS;
     }
@@ -480,7 +505,7 @@ MR_INLINE mr_err_t mr_uart_tx_stream_stop(mr_driver_t *drv) {
     /* Get UART operations */
     ua_ops = (const mr_uart_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!ua_ops->tx_stream_stop) {
         return -MR_ENOSYS;
     }
@@ -508,7 +533,7 @@ MR_INLINE mr_err_t mr_uart_tx_stream_offset(mr_driver_t *drv,
     /* Get UART operations */
     ua_ops = (const mr_uart_ops_t *)MR_DRIVER_OPS(drv);
 
-    /* Check if operation is supported */
+    /* Check whether operation is supported */
     if (!ua_ops->tx_stream_offset) {
         return -MR_ENOSYS;
     }
@@ -517,6 +542,58 @@ MR_INLINE mr_err_t mr_uart_tx_stream_offset(mr_driver_t *drv,
     return ua_ops->tx_stream_offset(drv, offset);
 }
 #endif /* defined(MR_USE_DRIVER_UART_STREAM) */
+
+/**
+ * @brief This function enables UART events.
+ *
+ * @param drv The UART driver.
+ * @param events The UART event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_uart_event_enable(mr_driver_t *drv, mr_uint32_t events) {
+    const mr_uart_ops_t *ua_ops;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_UART);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+
+    /* Get UART operations */
+    ua_ops = (const mr_uart_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Check whether event control is supported */
+    if (!ua_ops->event_control) {
+        return -MR_ENOSYS;
+    }
+
+    /* Enable UART events */
+    return ua_ops->event_control(drv, events, MR_TRUE);
+}
+
+/**
+ * @brief This function disables UART events.
+ *
+ * @param drv The UART driver.
+ * @param events The UART event mask.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_uart_event_disable(mr_driver_t *drv, mr_uint32_t events) {
+    const mr_uart_ops_t *ua_ops;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_UART);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+
+    /* Get UART operations */
+    ua_ops = (const mr_uart_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Check whether event control is supported */
+    if (!ua_ops->event_control) {
+        return -MR_ENOSYS;
+    }
+
+    /* Disable UART events */
+    return ua_ops->event_control(drv, events, MR_FALSE);
+}
 
 /**
  * @brief This function attaches a UART event.
@@ -547,8 +624,7 @@ MR_INLINE mr_err_t mr_uart_event_attach(mr_driver_t *drv, mr_waiter_t *entry) {
  * @param events The UART events.
  * @return 0 on success, a negative error code on failure.
  */
-MR_INLINE mr_err_t mr_uart_event_raise(mr_driver_t *drv,
-                                       mr_wait_event_t events) {
+MR_INLINE mr_err_t mr_uart_event_raise(mr_driver_t *drv, mr_uint32_t events) {
     mr_uart_data_t *ua_data;
 
     /* Check parameter */
@@ -559,7 +635,7 @@ MR_INLINE mr_err_t mr_uart_event_raise(mr_driver_t *drv,
     ua_data = (mr_uart_data_t *)MR_DRIVER_DATA(drv);
 
     /* Raise UART events */
-    return mr_waitable_raise(&ua_data->event, events, MR_NULL);
+    return mr_waitable_raise(&ua_data->event, (mr_wait_event_t)events, MR_NULL);
 }
 
 /**

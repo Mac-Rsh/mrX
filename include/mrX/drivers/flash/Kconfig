@@ -1,0 +1,14 @@
+menu "FLASH: Flash memory"
+
+# ==================================
+# FLASH
+# ==================================
+config MR_USE_DRIVER_FLASH
+    depends on MR_USE_DRIVER
+    bool "Use flash memory"
+    default n
+    help
+        Enable the flash memory driver framework.
+        Platform backends provide internal or external flash operations.
+
+endmenu

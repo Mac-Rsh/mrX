@@ -17,7 +17,7 @@ static void dac_release(const mr_driver_t *drv);
 MR_DRIVER_CLAZZES_DEFINE(dac, dac_init, dac_deinit, dac_release);
 
 mr_err_t mr_dac_configure(mr_driver_t *drv, mr_uint32_t channel,
-                          mr_dac_config_t *config) {
+                          const mr_dac_config_t *config) {
     const mr_dac_ops_t *da_ops;
     mr_dac_data_t *da_data;
 
@@ -27,12 +27,12 @@ mr_err_t mr_dac_configure(mr_driver_t *drv, mr_uint32_t channel,
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT(config != MR_NULL);
 
-    /* Get DAC data and operations */
+    /* Get DAC operations and data */
+    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
     da_data = (mr_dac_data_t *)MR_DRIVER_DATA(drv);
-    da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(da_ops->channel_configure != MR_NULL);
 
-    /* Check if channel is existed */
+    /* Check whether channel exists */
     if ((channel >= 32U) || (!(da_data->exist_mask & (1U << channel)))) {
         return -MR_EINVAL;
     }
@@ -52,12 +52,12 @@ mr_err_t mr_dac_configuration(mr_driver_t *drv, mr_uint32_t channel,
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT(config != MR_NULL);
 
-    /* Get DAC data and operations */
+    /* Get DAC operations and data */
+    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
     da_data = (mr_dac_data_t *)MR_DRIVER_DATA(drv);
-    da_ops = (mr_dac_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(da_ops->channel_configuration != MR_NULL);
 
-    /* Check if channel is existed */
+    /* Check whether channel exists */
     if ((channel >= 32U) || (!(da_data->exist_mask & (1U << channel)))) {
         return -MR_EINVAL;
     }
@@ -85,28 +85,30 @@ static mr_err_t dac_init(const mr_driver_t *drv) {
 }
 
 static mr_err_t dac_deinit(const mr_driver_t *drv) {
+    const mr_dac_ops_t *da_ops;
     mr_dac_data_t *da_data;
 #if defined(MR_USE_DRIVER_DAC_STREAM)
-    const mr_dac_ops_t *da_ops;
     mr_err_t ret;
 #endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 
     /* Check parameter */
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
 
-    /* Get DAC data */
+    /* Get DAC operations and data */
+    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
     da_data = (mr_dac_data_t *)MR_DRIVER_DATA(drv);
 
 #if defined(MR_USE_DRIVER_DAC_STREAM)
-    /* Stop the stream before deleting the event */
-    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
-    da_ops = (const mr_dac_ops_t *)MR_DRIVER_OPS(drv);
+    /* Stop the stream */
     if (da_ops->stream_stop) {
         ret = da_ops->stream_stop(drv);
-        if (ret != 0) {
+        if ((ret != 0) && (!MR_DRIVER_IS_DYING(drv))) {
             return ret;
         }
     }
+#else
+    MR_IGNORE(da_ops);
 #endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 
     /* Deinit DAC event */

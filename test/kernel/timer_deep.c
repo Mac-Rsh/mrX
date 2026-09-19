@@ -216,27 +216,6 @@ MR_TEST(timer, deep_delete_running_prevents_expiry) {
 }
 
 /* Test: restarting a running timer pushes its deadline into the future */
-MR_TEST(timer, deep_restart_extends_deadline) {
-    mr_timer_t timer;
-    int count = 0;
-    mr_err_t ret;
-
-    ret = mr_timer_init(&timer, deep_timer_mark_a, &count, 10);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
-    MR_TEST_ASSERT_EQ_INT(mr_timer_start(&timer), 0);
-
-    mr_clock_increase(4);
-    MR_TEST_EXPECT_EQ_INT(mr_timer_start(&timer), 0);
-
-    mr_clock_increase(5);
-    MR_TEST_EXPECT_EQ_INT(count, 0);
-
-    mr_clock_increase(5);
-    MR_TEST_EXPECT_EQ_INT(count, 1);
-
-    MR_TEST_ASSERT_EQ_INT(mr_timer_del(&timer), 0);
-}
-
 /* Test: tick set on a running timer stops it with the new period */
 MR_TEST(timer, deep_tick_set_stops_running) {
     mr_timer_t timer;

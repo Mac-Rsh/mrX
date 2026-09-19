@@ -17,7 +17,9 @@ static int adc_stream_stop_count;
 static mr_uint32_t adc_last_channel;
 static mr_adc_config_t adc_last_config;
 static mr_adc_seq_t adc_last_seq;
-static mr_bool_t adc_last_circular;
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+static mr_adc_stream_config_t adc_last_stream_config;
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 static mr_bool_t adc_busy;
 static mr_size_t adc_offset;
 static mr_err_t adc_configure_ret;
@@ -37,7 +39,9 @@ static void adc_test_reset(void) {
     adc_last_channel = 0;
     adc_last_config = (mr_adc_config_t){0};
     adc_last_seq = (mr_adc_seq_t){0};
-    adc_last_circular = MR_FALSE;
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+    adc_last_stream_config = (mr_adc_stream_config_t){0};
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
     adc_busy = MR_FALSE;
     adc_offset = 0;
     adc_configure_ret = 0;
@@ -78,12 +82,13 @@ static mr_ssize_t adc_read(const mr_driver_t *drv, mr_adc_seq_t *seq) {
     return adc_read_ret;
 }
 
+#if defined(MR_USE_DRIVER_ADC_STREAM)
 static mr_err_t adc_stream_start(const mr_driver_t *drv, mr_adc_seq_t *seq,
-                                 mr_bool_t circular) {
+                                 const mr_adc_stream_config_t *config) {
     MR_IGNORE(drv);
     adc_stream_start_count++;
     adc_last_seq = *seq;
-    adc_last_circular = circular;
+    adc_last_stream_config = *config;
     return adc_stream_start_ret;
 }
 
@@ -105,6 +110,7 @@ static mr_err_t adc_stream_get_offset(const mr_driver_t *drv,
     *offset = adc_offset;
     return adc_stream_offset_ret;
 }
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
 static const mr_adc_ops_t adc_ops = {
     .channel_configure = adc_channel_configure,
@@ -230,6 +236,10 @@ MR_TEST(adc, stream_paths) {
         .buf = buffer,
         .size = sizeof(buffer),
     };
+    mr_adc_stream_config_t config = {
+        .sample_rate = 48000U,
+        .circular = MR_TRUE,
+    };
     mr_size_t offset;
 
     adc_test_reset();
@@ -243,9 +253,10 @@ MR_TEST(adc, stream_paths) {
     adc_stream_busy_ret = -MR_EIO;
     MR_TEST_ASSERT_EQ_INT(mr_adc_stream_is_busy(drv, &busy), -MR_EIO);
     adc_stream_busy_ret = 0;
-    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_start(drv, &seq, MR_TRUE), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_start(drv, &seq, &config), 0);
     MR_TEST_ASSERT_EQ_INT(adc_stream_start_count, 1);
-    MR_TEST_ASSERT_EQ_INT(adc_last_circular, MR_TRUE);
+    MR_TEST_ASSERT_EQ_UINT(adc_last_stream_config.sample_rate, 48000U);
+    MR_TEST_ASSERT_EQ_INT(adc_last_stream_config.circular, MR_TRUE);
     adc_offset = sizeof(buffer) / 2;
     MR_TEST_ASSERT_EQ_INT(mr_adc_stream_offset(drv, &offset), 0);
     MR_TEST_ASSERT_EQ_INT(offset, sizeof(buffer) / 2);
@@ -270,6 +281,10 @@ MR_TEST(adc, stream_optional_operations) {
         .buf = buffer,
         .size = sizeof(buffer),
     };
+    mr_adc_stream_config_t config = {
+        .sample_rate = 1000U,
+        .circular = MR_FALSE,
+    };
     mr_size_t offset = 99;
 
     adc_test_reset();
@@ -287,7 +302,7 @@ MR_TEST(adc, stream_optional_operations) {
 
     drv->ops = (mr_ptr_t)&adc_ops;
     adc_stream_start_ret = -MR_EIO;
-    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_start(drv, &seq, MR_FALSE), -MR_EIO);
+    MR_TEST_ASSERT_EQ_INT(mr_adc_stream_start(drv, &seq, &config), -MR_EIO);
     MR_TEST_ASSERT_EQ_INT(adc_stream_start_count, 1);
     mr_adc_del(drv);
 }

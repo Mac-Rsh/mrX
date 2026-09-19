@@ -267,7 +267,7 @@ mr_err_t mr_dentry_uninstantiate(mr_dentry_t *dentry);
  * @return MR_TRUE on root, otherwise MR_FALSE.
  */
 MR_INLINE mr_bool_t mr_dentry_is_root(mr_dentry_t *dentry) {
-    /* Check if dentry is global root */
+    /* Check whether dentry is global root */
     return (dentry == mr_fs_struct_root()) ? MR_TRUE : MR_FALSE;
 }
 

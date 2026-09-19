@@ -49,12 +49,12 @@ mr_err_t mr_hashmap_add(mr_hashmap_t *map, mr_hashnode_t *node) {
         return -MR_EINVAL;
     }
 
-    /* Check if node is added */
+    /* Check whether node is added */
     if (MR_HASHNODE_IS_ADDED(node) == MR_TRUE) {
         return -MR_EBUSY;
     }
 
-    /* Check if key is exist */
+    /* Check whether key is exist */
     bucket = hashmap_bucket(map, hashmap_hash(node->key));
     if (hashmap_find(bucket, node->key) != MR_NULL) {
         return -MR_EEXIST;
@@ -66,7 +66,7 @@ mr_err_t mr_hashmap_add(mr_hashmap_t *map, mr_hashnode_t *node) {
 }
 
 mr_err_t mr_hashmap_del(mr_hashnode_t *node) {
-    /* Check if node exists */
+    /* Check whether node exists */
     if (MR_HASHNODE_IS_ADDED(node) == MR_FALSE) {
         return -MR_ENOENT;
     }

@@ -650,7 +650,7 @@ static mr_err_t fs_create_node_op(mr_dentry_t *parent, const char *name,
     /* Init inode */
     inode = MR_NULL;
 
-    /* Check if the parent is a directory */
+    /* Check whether the parent is a directory */
     if ((!parent->inode) || (parent->inode->type != MR_INODE_DIR)) {
         return -MR_ENOTDIR;
     }
@@ -673,7 +673,7 @@ static mr_err_t fs_create_node_op(mr_dentry_t *parent, const char *name,
         }
     }
 
-    /* Check if the name is existing */
+    /* Check whether the name is existing */
     ret = mr_dentry_lookup(parent, parent, name, &existing);
     if (ret == 0) {
         /* Repeated create */

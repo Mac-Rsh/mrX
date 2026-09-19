@@ -96,7 +96,7 @@ void *mr_malloc(mr_size_t size) {
     /* Disable interrupt */
     mask = mr_port_irq_disable();
 
-    /* Check if the heap is empty */
+    /* Check whether the heap is empty */
     prev = &__heap_blk_head;
     if (!prev->next) {
         mem = MR_NULL;
@@ -130,7 +130,7 @@ void *mr_malloc(mr_size_t size) {
     /* Remove one free fragment */
     __heap_info.frag_num--;
 
-    /* Check if we need to allocate a new block */
+    /* Check whether we need to allocate a new block */
     if (res > HEAP_SPLIT_THRESHOLD) {
         /* Shrink the old block */
         blk->size = size;
@@ -277,7 +277,7 @@ void mr_heap_region_add(const mr_heap_region_t *regions) {
     mr_ptr_t mem;
 
     for (rgn = regions; rgn->address && (rgn->size > 0); rgn++) {
-        /* Check if the block is too small */
+        /* Check whether the block is too small */
         if (rgn->size < ((HEAP_SPLIT_THRESHOLD * 2) + MR_ALIGN_SIZE)) {
             continue;
         }

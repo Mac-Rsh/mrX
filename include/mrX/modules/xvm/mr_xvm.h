@@ -204,7 +204,7 @@ MR_INLINE mr_err_t mr_xvm_resume(mr_xvm_t *xvm) {
     /* Get current status */
     status = mr_atomic_load(&xvm->status);
 
-    /* Check if XVM is in PAUSED or ERROR status */
+    /* Check whether XVM is in PAUSED or ERROR status */
     if ((status != MR_XVM_STATUS_PAUSED) && (status != MR_XVM_STATUS_EXCEPT)) {
         return -MR_EPERM;
     }
@@ -326,12 +326,12 @@ MR_INLINE mr_err_t mr_xvm_interrupt(mr_xvm_t *xvm, mr_uint32_t irq,
     /* Get current status */
     status = mr_atomic_load(&xvm->status);
 
-    /* Check if XVM is in INIT or ENDED status */
+    /* Check whether XVM is in INIT or ENDED status */
     if ((status == MR_XVM_STATUS_INIT) || (status == MR_XVM_STATUS_ENDED)) {
         return -MR_EPERM;
     }
 
-    /* Check if interrupt is supported */
+    /* Check whether interrupt is supported */
     if (!xvm->isa->ops->interrupt) {
         return -MR_ENOSYS;
     }

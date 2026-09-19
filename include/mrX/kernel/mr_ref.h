@@ -87,7 +87,7 @@ MR_INLINE mr_bool_t mr_ref_get(mr_ref_t *ref) {
     last = mr_atomic_load(ref);
 
     do {
-        /* Check if ref is inited or ref count is zero */
+        /* Check whether ref is inited or ref count is zero */
         if ((!MR_REF_IS_INITED(last)) || (MR_REF_COUNT(last) == 0)) {
             MR_ASSERT(last != MR_REF_OVERFLOW);
             /* End of life cycle */

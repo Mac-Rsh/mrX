@@ -1,8 +1,6 @@
 # 先进先出队列（FIFO）
 
-> FIFO 模块提供基于环形缓冲的定长元素先进先出队列，单写单读两侧均以原子操作
-> 实现无锁并发访问，适用于中断与线程之间的数据传递（串口收发、日志环、
-> 生产者消费者管道等）。
+> FIFO 模块提供基于环形缓冲的定长元素先进先出队列。普通写侧与普通读侧使用独立原子游标，适合单生产者/单消费者（SPSC）场景；覆盖写会额外推进读游标，需单独考虑并发同步。
 
 | 项       | 说明                                                                             |
 |----------|----------------------------------------------------------------------------------|
@@ -23,11 +21,11 @@ FIFO 解决的问题是： **在两个执行流之间传递定长元素，且不
 - 单元素接口 `mr_fifo_push` / `mr_fifo_pop`；批量接口 `mr_fifo_write` /
   `mr_fifo_read` / `mr_fifo_peek` / `mr_fifo_skip` / `mr_fifo_overwrite`。
 - 零拷贝接口 `mr_fifo_*_claim` / `mr_fifo_*_finish`，避免中间缓冲搬运。
-- 全部操作基于原子读写游标，单写单读（SPSC）场景无需任何锁。
-- 所有操作以"实际完成元素数"为返回值，参数非法、未初始化、队满、队空统一 返回 0，不产生错误码、不崩溃。
+- 普通 `push/write/write_claim+finish` 只推进 `widx`，普通 `pop/read/skip/read_claim+finish` 只推进 `ridx`，适合一写一读并发。
+- 大部分数据操作以“实际完成元素数”为返回值，队满/队空或 `fifo->buf == MR_NULL` 时常返回 0；这不是通用参数校验机制，调用者仍必须传入有效的 `mr_fifo_t *` 和数据指针。
 - 内核内已有使用者：[根文件系统 ramfs](../fs/ramfs.md) 与 RPC 组件 （`mrX/fs/ramfs/ramfs.c`、`mrX/modules/rpc/rpc.c`）。
 
-不适用于：变长消息队列（请自行在元素内携带长度字段）、多生产者或多消费者 并发（见第 7 节 FAQ）。
+不适用于：变长消息队列（可在元素内自行携带长度字段）、多生产者或多消费者并发。`overwrite` 系列因会同时修改 `ridx/widx`，也不应与独立消费者无锁并发。
 
 ### 2. 配置与依赖
 
@@ -79,13 +77,9 @@ void fifo_demo(void) {
 
 ### 4. 使用说明
 
-**生命周期**：静态方式用 `mr_fifo_init` 绑定调用者缓冲，不需要释放；动态方式 用 `mr_fifo_alloc` 堆分配、`mr_fifo_free`
-释放（仅释放缓冲区，`mr_fifo_t`
-本身的存储归调用者）。`free` 后可再次 `init` / `alloc` 复用同一对象。
+**生命周期**：静态方式用 `mr_fifo_init` 绑定调用者缓冲，不调用 `mr_fifo_free`；动态方式用 `mr_fifo_alloc` 分配缓冲，再用 `mr_fifo_free` 释放。`mr_fifo_free` 不知道缓冲来源，只要 `fifo->buf != MR_NULL` 就会调用 `mr_free`，因此绝不能对外部静态缓冲调用它。free 后只把 `buf` 置空，`capacity/elemsz/ridx/widx` 不会被清零；重新使用前应重新 `init` / `alloc`。
 
-**失败语义**：未初始化、参数非法、队满（写入类）、队空（读取类）一律返回 0， 不区分具体原因；需要区分时先调用 `mr_fifo_is_full` /
-`mr_fifo_is_empty`。 初始化失败时 `mr_fifo_t` 保持调用前的内容不变（`mrX/test/kernel/fifo.c:63`
-验证）。
+**失败语义**：多数数据路径在 `fifo->buf == MR_NULL`、队满或队空时返回 0；初始化函数对自身列出的 size/elemsz/buffer 条件也以 0 表示失败。API 并未全面检查 `fifo == MR_NULL`，push/pop/write/peek 等也不会在实际拷贝前检查数据指针是否为空，因此这些属于调用前置条件而不是可恢复错误。`mr_fifo_init` 在参数检查失败时不会改写已有 `fifo` 内容。
 
 **读写行为**
 
@@ -95,7 +89,7 @@ void fifo_demo(void) {
 | `mr_fifo_read`                 | 尽量读出并消费，超出已有元素自动截断                                 |
 | `mr_fifo_peek`                 | 只复制不消费，读后 `len` 不变                                        |
 | `mr_fifo_skip`                 | 丢弃最多 `num` 个最旧元素                                            |
-| `mr_fifo_overwrite`            | 空间不足时挤掉最旧元素；`num` 超过容量时只保留最新 `capacity` 个元素 |
+| `mr_fifo_overwrite`            | 空间不足时推进读游标挤掉最旧元素；`num` 超过容量时只保留最新 `capacity` 个元素 |
 | `mr_fifo_reset`                | 读写游标清零，缓冲内容不擦除                                         |
 | `mr_fifo_push` / `mr_fifo_pop` | 单元素版写读，成功返回 1                                             |
 
@@ -156,9 +150,9 @@ mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
                          mr_uint32_t elemsz);
 ```
 
-- `buf`：缓冲区，不可为 `MR_NULL`；`size`：缓冲区字节数，须不小于 `elemsz`。
-- `elemsz`：单元素字节数，不可为 0。
-- 返回：容量（元素个数）；参数非法或容量超过 `FIFO_CAPACITY_MAX` 返回 0。
+- `fifo` 必须是有效对象指针；函数本身不检查 `fifo == MR_NULL`。
+- `buf`：缓冲区，不可为 `MR_NULL`；`size`：缓冲区字节数，须不小于 `elemsz`；`elemsz` 不可为 0。
+- 返回：容量（元素个数）；上述缓冲参数非法或容量超过 `FIFO_CAPACITY_MAX` 返回 0。
 
 **`mr_fifo_alloc`**
 
@@ -166,9 +160,9 @@ mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
 mr_uint32_t mr_fifo_alloc(mr_fifo_t *fifo, mr_uint32_t num, mr_uint32_t elemsz);
 ```
 
-- `num`：期望容量，不可为 0 且不得超过 `FIFO_CAPACITY_MAX`，`num * elemsz`
-  不得溢出 32 位。
-- 返回：容量；参数非法或内存不足返回 0。
+- `fifo` 会显式检查不可为 `MR_NULL`；`num` 不得超过 `FIFO_CAPACITY_MAX`，`elemsz` 不可为 0，`num * elemsz` 不得溢出 32 位。
+- `num == 0` 没有单独拒绝分支，实际结果取决于 `mr_malloc(0)`，随后 `mr_fifo_init` 也无法形成非零容量；不要用 0 容量调用。
+- 返回：成功容量；检查失败、分配失败或后续 init 失败返回 0。
 
 **`mr_fifo_push` / `mr_fifo_pop`**
 
@@ -177,7 +171,7 @@ mr_uint32_t mr_fifo_push(mr_fifo_t *fifo, const void *data);
 mr_uint32_t mr_fifo_pop(mr_fifo_t *fifo, void *data);
 ```
 
-复制 `elemsz` 字节，成功返回 1；未初始化、队满（push）或队空（pop）返回 0。
+复制 `elemsz` 字节，成功返回 1；`fifo->buf == MR_NULL`、队满（push）或队空（pop）返回 0。`fifo` 与 `data` 指针本身必须有效，函数不做空指针保护。
 
 **`mr_fifo_write` / `mr_fifo_read` / `mr_fifo_peek` / `mr_fifo_skip`**
 
@@ -216,8 +210,8 @@ void mr_fifo_read_finish(mr_fifo_t *fifo, mr_uint32_t num);
 ```
 
 - `off`：相对当前游标的偏移（元素数），越过可用范围返回 0 且不修改 `*buf`。
-- `buf`：出参，指向缓冲区内连续区域首地址；`want`：期望元素数。
-- 实际返回值受可用量与物理边界限制；`finish` 的 `num` 超量自动截断，
+- `buf`：出参，成功 claim 时写入缓冲区内连续区域首地址；调用者必须传有效的 `void **`。`want`：期望元素数。
+- claim 返回 0 时不会写 `*buf`。实际返回值受可用量与物理边界限制；`finish` 的 `num` 超量自动截断，
   `overwrite_finish` 空间不足时自动推进读游标丢弃最旧元素（`fifo.c:351`），
   `read_finish` 无返回值。
 
@@ -284,15 +278,13 @@ void zero_copy_demo(mr_fifo_t *fifo, const mr_uint8_t *src, mr_uint32_t len) {
 
 **Q：可以在两个线程同时 push 吗？**
 
-不可以。FIFO 只保证 **单写单读**无锁安全：写侧只推进写游标、读侧只推进读 游标（`mrX/kernel/fifo.c:138`、`fifo.c:164`
-）。多生产者或多消费者必须在外部 加锁串行化，否则会产生数据竞争——两个写者会向同一物理槽位拷贝。测试
-`mrX/test/kernel/fifo.c:554` 的并发用例即严格的一写一读。
+不可以。普通 FIFO 路径只适合 **单写单读**：生产者拷贝到当前写槽后推进 `widx`，消费者从当前读槽拷贝后推进 `ridx`。两个生产者即使最后 CAS 能区分游标提交，也可能先同时写同一物理槽位；多个消费者同理。专项 pthread 测试也是一生产者一消费者。
+
+另外，`mr_fifo_overwrite` / `mr_fifo_overwrite_finish` 在空间不足时由写侧推进 `ridx`，会打破“读游标只由消费者修改”的 SPSC 分工；若消费者同时运行，应在外部同步。
 
 **Q：返回 0 到底是满了、空了还是没初始化？**
 
-API 层面不区分。可在操作前查询 `mr_fifo_is_full` / `mr_fifo_is_empty`； 未初始化对象的所有操作都安全返回 0（内部以
-`buf == MR_NULL` 判定，
-`fifo.c:120`）。
+API 层面不区分满/空等零完成原因。可在操作前查询 `mr_fifo_is_full` / `mr_fifo_is_empty`，但这些 inline 查询本身假定 `fifo` 结构有效，`mr_fifo_size` 在 `mr_fifo_free` 后甚至仍会读到旧 capacity。不要把“buf 为空时部分数据 API 返回 0”理解成任意未初始化内存都可安全调用。
 
 **Q：`elemsz` 不是 1 有什么影响？**
 
@@ -311,7 +303,7 @@ API 层面不区分。可在操作前查询 `mr_fifo_is_full` / `mr_fifo_is_empt
 
 **Q：`mr_fifo_free` 和 `mr_fifo_reset` 的区别？**
 
-`reset` 只清零游标、缓冲保留、可继续使用；`free` 释放堆缓冲并使队列回到 未初始化状态，静态初始化的队列不需要 `free`。
+`reset` 只把两个游标原子写 0，缓冲与配置保留。`free` 只适用于 `mr_fifo_alloc` 得到的堆缓冲：它释放 `fifo->buf` 并把该指针置空，但不会清零 capacity/elemsz/游标。外部静态缓冲初始化的 FIFO 不得调用 `free`。
 
 ---
 
@@ -323,13 +315,13 @@ FIFO 是内核中的独立工具模块，不接入对象系统、不依赖调度
 
 ```
    +-----------------------------------+
-   | 生产者（ISR / 线程）               |
-   |  push / write / overwrite_claim   |----仅推进 widx (CAS)
+   | 单一生产者                       |
+   |  push / write / write_claim       |----推进 widx (CAS)
    +-----------------+-----------------+
                      | mr_uint8_t *buf 环形缓冲（capacity 个 elemsz 元素）
    +-----------------v-----------------+
-   | 消费者（线程）                     |
-   |  pop / read / read_claim          |----仅推进 ridx (CAS)
+   | 单一消费者                       |
+   |  pop / read / read_claim          |----推进 ridx (CAS)
    +-----------------------------------+
         依赖：原子操作(mr_atomic: load/CAS)、memcpy、
               malloc(仅 alloc/free 路径)
@@ -365,8 +357,7 @@ capacity`）与"空"（`widx == ridx`）天然可区分，无需牺牲一个存�
 
 ### 10. 核心流程
 
-**游标推进**（`fifo_cursor_add`，`fifo.c:103`）：读当前游标，计算推进后的值 （超过 `2 * capacity` 减去之），用
-`mr_atomic_compare_exchange` CAS 循环 提交。CAS 只在多写者竞争同一游标时才会重试，SPSC 下一次即中。
+**游标推进**（`fifo_cursor_add`，`fifo.c:103`）：读当前游标，计算推进后的值并用 `mr_atomic_compare_exchange` CAS 循环提交。CAS 能保护游标值的条件更新，但不能让此前对物理数据槽的拷贝变成多生产者/多消费者安全，因此它不是 MPMC 支持。
 
 **长度计算**（`mr_fifo_len`，`mr_fifo.h:125`）：`widx >= ridx` 时为
 `widx - ridx`，跨圈时为 `2 * capacity - ridx + widx`；`mr_fifo_avail` 与
@@ -389,12 +380,11 @@ index` 限制为连续段；`mr_fifo_read_claim`（`fifo.c:369`）以 `len` 为�
 
 ### 11. 并发与中断安全
 
-- 写侧 API（`push`/`write`/`overwrite`/`write_claim`/`write_finish`/
-  `overwrite_*`）只读写 `widx` 与只读字段，读侧 API（`pop`/`read`/`peek`/
-  `skip`/`read_claim`/`read_finish`）只读写 `ridx` 与只读字段。两侧并发无需 任何锁，均可在中断上下文调用。
-- `peek` 不改游标，与写侧并发时读到的是某个瞬时快照；单读侧前提下（消费只有 一个执行流）`read` 的两段拷贝结果完整一致。
-- 多生产者、多消费者不受支持：游标虽由 CAS 保护，但两个写者会向同一物理 槽位并发拷贝，产生数据竞争。
-- `mr_fifo_init` / `mr_fifo_alloc` / `mr_fifo_free` / `mr_fifo_reset` 不做 并发保护，必须在开始生产/消费之前或两侧都停止之后调用。
+- 普通写路径（`push`/`write`/`write_claim`/`write_finish`）由单一生产者推进 `widx`；普通读路径（`pop`/`read`/`peek`/`skip`/`read_claim`/`read_finish`）由单一消费者推进 `ridx`。这是本实现适合 SPSC 的基础。
+- `overwrite` / `overwrite_finish` 在容量不足时会从生产者侧推进 `ridx`，因此不能归入上述独立游标模型；若有并发消费者，需要外部同步。
+- `peek` 不改游标。与普通 producer 并发时，它依据读取到的长度和读游标复制当前已提交数据；不要与 overwrite producer 并发假定同样的稳定性。
+- 多生产者、多消费者不受支持：CAS 只保护游标提交，不能保护多个执行流对同一槽位的 `memcpy`。
+- `mr_fifo_init` / `mr_fifo_alloc` / `mr_fifo_free` / `mr_fifo_reset` 不做生命周期并发保护，必须在生产/消费停止时操作。普通数据 API 本身没有阻塞调用，但是否适合某个 ISR 环境还取决于平台原子实现和所用内存。
 
 ### 12. 扩展与派生
 
@@ -431,6 +421,4 @@ FIFO 无对象 clazz、无 ops 与回调，也没有任何 `MR_CFG_*` 配置项�
 **配置宏**：本模块无功能宏、无 `MR_CFG_*` 配置项，始终编译。实现内部常量
 `FIFO_CAPACITY_MAX`（`MR_INT32_MAX / 2 + 1`）为容量硬上限。
 
-**错误码**：本模块不使用 `mr_errno` 错误码体系，所有 API 以元素计数为返回 值：返回 0
-表示"未完成任何元素"（涵盖未初始化、参数非法、队满、队空四种 情形），失败信息需通过 `mr_fifo_is_full` / `mr_fifo_is_empty`
-等查询接口 进一步区分。
+**错误码**：本模块的数据 API 不使用负 `mr_errno`。计数型函数返回 0 表示“本次完成 0 个元素”，常见原因包括队满、队空、零请求或 `fifo->buf == MR_NULL`；初始化/分配也以 0 表示失败。空 `fifo` 指针、实际拷贝时的空数据指针等不是返回 0 的统一错误路径，而是调用者必须满足的前置条件。

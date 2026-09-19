@@ -1,0 +1,98 @@
+/**
+ * @copyright (c) 2026, MacRsh
+ *
+ * @license SPDX-License-Identifier: Apache-2.0
+ */
+
+#ifndef __MR_PLATFORM_H__
+#define __MR_PLATFORM_H__
+
+#include <mrX/mr_config.h>
+#include <mrX/libc/mr_compiler.h>
+#include <mrX/libc/mr_types.h>
+#include <mrX/libc/mr_errno.h>
+#include "stm32h5xx_hal.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+/**
+ * @addtogroup Platform
+ * @{
+ */
+
+/**
+ * @brief This function initializes the STM32H5 clock port for mrX.
+ *
+ * @param per_second The number of clock ticks per second.
+ *
+ * @note CubeMX must initialize HAL and the system clock before this function
+ * is called. The platform overrides HAL_IncTick to update both clocks;
+ * the board SysTick handler must call HAL_IncTick exactly once per tick.
+ */
+extern void mr_stm32h5_platform_clock_init(mr_uint32_t per_second);
+
+/**
+ * @brief This function initializes the STM32H5 platform.
+ */
+extern void mr_platform_init(void);
+
+/**
+ * @brief This function enables an STM32H5 GPIO port clock.
+ *
+ * @param port The GPIO port instance.
+ * @return 0 on success, or -MR_EINVAL for an unsupported instance.
+ */
+extern mr_err_t mr_stm32h5_gpio_clock_enable(GPIO_TypeDef *port);
+
+/**
+ * @brief This function converts a HAL status to an mrX error code.
+ *
+ * @param status The HAL operation status.
+ * @return 0 on success, or the corresponding negative mrX error code.
+ */
+MR_INLINE mr_err_t mr_stm32h5_hal_status(HAL_StatusTypeDef status) {
+    switch (status) {
+        case HAL_OK: {
+            return 0;
+        }
+        case HAL_BUSY: {
+            return -MR_EBUSY;
+        }
+        case HAL_TIMEOUT: {
+            return -MR_ETIMEDOUT;
+        }
+        default: {
+            return -MR_EIO;
+        }
+    }
+}
+
+#if defined(MR_USE_DRIVER_TMR)
+struct mr_driver;
+
+/**
+ * @brief This function stops an H5 timer at its next update boundary.
+ *
+ * @param drv The exclusively owned STM32H5 basic timer driver.
+ * @param complete The timer IRQ callback, or MR_NULL to cancel a drain.
+ * @param param The callback parameter.
+ * @return 0 on success, a negative error code on failure.
+ *
+ * @note The timer must be configured. Its current counter is preserved.
+ * A stopped timer is armed for one period on its next start. Cancel before
+ * releasing the driver, including after a failed start. The caller must arm
+ * this before the next update; the period must exceed DMA IRQ latency.
+ */
+extern mr_err_t mr_stm32h5_tmr_drain(struct mr_driver *drv,
+                                     void (*complete)(void *), void *param);
+#endif /* defined(MR_USE_DRIVER_TMR) */
+
+/** @} */
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* __MR_PLATFORM_H__ */

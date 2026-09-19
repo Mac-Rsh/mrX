@@ -26,7 +26,7 @@ mr_err_t mr_object_derive(mr_object_t *obj, const mr_clazz_t *clazz) {
         return -MR_EINVAL;
     }
 
-    /* Check if clazz is a sub clazz of the object's current clazz */
+    /* Check whether clazz is a sub clazz of the object's current clazz */
     if (!mr_clazz_is_kind_of(clazz, MR_OBJECT_CLAZZ(obj))) {
         return -MR_EPERM;
     }

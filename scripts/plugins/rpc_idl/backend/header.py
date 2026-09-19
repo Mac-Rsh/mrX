@@ -44,6 +44,7 @@ class HeaderBuilder:
         self._emit_enums(lines, schema)
         self._emit_structs(lines, schema)
         self._emit_methods(lines, schema)
+        self._emit_self_desc(lines)
         self._emit_unions(lines, schema)
         self._emit_exports(lines, schema)
         return "\n".join(lines).rstrip() + "\n"
@@ -58,6 +59,7 @@ class HeaderBuilder:
             "",
             CEmit.generated_at(),
             "",
+            "#include <mrX/mr_config.h>",
             "#include <mrX/libc/mr_compiler.h>",
             "#include <mrX/libc/mr_types.h>",
             "#include <mrX/libc/mr_errno.h>",
@@ -175,6 +177,19 @@ class HeaderBuilder:
                 groups.append(group)
         return groups
 
+    @staticmethod
+    def _emit_self_desc(lines: list[str]) -> None:
+        """Emit workspace definitions for the generated self-description call."""
+        lines.extend([
+            CEmit.section_banner("self desc"),
+            "#if defined(MR_USE_MODULE_RPC_SELF_DESC)",
+            "#if !defined(MR_CFG_RPC_SELF_DESC_CHUNK_SIZE)",
+            "#define MR_CFG_RPC_SELF_DESC_CHUNK_SIZE    (128U)",
+            "#endif /* !defined(MR_CFG_RPC_SELF_DESC_CHUNK_SIZE) */",
+            "#endif /* defined(MR_USE_MODULE_RPC_SELF_DESC) */",
+            "",
+        ])
+
     def _emit_unions(self, lines: list[str], schema: Schema) -> None:
         """Emit the session request and response overlay unions."""
         lines.append(CEmit.section_banner("unions"))
@@ -192,10 +207,13 @@ class HeaderBuilder:
                 res = CNames.method_response_typedef(service.name, method.name)
                 response_members.append(f"{res} {member}")
         self._emit_union(lines, "mr_rpc_idl_request", "mr_rpc_idl_request_t",
-                         request_members)
+                         request_members,
+                         "mr_uint32_t __mr_rpc_self_desc")
         lines.append("")
         self._emit_union(lines, "mr_rpc_idl_response", "mr_rpc_idl_response_t",
-                         response_members)
+                         response_members,
+                         ("mr_uint8_t __mr_rpc_self_desc"
+                          "[MR_CFG_RPC_SELF_DESC_CHUNK_SIZE]"))
         lines.append("")
 
     def _emit_exports(self, lines: list[str], schema: Schema) -> None:
@@ -228,14 +246,17 @@ class HeaderBuilder:
         lines.append(f"}} MR_PACKED {typedef};")
 
     def _emit_union(self, lines: list[str], tag: str, typedef: str,
-                    members: list[str]) -> None:
-        """Emit one overlay union, with a placeholder when empty."""
+                    members: list[str], idl_member: str) -> None:
+        """Emit one overlay union plus optional self-description workspace."""
         lines.append(f"typedef union {tag} {{")
         if not members:
             lines.append(f"{CEmit.INDENT}mr_uint8_t unused;")
         else:
             for member in members:
                 lines.append(f"{CEmit.INDENT}{member};")
+        lines.append("#if defined(MR_USE_MODULE_RPC_SELF_DESC)")
+        lines.append(f"{CEmit.INDENT}{idl_member};")
+        lines.append("#endif /* defined(MR_USE_MODULE_RPC_SELF_DESC) */")
         lines.append(f"}} {typedef};")
 
     def _field_decls(self, fields: list[Field]) -> list[str]:

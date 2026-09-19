@@ -121,7 +121,7 @@ MR_INLINE void mr_spinlock_unlock_irqrestore(mr_spinlock_t *lock, int mask) {
  * @return MR_TRUE on locked, MR_FALSE otherwise.
  */
 MR_INLINE mr_bool_t mr_spinlock_is_locked(mr_spinlock_t *lock) {
-    /* Check if spinlock is locked */
+    /* Check whether spinlock is locked */
     return mr_atomic_load(lock) != 0;
 }
 

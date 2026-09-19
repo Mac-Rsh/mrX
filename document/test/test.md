@@ -22,7 +22,7 @@
 - 断言宏覆盖 EQ/NE/LT/LE/GT/GE/NEAR 七种比较 × int/uint/ptr/float/double 五种 类型，并区分 EXPECT（失败继续）与
   ASSERT（失败中止）两种失败策略。
 - 运行报告为 gtest 风格（`[ RUN ]` / `[ OK ]` / `[ FAILED ]` / 汇总统计）。
-- 经根工程 `mrX.exe` 的退出码（全过为 0）对接 CI。
+- 运行入口为公开 API（`mr_test_run` / `mr_testsuite_run` / `mr_testcase_run`），由应用自行调用，并可用返回值对接 CI。
 
 适用边界：框架面向 x64 宿主模拟环境的功能验证（`./build/mrX.exe`），不在目标板 资源受限环境下使用；其依赖的 `mr_printf`
 、链接器段机制均以宿主为第一场景。
@@ -47,9 +47,7 @@
 #endif /* defined(MR_USE_TEST) */
 ```
 
-运行：`cmake -S . -B build && cmake --build build && ./build/mrX.exe`， 退出码 0 表示全部通过（`user/main.c` 中
-`mr_test_run()` 的结果直接映射到
-`exit` 码）。
+构建：`cmake -S . -B build && cmake --build build`。测试由应用显式驱动：默认宿主示例 `user/main.c`（位于 `mrX/` 的上一级）运行的是 DMA/RPC 演示，不调用测试入口；要执行测试需在应用启动流程中自行调用 `mr_test_run()`（全部通过返回 `MR_TRUE`），并据此决定进程退出码。
 
 ### 3. 快速上手
 
@@ -112,7 +110,7 @@ MR_TEST(timer, init_del) {
 |------------------------|----------------------------------------------|
 | `MR_TEST(suite, name)` | 定义并自动导出一个测试用例（函数体即用例体） |
 
-运行入口（一般由 `user/main.c` 调用）：
+运行入口（由应用自行调用）：
 
 | API                            | 说明                                                        |
 |--------------------------------|-------------------------------------------------------------|
@@ -200,8 +198,7 @@ ASSERT 放在最前，或改用 EXPECT + `goto _exit` 模式。
 
 **Q：能只跑一个模块的测试吗？**
 
-可以。`mr_testsuite_run("timer")` 只运行 timer suite；`mr_testcase_run` 可精确 到单个用例。默认 `user/main.c` 调
-`mr_test_run()` 跑全部。
+可以。`mr_testsuite_run("timer")` 只运行 timer suite；`mr_testcase_run` 可精确 到单个用例。是否全量运行取决于应用调用的是哪个入口；当前宿主示例工程未调用它们。
 
 **Q：能在目标板上跑吗？**
 
@@ -268,7 +265,7 @@ typedef struct mr_testcase {        /* mrX/include/mrX/test/mr_test.h:169 */
 
 **分发**：`testcase_run`（`mrX/test/test.c:26`）打印 `[ RUN ]`、调用
 `cs->entry(&status)`、按最终 status 打印 `[ OK ]` / `[ FAILED ]`。三个运行入口 （`mr_testcase_run` / `mr_testsuite_run` /
-`mr_test_run`，`test.c:50/78/119`） 都是对哨兵区间 `start+1 .. end` 的线性扫描，区别仅在名称匹配粒度与汇总统计；
+`mr_test_run`，`test.c:50/80/124`） 都是对哨兵区间 `start+1 .. end` 的线性扫描，区别仅在名称匹配粒度与汇总统计；
 `mr_testcase_run` / `mr_testsuite_run` 空匹配打印 `[ NOT FOUND ]` 并返回失败。
 
 ### 11. 并发与中断安全
@@ -292,7 +289,7 @@ typedef struct mr_testcase {        /* mrX/include/mrX/test/mr_test.h:169 */
 | `mrX/include/mrX/test/mr_check.h:101`        | ASSERT 的状态切换与提前返回             |
 | `mrX/test/test.c:14-24`                      | sys.start / sys.end 哨兵用例            |
 | `mrX/test/test.c:26`                         | 单用例执行与结果打印                    |
-| `mrX/test/test.c:50/78/119`                  | 三个运行入口（用例/套件/全量）          |
+| `mrX/test/test.c:50/80/124`                  | 三个运行入口（用例/套件/全量）          |
 | `mrX/test/{kernel,libc,drivers,fs,modules}/` | 各子系统的实际用例集                    |
 
 ### 14. 附录
@@ -304,5 +301,4 @@ typedef struct mr_testcase {        /* mrX/include/mrX/test/mr_test.h:169 */
 | `MR_USE_TEST`         | 框架总开关（默认 n），自动选中 `MR_USE_PRINTF`                            |
 | `MR_USE_TEST_PTHREAD` | 多线程并发用例门控（无 Kconfig 项），由项目根 `CMakeLists.txt:78-81` 定义 |
 
-**错误码**：运行入口返回 `mr_bool_t`（全过 `MR_TRUE`），不使用 `mr_errno` 体系； 进程级结果经宿主入口 `user/main.c`（位于
-`mrX/` 的上一级）映射为退出码（0 = 全部通过）。
+**错误码**：运行入口返回 `mr_bool_t`（全过 `MR_TRUE`），不使用 `mr_errno` 体系； 是否把结果映射为进程退出码由调用方（应用入口）自行决定。

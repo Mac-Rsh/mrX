@@ -1,0 +1,20 @@
+menu "I2C: Inter-Integrated Circuit"
+
+# ==================================
+# I2C
+# ==================================
+config MR_USE_DRIVER_I2C
+    depends on MR_USE_DRIVER
+    bool "Use I2C"
+    default n
+    help
+        Enable the I2C bus controller driver framework.
+        Features:
+            - Master message transfers with repeated START support
+            - Slave receive/transmit data paths
+            - 7-bit and 10-bit addressing
+            - Explicit STOP/NOSTOP message control
+            - Waitable interrupt/event notification
+        DMA and interrupt transfer details are provided by controller backends.
+
+endmenu

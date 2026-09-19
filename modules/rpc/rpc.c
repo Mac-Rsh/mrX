@@ -135,14 +135,14 @@ static void rpc_subs_timer_entry(mr_timer_t *timer, void *param) {
         mr_list_move(&session->list, &rpc->subs.list);
     }
 
-    /* Check if subscription timer needs a new tick */
+    /* Check whether subscription timer needs a new tick */
     timer_tick = mr_timer_tick(&rpc->subs.timer) & (~MR_TIMER_PERIODIC);
     if ((tickless != 0U) && (tickless != timer_tick)) {
         /* Set to optimal tick */
         mr_timer_tick_set(&rpc->subs.timer, tickless | MR_TIMER_PERIODIC);
         mr_timer_start(&rpc->subs.timer);
 
-        /* Check if subscription is stopped(timing) for the last time */
+        /* Check whether subscription is stopped(timing) for the last time */
     } else if (mr_list_is_empty(&rpc->subs.tlist)) {
         /* Don't need timer */
         mr_timer_stop(&rpc->subs.timer);
@@ -274,7 +274,7 @@ mr_ssize_t mr_rpc_input(mr_rpc_t *rpc, const void *data, mr_uint32_t size) {
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(rpc, rpc));
     MR_ASSERT((data != MR_NULL) || (size == 0U));
 
-    /* Check if RPC is dying */
+    /* Check whether RPC is dying */
     if (mr_atomic_load(&rpc->dying)) {
         return -MR_ENOENT;
     }

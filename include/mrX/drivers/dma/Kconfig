@@ -1,0 +1,14 @@
+menu "DMA: Direct Memory Access"
+
+# ==================================
+# DMA
+# ==================================
+config MR_USE_DRIVER_DMA
+    depends on MR_USE_DRIVER
+    bool "Use DMA"
+    default n
+    help
+        Enable the DMA controller and channel driver framework.
+        Platform backends provide hardware-specific transfer operations.
+
+endmenu

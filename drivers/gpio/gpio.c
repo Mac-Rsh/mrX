@@ -15,7 +15,7 @@ static void gpio_release(const mr_driver_t *drv);
 MR_DRIVER_CLAZZES_DEFINE(gpio, MR_NULL, MR_NULL, gpio_release);
 
 mr_err_t mr_gpio_configure(mr_driver_t *drv, mr_uint32_t pin,
-                           mr_gpio_config_t *config) {
+                           const mr_gpio_config_t *config) {
     const mr_gpio_ops_t *gp_ops;
     mr_gpio_data_t *gp_data;
     mr_gpio_config_t cfg;
@@ -26,13 +26,13 @@ mr_err_t mr_gpio_configure(mr_driver_t *drv, mr_uint32_t pin,
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT(config != MR_NULL);
 
-    /* Get GPIO data and operations */
+    /* Get GPIO operations and data */
+    gp_ops = (const mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
-    gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(gp_ops->pin_configure != MR_NULL);
     cfg = *config;
 
-    /* Check if pin is existed */
+    /* Check whether pin exists */
     if ((pin >= 32U) || (!(gp_data->exist_mask & (1U << pin)))) {
         return -MR_EINVAL;
     }
@@ -58,12 +58,12 @@ mr_err_t mr_gpio_configuration(mr_driver_t *drv, mr_uint32_t pin,
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT(config != MR_NULL);
 
-    /* Get GPIO data and operations */
+    /* Get GPIO operations and data */
+    gp_ops = (const mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     gp_data = (mr_gpio_data_t *)MR_DRIVER_DATA(drv);
-    gp_ops = (mr_gpio_ops_t *)MR_DRIVER_OPS(drv);
     MR_ASSERT(gp_ops->pin_configuration != MR_NULL);
 
-    /* Check if pin is existed */
+    /* Check whether pin exists */
     if ((pin >= 32U) || (!(gp_data->exist_mask & (1U << pin)))) {
         return -MR_EINVAL;
     }

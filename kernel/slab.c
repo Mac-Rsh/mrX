@@ -39,7 +39,7 @@ void *mr_slab_alloc(mr_slab_t *slab) {
             desired = last | (mr_atomic_t)(1ULL << (bit - 1U));
         } while (!mr_atomic_compare_exchange(&slab->map[i], &last, desired));
 
-        /* Check if memory is allocated */
+        /* Check whether memory is allocated */
         if (bit == 0) {
             continue;
         }
