@@ -40,7 +40,7 @@ class CSymbolChecker:
     def check(self, schema: Schema) -> None:
         """Register all generated C identifiers and report collisions."""
         layouts = Layout.map_schema(schema)
-        self._register_interned(schema)
+        self._register_variable_arrays(schema)
         self._register_enums(schema)
         self._register_structs(schema)
         for service in schema.services.values():
@@ -48,13 +48,12 @@ class CSymbolChecker:
                 self._register_method(service, method, layouts)
         self._register_unions()
 
-    def _register_interned(self, schema: Schema) -> None:
-        """Register interned string and bytes tags and typedefs."""
-        interned = [*schema.strings.values(), *schema.bytes_types.values()]
-        for item in interned:
-            origin = f"interned {item.kind}<{item.max_len}>"
-            self._add(CNames.intern_tag(item.kind, item.max_len), origin)
-            self._add(CNames.intern_typedef(item.kind, item.max_len), origin)
+    def _register_variable_arrays(self, schema: Schema) -> None:
+        """Register interned variable-array tags and typedefs."""
+        for item in schema.variable_arrays.values():
+            origin = f"variable array #{item.index}"
+            self._add(CNames.variable_array_tag(item.index), origin)
+            self._add(CNames.variable_array_typedef(item.index), origin)
 
     def _register_enums(self, schema: Schema) -> None:
         """Register enum typedefs and item macros."""

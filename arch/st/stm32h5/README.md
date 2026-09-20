@@ -1,8 +1,50 @@
 # STM32H5 驱动适配约定
 
-本目录提供 GPIO、ADC、DAC、GPDMA、UART 和基本定时器适配。
+本目录提供 GPIO、ADC、DAC、GPDMA、UART、基本定时器、片上 FLASH 和 IWDG 适配。
+分层、资源所有权、HardTree 约定和代码骨架见
+[ST 平台适配规范](../../../document/arch/st/st.md)；本文只记录本芯片
+运行期语义。
+
 各驱动由对应 `MR_USE_DRIVER_*` 开关启用；ADC/DAC stream 还需要 DMA
 和 TMR，UART stream 需要 DMA。HAL 模块与 HardTree 资源由板级工程配置。
+没有对应 compat 实例时，backend 被 `MR_HT_HAS_DRIVER()` 裁掉。
+
+## HardTree 属性
+
+GPIO（`st_stm32h5_gpio`）：`st_gpiox`、`st_clken`、`st_irq_priority`；可选
+`exist_mask` / `invert_mask`。EXTI 线 `n` 仅在存在 `st_irq_handler_n`
+（向量名，如 `EXTI5_IRQHandler`）时生成处理函数。
+
+DMA（`st_stm32h5_gpdma`）：`st_gpdmax`、`st_clken`、`st_irq_priority`、
+`st_requests`（按下标对应硬件通道的 request ID）。通道数组长度等于
+`st_requests` 元素数；省略 `exist_mask` 时默认为低 `N` 位。可选
+`st_irq_handler_0`…`st_irq_handler_7`；若声明了任一通道 IRQ，需提供
+`st_ctrl`（0=GPDMA1，1=GPDMA2）。
+
+TMR（`st_stm32h5_tmr`）：`st_timx`、`st_clken`、`st_irqn`、
+`st_irq_priority`、`st_irq_handler`。
+
+UART（`st_stm32h5_uart`）：`st_uartx`、`st_clken`、`st_irqn`、
+`st_irq_priority`、`st_irq_handler`。方向引脚 `st_tx` / `st_rx` 为 GPIO
+spec `[phandle, pin]`，`st_tx_af` / `st_rx_af` 为 AF 编号；不用的方向可省略。
+`st_rx_dma` / `st_tx_dma` 按实例可选。AF 由 GPIO 拥有者 helper 配置，
+不要把这些引脚再配成 EXTI。
+
+ADC（`st_stm32h5_adc`）：`st_adcx`、`st_clken`、`st_ref`；`st_channels`
+单元为 `<hal_channel, gpio_phandle, pin>`。模拟脚必须落在对应 GPIO 的
+`exist_mask` 里。`st_dma` / `st_timer` / `st_trigger` 按实例可选。
+
+DAC（`st_stm32h5_dac`）：`st_dacx`、`st_clken`；`st_channels` 单元为
+`<HAL DAC channel, gpio_phandle, pin>`。stream 属性同 ADC。
+
+FLASH（`st_stm32h5_flash`）：片上阵列，无需额外 GPIO/DMA 属性。扇区 8 KB，
+编程宽度 128 bit。H50x/H52x/H53x 为单 bank，其余系列为双 bank。
+
+WDT（`st_stm32h5_wdt`）：`st_iwdgx`、`st_irqn`、`st_irq_priority`、
+`st_irq_handler`。时间单位为毫秒。`feed_min` 必须为 0（无窗口）；
+`feed_max` 为超时；`pretimeout` 为提前唤醒提前量，0 表示关闭 EWI。
+IWDG 启动后不可停止，`stop` 为 `MR_NULL`。TIMEOUT 直接复位芯片，
+不提供 TIMEOUT 事件。
 
 ## 流传输与资源生命周期
 

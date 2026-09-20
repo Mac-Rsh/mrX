@@ -192,6 +192,11 @@ _exit:
     return ret;
 }
 
+mr_bool_t mr_dentry_is_root(mr_dentry_t *dentry) {
+    /* Check whether dentry is global root */
+    return (dentry == mr_fs_struct_root()) ? MR_TRUE : MR_FALSE;
+}
+
 mr_err_t mr_dentry_init(mr_dentry_t *dentry, const mr_dentry_ops_t *ops,
                         const char *fmt, ...) {
     const mr_clazz_t *clazz = MR_CLAZZES_STATIK(dentry);

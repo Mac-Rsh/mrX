@@ -1,0 +1,42 @@
+menu "Crypto: Cryptographic algorithms"
+
+# ==================================
+# CRYPTO
+# ==================================
+config MR_USE_MODULE_CRYPTO
+    depends on MR_USE_MODULE
+    bool "Use crypto"
+    default n
+    help
+        Enable platform-independent software cryptographic algorithms.
+
+# ==================================
+# SHA
+# ==================================
+config MR_USE_MODULE_CRYPTO_SHA256
+    depends on MR_USE_MODULE_CRYPTO
+    bool "Use SHA-256"
+    default n
+    help
+        Enable SHA-256 hashing.
+
+# ==================================
+# ECC
+# ==================================
+config MR_USE_MODULE_CRYPTO_ECC_P256
+    depends on MR_USE_MODULE_CRYPTO
+    bool "Use P-256 ECC"
+    default n
+    help
+        Enable NIST P-256/secp256r1 elliptic-curve arithmetic.
+
+config MR_USE_MODULE_CRYPTO_ECDSA_P256
+    depends on MR_USE_MODULE_CRYPTO
+    select MR_USE_MODULE_CRYPTO_ECC_P256
+    select MR_USE_MODULE_CRYPTO_SHA256
+    bool "Use P-256 ECDSA"
+    default n
+    help
+        Enable ECDSA signature verification over P-256 with SHA-256.
+
+endmenu

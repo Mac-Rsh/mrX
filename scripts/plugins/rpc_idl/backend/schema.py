@@ -27,11 +27,11 @@ from ..semantic.model import (
     ArrayTypeRef,
     EnumTypeRef,
     Field,
-    InternedTypeRef,
     ResolvedType,
     ScalarType,
     Schema,
     StructTypeRef,
+    VariableArrayTypeRef,
 )
 from .emit import CEmit
 
@@ -40,7 +40,7 @@ class SchemaEncoder:
     """Encodes a resolved semantic schema into a compact binary format."""
 
     MAGIC = b"MRID"
-    FORMAT_VERSION = 1
+    FORMAT_VERSION = 2
     COMPRESSION_NONE = 0
     COMPRESSION_ZLIB = 1
 
@@ -59,9 +59,8 @@ class SchemaEncoder:
     }
     TYPE_ENUM = 0x20
     TYPE_STRUCT = 0x21
-    TYPE_STRING = 0x22
-    TYPE_BYTES = 0x23
     TYPE_ARRAY = 0x24
+    TYPE_VARIABLE_ARRAY = 0x25
 
     def encode(self, schema: Schema) -> bytes:
         """Encode one semantic schema into the stored self-description blob."""
@@ -193,14 +192,14 @@ class SchemaEncoder:
             output.append(self.TYPE_STRUCT)
             self._uvar(output, struct_ids[resolved.name])
             return
-        if isinstance(resolved, InternedTypeRef):
-            output.append(self.TYPE_STRING if resolved.kind == "string"
-                          else self.TYPE_BYTES)
-            self._uvar(output, resolved.max_len)
-            return
         if isinstance(resolved, ArrayTypeRef):
             output.append(self.TYPE_ARRAY)
             self._uvar(output, resolved.length)
+            self._write_type(output, resolved.element, enum_ids, struct_ids)
+            return
+        if isinstance(resolved, VariableArrayTypeRef):
+            output.append(self.TYPE_VARIABLE_ARRAY)
+            self._uvar(output, resolved.max_count)
             self._write_type(output, resolved.element, enum_ids, struct_ids)
             return
         raise ValueError(f"unsupported resolved RPC IDL type: {resolved!r}")

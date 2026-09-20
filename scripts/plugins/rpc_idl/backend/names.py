@@ -4,9 +4,9 @@
 """
 IDL Backend Names - C identifier mapping for header and source emission.
 
-Maps IDL names onto interned `__mr_rpc_idl_` tags, request/response
-typedefs, RPC call stages, shared empty payload helpers, user entry
-names, and codec helpers.
+Maps IDL names onto generated `__mr_rpc_idl_` tags, request/response
+typedefs, RPC call stages, shared empty payload helpers, user entry names,
+and codec helpers.
 
 @copyright (c) 2024-2026, MacRsh
 
@@ -49,14 +49,14 @@ class CNames:
         return f"{cls.PREFIX}{name}_t"
 
     @classmethod
-    def intern_tag(cls, kind: str, max_len: int) -> str:
-        """Return the struct tag for an interned string or bytes type."""
-        return f"{cls.PREFIX}{kind}_{max_len}"
+    def variable_array_tag(cls, index: int) -> str:
+        """Return the struct tag for one interned variable-array type."""
+        return f"{cls.PREFIX}var_array_{index}"
 
     @classmethod
-    def intern_typedef(cls, kind: str, max_len: int) -> str:
-        """Return the typedef name for an interned string or bytes type."""
-        return f"{cls.PREFIX}{kind}_{max_len}_t"
+    def variable_array_typedef(cls, index: int) -> str:
+        """Return the typedef name for one interned variable-array type."""
+        return f"{cls.variable_array_tag(index)}_t"
 
     @classmethod
     def method_request_tag(cls, service: str, method: str) -> str:

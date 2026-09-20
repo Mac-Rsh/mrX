@@ -9,21 +9,18 @@
 #include <mrX/platform/mr_platform.h>
 #if defined(MR_USE_DRIVER_DAC)
 #include <mrX/drivers/dac/mr_dac.h>
+#include <mrX/drivers/gpio/mr_gpio.h>
 #if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
     && defined(MR_USE_DRIVER_TMR)
+#define DAC_USE_STREAM
 #include <mrX/drivers/dma/mr_dma.h>
 #include <mrX/drivers/tmr/mr_tmr.h>
-#include <mrX/libc/mr_atomic.h>
 #endif /* DAC stream + DMA + TMR */
+#include "stm32h5xx_hal_dac.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT st_stm32h5_dac
-
-#define DAC_CHANNEL_MAX (2U)
-#define DAC_NANOSECONDS (1000000000ULL)
-#define DAC_EVENT_MASK                                                         \
-    (MR_DAC_WAIT_STREAM_HALF | MR_DAC_WAIT_STREAM_DONE                         \
-     | MR_DAC_WAIT_STREAM_ERROR)
+#define MR_HT_COMPAT                    st_stm32h5_dac
+#if MR_HT_HAS_DRIVER()
 
 /* DAC operations */
 static mr_err_t dac_channel_configure(const mr_driver_t *drv,
@@ -33,65 +30,70 @@ static mr_err_t dac_channel_configuration(const mr_driver_t *drv,
                                           mr_uint32_t channel,
                                           mr_dac_config_t *config);
 static mr_ssize_t dac_write(const mr_driver_t *drv, mr_dac_seq_t *seq);
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
+#if defined(DAC_USE_STREAM)
 static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
                                  const mr_dac_stream_config_t *config);
 static mr_err_t dac_stream_stop(const mr_driver_t *drv);
 static mr_err_t dac_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy);
 static mr_err_t dac_stream_offset(const mr_driver_t *drv, mr_size_t *offset);
-#endif /* DAC stream + DMA + TMR */
+#endif /* defined(DAC_USE_STREAM) */
 static mr_err_t dac_event_control(const mr_driver_t *drv, mr_uint32_t events,
                                   mr_bool_t enable);
 MR_UNUSED static const mr_dac_ops_t __dac_ops = {
     .channel_configure = dac_channel_configure,
     .channel_configuration = dac_channel_configuration,
     .write = dac_write,
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
+#if defined(DAC_USE_STREAM)
     .stream_start = dac_stream_start,
     .stream_stop = dac_stream_stop,
     .stream_is_busy = dac_stream_is_busy,
     .stream_offset = dac_stream_offset,
-#endif /* DAC stream + DMA + TMR */
+#endif /* defined(DAC_USE_STREAM) */
     .event_control = dac_event_control,
 };
 
-/* DAC hardware channel */
 typedef struct dac_channel {
     uint32_t channel;
-    GPIO_TypeDef *port;
-    uint16_t pin;
+    mr_ht_gpio_spec_t gpio;
 } dac_channel_t;
 
-/* DAC private data */
-typedef struct dac_priv {
-    DAC_HandleTypeDef hdac;
-    void (*clk_enable)(void); /* Board-provided HAL clock-enable macro */
-    const dac_channel_t *channels;
-    mr_size_t channels_num;
-    mr_uint8_t ref;
-    mr_uint8_t configured_mask;
-    mr_uint8_t started_mask;
-    mr_uint32_t event_mask;
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
-    mr_uint8_t hw_trigger_mask;
+#if defined(DAC_USE_STREAM)
+typedef struct dac_stream {
     mr_ht_dma_spec_t dma;
     mr_driver_t *timer;
+    mr_driver_t *drv;
+    mr_dma_transfer_t xfer;
+    mr_waiter_t waiter;
     uint32_t trigger;
-    mr_driver_t *stream_driver;
-    mr_dma_transfer_t transfer;
-    mr_waiter_t dma_waiter;
-    volatile mr_atomic_t stream_active;
-    volatile mr_atomic_t stream_complete;
-    mr_size_t stream_prefill;
+    mr_atomic_t active;
+    mr_atomic_t complete;
+    mr_size_t prefill;
     mr_bool_t dma_started;
-    mr_uint8_t stream_channel;
-    mr_bool_t stream_circular;
-    mr_bool_t dma_waiter_initialized;
-#endif /* DAC stream + DMA + TMR */
+    mr_uint8_t channel;
+    mr_bool_t circular;
+} dac_stream_t;
+#endif /* defined(DAC_USE_STREAM) */
+
+typedef struct dac_priv {
+    DAC_HandleTypeDef hdac;
+    void (*clk_enable)(void);
+    dac_channel_t *channels;
+    mr_size_t channels_num;
+    mr_uint8_t ref;
+    mr_uint8_t started_mask;
+    mr_uint32_t event_mask;
+#if defined(DAC_USE_STREAM)
+    dac_stream_t stream;
+#endif /* defined(DAC_USE_STREAM) */
 } dac_priv_t;
+
+#define DAC_CHANNEL_MAX                 (2U)
+#define DAC_EVENT_MASK                                                         \
+    (MR_DAC_WAIT_STREAM_HALF | MR_DAC_WAIT_STREAM_DONE                         \
+     | MR_DAC_WAIT_STREAM_ERROR)
+#if defined(DAC_USE_STREAM)
+#define DAC_NANOSECONDS                 (1000000000ULL)
+#endif /* defined(DAC_USE_STREAM) */
 
 static mr_bool_t dac_hal_channel_valid(uint32_t channel) {
     if (channel == DAC_CHANNEL_1) {
@@ -112,8 +114,7 @@ static mr_uint32_t dac_channel_mask(const dac_priv_t *priv) {
     return (1UL << priv->channels_num) - 1U;
 }
 
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
+#if defined(DAC_USE_STREAM)
 static uint32_t dac_dmaen(const dac_priv_t *priv, mr_uint32_t channel) {
     if (priv->channels[channel].channel == DAC_CHANNEL_1) {
         return DAC_CR_DMAEN1;
@@ -125,7 +126,7 @@ static uint32_t dac_dmaen(const dac_priv_t *priv, mr_uint32_t channel) {
 #endif /* defined(DAC_CHANNEL_2) */
     return 0U;
 }
-#endif /* DAC stream + DMA + TMR */
+#endif /* defined(DAC_USE_STREAM) */
 
 static mr_err_t dac_hw_init(dac_priv_t *priv) {
     mr_size_t i;
@@ -148,38 +149,23 @@ static mr_err_t dac_hw_init(dac_priv_t *priv) {
         }
     }
     priv->clk_enable();
-    if (HAL_DAC_GetState(&priv->hdac) != HAL_DAC_STATE_RESET) {
-        return 0;
-    }
 
-    /* Initialize the peripheral once */
+    /* Initialize the peripheral */
     return mr_stm32h5_hal_status(HAL_DAC_Init(&priv->hdac));
 }
 
 static mr_err_t dac_gpio_configure(dac_priv_t *priv, mr_uint32_t channel) {
-    const dac_channel_t *hw = &priv->channels[channel];
-    GPIO_InitTypeDef gpio_config = {0};
-    mr_uint8_t bit = (mr_uint8_t)(1U << channel);
-    mr_err_t ret;
+    dac_channel_t *hw = &priv->channels[channel];
+    mr_gpio_config_t cfg = {0};
 
-    if (priv->configured_mask & bit) {
-        return 0;
-    }
-    if ((hw->port == MR_NULL) || (hw->pin == 0U)) {
+    if (hw->gpio.drv == MR_NULL) {
         return -MR_ENODEV;
     }
 
-    ret = mr_stm32h5_gpio_clock_enable(hw->port);
-    if (ret != 0) {
-        return ret;
-    }
-
-    /* Set the board-described external analog output pin once */
-    gpio_config.Pin = hw->pin;
-    gpio_config.Mode = GPIO_MODE_ANALOG;
-    gpio_config.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(hw->port, &gpio_config);
-    return 0;
+    /* Set the analog output pin to analog mode with no pull */
+    cfg.mode = MR_GPIO_MODE_ANALOG;
+    cfg.pull = MR_GPIO_PULL_NONE;
+    return mr_ht_gpio_configure(&hw->gpio, &cfg);
 }
 
 static mr_err_t dac_config_trigger(dac_priv_t *priv, mr_uint32_t channel,
@@ -187,25 +173,6 @@ static mr_err_t dac_config_trigger(dac_priv_t *priv, mr_uint32_t channel,
     DAC_ChannelConfTypeDef dac_config = {0};
     mr_uint8_t bit = (mr_uint8_t)(1U << channel);
     mr_err_t ret;
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
-    mr_bool_t want_hw = (trigger != DAC_TRIGGER_NONE);
-
-    /* Skip identical untriggered or hardware-triggered setup */
-    if (priv->configured_mask & bit) {
-        if (want_hw) {
-            if (priv->hw_trigger_mask & bit) {
-                return 0;
-            }
-        } else if (!(priv->hw_trigger_mask & bit)) {
-            return 0;
-        }
-    }
-#else
-    if (priv->configured_mask & bit) {
-        return 0;
-    }
-#endif /* DAC stream + DMA + TMR */
 
     ret = dac_gpio_configure(priv, channel);
     if (ret != 0) {
@@ -230,21 +197,8 @@ static mr_err_t dac_config_trigger(dac_priv_t *priv, mr_uint32_t channel,
     dac_config.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
     dac_config.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_EXTERNAL;
     dac_config.DAC_UserTrimming = DAC_TRIMMING_FACTORY;
-    ret = mr_stm32h5_hal_status(HAL_DAC_ConfigChannel(
+    return mr_stm32h5_hal_status(HAL_DAC_ConfigChannel(
         &priv->hdac, &dac_config, priv->channels[channel].channel));
-    if (ret != 0) {
-        return ret;
-    }
-    priv->configured_mask |= bit;
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
-    if (want_hw) {
-        priv->hw_trigger_mask |= bit;
-    } else {
-        priv->hw_trigger_mask &= (mr_uint8_t)~bit;
-    }
-#endif /* DAC stream + DMA + TMR */
-    return 0;
 }
 
 static mr_err_t dac_channel_init(const mr_driver_t *drv, mr_uint32_t channel) {
@@ -279,8 +233,7 @@ static mr_err_t dac_seq_channels(const dac_priv_t *priv, mr_uint32_t channels,
     return 0;
 }
 
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
+#if defined(DAC_USE_STREAM)
 static mr_err_t dac_channel_trigger_configure(const mr_driver_t *drv,
                                               mr_uint32_t channel) {
     dac_priv_t *priv = MR_DRIVER_PRIV(drv);
@@ -292,7 +245,7 @@ static mr_err_t dac_channel_trigger_configure(const mr_driver_t *drv,
     }
 
     /* Program the HardTree-bound timer trigger; Start waits for DMA */
-    return dac_config_trigger(priv, channel, priv->trigger);
+    return dac_config_trigger(priv, channel, priv->stream.trigger);
 }
 
 static volatile uint32_t *dac_dhr12r(DAC_TypeDef *instance, uint32_t channel) {
@@ -307,28 +260,28 @@ static volatile uint32_t *dac_dhr12r(DAC_TypeDef *instance, uint32_t channel) {
     return MR_NULL;
 }
 
-static void dac_dma_waiter_release(dac_priv_t *priv) {
-    if (priv->dma_waiter_initialized) {
-        (void)mr_waiter_del(&priv->dma_waiter);
-        priv->dma_waiter_initialized = MR_FALSE;
+static void dac_stream_waiter_release(dac_priv_t *priv) {
+    if (priv->stream.drv != MR_NULL) {
+        (void)mr_waiter_del(&priv->stream.waiter);
+        priv->stream.drv = MR_NULL;
     }
 }
 
 static void dac_stream_halt_trigger(dac_priv_t *priv) {
-    if (priv->timer != MR_NULL) {
-        (void)mr_tmr_stop(priv->timer);
+    if (priv->stream.timer != MR_NULL) {
+        (void)mr_tmr_stop(priv->stream.timer);
     }
 }
 
 static void dac_stream_complete(void *param) {
     dac_priv_t *priv = param;
 
-    if (mr_atomic_load(&priv->stream_active) == 0) {
+    if (mr_atomic_load(&priv->stream.active) == 0) {
         return;
     }
-    mr_atomic_store(&priv->stream_complete, 1);
+    mr_atomic_store(&priv->stream.complete, 1);
     if (priv->event_mask & MR_DAC_WAIT_STREAM_DONE) {
-        (void)mr_dac_event_raise(priv->stream_driver, MR_DAC_WAIT_STREAM_DONE);
+        (void)mr_dac_event_raise(priv->stream.drv, MR_DAC_WAIT_STREAM_DONE);
     }
 }
 
@@ -342,16 +295,16 @@ static void dac_dma_event(mr_waiter_t *waiter, void *param,
     MR_IGNORE(data);
 
     /* Translate DMA events while the DAC stream is active */
-    if ((mr_atomic_load(&priv->stream_active) == 0)
-        || (priv->stream_driver == MR_NULL)) {
+    if ((mr_atomic_load(&priv->stream.active) == 0)
+        || (priv->stream.drv == MR_NULL)) {
         return;
     }
     if (event & MR_DMA_WAIT_ERROR) {
         /* Stop the trigger; defer DMA/channel/waiter cleanup out of IRQ */
         dac_stream_halt_trigger(priv);
-        mr_atomic_store(&priv->stream_complete, 1);
+        mr_atomic_store(&priv->stream.complete, 1);
         if (priv->event_mask & MR_DAC_WAIT_STREAM_ERROR) {
-            (void)mr_dac_event_raise(priv->stream_driver,
+            (void)mr_dac_event_raise(priv->stream.drv,
                                      MR_DAC_WAIT_STREAM_ERROR);
         }
         return;
@@ -361,14 +314,15 @@ static void dac_dma_event(mr_waiter_t *waiter, void *param,
         dac_event |= MR_DAC_WAIT_STREAM_HALF;
     }
     if (event & MR_DMA_WAIT_DONE) {
-        if (!priv->stream_circular) {
+        if (!priv->stream.circular) {
             /* The last word still needs one trigger to reach DOR */
             CLEAR_BIT(priv->hdac.Instance->CR,
-                      dac_dmaen(priv, priv->stream_channel));
-            ret = mr_stm32h5_tmr_drain(priv->timer, dac_stream_complete, priv);
+                      dac_dmaen(priv, priv->stream.channel));
+            ret = mr_stm32h5_tmr_drain(priv->stream.timer, dac_stream_complete,
+                                       priv);
             if (ret != 0) {
                 dac_stream_halt_trigger(priv);
-                mr_atomic_store(&priv->stream_complete, 1);
+                mr_atomic_store(&priv->stream.complete, 1);
                 if (priv->event_mask & MR_DAC_WAIT_STREAM_ERROR) {
                     dac_event |= MR_DAC_WAIT_STREAM_ERROR;
                 }
@@ -378,7 +332,7 @@ static void dac_dma_event(mr_waiter_t *waiter, void *param,
         }
     }
     if (dac_event != 0U) {
-        (void)mr_dac_event_raise(priv->stream_driver, dac_event);
+        (void)mr_dac_event_raise(priv->stream.drv, dac_event);
     }
 }
 
@@ -389,32 +343,32 @@ static mr_err_t dac_stream_stop(const mr_driver_t *drv) {
     mr_err_t ret;
 
     /* Stop the trigger source before stopping the data path */
-    if (priv->timer != MR_NULL) {
-        ret = mr_tmr_stop(priv->timer);
+    if (priv->stream.timer != MR_NULL) {
+        ret = mr_tmr_stop(priv->stream.timer);
         /* A failed start can leave a callback armed on a stopped timer */
-        (void)mr_stm32h5_tmr_drain(priv->timer, MR_NULL, MR_NULL);
+        (void)mr_stm32h5_tmr_drain(priv->stream.timer, MR_NULL, MR_NULL);
         if ((ret != 0) && (first_error == 0)) {
             first_error = ret;
         }
     }
 
-    if (mr_atomic_load(&priv->stream_active) != 0) {
+    if (mr_atomic_load(&priv->stream.active) != 0) {
         /* Stop/recover DMA even when HAL has put the channel in ERROR */
-        if (priv->dma.drv == MR_NULL) {
+        if (priv->stream.dma.drv == MR_NULL) {
             if (first_error == 0) {
                 first_error = -MR_ENODEV;
             }
-        } else if (priv->dma_started) {
-            ret = mr_dma_stop(priv->dma.drv, priv->dma.channel);
+        } else if (priv->stream.dma_started) {
+            ret = mr_dma_stop(priv->stream.dma.drv, priv->stream.dma.channel);
             if ((ret != 0) && (first_error == 0)) {
                 first_error = ret;
             }
         }
 
-        bit = (mr_uint8_t)(1U << priv->stream_channel);
+        bit = (mr_uint8_t)(1U << priv->stream.channel);
         if (priv->started_mask & bit) {
             ret = mr_stm32h5_hal_status(HAL_DAC_Stop(
-                &priv->hdac, priv->channels[priv->stream_channel].channel));
+                &priv->hdac, priv->channels[priv->stream.channel].channel));
             if ((ret != 0) && (first_error == 0)) {
                 first_error = ret;
             }
@@ -427,15 +381,14 @@ static mr_err_t dac_stream_stop(const mr_driver_t *drv) {
         if (first_error != 0) {
             return first_error;
         }
-        mr_atomic_store(&priv->stream_active, 0);
-        priv->dma_started = MR_FALSE;
+        mr_atomic_store(&priv->stream.active, 0);
+        priv->stream.dma_started = MR_FALSE;
     }
     if (HAL_DAC_GetState(&priv->hdac) != HAL_DAC_STATE_RESET) {
         CLEAR_BIT(priv->hdac.Instance->CR,
-                  dac_dmaen(priv, priv->stream_channel));
+                  dac_dmaen(priv, priv->stream.channel));
     }
-    dac_dma_waiter_release(priv);
-    priv->stream_driver = MR_NULL;
+    dac_stream_waiter_release(priv);
     return first_error;
 }
 
@@ -444,28 +397,28 @@ static mr_err_t dac_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
     mr_err_t ret;
 
     /* An idle DAC stream does not require an initialized DMA channel */
-    if (mr_atomic_load(&priv->stream_active) == 0) {
+    if (mr_atomic_load(&priv->stream.active) == 0) {
         *busy = MR_FALSE;
         return 0;
     }
-    if (priv->dma.drv == MR_NULL) {
+    if (priv->stream.dma.drv == MR_NULL) {
         return -MR_ENODEV;
     }
 
     /* Finite output includes the final DHR-to-DOR conversion */
-    if (!priv->stream_circular) {
-        *busy = (mr_atomic_load(&priv->stream_complete) == 0);
+    if (!priv->stream.circular) {
+        *busy = (mr_atomic_load(&priv->stream.complete) == 0);
         return *busy ? 0 : dac_stream_stop(drv);
     }
 
     /* Get DMA transfer state */
-    ret = mr_dma_is_busy(priv->dma.drv, priv->dma.channel, busy);
+    ret = mr_dma_is_busy(priv->stream.dma.drv, priv->stream.dma.channel, busy);
     if (ret != 0) {
         return ret;
     }
 
     /* Recover a circular stream after a DMA error */
-    if ((!*busy) && (mr_atomic_load(&priv->stream_active) != 0)) {
+    if ((!*busy) && (mr_atomic_load(&priv->stream.active) != 0)) {
         ret = dac_stream_stop(drv);
         if (ret != 0) {
             return ret;
@@ -479,16 +432,17 @@ static mr_err_t dac_stream_offset(const mr_driver_t *drv, mr_size_t *offset) {
     mr_err_t ret;
 
     /* Get the DMA transfer offset */
-    if (priv->dma.drv == MR_NULL) {
+    if (priv->stream.dma.drv == MR_NULL) {
         return -MR_ENODEV;
     }
-    if (priv->transfer.count == 0U) {
-        *offset = priv->stream_prefill;
+    if (priv->stream.xfer.count == 0U) {
+        *offset = priv->stream.prefill;
         return 0;
     }
-    ret = mr_dma_offset(priv->dma.drv, priv->dma.channel, offset);
+    ret = mr_dma_offset(priv->stream.dma.drv, priv->stream.dma.channel,
+                        offset);
     if (ret == 0) {
-        *offset += priv->stream_prefill;
+        *offset += priv->stream.prefill;
     }
     return ret;
 }
@@ -512,7 +466,8 @@ static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
     mr_err_t ret;
 
     /* Check stream parameters */
-    if ((priv->dma.drv == MR_NULL) || (priv->timer == MR_NULL)) {
+    if ((priv->stream.dma.drv == MR_NULL)
+        || (priv->stream.timer == MR_NULL)) {
         return -MR_ENODEV;
     }
     if ((config->update_rate == 0U) || (seq->buf == MR_NULL)
@@ -542,7 +497,7 @@ static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
     timer_config.period = period;
     timer_config.signal = MR_TMR_SIGNAL_UPDATE;
     timer_config.mode = MR_TMR_MODE_PERIODIC;
-    ret = mr_tmr_configure(priv->timer, &timer_config);
+    ret = mr_tmr_configure(priv->stream.timer, &timer_config);
     if (ret != 0) {
         return ret;
     }
@@ -556,32 +511,31 @@ static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
     if (ret != 0) {
         return ret;
     }
-    priv->stream_channel = (mr_uint8_t)channel;
-    priv->stream_circular = (config->circular != MR_FALSE);
+    priv->stream.channel = (mr_uint8_t)channel;
+    priv->stream.circular = (config->circular != MR_FALSE);
 
     /* Configure DMA for memory to DHR12Rx transfers */
-    ret = mr_dma_configure(priv->dma.drv, priv->dma.channel, &dma_config);
+    ret = mr_dma_configure(priv->stream.dma.drv, priv->stream.dma.channel,
+                           &dma_config);
     if (ret != 0) {
         return ret;
     }
 
     /* Attach a fresh waiter so it can be safely released on stream stop */
-    priv->stream_driver = (mr_driver_t *)drv;
-    ret = mr_waiter_init(&priv->dma_waiter, dac_dma_event, priv,
+    ret = mr_waiter_init(&priv->stream.waiter, dac_dma_event, priv,
                          MR_DMA_WAIT_HALF | MR_DMA_WAIT_DONE
                              | MR_DMA_WAIT_ERROR);
     if (ret != 0) {
-        priv->stream_driver = MR_NULL;
         return ret;
     }
-    priv->dma_waiter_initialized = MR_TRUE;
-    ret = mr_dma_event_attach(priv->dma.drv, priv->dma.channel,
-                              &priv->dma_waiter);
+    priv->stream.drv = (mr_driver_t *)drv;
+    ret = mr_dma_event_attach(priv->stream.dma.drv, priv->stream.dma.channel,
+                              &priv->stream.waiter);
     if (ret != 0) {
         (void)dac_stream_stop(drv);
         return ret;
     }
-    ret = mr_dma_event_enable(priv->dma.drv, priv->dma.channel,
+    ret = mr_dma_event_enable(priv->stream.dma.drv, priv->stream.dma.channel,
                               MR_DMA_WAIT_HALF | MR_DMA_WAIT_DONE
                                   | MR_DMA_WAIT_ERROR);
     if (ret != 0) {
@@ -590,10 +544,10 @@ static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
     }
 
     /* Preload finite output; each trigger converts then requests the next */
-    priv->stream_prefill = config->circular ? 0U : sizeof(mr_uint32_t);
-    priv->dma_started = MR_FALSE;
-    mr_atomic_store(&priv->stream_complete, 0);
-    if (priv->stream_prefill != 0U) {
+    priv->stream.prefill = config->circular ? 0U : sizeof(mr_uint32_t);
+    priv->stream.dma_started = MR_FALSE;
+    mr_atomic_store(&priv->stream.complete, 0);
+    if (priv->stream.prefill != 0U) {
         ret = mr_stm32h5_hal_status(HAL_DAC_SetValue(
             &priv->hdac, priv->channels[channel].channel, DAC_ALIGN_12B_R,
             *(const mr_uint32_t *)seq->buf & 0x0FFFU));
@@ -604,28 +558,31 @@ static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
     }
 
     /* Start DMA before enabling DAC conversion requests */
-    priv->transfer.next = config->circular ? &priv->transfer : MR_NULL;
-    priv->transfer.count = seq->size - priv->stream_prefill;
-    priv->transfer.src = (const mr_uint8_t *)seq->buf + priv->stream_prefill;
-    priv->transfer.dst = (void *)dac_dhr12r(priv->hdac.Instance,
-                                            priv->channels[channel].channel);
-    if (priv->transfer.dst == MR_NULL) {
+    priv->stream.xfer.next = config->circular ? &priv->stream.xfer : MR_NULL;
+    priv->stream.xfer.count = seq->size - priv->stream.prefill;
+    priv->stream.xfer.src = (const mr_uint8_t *)seq->buf
+                            + priv->stream.prefill;
+    priv->stream.xfer.dst = (void *)dac_dhr12r(priv->hdac.Instance,
+                                               priv->channels[channel].channel);
+    if (priv->stream.xfer.dst == MR_NULL) {
         (void)dac_stream_stop(drv);
         return -MR_EINVAL;
     }
-    mr_atomic_store(&priv->stream_active, 1);
-    if (priv->transfer.count != 0U) {
-        ret = mr_dma_start(priv->dma.drv, priv->dma.channel, &priv->transfer);
+    mr_atomic_store(&priv->stream.active, 1);
+    if (priv->stream.xfer.count != 0U) {
+        ret = mr_dma_start(priv->stream.dma.drv, priv->stream.dma.channel,
+                           &priv->stream.xfer);
         if (ret != 0) {
             (void)dac_stream_stop(drv);
             return ret;
         }
-        priv->dma_started = MR_TRUE;
+        priv->stream.dma_started = MR_TRUE;
         SET_BIT(priv->hdac.Instance->CR, dac_dmaen(priv, channel));
     } else {
         /* One sample requires exactly one trigger and no DMA request */
         CLEAR_BIT(priv->hdac.Instance->CR, dac_dmaen(priv, channel));
-        ret = mr_stm32h5_tmr_drain(priv->timer, dac_stream_complete, priv);
+        ret = mr_stm32h5_tmr_drain(priv->stream.timer, dac_stream_complete,
+                                   priv);
         if (ret != 0) {
             (void)dac_stream_stop(drv);
             return ret;
@@ -641,14 +598,14 @@ static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
     }
     priv->started_mask |= (mr_uint8_t)(1U << channel);
 
-    ret = mr_tmr_start(priv->timer);
+    ret = mr_tmr_start(priv->stream.timer);
     if (ret != 0) {
         (void)dac_stream_stop(drv);
         return ret;
     }
     return 0;
 }
-#endif /* DAC stream + DMA + TMR */
+#endif /* defined(DAC_USE_STREAM) */
 
 static mr_err_t dac_channel_start(const mr_driver_t *drv, mr_uint32_t channel,
                                   mr_uint16_t value) {
@@ -683,19 +640,17 @@ static mr_err_t dac_channel_configure(const mr_driver_t *drv,
                                       mr_uint32_t channel,
                                       const mr_dac_config_t *config) {
     dac_priv_t *priv = MR_DRIVER_PRIV(drv);
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
+#if defined(DAC_USE_STREAM)
     mr_bool_t busy;
     mr_err_t ret;
-#endif /* DAC stream + DMA + TMR */
+#endif /* defined(DAC_USE_STREAM) */
 
     /* Check channel and supported reference */
     if ((channel >= priv->channels_num) || (config->ref != priv->ref)) {
         return -MR_EINVAL;
     }
 
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
+#if defined(DAC_USE_STREAM)
     /* Do not alter the trigger while a stream is active */
     ret = dac_stream_is_busy(drv, &busy);
     if (ret != 0) {
@@ -704,7 +659,7 @@ static mr_err_t dac_channel_configure(const mr_driver_t *drv,
     if (busy) {
         return -MR_EBUSY;
     }
-#endif /* DAC stream + DMA + TMR */
+#endif /* defined(DAC_USE_STREAM) */
 
     /* Configure channel */
     return dac_channel_init(drv, channel);
@@ -733,13 +688,11 @@ static mr_ssize_t dac_write(const mr_driver_t *drv, mr_dac_seq_t *seq) {
     mr_size_t samples;
     mr_size_t i;
     mr_err_t ret;
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
+#if defined(DAC_USE_STREAM)
     mr_bool_t busy;
-#endif /* DAC stream + DMA + TMR */
+#endif /* defined(DAC_USE_STREAM) */
 
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
+#if defined(DAC_USE_STREAM)
     /* Do not convert while a stream is active */
     ret = dac_stream_is_busy(drv, &busy);
     if (ret != 0) {
@@ -748,7 +701,7 @@ static mr_ssize_t dac_write(const mr_driver_t *drv, mr_dac_seq_t *seq) {
     if (busy) {
         return -MR_EBUSY;
     }
-#endif /* DAC stream + DMA + TMR */
+#endif /* defined(DAC_USE_STREAM) */
 
     /* Check supported resolution, channel mask and sample layout */
     if ((seq->resolution != 12U) || (seq->size > (mr_size_t)MR_SSIZE_MAX)
@@ -794,18 +747,17 @@ static mr_err_t dac_event_control(const mr_driver_t *drv, mr_uint32_t events,
     if ((events == 0U) || ((events & ~DAC_EVENT_MASK) != 0U)) {
         return -MR_EINVAL;
     }
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
-    if (!enable && (mr_atomic_load(&priv->stream_active) != 0)) {
+#if defined(DAC_USE_STREAM)
+    if (!enable && (mr_atomic_load(&priv->stream.active) != 0)) {
         if ((events & MR_DAC_WAIT_STREAM_ERROR) != 0U) {
             return -MR_EBUSY;
         }
         if (((events & MR_DAC_WAIT_STREAM_DONE) != 0U)
-            && !priv->stream_circular) {
+            && !priv->stream.circular) {
             return -MR_EBUSY;
         }
     }
-#endif /* DAC stream + DMA + TMR */
+#endif /* defined(DAC_USE_STREAM) */
     if (enable) {
         priv->event_mask |= events;
     } else {
@@ -814,19 +766,35 @@ static mr_err_t dac_event_control(const mr_driver_t *drv, mr_uint32_t events,
     return 0;
 }
 
-/* Instance install */
-/* st_channels element: <HAL DAC channel, GPIO port, GPIO pin> */
 #define __ST_HT_DAC_CHANNEL_IMPL(_elem, _node, _prop)                          \
     {                                                                          \
         .channel = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0),               \
-        .port = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 1),                  \
-        .pin = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 2),                   \
+        .gpio                                                                  \
+        = {.drv = MR_HT_DRIVER_FIND(                                           \
+               MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 1)),                  \
+           .pin = (mr_uint8_t)MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 2)},   \
     }
+#if defined(DAC_USE_STREAM)
+#define __ST_HT_DAC_STREAM(_id)                                                \
+    .stream                                                                    \
+        = {MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_dma),                     \
+                       (.dma = MR_HT_DMA_SPEC(_id, st_dma)), (.dma = {0})),    \
+           MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_timer),                   \
+                       (.timer = MR_HT_DRIVER_FIND(                            \
+                            MR_HT_DRIVER_PROP(_id, st_timer))),                \
+                       (.timer = MR_NULL)),                                    \
+           MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_trigger),                 \
+                       (.trigger = MR_HT_DRIVER_PROP(_id, st_trigger)),        \
+                       (.trigger = 0)),                                        \
+           .active = MR_ATOMIC_INIT(0)},
+#else
+#define __ST_HT_DAC_STREAM(_id)
+#endif /* defined(DAC_USE_STREAM) */
 #define ST_HT_DAC_INSTALL(_id, _ops)                                           \
     static void MR_CAT(__dac_clk_enable_, _id)(void) {                         \
         MR_HT_DRIVER_PROP(_id, st_clken)();                                    \
     }                                                                          \
-    static const dac_channel_t MR_CAT(__dac_channels_, _id)[]                  \
+    static dac_channel_t MR_CAT(__dac_channels_, _id)[]                        \
         = {MR_HT_DRIVER_PROP_ELEM_FOREACH(_id, st_channels,                    \
                                           __ST_HT_DAC_CHANNEL_IMPL)};          \
     static mr_dac_data_t MR_CAT(__dac_data_, _id) = MR_DAC_DATA_INIT(          \
@@ -838,19 +806,10 @@ static mr_err_t dac_event_control(const mr_driver_t *drv, mr_uint32_t events,
            .channels = MR_CAT(__dac_channels_, _id),                           \
            .channels_num = MR_ARRAY_SIZE(MR_CAT(__dac_channels_, _id)),        \
            .ref = MR_HT_DRIVER_PROP_OR(_id, st_ref, MR_DAC_REF_INTERNAL),      \
-           __ST_HT_DAC_STREAM_SPEC(_id)};                                      \
+           __ST_HT_DAC_STREAM(_id)};                                           \
     MR_HT_DRIVER_INSTALL(_id, MR_DRIVER_CLAZZES_STATIK(dac),                   \
                          MR_DRIVER_TYPE_DAC, &MR_CAT(__dac_data_, _id),        \
                          &MR_CAT(__dac_priv_, _id), _ops)
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)            \
-    && defined(MR_USE_DRIVER_TMR)
-#define __ST_HT_DAC_STREAM_SPEC(_id)                                           \
-    .dma = MR_HT_DMA_SPEC(_id, st_dma),                                        \
-    .timer = MR_HT_DRIVER_FIND(MR_HT_DRIVER_PROP(_id, st_timer)),              \
-    .trigger = MR_HT_DRIVER_PROP(_id, st_trigger),                             \
-    .stream_active = MR_ATOMIC_INIT(0),
-#else
-#define __ST_HT_DAC_STREAM_SPEC(_id)
-#endif /* DAC stream + DMA + TMR */
 MR_HT_DRIVER_FOREACH(ST_HT_DAC_INSTALL, &__dac_ops);
+#endif /* MR_HT_HAS_DRIVER() */
 #endif /* defined(MR_USE_DRIVER_DAC) */

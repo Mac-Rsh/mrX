@@ -19,6 +19,11 @@
 extern "C" {
 #endif /* __cplusplus */
 
+/**
+ * @addtogroup FS-Struct
+ * @{
+ */
+
 #if defined(MR_USE_FS)
 struct mr_dentry;
 
@@ -76,6 +81,8 @@ int mr_fs_struct_lock(void);
  */
 void mr_fs_struct_unlock(int mask);
 #endif /* defined(MR_USE_FS) */
+
+/** @} */
 
 #ifdef __cplusplus
 }

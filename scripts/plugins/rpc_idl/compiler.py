@@ -18,7 +18,7 @@ from pathlib import Path
 from .semantic.model import (
     ArrayTypeRef,
     EnumTypeRef,
-    InternedTypeRef,
+    VariableArrayTypeRef,
     ResolvedType,
     ScalarType,
     Schema,
@@ -27,7 +27,7 @@ from .semantic.model import (
 from ..htc.common import CompilationUnit, Diagnostics, ErrorCode, SourceFile
 from ..htc.frontend import CppOptions, CppPreprocessor, Preprocessor
 from .backend import CSymbolChecker, HeaderBuilder, SourceBuilder
-from .backend.layout import Layout, MOVING_SLOT_MAX, VAR_SLOT_MAX
+from .backend.layout import Layout, LayoutLimitError
 from .frontend import Document, Lexer, Parser
 from .semantic import SemanticBuilder
 
@@ -83,14 +83,14 @@ class RpcIdlCompiler:
             return CompileResult(diagnostics=diagnostics, unit=unit,
                                  document=document, schema=schema)
 
-        # Check generated C identifiers after the schema is complete
-        CSymbolChecker(diagnostics).check(schema)
+        # Bound expansion before any backend builds the payload layouts
+        RpcIdlCompiler._check_codec_limits(schema, diagnostics)
         if diagnostics.has_errors():
             return CompileResult(diagnostics=diagnostics, unit=unit,
                                  document=document, schema=schema)
 
-        # Reject payloads that would unroll too many codec slots
-        RpcIdlCompiler._check_codec_limits(schema, diagnostics)
+        # Check generated C identifiers after the schema is complete
+        CSymbolChecker(diagnostics).check(schema)
         if diagnostics.has_errors():
             return CompileResult(diagnostics=diagnostics, unit=unit,
                                  document=document, schema=schema)
@@ -123,36 +123,25 @@ class RpcIdlCompiler:
 
     @staticmethod
     def _check_codec_limits(schema: Schema, diagnostics: Diagnostics) -> None:
-        """Reject payloads whose codec would exceed stack or code limits."""
-        for (service_name, method_name, which), layout in (
-                Layout.map_schema(schema).items()):
-            method = next(item for item in
-                          schema.services[service_name].methods
-                          if item.name == method_name)
-            if layout.var_count > VAR_SLOT_MAX:
-                diagnostic = diagnostics.error(
-                    ErrorCode.INVALID_ARRAY,
-                    f"{which} of '{service_name}.{method_name}' unrolls "
-                    f"{layout.var_count} variable slots "
-                    f"(limit {VAR_SLOT_MAX})",
-                )
-                if method.span is not None:
-                    diagnostic.with_source_span(method.span)
-                diagnostic.add_note(
-                    "interned string/bytes fields are unrolled per "
-                    "array element")
-            moving = len(layout.moving_slots)
-            if moving > MOVING_SLOT_MAX:
-                diagnostic = diagnostics.error(
-                    ErrorCode.INVALID_ARRAY,
-                    f"{which} of '{service_name}.{method_name}' unrolls "
-                    f"{moving} moving slots (limit {MOVING_SLOT_MAX})",
-                )
-                if method.span is not None:
-                    diagnostic.with_source_span(method.span)
-                diagnostic.add_note(
-                    "fields after the first interned slot need a codec "
-                    "src[] entry")
+        """Reject oversized layouts before symbol checking or C emission."""
+        for service in schema.services.values():
+            for method in service.methods:
+                payloads = [("request", method.request)]
+                if not method.oneway:
+                    payloads.append(("response", method.response))
+                for which, fields in payloads:
+                    try:
+                        Layout.from_fields(fields, schema)
+                    except LayoutLimitError as exc:
+                        diagnostic = diagnostics.error(
+                            ErrorCode.INVALID_ARRAY,
+                            f"{which} of '{service.name}.{method.name}' {exc}",
+                        )
+                        if method.span is not None:
+                            diagnostic.with_source_span(method.span)
+                        diagnostic.add_note(
+                            "fixed arrays containing variable-length fields "
+                            "are expanded only up to the codec slot limit")
 
     @staticmethod
     def _declaration_order(files: list[SourceFile]) -> list[SourceFile]:
@@ -230,21 +219,21 @@ class RpcIdlCompiler:
             "=== IDL schema ===",
             f"enum {len(schema.enums)}, struct {len(schema.structs)}, "
             f"service {len(schema.services)}",
-            f"interned string {len(schema.strings)}, "
-            f"bytes {len(schema.bytes_types)}",
+            # Variable-array layouts
+            f"variable array {len(schema.variable_arrays)}",
             f"payload max: request {schema.request_size_max}, "
             f"response {schema.response_size_max}",
         ]
 
-        # Interned string/bytes layouts
-        if schema.strings or schema.bytes_types:
+        # Interned variable-array layouts
+        if schema.variable_arrays:
             lines.append("")
-            lines.append("[interned]")
-            for interned in (*schema.strings.values(),
-                             *schema.bytes_types.values()):
+            lines.append("[variable arrays]")
+            for item in schema.variable_arrays.values():
                 lines.append(
-                    f"  {interned.kind}<{interned.max_len}>  "
-                    f"size={interned.size_type}  packed={interned.packed_size}")
+                    f"  #{item.index} "
+                    f"{RpcIdlCompiler._format_type(item.element)}<{item.max_count}>  "
+                    f"size={item.size_type}  packed={item.packed_size}")
 
         # User enums
         for enum in schema.enums.values():
@@ -301,8 +290,8 @@ class RpcIdlCompiler:
         if isinstance(resolved, ArrayTypeRef):
             return f"{RpcIdlCompiler._format_type(resolved.element)}" \
                    f"[{resolved.length}]"
-        if isinstance(resolved, InternedTypeRef):
-            return f"{resolved.kind}<{resolved.max_len}>"
+        if isinstance(resolved, VariableArrayTypeRef):
+            return f"{RpcIdlCompiler._format_type(resolved.element)}<{resolved.max_count}>"
         if isinstance(resolved, EnumTypeRef):
             return resolved.name
         if isinstance(resolved, StructTypeRef):

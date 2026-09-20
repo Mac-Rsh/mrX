@@ -16,14 +16,15 @@ it back.
 from ..semantic.model import (
     ArrayTypeRef,
     EnumTypeRef,
-    InternedTypeRef,
     ResolvedType,
     ScalarType,
     Schema,
     StructTypeRef,
+    VariableArrayTypeRef,
     Field,
 )
 from dataclasses import dataclass
+from collections.abc import Iterator
 
 PREFIX_WIDTH = {
     "u8": 1,
@@ -31,9 +32,14 @@ PREFIX_WIDTH = {
     "u32": 4,
 }
 BOOL_INDEX_NAMES = ("i", "j", "k")
+BoolBound = int | tuple[str, int]
 # Limits for generated codec n[] (variable) and src[] (moving) arrays
 VAR_SLOT_MAX = 256
 MOVING_SLOT_MAX = 256
+
+
+class LayoutLimitError(ValueError):
+    """A payload exceeds the generated codec's slot budget."""
 
 
 @dataclass(frozen=True)
@@ -45,12 +51,12 @@ class FixedSlot:
 
 @dataclass(frozen=True)
 class VarSlot:
-    """One interned `string<N>` or `bytes<N>` in the packed struct."""
+    """One bounded variable-length array in the packed struct."""
 
-    kind: str
-    max_len: int
+    max_count: int
     size_type: str
     prefix_size: int
+    element_size: int
     path: str
 
 
@@ -65,13 +71,19 @@ class Layout:
 
     @property
     def has_variable(self) -> bool:
-        """Return True when the payload contains string or bytes data."""
+        """Return True when the payload contains variable-length data."""
         return self.var_count > 0
 
     @property
     def var_count(self) -> int:
-        """Return the number of interned string or bytes slots."""
+        """Return the number of variable-length slots."""
         return sum(1 for slot in self.slots if isinstance(slot, VarSlot))
+
+    @property
+    def variable_only(self) -> bool:
+        """Return True when every payload slot is variable-length data."""
+        return bool(self.slots) and all(
+            isinstance(slot, VarSlot) for slot in self.slots)
 
     @property
     def moving_slots(self) -> tuple[Slot, ...]:
@@ -85,18 +97,25 @@ class Layout:
                 seen_var = True
         return tuple(moving)
 
-    @property
-    def strings(self) -> tuple[VarSlot, ...]:
-        """Return interned string slots that need a trailing NUL."""
-        return tuple(slot for slot in self.slots
-                     if isinstance(slot, VarSlot) and slot.kind == "string")
-
     @classmethod
     def from_fields(cls, fields: list[Field], schema: Schema) -> "Layout":
         """Flatten one payload into scatter slots."""
         raw: list[Slot] = []
+        variables = 0
+        moving = 0
         for field in fields:
-            _flatten_type(field.type, field.name, raw, schema)
+            for slot in _flatten_type(field.type, field.name, schema):
+                if variables:
+                    moving += 1
+                if isinstance(slot, VarSlot):
+                    variables += 1
+                if variables > VAR_SLOT_MAX:
+                    raise LayoutLimitError(
+                        f"requires more than {VAR_SLOT_MAX} variable slots")
+                if moving > MOVING_SLOT_MAX:
+                    raise LayoutLimitError(
+                        f"requires more than {MOVING_SLOT_MAX} moving slots")
+                raw.append(slot)
         return cls(tuple(raw))
 
     @classmethod
@@ -115,26 +134,16 @@ class Layout:
         return layouts
 
 
-def size_prefix(max_len: int) -> tuple[str, int]:
-    """Return the size-prefix type and width for `string<N>` / `bytes<N>`."""
-    if max_len <= 255:
-        return "u8", PREFIX_WIDTH["u8"]
-    if max_len <= 65535:
-        return "u16", PREFIX_WIDTH["u16"]
-    return "u32", PREFIX_WIDTH["u32"]
-
-
 def _is_fixed(resolved: ResolvedType, schema: Schema) -> bool:
     """Return True when a type has the same compact and scatter size."""
-    current = resolved
-    while isinstance(current, ArrayTypeRef):
-        current = current.element
-    if isinstance(current, InternedTypeRef):
+    if isinstance(resolved, VariableArrayTypeRef):
         return False
-    if isinstance(current, StructTypeRef):
-        struct = schema.structs[current.name]
+    if isinstance(resolved, ArrayTypeRef):
+        return _is_fixed(resolved.element, schema)
+    if isinstance(resolved, StructTypeRef):
+        struct = schema.structs[resolved.name]
         return all(_is_fixed(field.type, schema) for field in struct.fields)
-    return isinstance(current, (ScalarType, EnumTypeRef))
+    return isinstance(resolved, (ScalarType, EnumTypeRef))
 
 
 def bool_index_name(depth: int) -> str:
@@ -145,22 +154,29 @@ def bool_index_name(depth: int) -> str:
 
 
 def bool_paths(fields: list[Field],
-               schema: Schema) -> list[tuple[str, tuple[int, ...]]]:
-    """Collect bool accesses and the array lengths that wrap them."""
-    found: list[tuple[str, tuple[int, ...]]] = []
+               schema: Schema) -> list[tuple[str, tuple[BoolBound, ...]]]:
+    """Collect bool accesses and fixed or runtime array loop bounds."""
+    found: list[tuple[str, tuple[BoolBound, ...]]] = []
     for field in fields:
         _collect_bools(field.type, field.name, [], found, schema)
     return found
 
 
-def _collect_bools(resolved: ResolvedType, path: str, loops: list[int],
-                   found: list[tuple[str, tuple[int, ...]]],
+def _collect_bools(resolved: ResolvedType, path: str,
+                   loops: list[BoolBound],
+                   found: list[tuple[str, tuple[BoolBound, ...]]],
                    schema: Schema) -> None:
     """Walk one type and append every bool path under it."""
     if isinstance(resolved, ArrayTypeRef):
         index = bool_index_name(len(loops))
         _collect_bools(resolved.element, f"{path}[{index}]",
                        [*loops, resolved.length], found, schema)
+        return
+    if isinstance(resolved, VariableArrayTypeRef):
+        index = bool_index_name(len(loops))
+        bound: BoolBound = (path, resolved.max_count)
+        _collect_bools(resolved.element, f"{path}.data[{index}]",
+                       [*loops, bound], found, schema)
         return
     if isinstance(resolved, StructTypeRef):
         struct = schema.structs[resolved.name]
@@ -173,32 +189,29 @@ def _collect_bools(resolved: ResolvedType, path: str, loops: list[int],
 
 
 def _flatten_type(resolved: ResolvedType, path: str,
-                  slots: list[Slot], schema: Schema) -> None:
-    """Append scatter slots for one type."""
+                  schema: Schema) -> Iterator[Slot]:
+    """Yield slots lazily so limits stop oversized array expansion early."""
     if _is_fixed(resolved, schema):
-        slots.append(FixedSlot(path))
+        yield FixedSlot(path)
         return
     if isinstance(resolved, ArrayTypeRef):
         for index in range(resolved.length):
-            _flatten_type(resolved.element, f"{path}[{index}]",
-                          slots, schema)
+            yield from _flatten_type(resolved.element, f"{path}[{index}]",
+                                     schema)
         return
-    if isinstance(resolved, InternedTypeRef):
-        table = (schema.strings if resolved.kind == "string"
-                 else schema.bytes_types)
-        interned = table.get(resolved.max_len)
-        if interned is not None:
-            size_type = interned.size_type
-            prefix_size = PREFIX_WIDTH[size_type]
-        else:
-            size_type, prefix_size = size_prefix(resolved.max_len)
-        slots.append(VarSlot(
-            resolved.kind, resolved.max_len, size_type, prefix_size, path))
+    if isinstance(resolved, VariableArrayTypeRef):
+        yield VarSlot(
+            resolved.max_count,
+            resolved.size_type,
+            PREFIX_WIDTH[resolved.size_type],
+            resolved.element.packed_size,
+            path,
+        )
         return
     if isinstance(resolved, StructTypeRef):
         struct = schema.structs[resolved.name]
         for field in struct.fields:
             child = f"{path}.{field.name}" if path else field.name
-            _flatten_type(field.type, child, slots, schema)
+            yield from _flatten_type(field.type, child, schema)
         return
-    slots.append(FixedSlot(path))
+    yield FixedSlot(path)

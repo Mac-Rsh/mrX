@@ -16,7 +16,6 @@ rather than the lexer. Language-level `include` is not parsed; use
 from ...htc.common import Diagnostics, ErrorCode, SourceSpan
 from .syntax import (
     ArrayType,
-    BytesType,
     Document,
     EnumDecl,
     EnumItemDecl,
@@ -25,9 +24,9 @@ from .syntax import (
     NamedType,
     PrimType,
     ServiceDecl,
-    StringType,
     StructDecl,
     TypeExpr,
+    VariableArrayType,
 )
 from .tokens import Token, TokenType
 
@@ -40,8 +39,7 @@ class Parser:
     )
     PRIMS = INT_PRIMS + ("bool", "f32", "f64")
     IDL_KEYWORDS = frozenset((
-        "include", "enum", "struct", "service", "bool", "string", "bytes",
-        *PRIMS,
+        "include", "enum", "struct", "service", *PRIMS,
     ))
     C_KEYWORDS = frozenset((
         "auto", "break", "case", "char", "const", "continue", "default",
@@ -353,35 +351,65 @@ class Parser:
         return FieldDecl(name_token.value, type_expr, name_token.span)
 
     def _parse_type(self) -> TypeExpr | None:
-        """Parse a type atom followed by zero or more `[N]` suffixes."""
+        """Parse a type atom followed by fixed or variable array suffixes."""
         atom = self._parse_type_atom()
         if atom is None:
             return None
 
-        # Collect `[N]` suffixes, then wrap innermost-last so the first
-        # dimension stays outermost (`u8[2][3]` -> C `u8[2][3]`)
-        lengths: list[int] = []
-        while self._match(TokenType.LBRACKET):
-            length = self._expect_uint("array length")
-            if length is None:
-                return None
-            if self._expect(TokenType.RBRACKET, ErrorCode.EXPECTED_TOKEN,
-                            "expected ']' after array length") is None:
-                return None
-            if length < 1:
-                self._error(ErrorCode.INVALID_ARRAY,
-                            "array length must be >= 1", atom.span)
-                return None
-            lengths.append(length)
+        # Collect suffixes, then wrap innermost-last so the first dimension
+        # stays outermost (`u8[2][3]` -> C `u8[2][3]`).
+        suffixes: list[tuple[str, int]] = []
+        while True:
+            if self._match(TokenType.LBRACKET):
+                length = self._expect_uint("array length")
+                if length is None:
+                    return None
+                if self._expect(TokenType.RBRACKET, ErrorCode.EXPECTED_TOKEN,
+                                "expected ']' after array length") is None:
+                    return None
+                if length < 1:
+                    self._error(ErrorCode.INVALID_ARRAY,
+                                "array length must be >= 1", atom.span)
+                    return None
+                suffixes.append(("fixed", length))
+                continue
+            if self._match(TokenType.LT):
+                max_count = self._expect_uint("variable array maximum count")
+                if max_count is None:
+                    return None
+                if self._expect(TokenType.GT, ErrorCode.EXPECTED_GT,
+                                "expected '>' after variable array count") \
+                        is None:
+                    return None
+                if max_count < 1:
+                    self._error(ErrorCode.INVALID_ARRAY,
+                                "variable array maximum count must be >= 1",
+                                atom.span)
+                    return None
+                suffixes.append(("variable", max_count))
+                continue
+            break
+
+        # XLink's MRID reader permits 32 type nodes, including the atom.
+        # Check before semantic resolution recurses through the suffix chain.
+        if len(suffixes) >= 32:
+            self._error(ErrorCode.INVALID_ARRAY,
+                        "type exceeds the MRID limit of 31 array dimensions",
+                        atom.span)
+            return None
 
         current: TypeExpr = atom
-        for length in reversed(lengths):
-            current = ArrayType(span=atom.span, element=current,
-                                length=length)
+        for kind, count in reversed(suffixes):
+            if kind == "fixed":
+                current = ArrayType(span=atom.span, element=current,
+                                    length=count)
+            else:
+                current = VariableArrayType(span=atom.span, element=current,
+                                            max_count=count)
         return current
 
     def _parse_type_atom(self) -> TypeExpr | None:
-        """Parse a scalar, `string<N>`, `bytes<N>`, or named type."""
+        """Parse a scalar or named type."""
         token = self._peek()
         if token is None or token.type != TokenType.IDENTIFIER:
             self._error(ErrorCode.EXPECTED_IDENTIFIER, "expected a type",
@@ -391,39 +419,13 @@ class Parser:
         span = token.span
         self._advance()
 
-        # Scalar, bounded, or named user type
         if name in self.PRIMS:
             return PrimType(span=span, name=name)
-        if name in {"string", "bytes"}:
-            return self._parse_bounded_type(name, span)
         if name in self.KEYWORDS:
             self._error(ErrorCode.INVALID_PROPERTY,
                         f"'{name}' cannot be used as a type name", span)
             return None
         return NamedType(span=span, name=name)
-
-    def _parse_bounded_type(self, kind: str,
-                            span: SourceSpan | None) -> TypeExpr | None:
-        """Parse `<N>` for `string` or `bytes`."""
-        if self._expect(TokenType.LT, ErrorCode.EXPECTED_LT,
-                        f"expected '<' after '{kind}'") is None:
-            return None
-        max_len = self._expect_uint(f"{kind} maximum length")
-        if max_len is None:
-            return None
-        close = self._expect(TokenType.GT, ErrorCode.EXPECTED_GT,
-                             f"expected '>' after '{kind}' length")
-        if close is None:
-            return None
-
-        # `<>` cannot be zero
-        if max_len < 1:
-            self._error(ErrorCode.INVALID_ARRAY,
-                        f"{kind} maximum length must be >= 1", span)
-            return None
-        if kind == "string":
-            return StringType(span=span, max_len=max_len)
-        return BytesType(span=span, max_len=max_len)
 
     def _expect_int_prim(self) -> str | None:
         """Require an integer primitive type name."""

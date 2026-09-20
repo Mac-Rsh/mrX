@@ -9,8 +9,6 @@
 #ifndef __MR_FS_DENTRY_H__
 #define __MR_FS_DENTRY_H__
 
-#include "mr_fs_struct.h"
-
 #include <mrX/mr_config.h>
 #if defined(MR_USE_FS)
 #include <mrX/kernel/mr_object.h>
@@ -22,7 +20,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup Dentry
+ * @addtogroup FS-Dentry
  * @{
  */
 
@@ -266,10 +264,7 @@ mr_err_t mr_dentry_uninstantiate(mr_dentry_t *dentry);
  * @param dentry The dentry to check.
  * @return MR_TRUE on root, otherwise MR_FALSE.
  */
-MR_INLINE mr_bool_t mr_dentry_is_root(mr_dentry_t *dentry) {
-    /* Check whether dentry is global root */
-    return (dentry == mr_fs_struct_root()) ? MR_TRUE : MR_FALSE;
-}
+mr_bool_t mr_dentry_is_root(mr_dentry_t *dentry);
 
 /**
  * @brief This macro function gets a dentry name.

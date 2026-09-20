@@ -19,7 +19,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup Inode
+ * @addtogroup FS-Inode
  * @{
  */
 

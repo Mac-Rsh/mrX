@@ -273,7 +273,7 @@ printf 无 clazz 与派生机制（头文件里没有结构体、没有函数指
 
 - 输出终点由移植层实现的外部函数决定：`extern int mr_port_output(const char *buf, mr_size_t size)`（
   `mrX/include/mrX/port/mr_port_output.h:32`），printf 只用不定义（调用点 `mrX/kernel/printf.c:52`）。换后端就是换这个实现——宿主模拟写
-  `stdout`（`mrX/arch/win/platform/port/output.c:13`），目标板空实现占位（`mrX/arch/wch/ch32v/platform/port/output.c:13`）。
+  `stdout`（`mrX/arch/win/platform/port/output.c:13`）；STM32H5 参考实现逐字节输出到 Cortex-M ITM（`mrX/arch/st/stm32h5/platform/port/output.c:10`）。
 - 格式化逻辑不属本模块：由 [格式化 sprintf](../libc/sprintf.md) 的 `mr_vsnprintf` 提供（`printf.c:43`），可在
   `MR_USE_SPRINTF_STD` 下整体转发标准库（`mrX/include/mrX/libc/mr_sprintf.h:29-33`），这是改变格式能力（如新增说明符）的唯一入口。
 - 编译期开关：`MR_USE_PRINTF`、`MR_CFG_PRINTF_BUF_SIZE`（缺省 64，`printf.c:19-21`）、`MR_USE_PRINTF_COLOR`、

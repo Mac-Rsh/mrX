@@ -4,9 +4,8 @@
 """
 IDL Semantic Model - Resolved schema produced by the IDL builder.
 
-Records interned string/bytes types, user types, services, and packed
-storage sizes. Header emission reads this model later and assigns C
-identifiers then.
+Records bounded variable arrays, user types, services, and packed storage
+sizes. Header emission reads this model later and assigns C identifiers then.
 
 @copyright (c) 2024-2026, MacRsh
 
@@ -23,7 +22,7 @@ class ResolvedType:
     """A type after name resolution, with packed storage size.
 
     This is the C packed-struct size used for scatter storage, not the
-    compact on-wire size. Interned `string<N>` includes a trailing NUL.
+    compact on-wire size. Variable arrays reserve their full bounded capacity.
     """
 
     packed_size: int
@@ -51,11 +50,13 @@ class StructTypeRef(ResolvedType):
 
 
 @dataclass(frozen=True)
-class InternedTypeRef(ResolvedType):
-    """A resolved `string<N>` or `bytes<N>` interned type."""
+class VariableArrayTypeRef(ResolvedType):
+    """A resolved bounded variable-length array."""
 
-    kind: str = ""
-    max_len: int = 0
+    element: ResolvedType = field(default_factory=lambda: ResolvedType(0))
+    max_count: int = 0
+    size_type: str = ""
+    index: int = 0
 
 
 @dataclass(frozen=True)
@@ -96,11 +97,12 @@ class EnumType:
 
 
 @dataclass
-class InternedType:
-    """One interned `string<N>` or `bytes<N>` layout."""
+class VariableArrayType:
+    """One interned bounded variable-length array layout."""
 
-    kind: str
-    max_len: int
+    index: int
+    element: ResolvedType
+    max_count: int
     size_type: str
     packed_size: int
 
@@ -146,8 +148,7 @@ class Schema:
     enums: OrderedDict[str, EnumType] = field(default_factory=OrderedDict)
     structs: OrderedDict[str, StructType] = field(default_factory=OrderedDict)
     services: OrderedDict[str, Service] = field(default_factory=OrderedDict)
-    strings: OrderedDict[int, InternedType] = field(default_factory=OrderedDict)
-    bytes_types: OrderedDict[int, InternedType] = field(
+    variable_arrays: OrderedDict[int, VariableArrayType] = field(
         default_factory=OrderedDict)
     request_size_max: int = 0
     response_size_max: int = 0

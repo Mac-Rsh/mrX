@@ -102,27 +102,13 @@
  */
 
 #if defined(MR_USE_FS)
+#include <mrX/fs/mr_fs_struct.h>
 #include <mrX/fs/mr_fs_system.h>
 #include <mrX/fs/mr_fs_sblock.h>
 #include <mrX/fs/mr_fs_dentry.h>
 #include <mrX/fs/mr_fs_inode.h>
 #include <mrX/fs/mr_fs_file.h>
 #endif /* defined(MR_USE_FS) */
-
-/**
- * @addtogroup Modules
- * @{
- */
-
-#if defined(MR_USE_MODULE)
-#if defined(MR_USE_MODULE_XVM)
-#include <mrX/modules/xvm/mr_xvm.h>
-#include <mrX/modules/xvm/mr_xvm_gdb.h>
-#endif /* defined(MR_USE_MODULE_XVM) */
-#if defined(MR_USE_MODULE_RPC)
-#include <mrX/modules/rpc/mr_rpc.h>
-#endif /* defined(MR_USE_MODULE_RPC) */
-#endif /* defined(MR_USE_MODULE) */
 
 /** @} */
 

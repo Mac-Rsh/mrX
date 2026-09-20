@@ -54,6 +54,8 @@ python ./scripts/cli.py platform uninstall -i arch/<vendor>/<target>/install.tom
 同一输出目录同时只能安装一个平台。切换平台前先卸载旧平台；安装状态记录在 输出目录的 `.platform/` 中，安装产物和状态目录不纳入版本管理，因此每次重新
 获取 mrX 后都要重新安装。平台安装完成后，再运行 Kconfig，使平台 Kconfig 选项进入配置树。
 
+当前 ST / STM32H5 实现的资源归属、HardTree 和 backend 约定见 [ST 芯片适配](../arch/st/st.md)；具体运行期限制还应同时阅读 `mrX/arch/st/stm32h5/README.md`。
+
 ### 1.2 `install.toml` 的最小结构
 
 每个平台必须提供 `install.toml`，声明平台名称、基准目录和复制规则：

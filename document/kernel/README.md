@@ -23,6 +23,7 @@
 | 哈希表 Hashmap      | [hashmap.md](hashmap.md)   | 以 32 位整数为键的键值容器，节点内嵌无额外分配 |
 | 日志 Log            | [log.md](log.md)           | 带级别和时间戳的日志输出                       |
 | 格式化输出 Printf   | [printf.md](printf.md)     | 格式化字符串并经由平台输出接口送出             |
+| 基础工具 Foundation | [foundation.md](foundation.md) | 链表、引用计数、自旋锁、工具宏与版本宏 |
 
 ## 相关文档
 

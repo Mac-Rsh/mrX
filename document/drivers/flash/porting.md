@@ -56,11 +56,14 @@ backend 负责：
 
 ## 7. 当前参考
 
-当前仓库没有 FLASH 平台 backend。实现时可参考：
+当前可参考：
 
-- [RAM 移植指南](../ram/porting.md) 的 probe/region 模型；
-- [驱动框架](../driver.md) 的注册与生命周期；
-- `mrX/test/drivers/flash/flash.c` 对公共契约的行为约束。
+```text
+mrX/arch/st/stm32h5/platform/drivers/flash/flash.c
+```
+
+该 backend 展示了 `MR_HT_FLASH_INSTALL`、均匀扇区 probe/region、128-bit program
+与 cache 一致性处理。公共契约的行为约束见 `mrX/test/drivers/flash/flash.c`。
 
 ## 8. 移植检查清单
 

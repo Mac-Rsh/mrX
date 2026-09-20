@@ -13,7 +13,6 @@ Re-exports lexing, parsing, and syntax types.
 
 from .syntax import (
     ArrayType,
-    BytesType,
     Document,
     EnumDecl,
     EnumItemDecl,
@@ -22,9 +21,9 @@ from .syntax import (
     NamedType,
     PrimType,
     ServiceDecl,
-    StringType,
     StructDecl,
     TypeExpr,
+    VariableArrayType,
 )
 from .tokens import Token, TokenType
 from .parser import Parser
@@ -32,7 +31,6 @@ from .lexer import Lexer
 
 __all__ = [
     "ArrayType",
-    "BytesType",
     "Document",
     "EnumDecl",
     "EnumItemDecl",
@@ -43,9 +41,9 @@ __all__ = [
     "Parser",
     "PrimType",
     "ServiceDecl",
-    "StringType",
     "StructDecl",
     "Token",
     "TokenType",
+    "VariableArrayType",
     "TypeExpr",
 ]

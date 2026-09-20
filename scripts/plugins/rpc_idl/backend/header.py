@@ -4,7 +4,7 @@
 """
 IDL Backend Header - C header emission for the RPC IDL compiler.
 
-Renders interned layouts, user types, method payloads, overlay unions,
+Renders variable-array layouts, user types, method payloads, overlay unions,
 and `MR_RPC` user-entry macros into one generated header.
 
 @copyright (c) 2024-2026, MacRsh
@@ -15,11 +15,11 @@ and `MR_RPC` user-entry macros into one generated header.
 from ..semantic.model import (
     ArrayTypeRef,
     EnumTypeRef,
-    InternedTypeRef,
     ResolvedType,
-    InternedType,
     ScalarType,
     StructTypeRef,
+    VariableArrayType,
+    VariableArrayTypeRef,
     Method,
     Schema,
     Service,
@@ -40,7 +40,7 @@ class HeaderBuilder:
     def render(self, schema: Schema) -> str:
         """Render the header body for one schema."""
         lines: list[str] = []
-        self._emit_interned(lines, schema)
+        self._emitted_variable_arrays: set[int] = set()
         self._emit_enums(lines, schema)
         self._emit_structs(lines, schema)
         self._emit_methods(lines, schema)
@@ -84,31 +84,44 @@ class HeaderBuilder:
         ])
         return "\n".join(lines)
 
-    def _emit_interned(self, lines: list[str], schema: Schema) -> None:
-        """Emit interned string and bytes layouts once."""
-        interned = [*schema.strings.values(), *schema.bytes_types.values()]
-        if not interned:
+    def _emit_variable_arrays_for_fields(
+            self, lines: list[str], fields: list[Field], schema: Schema) -> None:
+        """Emit variable-array typedefs before the fields that use them."""
+        pending: list[VariableArrayTypeRef] = []
+        for field in fields:
+            for resolved in self._variable_array_refs(field.type):
+                if resolved.index in self._emitted_variable_arrays:
+                    continue
+                self._emitted_variable_arrays.add(resolved.index)
+                pending.append(resolved)
+        if not pending:
             return
-        lines.append(CEmit.section_banner("intern"))
-        for item in interned:
-            self._emit_interned_type(lines, item)
+
+        lines.append(CEmit.section_banner("variable array"))
+        for resolved in pending:
+            item = schema.variable_arrays[resolved.index]
+            self._emit_variable_array_type(lines, item)
             lines.append("")
 
-    def _emit_interned_type(self, lines: list[str],
-                            interned: InternedType) -> None:
-        """Emit one interned string or bytes struct."""
-        tag = CNames.intern_tag(interned.kind, interned.max_len)
-        typedef = CNames.intern_typedef(interned.kind, interned.max_len)
-        size_c = CNames.SCALARS[interned.size_type]
-        if interned.kind == "string":
-            data_type = "char"
-            data_len = interned.max_len + 1
-        else:
-            data_type = "mr_uint8_t"
-            data_len = interned.max_len
+    def _variable_array_refs(
+            self, resolved: ResolvedType) -> list[VariableArrayTypeRef]:
+        """Return variable arrays directly wrapped by fixed array dimensions."""
+        if isinstance(resolved, VariableArrayTypeRef):
+            return [resolved]
+        if isinstance(resolved, ArrayTypeRef):
+            return self._variable_array_refs(resolved.element)
+        return []
+
+    def _emit_variable_array_type(self, lines: list[str],
+                                  item: VariableArrayType) -> None:
+        """Emit one interned bounded variable-array struct."""
+        tag = CNames.variable_array_tag(item.index)
+        typedef = CNames.variable_array_typedef(item.index)
+        size_c = CNames.SCALARS[item.size_type]
+        data_type, suffix = self._c_type(item.element)
         self._emit_packed_struct(lines, tag, typedef, [
             f"{size_c} size",
-            f"{data_type} data[{data_len}]",
+            f"{data_type} data[{item.max_count}]{suffix}",
         ])
 
     def _emit_enums(self, lines: list[str], schema: Schema) -> None:
@@ -132,6 +145,7 @@ class HeaderBuilder:
     def _emit_structs(self, lines: list[str], schema: Schema) -> None:
         """Emit user structs in declaration order."""
         for struct in schema.structs.values():
+            self._emit_variable_arrays_for_fields(lines, struct.fields, schema)
             lines.append(CEmit.section_banner("struct", struct.name))
             tag = CNames.user_tag(struct.name)
             typedef = CNames.user_typedef(struct.name)
@@ -142,6 +156,11 @@ class HeaderBuilder:
     def _emit_methods(self, lines: list[str], schema: Schema) -> None:
         """Emit per-method request and response structs with fields."""
         for service in schema.services.values():
+            fields: list[Field] = []
+            for method in service.methods:
+                fields.extend(method.request)
+                fields.extend(method.response)
+            self._emit_variable_arrays_for_fields(lines, fields, schema)
             groups = self._method_payloads(service)
             if not groups:
                 continue
@@ -279,8 +298,8 @@ class HeaderBuilder:
             return CNames.SCALARS[current.name], suffix
         if isinstance(current, (EnumTypeRef, StructTypeRef)):
             return CNames.user_typedef(current.name), suffix
-        if isinstance(current, InternedTypeRef):
-            return CNames.intern_typedef(current.kind, current.max_len), suffix
+        if isinstance(current, VariableArrayTypeRef):
+            return CNames.variable_array_typedef(current.index), suffix
         return "mr_uint8_t", suffix
 
     @staticmethod

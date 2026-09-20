@@ -56,7 +56,7 @@ i8  i16  i32  i64
 bool  f32  f64
 ~~~
 
-字符串和字节串必须给出大于零的最大长度；数组长度也必须大于零：
+固定数组长度和变长数组上限都必须大于零：
 
 ~~~idl
 enum status: u8 {
@@ -72,9 +72,10 @@ struct point {
 
 struct sample {
     id: u32;
-    name: string<24>;
+    name: u8<24>;
     pos: point;
     tags: u8[4];
+    values: f32<32>;
     st: status;
 };
 ~~~
@@ -83,8 +84,11 @@ struct sample {
 
 - enum 的底层类型必须是整数类型；未写值的枚举项从 0 开始按前一项递增。
 - 类型必须先声明后使用；enum、struct 和 service 名称在同一命名空间中不能重复。
-- `string<N>` 在线上传输时带长度前缀，结构体中额外保留结尾 NUL；`bytes<N>` 不保留 NUL。
-- u8[2][3] 是固定长度的嵌套数组，所有数组都按声明顺序生成 C 数组。
+- `T[N]` 是恰好 `N` 个元素的定长数组；`T<N>` 是最多 `N` 个元素的变长数组，`N` 始终表示元素个数而不是字节数。
+- `T<N>` 在生成的 C 类型中通过 `.size` 保存当前元素个数，通过 `.data` 保存容量为 `N` 的元素数组；线上只传长度前缀和有效元素。
+- 当前版本要求 `T<N>` 的元素 `T` 必须是定长类型，可使用标量、enum、定长数组或只包含定长字段的 struct；变长数组不能直接或通过 struct 再包含变长元素。
+- 文本和原始字节都使用 `u8<N>` 表达；IDL 不区分字符编码，也不会额外保留或自动写入结尾 NUL。
+- `u8[2][3]` 是固定长度的嵌套数组，所有数组都按声明顺序生成 C 数组。
 - bool 解码和编码时会校验只能是 0 或 1。
 
 ### 服务和方法
@@ -94,18 +98,20 @@ struct sample {
 ~~~idl
 service lab @1 {
     mix @0 (
-        title: string<16>,
+        title: u8<16>,
         count: u32,
-        blob: bytes<40>
+        values: f32<32>,
+        blob: u8<40>
     ) -> (
-        title: string<16>,
+        title: u8<16>,
         count: u32,
-        blob: bytes<40>
+        values: f32<32>,
+        blob: u8<40>
     );
 
     ping @3 () -> ();
 
-    log @4 (msg: string<48>);
+    log @4 (msg: u8<48>);
 };
 ~~~
 
@@ -140,8 +146,11 @@ MR_RPC(lab, ping) {
 指针；入口返回非负结果后，生成代码自动编码响应并由 RPC 模块发送。新增或修改 .idl 后，必须重新生成并重新编译
 idl.c，否则方法注册表、类型和业务入口可能互不匹配。
 
-变量长度字段的最大值由 string<N> / bytes<N> 限制；解码会拒绝超长或截断负载，编码也 会拒绝超过声明上限的数据。生成器还会拒绝超过内部
-codec 槽位限制的过大数组或复杂布局。
+变长数组的最大元素个数由 `T<N>` 限制；解码会拒绝超长或截断负载，编码也会拒绝 `.size` 超过声明上限的数据。线上长度前缀根据 `N` 自动选择 `u8`、`u16` 或 `u32`，始终按小端编码；元素中的多字节标量仍使用目标机字节序，与 XLink 的 `byte_order` 对应。生成的解码器会在展开结束后将长度写回本机字节序的 `.size`，编码器则显式写出小端长度前缀。前缀后紧跟 `size * sizeof(T)` 字节的有效元素数据。
+
+生成器在数组展开过程中检查每个请求/响应的槽位预算：最多 256 个变长槽位，以及首个变长槽位后的 256 个移动槽位；超限立即停止展开并报告诊断，避免先展开巨大数组。单个类型表达式最多包含 31 层数组后缀，与 XLink 默认 MRID 类型深度限制一致。响应的最大 packed 大小不能超过 `0x7fffffff` 字节，因为 C 编码阶段通过有符号 `mr_err_t` 返回负载长度。
+
+对于只由变长数组组成的响应，生成编码器会把“所有 `.size` 都为 0”视为语义空响应：当该会话正在生成 `STREAM` 时直接返回 0，不把仅由长度前缀构成的 wire payload 当作有效数据。普通 `RESPONSE` 不受此优化影响，空变长数组仍会正常编码长度前缀。
 
 ## 运行时二进制描述
 
@@ -163,7 +172,7 @@ codec 槽位限制的过大数组或复杂布局。
 info = (format_version << 4) | compression
 ```
 
-当前格式版本为 `1`；压缩方式 `0` 表示不压缩，`1` 表示 zlib。因此当前未压缩文档的 info 为 `0x10`，zlib 文档为 `0x11`。`MRID + info` 这 5 字节始终保持未压缩，Host 无需先解压即可识别格式和压缩算法。
+当前格式版本为 `2`；压缩方式 `0` 表示不压缩，`1` 表示 zlib。因此当前未压缩文档的 info 为 `0x20`，zlib 文档为 `0x21`。`MRID + info` 这 5 字节始终保持未压缩，Host 无需先解压即可识别格式和压缩算法。
 
 body 按以下顺序连续编码，不保存 C 结构体 offset、alignment、`packed_size`、源码位置或生成符号名：
 
@@ -174,7 +183,7 @@ struct table
 service table
 ```
 
-所有计数、索引、service/method ID、数组长度、`string<N>`/`bytes<N>` 上限和无符号枚举值都使用 unsigned LEB128。字符串编码为 `length: uvar + UTF-8 bytes`，不保存结尾 NUL。名称先全局去重进入 string table，后续记录只引用 string index。出现顺序保持 semantic schema 的声明顺序，因此编码结果是确定的。
+所有计数、索引、service/method ID、定长数组长度、变长数组上限和无符号枚举值都使用 unsigned LEB128。string table 中的名称编码为 `length: uvar + UTF-8 bytes`，不保存结尾 NUL。名称先全局去重进入 string table，后续记录只引用 string index。出现顺序保持 semantic schema 的声明顺序，因此编码结果是确定的。
 
 有符号枚举值先做 ZigZag，再按 unsigned LEB128 编码：
 
@@ -262,11 +271,10 @@ repeat field_count times:
 | `0x0a` | `f64` | 无 |
 | `0x20` | enum | `enum_index: uvar` |
 | `0x21` | struct | `struct_index: uvar` |
-| `0x22` | `string<N>` | `N: uvar` |
-| `0x23` | `bytes<N>` | `N: uvar` |
-| `0x24` | array | `length: uvar`，随后递归编码 element type |
+| `0x24` | 定长数组 `T[N]` | `N: uvar`，随后递归编码 element type |
+| `0x25` | 变长数组 `T<N>` | `N: uvar`，随后递归编码 element type |
 
-例如 `u8[4]` 编码为 `0x24, 0x04, 0x00`；`sample[2]` 编码为 `0x24, 0x02, 0x21, <sample_index>`。
+例如 `u8[4]` 编码为 `0x24, 0x04, 0x00`；`sample[2]` 编码为 `0x24, 0x02, 0x21, <sample_index>`；`f32<32>` 编码为 `0x25, 0x20, 0x09`。
 
 ### 压缩规则
 
@@ -274,9 +282,9 @@ repeat field_count times:
 
 ```text
 if sizeof(zlib(body)) < sizeof(body):
-    blob = "MRID" + 0x11 + zlib(body)
+    blob = "MRID" + 0x21 + zlib(body)
 else:
-    blob = "MRID" + 0x10 + body
+    blob = "MRID" + 0x20 + body
 ```
 
 因此小型 schema 不会因为 zlib header/stream 开销而变大；板端也不需要任何压缩或解压代码，只把生成在 ROM 中的 blob 分片返回。解压工作完全由 Host 完成。

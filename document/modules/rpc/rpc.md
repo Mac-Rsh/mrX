@@ -25,7 +25,7 @@ RPC 解决的问题是： **在没有通用网络栈的串行链路（UART、SPI
 - 二进制帧协议：同步字 + 头部 Fletcher-16 校验 + 可选负载校验和，误码后自动逐字节重同步。
 - 六种消息类型：请求、响应、单向、订阅、退订、流推送。
 - 方法以 `service ID + method ID` 寻址，链接期自动导出；方法哈希表由 `MR_INIT_LEVEL_MODULE` 的 user-initcall 建立，因此使用方法分发前必须已经执行 `mr_user_init()`。
-- 参数/返回值编解码由 IDL 描述文件生成，字符串与变长数据带长度前缀且解码时严格 校验长度，越界与截断输入不会破坏内存。
+- 参数/返回值编解码由 IDL 描述文件生成，`T<N>` 变长数组带元素计数前缀且解码时严格校验上限，越界与截断输入不会破坏内存。文本编码和结尾 NUL 由应用约定。
 - 每个 RPC 对象的会话池与收发工作区预分配，请求处理过程不按调用临时分配内存；只有 `mr_rpc_create` 的动态对象本身使用堆。支持在方法回调中“持有”会话、稍后再应答。
 - 订阅机制：客户端订阅后，服务端按周期自动调用方法并以流帧推送结果。
 - 传输层完全由用户注入（`send`/`flush` 两个回调），支持阻塞与部分发送。
@@ -131,7 +131,7 @@ static void rpc_poll_once(void) {
 ```idl
 service calculator @1 {
     add @0 (left: i32, right: i32) -> (sum: i32);
-    echo @1 (message: string<48>) -> (message: string<48>);
+    echo @1 (message: u8<48>) -> (message: u8<48>);
 };
 ```
 
@@ -164,7 +164,6 @@ MR_RPC(calculator, echo) {
     response->message.size = request->message.size;
     mr_memcpy(response->message.data,
               request->message.data, request->message.size);
-    response->message.data[response->message.size] = '\0';
     return 0;
 }
 ```
@@ -173,7 +172,7 @@ MR_RPC(calculator, echo) {
 
 **4. 接收并处理对端请求**
 
-沿用前面的 `rpc_setup` 与 `rpc_poll_once` 驱动：传输层收到字节后交给 `mr_rpc_input`，再调用 `mr_rpc_execute`。对端按同一份 IDL 向 service `1`、method `0` 发送 `REQUEST`，本机便会解出 `left` 和 `right`、调用 `calculator.add`，再经 `ops->send` 返回 `sum` 和结果码。例如对端发送 2 和 3，本机返回 `sum = 5`、结果码 `0`；调用 `calculator.echo` 时则会收到原字符串。`string<48>` 字段在 C 中通过 `.size` 与 `.data` 读写，解码器会校验长度不超过 48。RPC 模块提供的是请求分发与响应处理端；IDL 生成器不会生成应用侧的远程调用代理，对端需自行按同一协议编码请求。
+沿用前面的 `rpc_setup` 与 `rpc_poll_once` 驱动：传输层收到字节后交给 `mr_rpc_input`，再调用 `mr_rpc_execute`。对端按同一份 IDL 向 service `1`、method `0` 发送 `REQUEST`，本机便会解出 `left` 和 `right`、调用 `calculator.add`，再经 `ops->send` 返回 `sum` 和结果码。例如对端发送 2 和 3，本机返回 `sum = 5`、结果码 `0`；调用 `calculator.echo` 时则会收到原始字节序列。`u8<48>` 字段在 C 中通过 `.size` 与 `.data` 读写，解码器会校验元素个数不超过 48；如果应用把它当文本使用，字符编码和结尾 NUL 由应用自行处理。RPC 模块提供的是请求分发与响应处理端；IDL 生成器不会生成应用侧的远程调用代理，对端需自行按同一协议编码请求。
 
 ### 4. 使用说明
 
@@ -216,7 +215,7 @@ MR_RPC(calculator, echo) {
 **负载编码规则**（由 IDL 生成，对接端实现时需一致）：
 
 - 字段按声明顺序紧凑排列，无填充与对齐。
-- `string<N>` / `bytes<N>`：1 字节长度前缀 + 数据本体，长度不得超过 `N`。
+- `T[N]` 表示恰好 `N` 个元素的定长数组；`T<N>` 表示最多 `N` 个元素的变长数组。变长数组先编码由 `N` 决定宽度的 `u8`/`u16`/`u32` 元素计数，再紧跟 `size * sizeof(T)` 字节的有效元素。
 - 多字节字段按宿主字节序原样传输。
 - 负载总长必须与字段布局完全一致：截断或多余尾部字节都按解码失败处理。
 
@@ -241,6 +240,7 @@ MR_RPC(lab, mix) {
 - 客户端发送 `SUBSCRIBE` 帧，`value` 为推送周期（毫秒），bit31（`MR_RPC_SUBSCRIBE_CONTINUOUS`）表示每个 STREAM 成功发送后不再等待软定时器，而是立即重新进入可 poll 队列；真正再次调用方法仍需要 `mr_rpc_poll()`。周期为 0 返回 `-MR_EINVAL`。
 - 订阅应答成功后，服务端每到周期即重新调用方法入口（`request` 为订阅时的数据，
   `response` 每次重新填充），并以 `STREAM` 帧推送；流帧的结果码为当次方法返回值。
+- 当一次 `STREAM` 调用成功但编码后的语义负载为空时，会话直接重新进入等待而不发送空流帧。对于只含变长数组的 IDL 响应，所有 `.size` 都为 0 时按空负载处理，长度前缀本身不会触发发送。
 - 订阅占用一个会话直至退订；订阅还需保留一个空闲会话给普通请求，因此单会话配置 无法订阅。
 - 退订发送 `UNSUBSCRIBE` 帧（负载必须为空），按 `session` ID 匹配；无匹配订阅时 应答 `-MR_ENOENT`。
 
@@ -415,7 +415,7 @@ mr_bool_t mr_rpc_put(mr_rpc_t *rpc);
 
 ```c
 MR_RPC(lab, mix) {
-    /* request: title(string<16>) count(u32) note(string<32>) blob(bytes<40>) */
+    /* request: title(u8<16>) count(u32) note(u8<32>) blob(u8<40>) */
     response->title.size = 2U;
     mr_memcpy(response->title.data, "ok", 2U);
     response->count = request->count + 1U;

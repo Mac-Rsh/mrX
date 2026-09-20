@@ -4,8 +4,8 @@
 """
 IDL Semantic Builder - Resolve parsed IDL syntax into a packed schema.
 
-Assigns protocol IDs, interns `string<N>` / `bytes<N>`, and checks names
-and layout sizes. C identifiers are left to the header generator.
+Assigns protocol IDs, interns bounded variable arrays, and checks names and
+layout sizes. C identifiers are left to the header generator.
 
 @copyright (c) 2024-2026, MacRsh
 
@@ -14,7 +14,6 @@ and layout sizes. C identifiers are left to the header generator.
 
 from ..frontend.syntax import (
     ArrayType,
-    BytesType,
     Document,
     EnumDecl,
     FieldDecl,
@@ -22,9 +21,9 @@ from ..frontend.syntax import (
     NamedType,
     PrimType,
     ServiceDecl,
-    StringType,
     StructDecl,
     TypeExpr,
+    VariableArrayType,
 )
 from .model import (
     ArrayTypeRef,
@@ -32,8 +31,6 @@ from .model import (
     EnumType,
     EnumTypeRef,
     Field,
-    InternedType,
-    InternedTypeRef,
     Method,
     ScalarType,
     Schema,
@@ -41,17 +38,18 @@ from .model import (
     StructType,
     StructTypeRef,
     ResolvedType,
+    VariableArrayType as ResolvedVariableArrayType,
+    VariableArrayTypeRef,
 )
 from ...htc.common import Diagnostics, ErrorCode, SourceSpan
-import re
 
 
 class SemanticBuilder:
     """Builds a semantic schema from a parsed IDL document."""
 
     PAYLOAD_MAX = 0xFFFFFFFF
+    RESPONSE_MAX = 0x7FFFFFFF
     ID_MAX = 0xFFFF
-    INTERN_NAME = re.compile(r"^(string|bytes)_([0-9]+)$")
     SCALAR_SIZES = {
         "u8": 1, "i8": 1, "bool": 1,
         "u16": 2, "i16": 2,
@@ -73,6 +71,9 @@ class SemanticBuilder:
         """Initialize builder state for one compilation."""
         self.diagnostics = diagnostics
         self.schema = Schema()
+        self._variable_arrays: dict[
+            tuple[ResolvedType, int], ResolvedVariableArrayType
+        ] = {}
         self._kinds: dict[str, str] = {}
         self._aliases: dict[str, str] = {}
         self._defining: set[str] = set()
@@ -198,7 +199,7 @@ class SemanticBuilder:
     def _build_method(self, service: str, decl: MethodDecl,
                       method_ids: dict[int, str],
                       next_id: int) -> Method | None:
-        """Resolve one method, including interned payload types."""
+        """Resolve one method, including bounded variable payload types."""
         method_id = self._assign_id(
             decl.method_id, next_id, method_ids, decl.name,
             f"method in service '{service}'", decl.span)
@@ -220,6 +221,13 @@ class SemanticBuilder:
             response = resolved
         request_size = self._sum_sizes(request, decl.span)
         response_size = 0 if oneway else self._sum_sizes(response, decl.span)
+        # Encoders return the byte count through signed mr_err_t. A larger
+        # declared response can wrap into a negative RPC error at runtime.
+        if response_size > self.RESPONSE_MAX:
+            self._error(ErrorCode.INVALID_ARRAY,
+                        "response packed size exceeds signed codec result",
+                        decl.span)
+            return None
 
         # Reserve `{service}_{method}_request/response` in the type namespace
         request_alias = f"{service}_{decl.name}_request"
@@ -257,13 +265,10 @@ class SemanticBuilder:
 
     def _resolve_type(self, expr: TypeExpr) -> ResolvedType | None:
         """Resolve one type expression to a packed layout."""
-        # Dispatch on the type expression
         if isinstance(expr, ArrayType):
             return self._resolve_array(expr)
-        if isinstance(expr, StringType):
-            return self._intern("string", expr.max_len, expr.span)
-        if isinstance(expr, BytesType):
-            return self._intern("bytes", expr.max_len, expr.span)
+        if isinstance(expr, VariableArrayType):
+            return self._resolve_variable_array(expr)
         if isinstance(expr, PrimType):
             return ScalarType(self.SCALAR_SIZES[expr.name], expr.name)
         if isinstance(expr, NamedType):
@@ -278,7 +283,6 @@ class SemanticBuilder:
         if element is None:
             return None
 
-        # Packed storage size is element times length
         if expr.length < 1:
             self._error(ErrorCode.INVALID_ARRAY,
                         "array length must be >= 1", expr.span)
@@ -290,6 +294,64 @@ class SemanticBuilder:
                         expr.span)
             return None
         return ArrayTypeRef(packed_size, element, expr.length)
+
+    def _resolve_variable_array(
+            self, expr: VariableArrayType) -> VariableArrayTypeRef | None:
+        """Resolve a bounded variable array with a fixed-size element type."""
+        element = self._resolve_type(expr.element)
+        if element is None:
+            return None
+        if expr.max_count < 1:
+            self._error(ErrorCode.INVALID_ARRAY,
+                        "variable array maximum count must be >= 1", expr.span)
+            return None
+        if not self._is_fixed_type(element):
+            self._error(
+                ErrorCode.INVALID_ARRAY,
+                "variable array element type must have fixed wire size",
+                expr.span,
+            )
+            return None
+
+        size_type = self._size_prefix(expr.max_count)
+        if size_type is None:
+            self._error(
+                ErrorCode.INVALID_ARRAY,
+                f"variable array <{expr.max_count}> is larger than a u32 "
+                "size prefix",
+                expr.span,
+            )
+            return None
+        packed_size = (self.SCALAR_SIZES[size_type] +
+                       element.packed_size * expr.max_count)
+        if packed_size > self.PAYLOAD_MAX:
+            self._error(ErrorCode.INVALID_ARRAY,
+                        "variable array packed size exceeds u32 payload_size",
+                        expr.span)
+            return None
+
+        key = (element, expr.max_count)
+        interned = self._variable_arrays.get(key)
+        if interned is None:
+            index = len(self.schema.variable_arrays)
+            interned = ResolvedVariableArrayType(
+                index, element, expr.max_count, size_type, packed_size)
+            self.schema.variable_arrays[index] = interned
+            self._variable_arrays[key] = interned
+        return VariableArrayTypeRef(
+            interned.packed_size, interned.element, interned.max_count,
+            interned.size_type, interned.index)
+
+    def _is_fixed_type(self, resolved: ResolvedType) -> bool:
+        """Return True when compact and scatter sizes are always identical."""
+        if isinstance(resolved, VariableArrayTypeRef):
+            return False
+        if isinstance(resolved, ArrayTypeRef):
+            return self._is_fixed_type(resolved.element)
+        if isinstance(resolved, StructTypeRef):
+            struct = self.schema.structs[resolved.name]
+            return all(self._is_fixed_type(field.type) for field in struct.fields)
+        return isinstance(resolved, (ScalarType, EnumTypeRef))
 
     def _resolve_named(self, expr: NamedType) -> ResolvedType | None:
         """Resolve a user type name with define-before-use and cycle checks."""
@@ -315,46 +377,13 @@ class SemanticBuilder:
                     f"unknown type '{name}'", expr.span)
         return None
 
-    def _intern(self, kind: str, max_len: int,
-                span: SourceSpan | None) -> InternedTypeRef | None:
-        """Intern one `string<N>` or `bytes<N>` layout."""
-        table = self.schema.strings if kind == "string" \
-            else self.schema.bytes_types
-
-        # Reuse an interned layout with the same N
-        if max_len in table:
-            interned = table[max_len]
-            return InternedTypeRef(interned.packed_size, kind, max_len)
-        if max_len < 1:
-            self._error(ErrorCode.INVALID_ARRAY,
-                        f"{kind} maximum length must be >= 1", span)
-            return None
-
-        # Size prefix from N; scatter buffer is N, or N+1 for string NUL
-        size_type = self._size_prefix(max_len)
-        if size_type is None:
-            self._error(ErrorCode.INVALID_ARRAY,
-                        f"{kind}<{max_len}> is larger than a u32 size prefix",
-                        span)
-            return None
-        data_size = max_len + 1 if kind == "string" else max_len
-        packed_size = self.SCALAR_SIZES[size_type] + data_size
-        if packed_size > self.PAYLOAD_MAX:
-            self._error(ErrorCode.INVALID_ARRAY,
-                        f"{kind}<{max_len}> packed size exceeds u32 "
-                        "payload_size", span)
-            return None
-        interned = InternedType(kind, max_len, size_type, packed_size)
-        table[max_len] = interned
-        return InternedTypeRef(packed_size, kind, max_len)
-
-    def _size_prefix(self, max_len: int) -> str | None:
-        """Return the smallest unsigned integer type that can hold `max_len`."""
-        if max_len <= 255:
+    def _size_prefix(self, max_count: int) -> str | None:
+        """Return the smallest unsigned integer type that can hold a count."""
+        if max_count <= 255:
             return "u8"
-        if max_len <= 65535:
+        if max_count <= 65535:
             return "u16"
-        if max_len <= 0xFFFFFFFF:
+        if max_count <= 0xFFFFFFFF:
             return "u32"
         return None
 
@@ -381,13 +410,6 @@ class SemanticBuilder:
     def _claim_user_name(self, name: str, kind: str,
                          span: SourceSpan | None) -> bool:
         """Claim an IDL type-namespace name and reject reserved forms."""
-        # `string_N` / `bytes_N` are reserved for interned types
-        match = self.INTERN_NAME.match(name)
-        if match is not None:
-            self._error(ErrorCode.INVALID_PROPERTY,
-                        f"'{name}' is reserved for interned "
-                        f"{match.group(1)}<{match.group(2)}>", span)
-            return False
         if name in self._kinds:
             self._error(ErrorCode.DUPLICATE_NODE,
                         f"duplicate {kind} '{name}', already a "

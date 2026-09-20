@@ -2,6 +2,8 @@
  * @copyright (c) 2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
+ *
+ * @date 2026-09-20        MacRsh        GPIO owner helpers replace port clock switch
  */
 
 #ifndef __MR_PLATFORM_H__
@@ -12,6 +14,9 @@
 #include <mrX/libc/mr_types.h>
 #include <mrX/libc/mr_errno.h>
 #include "stm32h5xx_hal.h"
+#if defined(MR_USE_DRIVER_GPIO)
+#include <mrX/drivers/gpio/mr_gpio.h>
+#endif /* defined(MR_USE_DRIVER_GPIO) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,14 +44,6 @@ extern void mr_stm32h5_platform_clock_init(mr_uint32_t per_second);
 extern void mr_platform_init(void);
 
 /**
- * @brief This function enables an STM32H5 GPIO port clock.
- *
- * @param port The GPIO port instance.
- * @return 0 on success, or -MR_EINVAL for an unsupported instance.
- */
-extern mr_err_t mr_stm32h5_gpio_clock_enable(GPIO_TypeDef *port);
-
-/**
  * @brief This function converts a HAL status to an mrX error code.
  *
  * @param status The HAL operation status.
@@ -68,6 +65,36 @@ MR_INLINE mr_err_t mr_stm32h5_hal_status(HAL_StatusTypeDef status) {
         }
     }
 }
+
+#if defined(MR_USE_DRIVER_GPIO)
+/**
+ * @brief This function muxes a GPIO specification to an alternate function.
+ *
+ * @param spec The GPIO specification owned by the STM32H5 GPIO backend.
+ * @param af The STM32 alternate-function number (0..15).
+ * @param pull The pull configuration.
+ * @param otype The output type (push-pull or open-drain).
+ * @return 0 on success, or a negative error code.
+ *
+ * @note The GPIO public config cannot carry an AF number. This helper is the
+ * GPIO owner's AF path; consumers must not call HAL_GPIO_Init.
+ */
+extern mr_err_t mr_stm32h5_gpio_pin_alternate(const mr_ht_gpio_spec_t *spec,
+                                              mr_uint32_t af,
+                                              mr_gpio_pull_t pull,
+                                              mr_gpio_otype_t otype);
+
+/**
+ * @brief This function releases a GPIO specification from peripheral mux.
+ *
+ * @param spec The GPIO specification owned by the STM32H5 GPIO backend.
+ * @return 0 on success, or a negative error code.
+ *
+ * @note Use this when a consumer stops using a pin (for example UART drops
+ * TX or RX). It does not return the pin to a GPIO API mode.
+ */
+extern mr_err_t mr_stm32h5_gpio_pin_release(const mr_ht_gpio_spec_t *spec);
+#endif /* defined(MR_USE_DRIVER_GPIO) */
 
 #if defined(MR_USE_DRIVER_TMR)
 struct mr_driver;

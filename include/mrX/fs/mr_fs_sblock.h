@@ -21,7 +21,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup Super-block
+ * @addtogroup FS-Super-block
  * @{
  */
 

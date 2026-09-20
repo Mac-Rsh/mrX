@@ -20,7 +20,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup File
+ * @addtogroup FS-File
  * @{
  */
 

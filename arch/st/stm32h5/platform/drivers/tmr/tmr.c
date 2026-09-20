@@ -13,25 +13,8 @@
 #include "stm32h5xx_hal_tim.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT st_stm32h5_tmr
-
-#define TMR_NANOSECONDS      (1000000000ULL)
-#define TMR_PRESCALER_MAX    (65536ULL)
-#define TMR_PSC_SEARCH_LIMIT (64ULL)
-
-/* TMR private data */
-typedef struct tmr_priv {
-    TIM_HandleTypeDef handle;
-    void (*clk_enable)(void); /* Board-provided HAL clock-enable macro */
-    IRQn_Type irqn;
-    mr_uint32_t irq_priority;
-    mr_driver_t *drv;
-    mr_tmr_config_t config;
-    mr_bool_t configured;
-    mr_bool_t event_enabled;
-    void (*drain_complete)(void *);
-    void *drain_param;
-} tmr_priv_t;
+#define MR_HT_COMPAT                    st_stm32h5_tmr
+#if MR_HT_HAS_DRIVER()
 
 /* TMR operations */
 static mr_err_t tmr_configure(const mr_driver_t *drv,
@@ -51,6 +34,23 @@ MR_UNUSED static const mr_tmr_ops_t __tmr_ops = {
     .is_busy = tmr_is_busy,
     .event_control = tmr_event_control,
 };
+
+typedef struct tmr_priv {
+    TIM_HandleTypeDef handle;
+    void (*clk_enable)(void);
+    IRQn_Type irqn;
+    mr_uint32_t irq_priority;
+    mr_driver_t *drv;
+    mr_tmr_config_t config;
+    mr_bool_t configured;
+    mr_bool_t event_enabled;
+    void (*drain_complete)(void *);
+    void *drain_param;
+} tmr_priv_t;
+
+#define TMR_NANOSECONDS                 (1000000000ULL)
+#define TMR_PRESCALER_MAX               (65536ULL)
+#define TMR_PSC_SEARCH_LIMIT            (64ULL)
 
 static mr_bool_t tmr_is_apb2(TIM_TypeDef *instance) {
 #if defined(TIM1)
@@ -232,33 +232,19 @@ static mr_err_t tmr_configure(const mr_driver_t *drv,
         return ret;
     }
 
-    /* Reuse the current programming when PSC/ARR, mode and TRGO match */
-    if (priv->configured && (priv->handle.Init.Prescaler == prescaler)
-        && (priv->handle.Init.Period == period)
-        && (priv->config.mode == config->mode)
-        && (priv->config.signal == config->signal)) {
-        priv->config = *config;
-        priv->config.period = actual_period;
-        return 0;
+    /* Init the time base */
+    priv->handle.Init.Prescaler = prescaler;
+    priv->handle.Init.CounterMode = TIM_COUNTERMODE_UP;
+    priv->handle.Init.Period = period;
+    priv->handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    priv->handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+    ret = mr_stm32h5_hal_status(HAL_TIM_Base_Init(&priv->handle));
+    if (ret != 0) {
+        return ret;
     }
 
-    /* Init the time base when PSC/ARR changed */
-    if ((!priv->configured) || (priv->handle.Init.Prescaler != prescaler)
-        || (priv->handle.Init.Period != period)) {
-        priv->handle.Init.Prescaler = prescaler;
-        priv->handle.Init.CounterMode = TIM_COUNTERMODE_UP;
-        priv->handle.Init.Period = period;
-        priv->handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-        priv->handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-        ret = mr_stm32h5_hal_status(HAL_TIM_Base_Init(&priv->handle));
-        if (ret != 0) {
-            return ret;
-        }
-    }
-
-    /* Program TRGO when the update signal changed */
-    if (IS_TIM_MASTER_INSTANCE(priv->handle.Instance)
-        && ((!priv->configured) || (priv->config.signal != config->signal))) {
+    /* Program TRGO */
+    if (IS_TIM_MASTER_INSTANCE(priv->handle.Instance)) {
         master.MasterOutputTrigger = (config->signal & MR_TMR_SIGNAL_UPDATE)
                                        ? TIM_TRGO_UPDATE
                                        : TIM_TRGO_RESET;
@@ -271,12 +257,10 @@ static mr_err_t tmr_configure(const mr_driver_t *drv,
     }
 
     /* Select one-shot or periodic */
-    if ((!priv->configured) || (priv->config.mode != config->mode)) {
-        if (config->mode == MR_TMR_MODE_ONESHOT) {
-            SET_BIT(priv->handle.Instance->CR1, TIM_CR1_OPM);
-        } else {
-            CLEAR_BIT(priv->handle.Instance->CR1, TIM_CR1_OPM);
-        }
+    if (config->mode == MR_TMR_MODE_ONESHOT) {
+        SET_BIT(priv->handle.Instance->CR1, TIM_CR1_OPM);
+    } else {
+        CLEAR_BIT(priv->handle.Instance->CR1, TIM_CR1_OPM);
     }
 
     /* Enable the NVIC line after a successful first init */
@@ -431,21 +415,19 @@ static void tmr_irq(tmr_priv_t *priv) {
     }
 }
 
-/* clang-format off */
-#define ST_HT_TMR_INSTALL(_id, _ops)                                          \
-    static void MR_CAT(__tmr_clk_enable_, _id)(void) {                \
+#define ST_HT_TMR_INSTALL(_id, _ops)                                           \
+    static void MR_CAT(__tmr_clk_enable_, _id)(void) {                         \
         MR_HT_DRIVER_PROP(_id, st_clken)();                                    \
     }                                                                          \
-    static tmr_priv_t MR_CAT(__tmr_priv_, _id) = {             \
-        .handle = {.Instance = MR_HT_DRIVER_PROP(_id, st_timx)},               \
-        .clk_enable = MR_CAT(__tmr_clk_enable_, _id),                  \
-        .irqn = MR_HT_DRIVER_PROP(_id, st_irqn),                               \
-        .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),               \
-    };                                                                         \
+    static tmr_priv_t MR_CAT(__tmr_priv_, _id)                                 \
+        = {.handle = {.Instance = MR_HT_DRIVER_PROP(_id, st_timx)},            \
+           .clk_enable = MR_CAT(__tmr_clk_enable_, _id),                       \
+           .irqn = MR_HT_DRIVER_PROP(_id, st_irqn),                            \
+           .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority)};           \
     void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {                        \
-        tmr_irq(&MR_CAT(__tmr_priv_, _id));                    \
+        tmr_irq(&MR_CAT(__tmr_priv_, _id));                                    \
     }                                                                          \
     MR_HT_TMR_INSTALL(_id, &MR_CAT(__tmr_priv_, _id), _ops)
-/* clang-format on */
 MR_HT_DRIVER_FOREACH(ST_HT_TMR_INSTALL, &__tmr_ops);
+#endif /* MR_HT_HAS_DRIVER() */
 #endif /* defined(MR_USE_DRIVER_TMR) */

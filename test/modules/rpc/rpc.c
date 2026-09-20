@@ -459,8 +459,10 @@ MR_TEST(rpc, valid_idl_roundtrip) {
     MR_TEST_EXPECT_EQ_UINT(response.session, 101U);
     MR_TEST_EXPECT_EQ_UINT(response.flags, MR_RPC_FRAME_FLAG_CHECKSUM);
     MR_TEST_EXPECT_EQ_UINT(test_rpc_last_mix.count, 0x12345678U);
-    MR_TEST_EXPECT_EQ_INT(test_rpc_last_mix.title.data[3], '\0');
-    MR_TEST_EXPECT_EQ_INT(test_rpc_last_mix.note.data[4], '\0');
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_last_mix.title.size, 3U);
+    MR_TEST_EXPECT_EQ_INT(test_rpc_last_mix.title.data[2], 'x');
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_last_mix.note.size, 4U);
+    MR_TEST_EXPECT_EQ_INT(test_rpc_last_mix.note.data[3], 'e');
     MR_TEST_EXPECT_EQ_UINT(response_payload[0], 2U);
 
     size = test_rpc_nest_payload(payload);
@@ -469,7 +471,8 @@ MR_TEST(rpc, valid_idl_roundtrip) {
                           0);
     MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 102U, 8), MR_TRUE);
     MR_TEST_EXPECT_EQ_UINT(test_rpc_last_nest.item.id, 42U);
-    MR_TEST_EXPECT_EQ_INT(test_rpc_last_nest.item.name.data[4], '\0');
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_last_nest.item.name.size, 4U);
+    MR_TEST_EXPECT_EQ_INT(test_rpc_last_nest.item.name.data[3], 'e');
 
     size = test_rpc_table_payload(payload);
     MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST, 0U,
@@ -1128,7 +1131,7 @@ MR_TEST(rpc, ping_log_and_unknown_types) {
                           0);
     MR_TEST_EXPECT_EQ_UINT(io.size, 0U);
     MR_TEST_EXPECT_EQ_UINT(test_rpc_last_log.msg.size, 3U);
-    MR_TEST_EXPECT_EQ_INT(test_rpc_last_log.msg.data[3], '\0');
+    MR_TEST_EXPECT_EQ_INT(test_rpc_last_log.msg.data[2], 'g');
 
     for (i = 0U; i < MR_ARRAY_SIZE(bad_log_sizes); i++) {
         payload[0] = (i == 1U) ? 49U : 1U;

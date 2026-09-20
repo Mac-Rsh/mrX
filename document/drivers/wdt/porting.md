@@ -79,11 +79,14 @@ MR_WDT_WAIT_TIMEOUT
 
 ## 8. 当前参考
 
-当前 STM32H5 平台没有 WDT backend。实现时参考：
+当前可参考：
 
-- `mrX/include/mrX/drivers/wdt/mr_wdt.h`
-- `mrX/test/drivers/wdt/wdt.c`
-- [TMR 移植指南](../tmr/porting.md) 的时间参数与事件实现风格。
+```text
+mrX/arch/st/stm32h5/platform/drivers/wdt/wdt.c
+```
+
+该 backend 展示了 IWDG 量化、不可停止的 `stop = MR_NULL`、EWI PRETIMEOUT，
+以及 TIMEOUT 直接复位、不伪造事件。公共契约见 `mrX/test/drivers/wdt/wdt.c`。
 
 ## 9. 移植检查清单
 

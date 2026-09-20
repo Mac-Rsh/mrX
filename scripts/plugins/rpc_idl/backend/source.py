@@ -15,7 +15,7 @@ helpers.
 
 from collections.abc import Callable
 
-from .layout import Layout, VarSlot, bool_index_name, bool_paths
+from .layout import BoolBound, Layout, VarSlot, bool_index_name, bool_paths
 from ..semantic.model import Field, Method, Schema, Service
 from .codec import CodecBuilder
 from .names import CNames
@@ -202,6 +202,10 @@ class SourceBuilder:
         if bool_lines:
             lines.append("")
             lines.extend(bool_lines)
+        empty_lines = self._stream_empty_lines(response_layout)
+        if empty_lines:
+            lines.append("")
+            lines.extend(empty_lines)
         if response_var:
             pack = CNames.pack_fn(service.name, method.name, "response")
             lines.extend([
@@ -288,10 +292,10 @@ class SourceBuilder:
                                           on_error))
         return lines
 
-    def _bool_check(self, param: str, access: str, dims: tuple[int, ...],
-                    indent: str,
+    def _bool_check(self, param: str, access: str,
+                    dims: tuple[BoolBound, ...], indent: str,
                     on_error: _BoolErrorHandler) -> list[str]:
-        """Emit one bool field check, with loops for array dimensions."""
+        """Emit one bool field check, with fixed or runtime array loops."""
         cond = f"{param}->{access} > 1U"
         if not dims:
             return self._bool_if(f"{indent}if ({cond}) {{", indent, on_error)
@@ -300,11 +304,19 @@ class SourceBuilder:
             f"{indent}{{",
             f"{indent}{CEmit.INDENT}mr_uint32_t {', '.join(names)};",
         ]
-        for depth, length in enumerate(dims):
+        for depth, bound in enumerate(dims):
             name = names[depth]
             pad = indent + CEmit.INDENT * (depth + 1)
+            if isinstance(bound, int):
+                condition = f"{name} < {bound}U"
+            else:
+                size_path, max_count = bound
+                condition = (
+                    f"({name} < {param}->{size_path}.size) && "
+                    f"({name} < {max_count}U)"
+                )
             lines.append(
-                f"{pad}for ({name} = 0U; {name} < {length}U; {name}++) {{")
+                f"{pad}for ({name} = 0U; {condition}; {name}++) {{")
         pad = indent + CEmit.INDENT * (len(dims) + 1)
         lines.extend(self._bool_if(f"{pad}if ({cond}) {{", pad, on_error))
         for depth in range(len(dims) - 1, -1, -1):
@@ -326,6 +338,35 @@ class SourceBuilder:
     def _decode_bool_error(indent: str) -> list[str]:
         """Return `-MR_EINVAL` from a decode or encode stage."""
         return [f"{indent}return -MR_EINVAL;"]
+
+    @staticmethod
+    def _stream_empty_lines(response_layout: Layout | None) -> list[str]:
+        """Skip wire-only length prefixes for an empty stream response."""
+        if response_layout is None or not response_layout.variable_only:
+            return []
+        indent = CEmit.INDENT
+        slots = [slot for slot in response_layout.slots
+                 if isinstance(slot, VarSlot)]
+        lines = [
+            f"{indent}/* Skip an empty stream response */",
+            f"{indent}if (session->request.type == MR_RPC_MSG_STREAM) {{",
+        ]
+        for index, slot in enumerate(slots):
+            prefix = "if" if index == 0 else "&&"
+            pad = indent * 2 if index == 0 else indent * 3
+            if index == 0:
+                lines.append(
+                    f"{pad}{prefix} ((response->{slot.path}.size == 0U)")
+            else:
+                lines.append(
+                    f"{pad}{prefix} (response->{slot.path}.size == 0U)")
+        lines[-1] += ") {"
+        lines.extend([
+            f"{indent * 3}return 0;",
+            f"{indent * 2}}}",
+            f"{indent}}}",
+        ])
+        return lines
 
     @staticmethod
     def _response_init_lines(response_layout: Layout | None,

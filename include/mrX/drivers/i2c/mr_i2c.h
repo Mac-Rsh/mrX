@@ -19,7 +19,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @addtogroup I2C
+ * @addtogroup Drivers-I2C
  * @{
  */
 

@@ -66,7 +66,18 @@ class CodecBuilder:
                 n_expr = None if n_index is None \
                     else CEmit.arr("n", n_index, n_count)
                 lines.extend(self._unpack_move(slot, which, src_expr, n_expr))
-        lines.extend(self._unpack_nuls(layout, which))
+        # Restore native counts only after all compact source bytes have moved.
+        # The wire prefix is little-endian even on a big-endian target.
+        var_i = 0
+        for slot in layout.slots:
+            if isinstance(slot, VarSlot):
+                if slot.prefix_size > 1:
+                    access = self._access(which, slot)
+                    n_expr = CEmit.arr("n", var_i, n_count)
+                    size_c = CNames.SCALARS[slot.size_type]
+                    lines.append(
+                        f"{indent}{access}.size = ({size_c}){n_expr};")
+                var_i += 1
         lines.append(f"{indent}return 0;")
         lines.append("}")
         return lines
@@ -83,9 +94,12 @@ class CodecBuilder:
             f"static mr_err_t {name}(",
             f"{indent}{typedef} *{which}, mr_uint32_t *compact_size) {{",
         ]
-        lines.extend(self._locals(n_count, 0, has_p=bool(moving)))
+        needs_pointer = bool(moving) or any(
+            isinstance(slot, VarSlot) and slot.prefix_size > 1
+            for slot in layout.slots)
+        lines.extend(self._locals(n_count, 0, has_p=needs_pointer))
         lines.append("")
-        if moving:
+        if needs_pointer:
             lines.append(f"{indent}p = (mr_uint8_t *){which};")
         lines.append(f"{indent}off = 0U;")
 
@@ -126,6 +140,7 @@ class CodecBuilder:
         if isinstance(slot, VarSlot):
             prefix = f"{slot.prefix_size}U"
             n_expr = n_expr or "n"
+            data_size = self._data_size(slot, n_expr)
             lines.extend([
                 f"{indent}if ((off + {prefix}) > compact_size) {{",
                 f"{indent * 2}return -MR_EINVAL;",
@@ -133,14 +148,14 @@ class CodecBuilder:
             ])
             lines.extend(self._load_size(slot, n_expr))
             lines.extend([
-                f"{indent}if (({n_expr} > {slot.max_len}U) || "
-                f"((off + {prefix} + {n_expr}) > compact_size)) {{",
+                f"{indent}if (({n_expr} > {slot.max_count}U) || "
+                f"((off + {prefix} + {data_size}) > compact_size)) {{",
                 f"{indent * 2}return -MR_EINVAL;",
                 f"{indent}}}",
             ])
             if src_expr is not None:
                 lines.append(f"{indent}{src_expr} = off;")
-            lines.append(f"{indent}off += {prefix} + {n_expr};")
+            lines.append(f"{indent}off += {prefix} + {data_size};")
             return lines
         size = f"sizeof({access})"
         lines.extend([
@@ -158,19 +173,11 @@ class CodecBuilder:
         """Move one compact slot into its scatter field."""
         access = self._access(param, slot)
         if isinstance(slot, VarSlot):
-            length = f"{slot.prefix_size}U + {n_expr}"
+            data_size = self._data_size(slot, n_expr or "n")
+            length = f"{slot.prefix_size}U + {data_size}"
         else:
             length = f"sizeof({access})"
         return self._memmove(f"&{access}", f"p + {src_expr}", length)
-
-    def _unpack_nuls(self, layout: Layout, param: str) -> list[str]:
-        """Write string NULs after fields are in scatter position."""
-        indent = CEmit.INDENT
-        lines: list[str] = []
-        for slot in layout.strings:
-            access = self._access(param, slot)
-            lines.append(f"{indent}{access}.data[{access}.size] = '\\0';")
-        return lines
 
     def _pack_slot(self, slot: Slot, param: str, move: bool,
                    n_expr: str | None) -> list[str]:
@@ -182,13 +189,21 @@ class CodecBuilder:
             n_expr = n_expr or "n"
             lines.extend([
                 f"{indent}{n_expr} = {access}.size;",
-                f"{indent}if ({n_expr} > {slot.max_len}U) {{",
+                f"{indent}if ({n_expr} > {slot.max_count}U) {{",
                 f"{indent * 2}return -MR_EINVAL;",
                 f"{indent}}}",
             ])
-            length = f"{slot.prefix_size}U + {n_expr}"
+            data_size = self._data_size(slot, n_expr)
+            length = f"{slot.prefix_size}U + {data_size}"
             if move:
                 lines.extend(self._memmove("p + off", f"&{access}", length))
+            if slot.prefix_size > 1:
+                # Movement copies native .size bytes. Write the actual wire
+                # prefix explicitly without changing the element byte order.
+                for byte in range(slot.prefix_size):
+                    target = "p[off]" if byte == 0 else f"p[off + {byte}U]"
+                    value = n_expr if byte == 0 else f"({n_expr} >> {byte * 8}U)"
+                    lines.append(f"{indent}{target} = (mr_uint8_t){value};")
             lines.append(f"{indent}off += {length};")
             return lines
         length = f"sizeof({access})"
@@ -196,6 +211,13 @@ class CodecBuilder:
             lines.extend(self._memmove("p + off", f"&{access}", length))
         lines.append(f"{indent}off += {length};")
         return lines
+
+    @staticmethod
+    def _data_size(slot: VarSlot, count: str) -> str:
+        """Return the compact byte count for `count` array elements."""
+        if slot.element_size == 1:
+            return count
+        return f"({count} * {slot.element_size}U)"
 
     def _load_size(self, slot: VarSlot, dest: str) -> list[str]:
         """Load a little-endian size prefix at `p[off]` into `dest`."""

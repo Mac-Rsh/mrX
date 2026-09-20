@@ -3,7 +3,7 @@
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
- * @date 2024-09-06        OpenCode       First version
+ * @date 2024-09-06        MacRsh        First version
  */
 
 #include <mrX/kernel/mr_hashmap.h>

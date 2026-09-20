@@ -31,17 +31,11 @@ class PrimType(TypeExpr):
 
 
 @dataclass(frozen=True)
-class StringType(TypeExpr):
-    """A bounded `string<N>` type."""
+class VariableArrayType(TypeExpr):
+    """A bounded variable-length array wrapped around an inner type."""
 
-    max_len: int = 0
-
-
-@dataclass(frozen=True)
-class BytesType(TypeExpr):
-    """A bounded `bytes<N>` type."""
-
-    max_len: int = 0
+    element: TypeExpr = field(default_factory=TypeExpr)
+    max_count: int = 0
 
 
 @dataclass(frozen=True)

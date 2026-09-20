@@ -483,6 +483,24 @@ dentry 的 `ops->hash`/`ops->compare` 可用于大小写不敏感等名字策略
 ）。名字是否重复以该比较策略为准： 例如大小写不敏感时，`CaseName` 与 `casename` 是同一名字，第二次创建返回
 `-MR_EEXIST`。inode 的 `ops->destroy` 是后端释放私有资源的收尾钩子 （`mrX/fs/inode.c:84`）。
 
+#### 12.1 后端开发者 API 导览
+
+下列接口公开在 `mrX/include/mrX/fs/` 中，主要面向文件系统实现者，不是普通文件用户的首选入口：
+
+| 层次 | 主要 API | 用途 |
+|------|----------|------|
+| 文件系统注册 | `mr_file_system_register`、`mr_file_system_find` | 注册和查找 `mr_file_system_t` |
+| 文件系统上下文 | `mr_fs_struct_root/current/init/lock/unlock` | 管理 root/cwd 与结构锁；多用户模式下 `current` 由平台提供 |
+| 超级块 | `mr_sblock_create/del/attach/detach`、`mr_sblock_get/put` | 创建、挂载、卸载和管理文件系统实例 |
+| 超级块并发 | `mr_sblock_op_enter/exit`、`mr_sblock_file_acquire/release` | 阻止操作或已打开文件跨过卸载边界 |
+| dentry 生命周期 | `mr_dentry_init/create/del/get/put` | 初始化、分配和引用计数 |
+| dentry 树 | `mr_dentry_add/remove/move/rename/unlink`、`mr_dentry_child_get` | 维护命名空间树与目录枚举 |
+| dentry 解析 | `mr_dentry_lookup`、`mr_dentry_instantiate/uninstantiate` | 路径查找以及 dentry/inode 绑定 |
+| dentry 查询 | `mr_dentry_is_empty`、`mr_dentry_is_root` | 检查目录子项及是否为当前全局根 |
+| inode | `mr_inode_init/create/get/put` | 初始化、分配和引用 inode |
+
+`mr_dentry_is_root(dentry)` 与 `mr_fs_struct_root()` 的当前返回值比较，判断的是全局根，不是某个子文件系统的挂载根。所有结构级 API 都需遵守本文第 11 节的锁顺序、引用计数和卸载边界；不应绕过 `mr_fs_*` 用户 API 直接组装业务文件操作。
+
 ### 13. 源码导读
 
 | 位置                                                                                                           | 职责                                                            |

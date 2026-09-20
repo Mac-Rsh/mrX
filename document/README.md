@@ -73,15 +73,16 @@ mrX/document/
 ├── libc/             # C 库：内存分配、字符串、格式化输入输出
 ├── drivers/          # 设备驱动：驱动框架、GPIO、UART、ADC/DAC、扩展芯片
 ├── fs/               # 文件系统：VFS、RamFS、RootFS
-├── modules/          # 上层组件：RPC、XVM（含调试器、GDB 桩）
+├── modules/          # 上层组件：RPC、XVM、Crypto
 ├── platform/         # 平台移植层：安装已有平台、移植新平台
+├── arch/             # 芯片厂商适配说明：当前包含 ST / STM32H5
 ├── scripts/          # 主机端 Python 工具（kconfig、htc、sections……）（有目录入口）
 └── test/             # 测试框架
 ```
 
 部分目录带一个入口文件，从它进目录比直接点某个模块文件更省事：
 [kernel/README.md](kernel/README.md)（内核服务总览）、[scripts/README.md](scripts/README.md)、
-[platform/platform.md](platform/platform.md)、[test/test.md](test/test.md)。
+[platform/platform.md](platform/platform.md)、[ST 芯片适配](arch/st/st.md)、[test/test.md](test/test.md)。
 
 `libc/`、`drivers/`、`fs/`、`modules/` 没有独立入口文件，直接看第 5 节索引即可； 其中 `drivers/driver.md`
 末尾列有本目录全部驱动，可作为驱动的起点。
@@ -108,6 +109,7 @@ mrX/document/
 | 对象系统 Object   | [object.md](kernel/object.md) | 格式化输出 Printf   | [printf.md](kernel/printf.md)     |
 | 内存块分配器 Slab | [slab.md](kernel/slab.md)     | 软定时器 Timer      | [timer.md](kernel/timer.md)       |
 | 等待队列 Wait     | [wait.md](kernel/wait.md)     | 工作队列 Work       | [work.md](kernel/work.md)         |
+| 基础工具 Foundation | [foundation.md](kernel/foundation.md) |                     |                                   |
 
 ### C 库
 
@@ -144,6 +146,13 @@ mrX/document/
 |------------------|--------------------------|------------|--------------------------|
 | 远程过程调用 RPC | [rpc.md](modules/rpc/rpc.md) | 虚拟机 XVM | [xvm.md](modules/xvm/xvm.md) |
 | 调试器 Dbg       | [dbg.md](modules/xvm/dbg.md) | GDB 桩 Gdb | [gdb.md](modules/xvm/gdb.md) |
+| 密码算法 Crypto  | [crypto.md](modules/crypto/crypto.md) |            |                              |
+
+### 芯片厂商适配
+
+| 厂商 / 系列 | 文档 | 说明 |
+|-------------|------|------|
+| ST / STM32H5 | [st.md](arch/st/st.md) | ST 适配分层、资源归属、HardTree 约定与 backend 实现规则 |
 
 ## 6. 阅读方法：每篇模块文档怎么用
 
