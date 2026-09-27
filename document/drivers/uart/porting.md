@@ -4,7 +4,8 @@
 
 ## 1. 移植边界
 
-UART 公共层负责类型化 API、waitable 生命周期和 stream 能力门控；backend 负责波特率/帧格式映射、普通 read/write、中断事件以及可选 DMA stream。
+UART 公共层负责类型化 API、waitable 生命周期和 stream 能力门控；backend 负责波特率/帧格式映射、普通 read/write、中断事件以及可选
+DMA stream。
 
 建议实现位置：
 
@@ -75,7 +76,8 @@ MR_UART_WAIT_TX_ERROR
 - `TX_DONE`：最后一个 stop bit 已真正发送完成，对应 TC 类条件；
 - RX/TX ERROR：平台可区分后合并到对应公共错误事件。
 
-RX_READY 常来自电平型条件。若 waiter 可能只投递任务而不立即读取，backend 应避免因状态持续有效造成 IRQ storm，可采用 one-shot 屏蔽并在 read 后 rearm 等策略。
+RX_READY 常来自电平型条件。若 waiter 可能只投递任务而不立即读取，backend 应避免因状态持续有效造成 IRQ storm，可采用
+one-shot 屏蔽并在 read 后 rearm 等策略。
 
 TX_DONE 不应在“写入 TDR/FIFO”时触发，而应等物理 UART 发送完成。
 
@@ -113,7 +115,8 @@ waiter 同步运行在 raise 上下文，ISR 路径不能依赖 waiter 阻塞等
 
 ## 8. HardTree 与安装
 
-平台可用 `MR_HT_UART_INSTALL` 注册实例。HardTree 通常描述 UART instance、TX/RX pin、alternate、clock、IRQ、priority 和可选 RX/TX DMA spec。
+平台可用 `MR_HT_UART_INSTALL` 注册实例。HardTree 通常描述 UART instance、TX/RX pin、alternate、clock、IRQ、priority 和可选
+RX/TX DMA spec。
 
 平台私有数据应保存 HAL handle/寄存器基址、event mask、当前配置和 stream 状态。
 

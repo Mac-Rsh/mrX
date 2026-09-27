@@ -8,7 +8,7 @@
 |----------|-------------------------------------------------------------------------------------------------------|
 | 功能宏   | 无独立功能宏（随 `MR_USE_DRIVER_GPIO` 编译；仅当硬件模板存在 compat `gpio_hc165` 实例时展开驱动代码） |
 | 头文件   | `<mrX/drivers/gpio/mr_gpio.h>`（复用 GPIO 驱动接口）                                                  |
-| 依赖模块 | [GPIO 驱动](gpio.md)、[驱动框架 Driver](../driver.md)                                                    |
+| 依赖模块 | [GPIO 驱动](gpio.md)、[驱动框架 Driver](../driver.md)                                                 |
 | 参考测试 | 无（`mrX/test/drivers/` 下暂无对应测试）                                                              |
 
 ---
@@ -42,17 +42,17 @@ HC165 扩展解决的问题是： **片上 GPIO 引脚不够读入时，用最�
 `MR_HT_HAS_DRIVER()`
 门控）。实例属性在硬件模板节点上描述：
 
-| 属性          | 必需 | 说明                                        |
-|---------------|------|---------------------------------------------|
-| `clk`         | 是   | 移位时钟引脚 CLK，属性单元 `[phandle, pin]` |
-| `sh`          | 是   | 锁存/移位控制引脚 SH/\!LD                   |
-| `qh`          | 是   | 串行数据输出引脚 QH（接 MCU 输入）          |
-| `clk_inh`     | 否   | 时钟禁止引脚 CLK-INH                        |
-| `ser`         | 否   | 串行输入引脚 SER（多芯片级联时使用）        |
-| `cascade_num` | 否   | 级联芯片数，缺省 1，允许 1~4                |
+| 属性          | 必需 | 说明                                                         |
+|---------------|------|--------------------------------------------------------------|
+| `clk`         | 是   | 移位时钟引脚 CLK，属性单元 `[phandle, pin]`                  |
+| `sh`          | 是   | 锁存/移位控制引脚 SH/\!LD                                    |
+| `qh`          | 是   | 串行数据输出引脚 QH（接 MCU 输入）                           |
+| `clk_inh`     | 否   | 时钟禁止引脚 CLK-INH                                         |
+| `ser`         | 否   | 串行输入引脚 SER（多芯片级联时使用）                         |
+| `cascade_num` | 否   | 级联芯片数，缺省 1，允许 1~4                                 |
 | `exist_mask`  | 否   | GPIO 存在掩码，缺省 `0xffffffff`；建议按实际级联宽度显式设置 |
-| `invert_mask` | 否   | 反相掩码，缺省 `0x00000000`                 |
-| `INIT_LEVEL`  | 否   | 安装级别，缺省 DEFER                        |
+| `invert_mask` | 否   | 反相掩码，缺省 `0x00000000`                                  |
+| `INIT_LEVEL`  | 否   | 安装级别，缺省 DEFER                                         |
 
 启用后重新生成 `mr_config.h`，包含头文件即可使用：
 
@@ -85,7 +85,9 @@ void hc165_example(void) {
 }
 ```
 
-第一次对合法引脚调用 `mr_gpio_input`/`mr_gpio_configure` 时，驱动一次性完成 CLK/SH/\!LD/QH（及可选 CLK-INH/SER）的初始化。之后再次配置合法、且仍为 `MR_GPIO_MODE_INPUT` 的引脚时，不会重复初始化这些宿主引脚；pin 范围和 mode 校验仍然每次执行。
+第一次对合法引脚调用 `mr_gpio_input`/`mr_gpio_configure` 时，驱动一次性完成 CLK/SH/\!LD/QH（及可选
+CLK-INH/SER）的初始化。之后再次配置合法、且仍为 `MR_GPIO_MODE_INPUT` 的引脚时，不会重复初始化这些宿主引脚；pin 范围和 mode
+校验仍然每次执行。
 
 ### 4. 使用说明
 
@@ -96,7 +98,8 @@ void hc165_example(void) {
 CLK，最后从结果中取出目标位。
 `mr_gpio_port_read` 执行同样的时序但一次性返回整条链的掩码，需要读多个 引脚时用它只移位一次。
 
-**配置幂等**：宿主引脚的初始化只发生一次（内部 `configured` 标记）。后续合法输入配置在通过 pin/mode 校验后直接成功，不会重复改动时钟与锁存引脚状态；非法 pin 或非 INPUT mode 仍返回 `-MR_EINVAL`。
+**配置幂等**：宿主引脚的初始化只发生一次（内部 `configured` 标记）。后续合法输入配置在通过 pin/mode
+校验后直接成功，不会重复改动时钟与锁存引脚状态；非法 pin 或非 INPUT mode 仍返回 `-MR_EINVAL`。
 
 **事件**：本驱动的 `event_attach` 能力为空，`mr_gpio_event_attach` 返回
 `-MR_ENOSYS`；输入变化需要轮询获取。
@@ -149,7 +152,9 @@ mr_ssize_t mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask);
 mr_ssize_t mr_gpio_read(mr_driver_t *drv, mr_uint32_t pin, mr_uint8_t *value);
 ```
 
-- `pin`：逻辑有效范围是 0 ~ `cascade_num * 8 - 1`。`mr_gpio_read` 公共层只断言 `pin < 32U`，HC165 的 `drv_pin_read` 也不再次做级联范围检查，所以若 `exist_mask` 仍保持默认全 1，读取实际级联宽度之外的 pin 会从零填充的 mask 高位得到 0。建议让模板中的 `exist_mask` 与实际级联宽度一致。
+- `pin`：逻辑有效范围是 0 ~ `cascade_num * 8 - 1`。`mr_gpio_read` 公共层只断言 `pin < 32U`，HC165 的 `drv_pin_read`
+  也不再次做级联范围检查，所以若 `exist_mask` 仍保持默认全 1，读取实际级联宽度之外的 pin 会从零填充的 mask 高位得到
+  0。建议让模板中的 `exist_mask` 与实际级联宽度一致。
 - `value`：输出逻辑电平（`MR_GPIO_LEVEL_LOW`/`MR_GPIO_LEVEL_HIGH`）。
 - 返回：成功 1，失败负数错误码。
 
@@ -306,9 +311,11 @@ typedef struct drv_gpio_hc165_priv {
 
 ### 11. 并发与中断安全
 
-- ops 层无任何互斥或临界区：一次端口读是多次宿主引脚写/读组成的完整移位序列，两个执行流并发访问会交替翻转 CLK/SH/\!LD，时序会被破坏。并发访问同一实例必须由上层序列化。
+- ops 层无任何互斥或临界区：一次端口读是多次宿主引脚写/读组成的完整移位序列，两个执行流并发访问会交替翻转
+  CLK/SH/\!LD，时序会被破坏。并发访问同一实例必须由上层序列化。
 - 宿主引脚操作经由平台 GPIO 驱动完成，但这不能使 HC165 的整段多步时序自动具备原子性。
-- 回调同步运行在调用者上下文。驱动本身没有声明 ISR-safe；由于读取需要完整 bit-bang 序列，不应仅因为底层 API 可调用就假定适合在中断上下文执行。
+- 回调同步运行在调用者上下文。驱动本身没有声明 ISR-safe；由于读取需要完整 bit-bang 序列，不应仅因为底层 API
+  可调用就假定适合在中断上下文执行。
 - `configured` 只是普通布尔字段，用来避免重复初始化宿主引脚，不是并发同步原语。
 
 ### 12. 扩展与派生
@@ -354,4 +361,6 @@ GPIO 框架共享的 clazz（`mrX/include/mrX/drivers/gpio/mr_gpio.h:610`，claz
 | `MR_USE_DRIVER_GPIO` | 上层开关（`mrX/include/mrX/drivers/gpio/Kconfig`），默认 n |
 | `MR_HT_COMPAT`       | 本文件内定义为 `gpio_hc165`，与硬件模板 compat 匹配        |
 
-**错误码**：`-MR_EINVAL` 可来自 GPIO 公共层的 `exist_mask` 检查，也可来自 HC165 backend 的非 INPUT 配置或 `pin >= cascade_num * 8`；`-MR_EPERM` 表示写操作不支持；宿主引脚操作失败时透传其错误码。`cascade_num` 的 1~4 约束目前只在配置路径以 `MR_ASSERT` 检查，空指针等编程错误同样由断言保护。
+**错误码**：`-MR_EINVAL` 可来自 GPIO 公共层的 `exist_mask` 检查，也可来自 HC165 backend 的非 INPUT 配置或
+`pin >= cascade_num * 8`；`-MR_EPERM` 表示写操作不支持；宿主引脚操作失败时透传其错误码。`cascade_num` 的 1~4 约束目前只在配置路径以
+`MR_ASSERT` 检查，空指针等编程错误同样由断言保护。

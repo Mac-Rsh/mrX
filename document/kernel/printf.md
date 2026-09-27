@@ -31,11 +31,11 @@
 
 ### 2. 配置与依赖
 
-| 配置项                   | 类型 | 默认值 | 说明                                                         |
-|--------------------------|------|--------|--------------------------------------------------------------|
-| `MR_USE_PRINTF`          | bool | y      | 启用格式化输出（`mrX/include/mrX/kernel/Kconfig:69`）        |
-| `MR_CFG_PRINTF_BUF_SIZE` | 整型 | 64     | 内部格式化缓冲字节数，范围 8~65535（`Kconfig:77`）           |
-| `MR_USE_PRINTF_COLOR`    | bool | n      | 启用 ANSI 颜色宏（`Kconfig:88`）                             |
+| 配置项                   | 类型 | 默认值 | 说明                                                           |
+|--------------------------|------|--------|----------------------------------------------------------------|
+| `MR_USE_PRINTF`          | bool | y      | 启用格式化输出（`mrX/include/mrX/kernel/Kconfig:69`）          |
+| `MR_CFG_PRINTF_BUF_SIZE` | 整型 | 64     | 内部格式化缓冲字节数，范围 8~65535（`Kconfig:77`）             |
+| `MR_USE_PRINTF_COLOR`    | bool | n      | 启用 ANSI 颜色宏（`Kconfig:88`）                               |
 | `MR_USE_PRINTF_SAFE`     | bool | n      | 每次调用改用堆分配缓冲，避免共享静态格式化缓冲（`Kconfig:97`） |
 
 启用 `MR_USE_PRINTF` 并重新生成 `mr_config.h` 后，包含头文件即可使用：
@@ -62,7 +62,8 @@ void demo(void) {
 要点：
 
 - 换行需自行携带 `\r\n`，模块不追加。
-- 成功路径最终返回 `mr_port_output` 的返回值；按 port 接口约定通常是实际输出字符数。`fmt` 为 `MR_NULL` 或空串返回 `-MR_EINVAL`。
+- 成功路径最终返回 `mr_port_output` 的返回值；按 port 接口约定通常是实际输出字符数。`fmt` 为 `MR_NULL` 或空串返回
+  `-MR_EINVAL`。
 
 ### 4. 使用说明
 
@@ -72,19 +73,19 @@ void demo(void) {
 
 **返回值约定**
 
-| 情形                                  | 返回                     |
-|---------------------------------------|--------------------------|
-| `mr_port_output` 成功                  | 直接返回 port 的返回值；接口约定为实际输出字符数 |
-| `fmt` 为 `MR_NULL` 或空串             | `-MR_EINVAL`                                    |
-| 格式化失败（`mr_vsnprintf` 返回负数） | `-MR_EINVAL`                                    |
-| `MR_USE_PRINTF_SAFE` 下缓冲分配失败   | `-MR_ENOMEM`                                    |
-| `mr_port_output` 自身失败             | 原样透传平台返回值，不由 Printf 映射            |
+| 情形                                  | 返回                                             |
+|---------------------------------------|--------------------------------------------------|
+| `mr_port_output` 成功                 | 直接返回 port 的返回值；接口约定为实际输出字符数 |
+| `fmt` 为 `MR_NULL` 或空串             | `-MR_EINVAL`                                     |
+| 格式化失败（`mr_vsnprintf` 返回负数） | `-MR_EINVAL`                                     |
+| `MR_USE_PRINTF_SAFE` 下缓冲分配失败   | `-MR_ENOMEM`                                     |
+| `mr_port_output` 自身失败             | 原样透传平台返回值，不由 Printf 映射             |
 
 **缓冲模式**
 
-| 模式                 | 缓冲                                 | 适用                           |
-|----------------------|--------------------------------------|--------------------------------|
-| 默认（静态）         | 全局唯一 `static` 缓冲，所有调用共享 | 单线程、或能保证调用串行的场合 |
+| 模式                 | 缓冲                                 | 适用                                                               |
+|----------------------|--------------------------------------|--------------------------------------------------------------------|
+| 默认（静态）         | 全局唯一 `static` 缓冲，所有调用共享 | 单线程、或能保证调用串行的场合                                     |
 | `MR_USE_PRINTF_SAFE` | 每次调用 `mr_malloc`/`mr_free`       | 避免格式化缓冲互相覆盖；整体并发能力仍取决于 malloc 与 port output |
 
 **颜色宏**（需 `MR_USE_PRINTF_COLOR`）：`MR_COLOR_RED` 等展开为 ANSI 转义序列， 未启用时展开为空，用法：
@@ -98,11 +99,11 @@ mr_printf(MR_COLOR(MR_COLOR_RED, "error: %d\r\n"), code);
 
 **调用约束**
 
-| 事项             | 约定                                                       |
-|------------------|------------------------------------------------------------|
+| 事项             | 约定                                                                                            |
+|------------------|-------------------------------------------------------------------------------------------------|
 | 可否在中断中调用 | 无统一保证：默认静态缓冲不可重入，safe 模式又依赖 `mr_malloc`，两者都还受 `mr_port_output` 约束 |
-| 可否在回调中调用 | 取决于该回调上下文是否允许所选缓冲策略与平台输出实现                     |
-| 格式化失败的处理 | 返回负数错误码，不输出任何内容                             |
+| 可否在回调中调用 | 取决于该回调上下文是否允许所选缓冲策略与平台输出实现                                            |
+| 格式化失败的处理 | 返回负数错误码，不输出任何内容                                                                  |
 
 ### 5. API 参考
 
@@ -179,7 +180,8 @@ void truncation_demo(void) {
 
 **Q：返回的字符数比格式串展开后的完整长度短？**
 
-传给 `mr_port_output` 的长度会被截断到最多 `MR_CFG_PRINTF_BUF_SIZE - 1`。若平台按接口约定返回实际写出长度，看到的返回值也会相应变短；Printf 本身不把截断视为错误。
+传给 `mr_port_output` 的长度会被截断到最多 `MR_CFG_PRINTF_BUF_SIZE - 1`。若平台按接口约定返回实际写出长度，看到的返回值也会相应变短；Printf
+本身不把截断视为错误。
 
 **Q：`mr_printf(MR_NULL)` 会崩溃吗？**
 
@@ -187,7 +189,8 @@ void truncation_demo(void) {
 
 **Q：两个线程同时打印，输出交错/出现半截内容？**
 
-默认模式所有调用共享同一静态缓冲，并发或嵌套调用会互相覆盖。启用 `MR_USE_PRINTF_SAFE` 可消除**格式化缓冲**竞争；它不为 `mr_port_output` 加锁，也不保证 `mr_malloc` 适用于所有上下文。
+默认模式所有调用共享同一静态缓冲，并发或嵌套调用会互相覆盖。启用 `MR_USE_PRINTF_SAFE` 可消除 **格式化缓冲**竞争；它不为
+`mr_port_output` 加锁，也不保证 `mr_malloc` 适用于所有上下文。
 
 **Q：为什么启用 `MR_USE_PRINTF_SAFE` 后偶发返回 `-MR_ENOMEM`？**
 
@@ -250,18 +253,21 @@ void truncation_demo(void) {
 2. 取缓冲：静态或按 `MR_USE_PRINTF_SAFE` 分配，分配失败返回 `-MR_ENOMEM`
    （`printf.c:36`）。
 3. `mr_vsnprintf(buf, MR_CFG_PRINTF_BUF_SIZE, fmt, args)` 格式化（`printf.c:43`）； 返回负数视为格式化失败，转 `-MR_EINVAL`。
-4. 计算 `outsz = MR_MIN(ret, buf_size - 1)`（`printf.c:45`），因此无论格式化结果长度如何，最多把缓冲可容纳的非终止字符部分交给 port。
+4. 计算 `outsz = MR_MIN(ret, buf_size - 1)`（`printf.c:45`），因此无论格式化结果长度如何，最多把缓冲可容纳的非终止字符部分交给
+   port。
 5. `mr_port_output(buf, outsz)` 输出，并把该函数的返回值原样作为 `mr_vprintf` 的结果（`printf.c:52`）。
 6. 安全模式下释放缓冲（`printf.c:55`）。
 
 **`mr_printf`**（`printf.c:60`）：参数检查后以 `mr_va_start`/`mr_va_end` 包裹
 `mr_vprintf`，纯转发逻辑。
 
-**截断语义**：第 4 步的 `MR_MIN` 只限定传给 `mr_port_output` 的 `outsz` 上界为 `MR_CFG_PRINTF_BUF_SIZE - 1`。最终返回值来自 port；当前测试仅验证超长格式串在现有测试平台上返回正值。
+**截断语义**：第 4 步的 `MR_MIN` 只限定传给 `mr_port_output` 的 `outsz` 上界为 `MR_CFG_PRINTF_BUF_SIZE - 1`。最终返回值来自
+port；当前测试仅验证超长格式串在现有测试平台上返回正值。
 
 ### 11. 并发与中断安全
 
-- 默认静态缓冲模式：格式化阶段非可重入——并发调用或嵌套调用会共享并覆盖同一缓冲。即使只有一个调用者，是否适合 ISR 仍取决于 `mr_port_output`。
+- 默认静态缓冲模式：格式化阶段非可重入——并发调用或嵌套调用会共享并覆盖同一缓冲。即使只有一个调用者，是否适合 ISR 仍取决于
+  `mr_port_output`。
 - `MR_USE_PRINTF_SAFE` 模式：缓冲按调用独立，格式化阶段可并发；整体安全性还 取决于 `mr_malloc` 的中断可用性与
   `mr_port_output` 的实现。
 - 模块本身不加锁；跨上下文的输出原子性由移植层负责。
@@ -273,7 +279,8 @@ printf 无 clazz 与派生机制（头文件里没有结构体、没有函数指
 
 - 输出终点由移植层实现的外部函数决定：`extern int mr_port_output(const char *buf, mr_size_t size)`（
   `mrX/include/mrX/port/mr_port_output.h:32`），printf 只用不定义（调用点 `mrX/kernel/printf.c:52`）。换后端就是换这个实现——宿主模拟写
-  `stdout`（`mrX/arch/win/platform/port/output.c:13`）；STM32H5 参考实现逐字节输出到 Cortex-M ITM（`mrX/arch/st/stm32h5/platform/port/output.c:10`）。
+  `stdout`（`mrX/arch/win/platform/port/output.c:13`）；STM32H5 参考实现逐字节输出到 Cortex-M ITM（
+  `mrX/arch/st/stm32h5/platform/port/output.c:10`）。
 - 格式化逻辑不属本模块：由 [格式化 sprintf](../libc/sprintf.md) 的 `mr_vsnprintf` 提供（`printf.c:43`），可在
   `MR_USE_SPRINTF_STD` 下整体转发标准库（`mrX/include/mrX/libc/mr_sprintf.h:29-33`），这是改变格式能力（如新增说明符）的唯一入口。
 - 编译期开关：`MR_USE_PRINTF`、`MR_CFG_PRINTF_BUF_SIZE`（缺省 64，`printf.c:19-21`）、`MR_USE_PRINTF_COLOR`、
@@ -303,4 +310,5 @@ printf 无 clazz 与派生机制（头文件里没有结构体、没有函数指
 | `MR_USE_PRINTF_COLOR`    | ANSI 颜色宏开关，默认 n               |
 | `MR_USE_PRINTF_SAFE`     | 堆缓冲安全模式开关，默认 n            |
 
-**错误码**：Printf 自身产生 `-MR_EINVAL`（`fmt` 为空/空串，或 `mr_vsnprintf` 失败）和 `-MR_ENOMEM`（仅 `MR_USE_PRINTF_SAFE`，缓冲分配失败）。进入输出阶段后，`mr_port_output` 的返回值原样透传；宿主实现成功返回实际写出字节数，失败返回 `-1`。
+**错误码**：Printf 自身产生 `-MR_EINVAL`（`fmt` 为空/空串，或 `mr_vsnprintf` 失败）和 `-MR_ENOMEM`（仅 `MR_USE_PRINTF_SAFE`
+，缓冲分配失败）。进入输出阶段后，`mr_port_output` 的返回值原样透传；宿主实现成功返回实际写出字节数，失败返回 `-1`。

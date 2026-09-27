@@ -8,7 +8,7 @@
 |----------|-------------------------------------------------------------------------------------------------------|
 | 功能宏   | 无独立功能宏（随 `MR_USE_DRIVER_GPIO` 编译；仅当硬件模板存在 compat `gpio_hc595` 实例时展开驱动代码） |
 | 头文件   | `<mrX/drivers/gpio/mr_gpio.h>`（复用 GPIO 驱动接口）                                                  |
-| 依赖模块 | [GPIO 驱动](gpio.md)、[驱动框架 Driver](../driver.md)                                                    |
+| 依赖模块 | [GPIO 驱动](gpio.md)、[驱动框架 Driver](../driver.md)                                                 |
 | 参考测试 | 无（`mrX/test/drivers/` 下暂无对应测试）                                                              |
 
 ---
@@ -42,17 +42,17 @@ HC595 扩展解决的问题是： **片上 GPIO 引脚不够输出时，用最�
 `MR_HT_HAS_DRIVER()`
 门控）。实例属性在硬件模板节点上描述：
 
-| 属性          | 必需 | 说明                                            |
-|---------------|------|-------------------------------------------------|
-| `ser`         | 是   | 串行数据输入引脚 SER，属性单元 `[phandle, pin]` |
-| `srclk`       | 是   | 移位时钟引脚 SRCLK                              |
-| `rclk`        | 是   | 锁存时钟引脚 RCLK                               |
-| `oe`          | 否   | 输出使能引脚 OE（低有效）                       |
-| `srclr`       | 否   | 寄存器清零引脚 SRCLR（低有效）                  |
-| `cascade_num` | 否   | 级联芯片数，缺省 1，允许 1~4                    |
+| 属性          | 必需 | 说明                                                         |
+|---------------|------|--------------------------------------------------------------|
+| `ser`         | 是   | 串行数据输入引脚 SER，属性单元 `[phandle, pin]`              |
+| `srclk`       | 是   | 移位时钟引脚 SRCLK                                           |
+| `rclk`        | 是   | 锁存时钟引脚 RCLK                                            |
+| `oe`          | 否   | 输出使能引脚 OE（低有效）                                    |
+| `srclr`       | 否   | 寄存器清零引脚 SRCLR（低有效）                               |
+| `cascade_num` | 否   | 级联芯片数，缺省 1，允许 1~4                                 |
 | `exist_mask`  | 否   | GPIO 存在掩码，缺省 `0xffffffff`；建议按实际级联宽度显式设置 |
-| `invert_mask` | 否   | 反相掩码，缺省 `0x00000000`                     |
-| `INIT_LEVEL`  | 否   | 安装级别，缺省 DEFER                            |
+| `invert_mask` | 否   | 反相掩码，缺省 `0x00000000`                                  |
+| `INIT_LEVEL`  | 否   | 安装级别，缺省 DEFER                                         |
 
 启用后重新生成 `mr_config.h`，包含头文件即可使用：
 
@@ -86,7 +86,9 @@ void hc595_example(void) {
 }
 ```
 
-第一次对合法引脚调用 `mr_gpio_output`/`mr_gpio_configure` 时，驱动一次性完成 SER/SRCLK/RCLK（及可选 OE/SRCLR）初始化、移入全 0 并使能输出；之后再次配置合法 OUTPUT 引脚不会重复初始化宿主引脚，而是直接把新的 `level` 应用到对应扩展输出。pin 范围与 mode 校验仍然每次执行。
+第一次对合法引脚调用 `mr_gpio_output`/`mr_gpio_configure` 时，驱动一次性完成 SER/SRCLK/RCLK（及可选 OE/SRCLR）初始化、移入全
+0 并使能输出；之后再次配置合法 OUTPUT 引脚不会重复初始化宿主引脚，而是直接把新的 `level` 应用到对应扩展输出。pin 范围与
+mode 校验仍然每次执行。
 
 ### 4. 使用说明
 
@@ -94,13 +96,16 @@ void hc595_example(void) {
 返回影子寄存器中的最后写入值，不与芯片通信、不反映引脚实际电平（芯片无 输出回读能力）。若硬件模板声明了 `invert_mask`
 ，读回的是框架层换算后的 逻辑电平。
 
-如果 `exist_mask` 保持默认全 1，而实际级联少于 4 片，那么 shadow 的未使用高位也可能被软件写入和读回，尽管这些位没有对应物理输出；因此模板应显式把 `exist_mask` 限制到实际 `cascade_num * 8` 位宽。
+如果 `exist_mask` 保持默认全 1，而实际级联少于 4 片，那么 shadow 的未使用高位也可能被软件写入和读回，尽管这些位没有对应物理输出；因此模板应显式把
+`exist_mask` 限制到实际 `cascade_num * 8` 位宽。
 
-**写入语义**：HC595 backend 更新目标 shadow 位时，如果值没有变化，会跳过整轮移位并直接以 backend 成功返回；公共 `mr_gpio_write` 仍按 GPIO 统一语义返回 1。值变化时才执行整轮移位——先把整链新值逐位移入，最后脉冲 RCLK 锁存输出。`mr_gpio_port_write` 按掩码整链写入（框架层先按 `exist_mask`/`invert_mask` 换算），backend 不做无变化检测。
+**写入语义**：HC595 backend 更新目标 shadow 位时，如果值没有变化，会跳过整轮移位并直接以 backend 成功返回；公共
+`mr_gpio_write` 仍按 GPIO 统一语义返回 1。值变化时才执行整轮移位——先把整链新值逐位移入，最后脉冲 RCLK 锁存输出。
+`mr_gpio_port_write` 按掩码整链写入（框架层先按 `exist_mask`/`invert_mask` 换算），backend 不做无变化检测。
 
 **配置行为**：`mr_gpio_configure` 只接受 `MR_GPIO_MODE_OUTPUT` 模式，其他 模式返回 `-MR_EINVAL`；`mr_gpio_configuration`
-回读时固定报告输出、推挽、 无上下拉，电平位取自影子寄存器。首次配置的完整序列：OE/SRCLR（若存在）置无效电平（高）→ SER/SRCLK/RCLK 置低 → 移入全 0 →
-OE（若存在）拉低使能输出。
+回读时固定报告输出、推挽、 无上下拉，电平位取自影子寄存器。首次配置的完整序列：OE/SRCLR（若存在）置无效电平（高）→ SER/SRCLK/RCLK
+置低 → 移入全 0 → OE（若存在）拉低使能输出。
 
 **生命周期**：驱动实例由硬件模板在编译期安装，安装级别缺省 DEFER，应用 需 `mr_driver_find` 后调用 `mr_driver_setup`
 启用；引用管理遵循
@@ -131,9 +136,9 @@ OE（若存在）拉低使能输出。
 
 不可用操作：
 
-| API                    | 行为                                |
-|------------------------|-------------------------------------|
-| `mr_gpio_event_attach` | 返回 `-MR_ENOSYS`（事件挂接未实现） |
+| API                                              | 行为                                |
+|--------------------------------------------------|-------------------------------------|
+| `mr_gpio_event_attach`                           | 返回 `-MR_ENOSYS`（事件挂接未实现） |
 | `mr_gpio_event_enable` / `mr_gpio_event_disable` | 返回 `-MR_ENOSYS`（事件控制未实现） |
 
 **`mr_gpio_write`**
@@ -142,7 +147,9 @@ OE（若存在）拉低使能输出。
 mr_ssize_t mr_gpio_write(mr_driver_t *drv, mr_uint32_t pin, mr_uint8_t value);
 ```
 
-- `pin`：逻辑有效范围是 0 ~ `cascade_num * 8 - 1`。公共 `mr_gpio_write` 只断言 `pin < 32U`，HC595 的 `drv_pin_write` 也不再次做级联范围检查；如果模板仍使用默认 `exist_mask = 0xffffffffU`，实际级联宽度之外的 pin 可能只改变 shadow 高位而不会产生物理输出。建议让 `exist_mask` 与实际级联宽度一致。
+- `pin`：逻辑有效范围是 0 ~ `cascade_num * 8 - 1`。公共 `mr_gpio_write` 只断言 `pin < 32U`，HC595 的 `drv_pin_write`
+  也不再次做级联范围检查；如果模板仍使用默认 `exist_mask = 0xffffffffU`，实际级联宽度之外的 pin 可能只改变 shadow
+  高位而不会产生物理输出。建议让 `exist_mask` 与实际级联宽度一致。
 - `value`：逻辑电平，0 与非 0 均可（内部按 `MR_GPIO_LEVEL_*` 语义处理）。
 - 返回：成功 1，宿主引脚操作失败返回负数错误码。
 
@@ -209,7 +216,8 @@ setup 再配置。
 
 **Q：写同一值为什么有快有慢？**
 
-HC595 backend 在目标位与 shadow 一致时会跳过整轮移位时序；对上层而言 `mr_gpio_write` 仍是一次成功写入并返回 1。只有值变化时 backend 才真正移位锁存。需要强制刷新整链输出时可用 `mr_gpio_port_write`，其 backend 不做变化检测。
+HC595 backend 在目标位与 shadow 一致时会跳过整轮移位时序；对上层而言 `mr_gpio_write` 仍是一次成功写入并返回 1。只有值变化时
+backend 才真正移位锁存。需要强制刷新整链输出时可用 `mr_gpio_port_write`，其 backend 不做变化检测。
 
 **Q：写一个引脚为什么其他引脚也动了？**
 
@@ -298,8 +306,8 @@ typedef struct drv_gpio_hc595_priv {
 `cascade_num` 在 1~4，再校验模式与引脚范围；首次配置时依次初始化可选 OE/SRCLR（输出高，输出禁用/不清零）、SER/SRCLK/RCLK（输出低），随即
 `hc595_cascade_write(priv, 0)` 移入全 0（`gpio_hc595.c:140`），最后把 OE 拉低使能输出（`gpio_hc595.c:146-152`
 ），保证"配置完成即输出已知的 全 0 电平"。`drv_pin_configuration`（`gpio_hc595.c:161`）不回读硬件， 直接报告固定的输出属性。
-已配置（`configured` 置位）后再次调用 `drv_pin_configure` 不再重复初始化，
-而是经 `drv_pin_write` 把 `config->level` 应用到目标引脚（`gpio_hc595.c:104-106`）。
+已配置（`configured` 置位）后再次调用 `drv_pin_configure` 不再重复初始化， 而是经 `drv_pin_write` 把 `config->level`
+应用到目标引脚（`gpio_hc595.c:104-106`）。
 
 **安装路径**：`GPIO_HC595_HT_GPIO_INSTALL`（`gpio_hc595.c:234`）为每个 模板实例展开静态私有数据——可选引脚用
 `MR_HT_DRIVER_HAS_PROP` 条件填充 （不存在则为 `{0}`，即 `drv == MR_NULL`，配置时跳过），`cascade_num` 用
@@ -308,7 +316,8 @@ typedef struct drv_gpio_hc595_priv {
 
 ### 11. 并发与中断安全
 
-- ops 层无任何互斥或临界区：一次端口写是多次宿主 GPIO 写组成的完整移位序列，两个执行流并发写会交替翻转 SER/SRCLK，导致移位数据错乱，并可能让 shadow 与实际输出失步。并发访问同一实例必须由上层序列化。
+- ops 层无任何互斥或临界区：一次端口写是多次宿主 GPIO 写组成的完整移位序列，两个执行流并发写会交替翻转
+  SER/SRCLK，导致移位数据错乱，并可能让 shadow 与实际输出失步。并发访问同一实例必须由上层序列化。
 - shadow 的“改位 → 写整链 → 提交”不是原子操作，并发 `mr_gpio_write` 可能丢失更新；`configured` 也只是普通布尔字段，不承担同步职责。
 - 宿主 GPIO 自身即使支持并发访问，也不能自动保证 HC595 这一整段多步 bit-bang 时序的原子性。
 - ops 同步运行在调用者上下文，但本驱动没有声明 ISR-safe；完整移位可能持续较长，不应仅因为底层 GPIO API 可调用就假定适合在中断上下文执行。
@@ -357,4 +366,6 @@ HC595 不注册自己的驱动 clazz：它借用共享的 GPIO clazz，经 `MR_H
 | `MR_USE_DRIVER_GPIO` | 上层开关（`mrX/include/mrX/drivers/gpio/Kconfig`），默认 n |
 | `MR_HT_COMPAT`       | 本文件内定义为 `gpio_hc595`，与硬件模板 compat 匹配        |
 
-**错误码**：`-MR_EINVAL` 可来自 GPIO 公共层的 `exist_mask` 检查，也可来自 HC595 backend 的非 OUTPUT 配置或配置回读时的级联范围检查；宿主引脚操作失败时透传平台 GPIO 错误码。`cascade_num` 的 1~4 约束目前只在配置路径以 `MR_ASSERT` 检查，空指针等编程错误同样由断言保护。
+**错误码**：`-MR_EINVAL` 可来自 GPIO 公共层的 `exist_mask` 检查，也可来自 HC595 backend 的非 OUTPUT
+配置或配置回读时的级联范围检查；宿主引脚操作失败时透传平台 GPIO 错误码。`cascade_num` 的 1~4 约束目前只在配置路径以
+`MR_ASSERT` 检查，空指针等编程错误同样由断言保护。

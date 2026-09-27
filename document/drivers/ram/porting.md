@@ -4,7 +4,8 @@
 
 ## 1. 移植边界
 
-RAM 公共层在 setup 时调用 `probe`，缓存 `mr_ram_info_t` 并负责总范围检查。实际 memory-map、控制器初始化、region 属性以及读写方式由 backend 负责。
+RAM 公共层在 setup 时调用 `probe`，缓存 `mr_ram_info_t` 并负责总范围检查。实际 memory-map、控制器初始化、region 属性以及读写方式由
+backend 负责。
 
 ## 2. 操作表
 
@@ -26,7 +27,8 @@ typedef struct mr_ram_ops {
 
 `probe` 返回总容量和 region 数量。若 `regions_num > 0`，backend 必须提供 `region`。
 
-RAM region 用于表达 CPU 映射区或不同属性的内存区域。backend 应保证所有 region 的 offset/size 与总容量一致，并明确 region 的访问属性。
+RAM region 用于表达 CPU 映射区或不同属性的内存区域。backend 应保证所有 region 的 offset/size 与总容量一致，并明确 region
+的访问属性。
 
 ## 4. 读写实现
 
@@ -44,11 +46,13 @@ backend 负责：
 
 ## 5. 私有状态与生命周期
 
-私有数据可保存映射基址、控制器、region 表、cache 属性和锁。setup 只通过 probe 获取几何，不代表硬件一定由公共层初始化；需要控制器初始化时应在平台驱动自己的初始化路径中完成。
+私有数据可保存映射基址、控制器、region 表、cache 属性和锁。setup 只通过 probe
+获取几何，不代表硬件一定由公共层初始化；需要控制器初始化时应在平台驱动自己的初始化路径中完成。
 
 ## 6. HardTree 与安装
 
-`MR_HT_RAM_INSTALL` 用于注册 RAM 实例。静态资源可以来自 HardTree，但容量/region 若能由硬件可靠 probe，应优先由 probe 返回，避免两份信息漂移。
+`MR_HT_RAM_INSTALL` 用于注册 RAM 实例。静态资源可以来自 HardTree，但容量/region 若能由硬件可靠 probe，应优先由 probe
+返回，避免两份信息漂移。
 
 ## 7. 当前参考
 

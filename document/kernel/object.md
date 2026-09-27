@@ -8,7 +8,7 @@
 |----------|------------------------------------------------------------|
 | 功能宏   | 无（始终编译；`MR_USE_REF_LONG_COUNT` 可切换引用计数位宽） |
 | 头文件   | `<mrX/kernel/mr_object.h>`                                 |
-| 依赖模块 | 无（构建于内核引用计数工具 `mr_ref.h` 与断言之上）           |
+| 依赖模块 | 无（构建于内核引用计数工具 `mr_ref.h` 与断言之上）         |
 | 参考测试 | `mrX/test/kernel/object.c`                                 |
 
 ---
@@ -97,15 +97,15 @@ void my_obj_example(void) {
 
 **引用计数约定**
 
-| 操作                        | 行为                                                                            |
-|-----------------------------|---------------------------------------------------------------------------------|
-| `mr_object_get`             | 计数加一并返回对象指针；对象未初始化或已到达生命周期终点时返回 `MR_NULL`        |
-| `mr_object_put`             | 计数减一；归零时执行释放链并返回 `MR_TRUE`（生命周期终点），否则返回 `MR_FALSE` |
-| 对未初始化/已删除对象 `put` | 安全，直接返回 `MR_TRUE`                                                        |
-| 对未初始化/已删除对象 `get` | 安全，返回 `MR_NULL`                                                            |
+| 操作                        | 行为                                                                                     |
+|-----------------------------|------------------------------------------------------------------------------------------|
+| `mr_object_get`             | 计数加一并返回对象指针；对象未初始化或已到达生命周期终点时返回 `MR_NULL`                 |
+| `mr_object_put`             | 计数减一；归零时执行释放链并返回 `MR_TRUE`（生命周期终点），否则返回 `MR_FALSE`          |
+| 对未初始化/已删除对象 `put` | 安全，直接返回 `MR_TRUE`                                                                 |
+| 对未初始化/已删除对象 `get` | 安全，返回 `MR_NULL`                                                                     |
 | `del` 后再次 `get`          | 若 `del` 已使计数归零则返回 `MR_NULL`；若仍有其他引用，对象仍有效，新的 `get` 仍可能成功 |
-| 生命周期终点后再次 `put`    | 返回 `MR_TRUE`，不会再次执行 release                                            |
-| 对已初始化对象重复 `init`   | 实现会直接重置 clazz 与计数为 1；仅在确认没有其他持有者时才可这样做，否则会破坏引用关系 |
+| 生命周期终点后再次 `put`    | 返回 `MR_TRUE`，不会再次执行 release                                                     |
+| 对已初始化对象重复 `init`   | 实现会直接重置 clazz 与计数为 1；仅在确认没有其他持有者时才可这样做，否则会破坏引用关系  |
 
 **类型检查**：拿到一个对象指针后，先用 `MR_OBJECT_IS_CLAZZES(obj, name)` 确认类型， 再做后续操作。内核各组件的 API
 内部都执行该检查，直接传入错误类型对象在断言开启时 会被 `MR_ASSERT` 拦截。
@@ -174,7 +174,8 @@ mr_err_t mr_object_derive(mr_object_t *obj, const mr_clazz_t *clazz);
 void mr_object_del(mr_object_t *obj);
 ```
 
-对未初始化对象或 `MR_NULL` 直接返回。对已初始化对象执行一次 `put`；通常由对象所有者用它归还初始化时的那次引用，但 core 不记录“哪一次引用是初始引用”。若仍有其他引用，调用后对象继续有效。
+对未初始化对象或 `MR_NULL` 直接返回。对已初始化对象执行一次 `put`；通常由对象所有者用它归还初始化时的那次引用，但 core
+不记录“哪一次引用是初始引用”。若仍有其他引用，调用后对象继续有效。
 
 **`mr_object_get` / `mr_object_put`**
 
@@ -183,7 +184,9 @@ mr_object_t *mr_object_get(mr_object_t *obj);
 mr_bool_t mr_object_put(mr_object_t *obj);
 ```
 
-`get` 返回对象指针（计数已加一），未初始化或生命周期已到终点返回 `MR_NULL`。`put` 返回 `MR_TRUE` 表示对象已经处于/到达生命周期终点；对于有效对象，本次从 1 降到 0 时会先清 magic、同步执行释放链并返回 `MR_TRUE`，仍有引用则返回 `MR_FALSE`。
+`get` 返回对象指针（计数已加一），未初始化或生命周期已到终点返回 `MR_NULL`。`put` 返回 `MR_TRUE`
+表示对象已经处于/到达生命周期终点；对于有效对象，本次从 1 降到 0 时会先清 magic、同步执行释放链并返回 `MR_TRUE`，仍有引用则返回
+`MR_FALSE`。
 
 **`MR_OBJECT_IS_CLAZZES`**
 
@@ -260,15 +263,18 @@ void derive_example(void) {
 
 **Q：`get` 返回了 `MR_NULL` 是什么意思？**
 
-对象未初始化，或引用计数已经进入无效/生命周期终点状态。注意，单独调用一次 `mr_object_del` 并不保证这一点：若还有其他引用，对象仍可能被成功 `get`。
+对象未初始化，或引用计数已经进入无效/生命周期终点状态。注意，单独调用一次 `mr_object_del` 并不保证这一点：若还有其他引用，对象仍可能被成功
+`get`。
 
 **Q：`put` 返回 `MR_TRUE` 后还能继续用对象吗？**
 
-对于一次有效引用从 1 降到 0 的情况，不能继续使用：此时 magic 已清除且释放链已执行。对未初始化/已结束对象再次调用 `mr_object_put` 也会直接返回 `MR_TRUE`，但不会再次执行 release。
+对于一次有效引用从 1 降到 0 的情况，不能继续使用：此时 magic 已清除且释放链已执行。对未初始化/已结束对象再次调用
+`mr_object_put` 也会直接返回 `MR_TRUE`，但不会再次执行 release。
 
 **Q：初始引用是谁的？**
 
-`init` 把计数设为 1，通常约定这一次引用归创建/初始化对象的所有者持有；所有者用 `mr_object_del` 归还，其他持有者用 `get`/`put` 配对。这个“所有者”是组件层约定，对象 core 本身不记录引用来源。
+`init` 把计数设为 1，通常约定这一次引用归创建/初始化对象的所有者持有；所有者用 `mr_object_del` 归还，其他持有者用 `get`/
+`put` 配对。这个“所有者”是组件层约定，对象 core 本身不记录引用来源。
 
 **Q：为什么派生被拒绝并返回 `-MR_EPERM`？**
 
@@ -277,7 +283,8 @@ clazz（包括同类型的另一个通道）会被拒绝。
 
 **Q：引用计数最大是多少？**
 
-有效计数字段默认 8 位（最大 255），启用 `MR_USE_REF_LONG_COUNT` 后为 16 位（最大 65535）。引用计数**不会饱和**：在最大有效计数上再 `get` 会把存储推进到 `MR_REF_OVERFLOW`，使 ref 失效；后续 `get` 会失败并在断言开启时命中 overflow 断言。因此必须在设计上避免达到该边界。
+有效计数字段默认 8 位（最大 255），启用 `MR_USE_REF_LONG_COUNT` 后为 16 位（最大 65535）。引用计数 **不会饱和**：在最大有效计数上再
+`get` 会把存储推进到 `MR_REF_OVERFLOW`，使 ref 失效；后续 `get` 会失败并在断言开启时命中 overflow 断言。因此必须在设计上避免达到该边界。
 
 ---
 
@@ -352,7 +359,8 @@ typedef struct mr_object {
 
 ### 10. 核心流程
 
-**初始化**：`mr_object_init`（`mrX/kernel/object.c:11`）仅记录 clazz 并 `mr_ref_init`（计数置 1），不做任何分配。函数本身不拒绝重复初始化，但重复调用会覆盖现有 clazz/引用计数，调用者必须保证此时不存在其他活跃引用。
+**初始化**：`mr_object_init`（`mrX/kernel/object.c:11`）仅记录 clazz 并 `mr_ref_init`（计数置
+1），不做任何分配。函数本身不拒绝重复初始化，但重复调用会覆盖现有 clazz/引用计数，调用者必须保证此时不存在其他活跃引用。
 
 **派生**：`mr_object_derive`（`object.c:23`）先检查参数与初始化状态，再以
 `mr_clazz_is_kind_of(clazz, 当前 clazz)`（`mr_object.h:203`，沿 `super` 链线性查找） 确认新 clazz 是当前 clazz 的子孙，通过后仅改写
@@ -361,9 +369,11 @@ typedef struct mr_object {
 
 **引用计数**：`mr_object_get/put` 薄封装 `mr_ref_get/mr_ref_put`：
 
-- `mr_ref_get`（`mr_ref.h:83`）：CAS 循环加一；发现 magic 无效或计数为 0 即返回失败。与最后一次 `put` 竞争时，只有在 magic 被清除前成功取得引用的调用才能继续；单独一次 `mr_object_del` 若未把计数降到 0，并不会阻止新的 `get`。
+- `mr_ref_get`（`mr_ref.h:83`）：CAS 循环加一；发现 magic 无效或计数为 0 即返回失败。与最后一次 `put` 竞争时，只有在 magic
+  被清除前成功取得引用的调用才能继续；单独一次 `mr_object_del` 若未把计数降到 0，并不会阻止新的 `get`。
 - 最大计数没有饱和保护：从最大有效计数再加 1 会得到 `MR_REF_OVERFLOW` 并使 magic 校验失败；这是需要调用者避免的溢出状态。
-- `mr_ref_put`（`mr_ref.h:109`）：`fetch_sub` 减一；若减前计数为 1 且提供了 release，先用 `fetch_and(~MR_REF_MAGIC)` 清除 magic，再调用 release。对象层始终传入 `object_ref_release`，因此最后一次对象引用遵循“先失效、后释放”的顺序。
+- `mr_ref_put`（`mr_ref.h:109`）：`fetch_sub` 减一；若减前计数为 1 且提供了 release，先用 `fetch_and(~MR_REF_MAGIC)` 清除
+  magic，再调用 release。对象层始终传入 `object_ref_release`，因此最后一次对象引用遵循“先失效、后释放”的顺序。
 
 **释放链**：计数归零后 `object_ref_release`（`object.c:74`）以
 `MR_CONTAINER_OF` 取回对象，调用 `object_clazz_release`（`object.c:59`）：从对象当前 clazz 沿 `super` 链
@@ -375,10 +385,12 @@ typedef struct mr_object {
 
 ### 11. 并发与中断安全
 
-- 引用计数增减使用 `mr_atomic_*`，因此 `get` 与计数更新本身不依赖对象级互斥锁；但 `put` 在最后一个引用上会同步执行 clazz release，能否在中断上下文调用取决于具体 release 回调及底层原子实现，不能由 Object 层统一承诺。
+- 引用计数增减使用 `mr_atomic_*`，因此 `get` 与计数更新本身不依赖对象级互斥锁；但 `put` 在最后一个引用上会同步执行 clazz
+  release，能否在中断上下文调用取决于具体 release 回调及底层原子实现，不能由 Object 层统一承诺。
 - 对象系统自身无锁：clazz 指针的改写（`derive`）与初始化不由锁保护，同一对象的
   `init`/`derive` 与并发 `get/put` 的交由使用者按组件约定安排（内核组件均在初始化 阶段完成 derive，之后再不修改 clazz）。
-- 释放链在最后一次 `put` 的调用者上下文中同步递归执行；若 release 会分配/释放内存、获取可能阻塞的资源或依赖特定上下文，则该对象的最后一次 `put` 必须遵守对应约束。Object 层不检查这些条件。
+- 释放链在最后一次 `put` 的调用者上下文中同步递归执行；若 release 会分配/释放内存、获取可能阻塞的资源或依赖特定上下文，则该对象的最后一次
+  `put` 必须遵守对应约束。Object 层不检查这些条件。
 
 ### 12. 扩展与派生
 

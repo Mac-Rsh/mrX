@@ -5,15 +5,15 @@
 
 本页说明 CLI 的共同行为和交互 Shell。各命令的完整输入格式、操作步骤和故障排查见：
 
-| 命令       | 详细教程                               |
-|------------|----------------------------------------|
+| 命令       | 详细教程                                          |
+|------------|---------------------------------------------------|
 | `kconfig`  | [Kconfig 配置与头文件生成](../kconfig/kconfig.md) |
-| `htc`      | [HTC 硬件描述编译](../htc/htc.md)             |
+| `htc`      | [HTC 硬件描述编译](../htc/htc.md)                 |
 | `rpc-idl`  | [RPC IDL 编译](../rpc-idl/rpc-idl.md)             |
-| `platform` | [平台文件安装与卸载](../platform/platform.md)      |
-| `sections` | [GNU ld 注册段处理](../sections/sections.md)       |
-| `mdk`      | [Keil MDK 工程维护](../mdk/mdk.md)            |
-| `echo`     | [echo 最小插件示例](../echo/echo.md)           |
+| `platform` | [平台文件安装与卸载](../platform/platform.md)     |
+| `sections` | [GNU ld 注册段处理](../sections/sections.md)      |
+| `mdk`      | [Keil MDK 工程维护](../mdk/mdk.md)                |
+| `echo`     | [echo 最小插件示例](../echo/echo.md)              |
 
 | 项       | 说明                                            |
 |----------|-------------------------------------------------|

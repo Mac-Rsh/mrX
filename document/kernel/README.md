@@ -7,23 +7,23 @@
 
 ## 模块索引
 
-| 模块                | 文档                       | 一句话说明                                     |
-|---------------------|----------------------------|------------------------------------------------|
-| 初始化调用 Initcall | [initcall.md](initcall.md) | 链接段收集初始化函数，由 `mr_user_init` 按级别执行 |
-| 入口 Entry          | [entry.md](entry.md)       | 工具链入口接线：在 `main` 之前完成内核初始化   |
-| 时钟 Clock          | [clock.md](clock.md)       | tick/uptime 基准与同步 hook、tickless 汇总     |
-| 软定时器 Timer      | [timer.md](timer.md)       | 一次/周期到期回调，支持静态与动态对象          |
-| 中断 Irq            | [irq.md](irq.md)           | IRQ 控制器/动作管理与可选 defer 工作队列       |
-| 等待队列 Wait       | [wait.md](wait.md)         | waitable/waiter 的同步回调式事件分发           |
-| 工作队列 Work       | [work.md](work.md)         | 立即/延时 work 排队，由调用者驱动 execute      |
-| 钩子 Hook           | [hook.md](hook.md)         | 固定容量、追加式条目表；遍历由使用模块解释     |
-| 对象系统 Object     | [object.md](object.md)     | 对象 clazz 注册、引用计数与生命周期            |
-| 内存块分配器 Slab   | [slab.md](slab.md)         | 固定块对象池，原子位图管理分配状态             |
-| FIFO                | [fifo.md](fifo.md)         | 定长环形缓冲；普通读写支持 SPSC 使用模型       |
-| 哈希表 Hashmap      | [hashmap.md](hashmap.md)   | 以 32 位整数为键的键值容器，节点内嵌无额外分配 |
-| 日志 Log            | [log.md](log.md)           | 带级别和时间戳的日志输出                       |
-| 格式化输出 Printf   | [printf.md](printf.md)     | 格式化字符串并经由平台输出接口送出             |
-| 基础工具 Foundation | [foundation.md](foundation.md) | 链表、引用计数、自旋锁、工具宏与版本宏 |
+| 模块                | 文档                           | 一句话说明                                         |
+|---------------------|--------------------------------|----------------------------------------------------|
+| 初始化调用 Initcall | [initcall.md](initcall.md)     | 链接段收集初始化函数，由 `mr_user_init` 按级别执行 |
+| 入口 Entry          | [entry.md](entry.md)           | 工具链入口接线：在 `main` 之前完成内核初始化       |
+| 时钟 Clock          | [clock.md](clock.md)           | tick/uptime 基准与同步 hook、tickless 汇总         |
+| 软定时器 Timer      | [timer.md](timer.md)           | 一次/周期到期回调，支持静态与动态对象              |
+| 中断 Irq            | [irq.md](irq.md)               | IRQ 控制器/动作管理与可选 defer 工作队列           |
+| 等待队列 Wait       | [wait.md](wait.md)             | waitable/waiter 的同步回调式事件分发               |
+| 工作队列 Work       | [work.md](work.md)             | 立即/延时 work 排队，由调用者驱动 execute          |
+| 钩子 Hook           | [hook.md](hook.md)             | 固定容量、追加式条目表；遍历由使用模块解释         |
+| 对象系统 Object     | [object.md](object.md)         | 对象 clazz 注册、引用计数与生命周期                |
+| 内存块分配器 Slab   | [slab.md](slab.md)             | 固定块对象池，原子位图管理分配状态                 |
+| FIFO                | [fifo.md](fifo.md)             | 定长环形缓冲；普通读写支持 SPSC 使用模型           |
+| 哈希表 Hashmap      | [hashmap.md](hashmap.md)       | 以 32 位整数为键的键值容器，节点内嵌无额外分配     |
+| 日志 Log            | [log.md](log.md)               | 带级别和时间戳的日志输出                           |
+| 格式化输出 Printf   | [printf.md](printf.md)         | 格式化字符串并经由平台输出接口送出                 |
+| 基础工具 Foundation | [foundation.md](foundation.md) | 链表、引用计数、自旋锁、工具宏与版本宏             |
 
 ## 相关文档
 

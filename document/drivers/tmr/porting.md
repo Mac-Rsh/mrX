@@ -4,7 +4,8 @@
 
 ## 1. 移植边界
 
-TMR 公共层负责配置调用门控、busy 查询和 waitable 生命周期；backend 负责 period 到硬件计数参数的换算、启动/停止、trigger signal 和 timeout 中断。
+TMR 公共层负责配置调用门控、busy 查询和 waitable 生命周期；backend 负责 period 到硬件计数参数的换算、启动/停止、trigger
+signal 和 timeout 中断。
 
 建议实现位置：
 
@@ -53,7 +54,8 @@ TMR 公共层不会自动协调 ADC/DAC/DMA，因此：
 
 ## 5. Timeout 事件
 
-`event_control` 负责打开/关闭 `MR_TMR_WAIT_TIMEOUT` 的硬件来源。ISR 清除 update/timeout 状态后调用 `mr_tmr_event_raise()`。
+`event_control` 负责打开/关闭 `MR_TMR_WAIT_TIMEOUT` 的硬件来源。ISR 清除 update/timeout 状态后调用
+`mr_tmr_event_raise()`。
 
 raise 为同步分发；ISR 中的 waiter 不得执行阻塞工作。
 

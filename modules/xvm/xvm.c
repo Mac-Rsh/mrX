@@ -39,7 +39,7 @@ static mr_err_t xvm_init(mr_xvm_t *xvm, const mr_clazz_t *clazz,
     xvm->isa = isa;
 #if defined(MR_USE_MODULE_XVM_DEBUG)
     /* Init XVM debug */
-    mr_xvm_dbg_init(xvm);
+    mr_xvm_debug_init(xvm);
 #endif /* defined(MR_USE_MODULE_XVM_DEBUG) */
 
     /* Init object */
@@ -166,7 +166,7 @@ mr_err_t mr_xvm_load(mr_xvm_t *xvm, const void *image, mr_size_t image_size,
 
 #if defined(MR_USE_MODULE_XVM_DEBUG)
     /* Clear all breakpoint */
-    mr_xvm_dbg_break_clear(xvm);
+    mr_xvm_debug_break_clear(xvm);
 #endif /* defined(MR_USE_MODULE_XVM_DEBUG) */
 
     /* Set XVM status */
@@ -209,7 +209,7 @@ mr_xvm_return_t mr_xvm_execute(mr_xvm_t *xvm, mr_xvm_event_t *event,
 
 #if defined(MR_USE_MODULE_XVM_DEBUG)
     /* Clamp the step when a probe is attached */
-    if (mr_xvm_dbg_probe_enter(xvm, &step, event)) {
+    if (mr_xvm_debug_probe_enter(xvm, &step, event)) {
         exec_ret = MR_XVM_NONE;
         goto _exit;
     }
@@ -232,7 +232,7 @@ mr_xvm_return_t mr_xvm_execute(mr_xvm_t *xvm, mr_xvm_event_t *event,
 
 #if defined(MR_USE_MODULE_XVM_DEBUG)
     /* Hold debug stops and hide them from the runtime */
-    exec_ret = mr_xvm_dbg_probe_leave(xvm, exec_ret, event);
+    exec_ret = mr_xvm_debug_probe_leave(xvm, exec_ret, event);
 #endif /* defined(MR_USE_MODULE_XVM_DEBUG) */
 _exit:
     /* Unlock */

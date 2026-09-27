@@ -50,7 +50,7 @@ mrX 不是那种“下载下来就能跑出一个程序”的工程，而是一�
 | 第一次把 mrX 接入应用             | [框架使用指南](usage.md)                                               |
 | 选择、安装已有平台                | [平台移植层：使用已有平台](platform/platform.md#11-选择并安装已有平台) |
 | 为新芯片开发平台适配              | [平台移植层：开发新平台](platform/platform.md#13-新平台的移植范围)     |
-| 为平台实现某个外设 backend         | [设备驱动移植入口](#设备驱动)                                         |
+| 为平台实现某个外设 backend        | [设备驱动移植入口](#设备驱动)                                          |
 | 验收自研平台适配                  | [平台移植层：适配验收清单](platform/platform.md#121-适配验收清单)      |
 | 配置功能、生成 `mr_config.h`      | [框架使用指南：Kconfig](usage.md#3-使用-kconfig-配置功能)              |
 | 描述板级硬件、生成 `mr_hardgen.h` | [框架使用指南：HTC](usage.md#4-htc-硬件描述编译)                       |
@@ -62,7 +62,8 @@ mrX 不是那种“下载下来就能跑出一个程序”的工程，而是一�
 
 ## 4. 文档放在哪
 
-模块文档按源码职责分目录，通常与源码目录保持对应——`kernel/timer.md` 讲的就是 `kernel/timer.c`；RPC 和 XVM 文档集中在 `modules/` 下的对应目录：
+模块文档按源码职责分目录，通常与源码目录保持对应——`kernel/timer.md` 讲的就是 `kernel/timer.c`；Boot、RPC 和 XVM 文档集中在
+`modules/` 下的对应目录：
 
 ```text
 mrX/document/
@@ -73,7 +74,7 @@ mrX/document/
 ├── libc/             # C 库：内存分配、字符串、格式化输入输出
 ├── drivers/          # 设备驱动：驱动框架、GPIO、UART、ADC/DAC、扩展芯片
 ├── fs/               # 文件系统：VFS、RamFS、RootFS
-├── modules/          # 上层组件：RPC、XVM、Crypto
+├── modules/          # 上层组件：Boot、RPC、XVM、Crypto
 ├── platform/         # 平台移植层：安装已有平台、移植新平台
 ├── arch/             # 芯片厂商适配说明：当前包含 ST / STM32H5
 ├── scripts/          # 主机端 Python 工具（kconfig、htc、sections……）（有目录入口）
@@ -100,15 +101,15 @@ mrX/document/
 
 ### 内核服务
 
-| 模块              | 文档                          | 模块                | 文档                              |
-|-------------------|-------------------------------|---------------------|-----------------------------------|
-| 时钟 Clock        | [clock.md](kernel/clock.md)   | 入口 Entry          | [entry.md](kernel/entry.md)       |
-| FIFO              | [fifo.md](kernel/fifo.md)     | 哈希表 Hashmap      | [hashmap.md](kernel/hashmap.md)   |
-| 钩子 Hook         | [hook.md](kernel/hook.md)     | 初始化调用 Initcall | [initcall.md](kernel/initcall.md) |
-| 中断 Irq          | [irq.md](kernel/irq.md)       | 日志 Log            | [log.md](kernel/log.md)           |
-| 对象系统 Object   | [object.md](kernel/object.md) | 格式化输出 Printf   | [printf.md](kernel/printf.md)     |
-| 内存块分配器 Slab | [slab.md](kernel/slab.md)     | 软定时器 Timer      | [timer.md](kernel/timer.md)       |
-| 等待队列 Wait     | [wait.md](kernel/wait.md)     | 工作队列 Work       | [work.md](kernel/work.md)         |
+| 模块                | 文档                                  | 模块                | 文档                              |
+|---------------------|---------------------------------------|---------------------|-----------------------------------|
+| 时钟 Clock          | [clock.md](kernel/clock.md)           | 入口 Entry          | [entry.md](kernel/entry.md)       |
+| FIFO                | [fifo.md](kernel/fifo.md)             | 哈希表 Hashmap      | [hashmap.md](kernel/hashmap.md)   |
+| 钩子 Hook           | [hook.md](kernel/hook.md)             | 初始化调用 Initcall | [initcall.md](kernel/initcall.md) |
+| 中断 Irq            | [irq.md](kernel/irq.md)               | 日志 Log            | [log.md](kernel/log.md)           |
+| 对象系统 Object     | [object.md](kernel/object.md)         | 格式化输出 Printf   | [printf.md](kernel/printf.md)     |
+| 内存块分配器 Slab   | [slab.md](kernel/slab.md)             | 软定时器 Timer      | [timer.md](kernel/timer.md)       |
+| 等待队列 Wait       | [wait.md](kernel/wait.md)             | 工作队列 Work       | [work.md](kernel/work.md)         |
 | 基础工具 Foundation | [foundation.md](kernel/foundation.md) |                     |                                   |
 
 ### C 库
@@ -120,14 +121,14 @@ mrX/document/
 
 ### 设备驱动
 
-| 模块            | 文档                                   | 模块           | 文档                                   |
-|-----------------|----------------------------------------|----------------|----------------------------------------|
-| 驱动框架 Driver | [driver.md](drivers/driver.md)         | GPIO           | [gpio.md](drivers/gpio/gpio.md)             |
-| UART            | [uart.md](drivers/uart/uart.md)       | I2C            | [i2c.md](drivers/i2c/i2c.md)                |
-| ADC             | [adc.md](drivers/adc/adc.md)         | DAC            | [dac.md](drivers/dac/dac.md)                |
-| RAM 设备        | [ram.md](drivers/ram/ram.md)         | DMA            | [dma.md](drivers/dma/dma.md)                |
-| TMR             | [tmr.md](drivers/tmr/tmr.md)         | WDT            | [wdt.md](drivers/wdt/wdt.md)                |
-| FLASH           | [flash.md](drivers/flash/flash.md)   |                |                                              |
+| 模块            | 文档                                        | 模块           | 文档                                        |
+|-----------------|---------------------------------------------|----------------|---------------------------------------------|
+| 驱动框架 Driver | [driver.md](drivers/driver.md)              | GPIO           | [gpio.md](drivers/gpio/gpio.md)             |
+| UART            | [uart.md](drivers/uart/uart.md)             | I2C            | [i2c.md](drivers/i2c/i2c.md)                |
+| ADC             | [adc.md](drivers/adc/adc.md)                | DAC            | [dac.md](drivers/dac/dac.md)                |
+| RAM 设备        | [ram.md](drivers/ram/ram.md)                | DMA            | [dma.md](drivers/dma/dma.md)                |
+| TMR             | [tmr.md](drivers/tmr/tmr.md)                | WDT            | [wdt.md](drivers/wdt/wdt.md)                |
+| FLASH           | [flash.md](drivers/flash/flash.md)          |                |                                             |
 | HC165 输入扩展  | [gpio_hc165.md](drivers/gpio/gpio_hc165.md) | HC595 输出扩展 | [gpio_hc595.md](drivers/gpio/gpio_hc595.md) |
 
 平台 backend 开发请阅读对应驱动目录下的 `porting.md`：
@@ -142,16 +143,16 @@ mrX/document/
 
 ### 上层模块
 
-| 模块             | 文档                     | 模块       | 文档                     |
-|------------------|--------------------------|------------|--------------------------|
-| 远程过程调用 RPC | [rpc.md](modules/rpc/rpc.md) | 虚拟机 XVM | [xvm.md](modules/xvm/xvm.md) |
-| 调试器 Dbg       | [dbg.md](modules/xvm/dbg.md) | GDB 桩 Gdb | [gdb.md](modules/xvm/gdb.md) |
-| 密码算法 Crypto  | [crypto.md](modules/crypto/crypto.md) |            |                              |
+| 模块             | 文档                                  | 模块                | 文档                            |
+|------------------|---------------------------------------|---------------------|---------------------------------|
+| 远程过程调用 RPC | [rpc.md](modules/rpc/rpc.md)          | 虚拟机 XVM          | [xvm.md](modules/xvm/xvm.md)    |
+| 调试器 Dbg       | [dbg.md](modules/xvm/dbg.md)          | GDB 桩 Gdb          | [gdb.md](modules/xvm/gdb.md)    |
+| 密码算法 Crypto  | [crypto.md](modules/crypto/crypto.md) | 启动与固件更新 Boot | [boot.md](modules/boot/boot.md) |
 
 ### 芯片厂商适配
 
-| 厂商 / 系列 | 文档 | 说明 |
-|-------------|------|------|
+| 厂商 / 系列  | 文档                   | 说明                                                    |
+|--------------|------------------------|---------------------------------------------------------|
 | ST / STM32H5 | [st.md](arch/st/st.md) | ST 适配分层、资源归属、HardTree 约定与 backend 实现规则 |
 
 ## 6. 阅读方法：每篇模块文档怎么用

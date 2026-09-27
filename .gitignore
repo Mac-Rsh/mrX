@@ -51,6 +51,7 @@ htmlcov/
 # mrX generated files
 mr_config.h
 mr_hardgen.h
+/.platform/
 /platform/*
 !/platform/.gitkeep
 modules/rpc/idl.c

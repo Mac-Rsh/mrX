@@ -37,14 +37,13 @@ mrX 的常用源码目录为 `kernel`、`libc`、安装后的 `platform`、`driv
 ### 注册段与链接器
 
 mrX 的注册段（initcall、driver、RPC、testcase）在 MDK 下不需要任何额外链接器配置：注册条目带有
-`used` 属性，armlink 不会裁剪它们；内核以 `initcall.c` 自身导出的段首尾哨兵定界遍历
-（`MR_INIT_EXPORT(start, "0.end")` 与 `MR_INIT_EXPORT(end, "9.end")`，其变量名即
-`__mr_initcall_start` / `__mr_initcall_end`），不依赖链接器生成边界符号；而 armlink
-默认把同类只读段按名字连续、字典序放置，天然满足注册段的收集、排序需求。
+`used` 属性，armlink 不会裁剪它们；内核以 `initcall.c` 自身导出的段首尾哨兵定界遍历 （`MR_INIT_EXPORT(start, "0.end")` 与
+`MR_INIT_EXPORT(end, "9.end")`，其变量名即
+`__mr_initcall_start` / `__mr_initcall_end`），不依赖链接器生成边界符号；而 armlink 默认把同类只读段按名字连续、字典序放置，天然满足注册段的收集、排序需求。
 
-因此 MDK 工程不需要 scatter 文件，也不需要 `--keep` 等链接器选项，按 Target
-对话框的默认内存布局链接即可；同时不要对 MDK 工程执行 `sections` 命令或套用 GNU ld 规则。
-若工程因其他原因自建 scatter，需保证其中包含等效的收集规则（如 `*(mr_initcall.*)`）。
+因此 MDK 工程不需要 scatter 文件，也不需要 `--keep` 等链接器选项，按 Target 对话框的默认内存布局链接即可；同时不要对 MDK
+工程执行 `sections` 命令或套用 GNU ld 规则。 若工程因其他原因自建 scatter，需保证其中包含等效的收集规则（如
+`*(mr_initcall.*)`）。
 
 ## 添加文件：add
 

@@ -23,7 +23,8 @@ HC165/HC595 属于建立在 GPIO API 上的扩展驱动，不是片上 GPIO 平�
 - `port_write` / `port_read`
 - 可选 `event_attach` / `event_control`
 
-`mr_gpio_data_t.exist_mask` 描述实际存在 pin，`invert_mask` 由公共层处理逻辑反相。backend 接收到的 pin value 已经处于公共层定义的硬件侧语义，不要再次重复反相。
+`mr_gpio_data_t.exist_mask` 描述实际存在 pin，`invert_mask` 由公共层处理逻辑反相。backend 接收到的 pin value
+已经处于公共层定义的硬件侧语义，不要再次重复反相。
 
 ## 3. Pin 配置
 
@@ -52,7 +53,8 @@ GPIO 的事件 waitable 由 backend 管理。典型实现为每个可中断 pin 
 - 触发类型；
 - 当前启用状态。
 
-`event_attach` 只负责订阅，`event_control` 才真正打开/关闭硬件中断来源。ISR 应先清 pending，再通过 waitable raise `MR_GPIO_WAIT_EXTI`。若提供 payload，保持其格式在同一 backend 内稳定。
+`event_attach` 只负责订阅，`event_control` 才真正打开/关闭硬件中断来源。ISR 应先清 pending，再通过 waitable raise
+`MR_GPIO_WAIT_EXTI`。若提供 payload，保持其格式在同一 backend 内稳定。
 
 切换 pin 离开 IRQ 模式时，应释放对应映射并关闭来源，避免陈旧 waiter 继续收到硬件事件。
 

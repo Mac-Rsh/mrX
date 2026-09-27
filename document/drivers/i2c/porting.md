@@ -4,7 +4,8 @@
 
 ## 1. 移植边界
 
-I2C 公共层定义 controller 配置、message 数组和 Slave wait 事件；backend 负责总线状态机、START/RESTART/STOP、地址阶段、ACK/NACK、读写方向、错误恢复以及可选 Slave 模式。
+I2C 公共层定义 controller 配置、message 数组和 Slave wait 事件；backend
+负责总线状态机、START/RESTART/STOP、地址阶段、ACK/NACK、读写方向、错误恢复以及可选 Slave 模式。
 
 建议实现位置：
 
@@ -73,7 +74,8 @@ ERROR
 - STOP：本次总线事务结束；
 - ERROR：NACK、仲裁/总线错误或平台定义的失败。
 
-事件通过 `mr_i2c_event_raise()` 同步通知 waiter。若从 ISR raise，回调也处于 ISR 调用链。时钟拉伸策略、一次 read/write 搬多少字节以及缓冲方式由 backend 决定。
+事件通过 `mr_i2c_event_raise()` 同步通知 waiter。若从 ISR raise，回调也处于 ISR 调用链。时钟拉伸策略、一次 read/write
+搬多少字节以及缓冲方式由 backend 决定。
 
 ## 6. 错误与恢复
 
@@ -90,7 +92,8 @@ backend 应明确处理：
 
 ## 7. HardTree 与安装
 
-`MR_HT_I2C_INSTALL` 安装整颗 controller，不创建 I2C client/device 对象。HardTree 可描述 controller 实例、pins、clock/IRQ 以及平台需要的静态资源。
+`MR_HT_I2C_INSTALL` 安装整颗 controller，不创建 I2C client/device 对象。HardTree 可描述 controller 实例、pins、clock/IRQ
+以及平台需要的静态资源。
 
 ## 8. 当前参考
 

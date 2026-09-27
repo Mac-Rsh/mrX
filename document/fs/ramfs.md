@@ -21,7 +21,8 @@ RamFS 解决的问题是： **在没有块设备与持久存储的场合，提�
 
 特性：
 
-- 通过 `MR_INIT_LEVEL_FS` initcall 自动注册 `"ramfs"`；该 initcall 由 `mr_user_init()` 遍历执行，不属于 `mr_kernel_init()` 的硬编码阶段。
+- 通过 `MR_INIT_LEVEL_FS` initcall 自动注册 `"ramfs"`；该 initcall 由 `mr_user_init()` 遍历执行，不属于 `mr_kernel_init()`
+  的硬编码阶段。
 - 普通文件由堆缓冲区支撑：写入自动扩展，空洞读为零，支持截断与扩展。
 - 可选 FIFO 节点：以 [FIFO](../kernel/fifo.md) 环形队列实现的非阻塞字节管道。
 - 目录枚举、重命名等命名空间能力全部来自 VFS（见 [文件系统 VFS](fs.md)）， RamFS 自身只负责文件数据。
@@ -43,7 +44,8 @@ RamFS 解决的问题是： **在没有块设备与持久存储的场合，提�
 #include <mrX/fs/mr_fs_file.h>
 ```
 
-在按名字挂载 `"ramfs"` 前，启动流程需要已经执行 `mr_user_init()`（或以其他方式确保 `mr_fs_ramfs_init` 对应 initcall 已运行完成注册）。
+在按名字挂载 `"ramfs"` 前，启动流程需要已经执行 `mr_user_init()`（或以其他方式确保 `mr_fs_ramfs_init` 对应 initcall
+已运行完成注册）。
 
 ### 3. 快速上手
 
@@ -93,7 +95,8 @@ static int ramfs_demo(void) {
 
 - 同一个节点（普通文件或 FIFO）在同一时刻只允许一个数据操作：`read`/`write`/
   `ftruncate` 以及带 `MR_O_TRUNC` 的 `open`。若另一上下文正对同一节点执行上述 操作，本次调用立即返回 `-MR_EBUSY`
-  ，不会等待，可稍后重试。不同节点之间没有 RamFS 节点锁级别的互斥；多个句柄打开同一节点也受同一规则约束。零长度读写在**已经通过 VFS 的句柄、访问模式与节点类型检查后**会在 RamFS callback 内直接返回 0，不参与节点锁竞争。
+  ，不会等待，可稍后重试。不同节点之间没有 RamFS 节点锁级别的互斥；多个句柄打开同一节点也受同一规则约束。零长度读写在 **已经通过
+  VFS 的句柄、访问模式与节点类型检查后**会在 RamFS callback 内直接返回 0，不参与节点锁竞争。
 
 **FIFO 节点**
 
@@ -101,31 +104,33 @@ static int ramfs_demo(void) {
   创建，容量为 `MR_CFG_FS_RAMFS_FIFO_SIZE`（编译期确定，无运行期修改接口）。
 - 读写完全不阻塞：读到当前存量为止，写到当前剩余空间为止，返回实际搬运的 字节数；队空读到 0，队满写出 0。
 - 不支持定位：`mr_fs_lseek` 返回 `-MR_ESPIPE`。
-- `MR_O_TRUNC` 只对普通文件生效，FIFO 以 `O_TRUNC` 打开不会清空队列；`MR_O_APPEND` 对 FIFO 也没有“定位到 EOF”的特殊意义，写入仍只是向队尾追加字节。
+- `MR_O_TRUNC` 只对普通文件生效，FIFO 以 `O_TRUNC` 打开不会清空队列；`MR_O_APPEND` 对 FIFO 也没有“定位到
+  EOF”的特殊意义，写入仍只是向队尾追加字节。
 - FIFO 与普通文件一样可以被 unlink，打开中的句柄用完即释放队列内存。
 
 **数据生命周期**
 
-- 文件数据与 FIFO 队列都存放于堆：unlink 后名字立即消失，数据在 inode 最后引用释放时回收。成功 `mr_fs_umount` 会摘除并清理整个挂载命名空间；若内部对象仍被额外显式引用持有，其最终内存释放仍遵循各对象的引用计数生命周期。
+- 文件数据与 FIFO 队列都存放于堆：unlink 后名字立即消失，数据在 inode 最后引用释放时回收。成功 `mr_fs_umount`
+  会摘除并清理整个挂载命名空间；若内部对象仍被额外显式引用持有，其最终内存释放仍遵循各对象的引用计数生命周期。
 - 数据仅存在于内存中，复位或卸载后不可恢复，不要存放需要持久化的内容。
 
 ### 5. API 参考
 
 RamFS 不定义自己的公开 API，全部操作通过 [文件系统 VFS](fs.md) 的通用接口完成。 下表列出每个 VFS 操作作用于 RamFS 节点时的行为：
 
-| API                                  | 作用于 RamFS 时的行为                                                                                      |
-|--------------------------------------|------------------------------------------------------------------------------------------------------------|
-| `mr_fs_open` + `MR_O_CREAT`          | 创建普通文件（`MR_INODE_REG`），缓冲区初始为空                                                             |
-| `mr_fs_mkdir`                        | 创建目录（目录无数据缓冲区）                                                                               |
-| `mr_fs_mkfifo` / `mr_fs_mknod(FIFO)` | 创建 FIFO 节点；`MR_USE_FS_RAMFS_FIFO` 关闭时 `-MR_ENOSYS`                                                 |
-| `mr_fs_read`                         | 普通文件按位置读取并在 EOF 截断；FIFO 非阻塞出队                                                           |
-| `mr_fs_write`                        | 普通文件按位置写入并按需扩展；FIFO 非阻塞入队                                                              |
-| `mr_fs_lseek`                        | 普通文件正常定位；FIFO 返回 `-MR_ESPIPE`                                                                   |
-| `mr_fs_ftruncate`                    | 调整普通文件长度；FIFO 返回 `-MR_EINVAL`（非普通文件）                                                     |
-| `mr_fs_fstat`                        | 返回通用字段：`type`/`mode`/`size`（无后端 stat 覆盖）                                                     |
-| `mr_fs_fsync` / `mr_fs_ioctl`        | RamFS 未提供对应 file callback，返回 `-MR_ENOSYS`                                                          |
-| `mr_fs_readdir`                      | 使用 VFS 默认目录枚举（按 dentry 树遍历）                                                                  |
-| `mr_fs_unlink` / `mr_fs_close`       | 删除名字或释放句柄引用；最后一个引用释放时回收数据缓冲区或 FIFO 队列                                       |
+| API                                  | 作用于 RamFS 时的行为                                                                                                              |
+|--------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| `mr_fs_open` + `MR_O_CREAT`          | 创建普通文件（`MR_INODE_REG`），缓冲区初始为空                                                                                     |
+| `mr_fs_mkdir`                        | 创建目录（目录无数据缓冲区）                                                                                                       |
+| `mr_fs_mkfifo` / `mr_fs_mknod(FIFO)` | 创建 FIFO 节点；`MR_USE_FS_RAMFS_FIFO` 关闭时 `-MR_ENOSYS`                                                                         |
+| `mr_fs_read`                         | 普通文件按位置读取并在 EOF 截断；FIFO 非阻塞出队                                                                                   |
+| `mr_fs_write`                        | 普通文件按位置写入并按需扩展；FIFO 非阻塞入队                                                                                      |
+| `mr_fs_lseek`                        | 普通文件正常定位；FIFO 返回 `-MR_ESPIPE`                                                                                           |
+| `mr_fs_ftruncate`                    | 调整普通文件长度；FIFO 返回 `-MR_EINVAL`（非普通文件）                                                                             |
+| `mr_fs_fstat`                        | 返回通用字段：`type`/`mode`/`size`（无后端 stat 覆盖）                                                                             |
+| `mr_fs_fsync` / `mr_fs_ioctl`        | RamFS 未提供对应 file callback，返回 `-MR_ENOSYS`                                                                                  |
+| `mr_fs_readdir`                      | 使用 VFS 默认目录枚举（按 dentry 树遍历）                                                                                          |
+| `mr_fs_unlink` / `mr_fs_close`       | 删除名字或释放句柄引用；最后一个引用释放时回收数据缓冲区或 FIFO 队列                                                               |
 | `mr_fs_mount` / `mr_fs_umount`       | `source`/`flags`/`data` 被忽略；有打开句柄、在途操作或子挂载时卸载返回 `-MR_EBUSY`，成功后摘除实例命名空间并按引用生命周期回收对象 |
 
 **`mr_fs_mount`（挂载 "ramfs"）**
@@ -213,7 +218,8 @@ FIFO 是字节管道，没有位置概念，RamFS 显式拒绝定位；读写只
 
 **Q：数据会占用多少内存？什么时候归还？**
 
-普通文件缓冲区按逻辑文件长度分配/重分配；目录没有 `ramfs_node_t` 数据区；FIFO 额外分配固定容量的环形缓冲。测试中的正常 unlink/close/umount 生命周期会最终恢复堆占用；若调用者额外持有 inode/dentry 等引用，释放会相应延后。
+普通文件缓冲区按逻辑文件长度分配/重分配；目录没有 `ramfs_node_t` 数据区；FIFO 额外分配固定容量的环形缓冲。测试中的正常
+unlink/close/umount 生命周期会最终恢复堆占用；若调用者额外持有 inode/dentry 等引用，释放会相应延后。
 
 **Q：掉电或复位后文件还在吗？**
 
@@ -243,7 +249,9 @@ RamFS 是 VFS 之上的最小后端实现，自身不含路径与缓存逻辑：
 +-----------------------------+
 ```
 
-- 模块初始化函数 `mr_fs_ramfs_init` 通过 `MR_INIT_EXPORT` 挂在 `MR_INIT_LEVEL_FS`（`mrX/fs/ramfs/ramfs.c:441-444`），由 `mr_user_init()` 的 initcall 遍历执行并调用 `mr_file_system_register(&__ramfs)`。注册函数的返回值当前没有在该 initcall 中检查。
+- 模块初始化函数 `mr_fs_ramfs_init` 通过 `MR_INIT_EXPORT` 挂在 `MR_INIT_LEVEL_FS`（`mrX/fs/ramfs/ramfs.c:441-444`），由
+  `mr_user_init()` 的 initcall 遍历执行并调用 `mr_file_system_register(&__ramfs)`。注册函数的返回值当前没有在该 initcall
+  中检查。
 - 文件系统描述符 `__ramfs`（`ramfs.c:57`）只提供 `mount` 回调，
   `unmount` 为 `MR_NULL`：实例没有需要释放的文件系统级后端资源，卸载路径全部由 VFS 的引用释放链完成。
 - `mount` 回调（`ramfs.c:422`）分配一个目录 inode 作为根并置
@@ -322,7 +330,8 @@ typedef struct ramfs_node {
   `pos`。
 - FIFO 的环形队列下标本身是原子量，但一次调用内部"先查存量再搬运"依赖节点锁 才成为整体原子事务。多个上下文交替读写时，各次调用的先后顺序由调度决定，
   冲突的一方得到 `-MR_EBUSY`。
-- `ramfs_inode_destroy` 不取节点锁：它只在 inode 最后引用释放时运行；正常文件 I/O 通过打开句柄持有 inode 引用，因此在途文件操作会阻止 inode 进入最终 destroy。
+- `ramfs_inode_destroy` 不取节点锁：它只在 inode 最后引用释放时运行；正常文件 I/O 通过打开句柄持有 inode 引用，因此在途文件操作会阻止
+  inode 进入最终 destroy。
 
 ### 12. 扩展与派生
 
@@ -334,18 +343,18 @@ RamFS 的定位是文件系统实现范例（`mrX/include/mrX/fs/ramfs/Kconfig:6
 
 ### 13. 源码导读
 
-| 位置                                         | 职责                                                                                   |
-|----------------------------------------------|----------------------------------------------------------------------------------------|
-| `mrX/fs/ramfs/ramfs.c:57-58`                    | 文件系统名 `"ramfs"`                                                                   |
-| `mrX/fs/ramfs/ramfs.c:24`                    | inode 操作表（create/truncate/destroy）                                                |
-| `mrX/fs/ramfs/ramfs.c:35` / `:47`            | 普通文件 / FIFO 的 file 操作表                                                         |
-| `mrX/fs/ramfs/ramfs.c:57`                    | `mr_file_system_t` 描述符（仅 mount 回调）                                             |
-| `mrX/fs/ramfs/ramfs.c:61`                    | `ramfs_node_t` 节点结构（数据锁 + 类型联合体）；`ramfs_node_try_lock/unlock` 见 `:156` |
-| `mrX/fs/ramfs/ramfs.c:73`                    | 节点分配（类型校验、FIFO 容量与失败回滚）                                              |
-| `mrX/fs/ramfs/ramfs.c:166` / `:253` / `:287` | 截断 / 读 / 写的实现细节                                                               |
-| `mrX/fs/ramfs/ramfs.c:352` / `:385` / `:416` | FIFO 读 / 写 / 拒绝定位                                                                |
-| `mrX/fs/ramfs/ramfs.c:422` / `:441`          | 挂载回调 / 注册入口（`MR_INIT_LEVEL_FS`）                                              |
-| `mrX/test/fs/ramfs.c` / `ramfs_matrix.c` / `ramfs_rootfs_deep.c` | 普通文件边界、FIFO 回绕、矩阵化与深层生命周期行为测试 |
+| 位置                                                             | 职责                                                                                   |
+|------------------------------------------------------------------|----------------------------------------------------------------------------------------|
+| `mrX/fs/ramfs/ramfs.c:57-58`                                     | 文件系统名 `"ramfs"`                                                                   |
+| `mrX/fs/ramfs/ramfs.c:24`                                        | inode 操作表（create/truncate/destroy）                                                |
+| `mrX/fs/ramfs/ramfs.c:35` / `:47`                                | 普通文件 / FIFO 的 file 操作表                                                         |
+| `mrX/fs/ramfs/ramfs.c:57`                                        | `mr_file_system_t` 描述符（仅 mount 回调）                                             |
+| `mrX/fs/ramfs/ramfs.c:61`                                        | `ramfs_node_t` 节点结构（数据锁 + 类型联合体）；`ramfs_node_try_lock/unlock` 见 `:156` |
+| `mrX/fs/ramfs/ramfs.c:73`                                        | 节点分配（类型校验、FIFO 容量与失败回滚）                                              |
+| `mrX/fs/ramfs/ramfs.c:166` / `:253` / `:287`                     | 截断 / 读 / 写的实现细节                                                               |
+| `mrX/fs/ramfs/ramfs.c:352` / `:385` / `:416`                     | FIFO 读 / 写 / 拒绝定位                                                                |
+| `mrX/fs/ramfs/ramfs.c:422` / `:441`                              | 挂载回调 / 注册入口（`MR_INIT_LEVEL_FS`）                                              |
+| `mrX/test/fs/ramfs.c` / `ramfs_matrix.c` / `ramfs_rootfs_deep.c` | 普通文件边界、FIFO 回绕、矩阵化与深层生命周期行为测试                                  |
 
 ### 14. 附录
 
@@ -357,4 +366,6 @@ RamFS 的定位是文件系统实现范例（`mrX/include/mrX/fs/ramfs/Kconfig:6
 | `MR_USE_FS_RAMFS_FIFO`      | FIFO 节点开关，依赖 `MR_USE_FS_RAMFS`，默认 y  |
 | `MR_CFG_FS_RAMFS_FIFO_SIZE` | FIFO 默认容量（字节），默认 32，范围 1~1048576 |
 
-**错误码**（经 VFS API 返回，均为负数）：`-MR_EBUSY`（同一 RamFS 节点数据锁竞争）、`-MR_ENOSYS`（FIFO 特性关闭或 file 操作未提供）、`-MR_EINVAL`（不支持的节点类型/负长度）、`-MR_ENOMEM`（缓冲区扩展或队列分配失败）、`-MR_ERANGE`（普通文件写位置范围溢出）、`-MR_ESPIPE`（FIFO 定位）。VFS 还会在进入 RamFS callback 前产生访问模式、目录类型、路径等错误，详见 [文件系统 VFS](fs.md) 附录。
+**错误码**（经 VFS API 返回，均为负数）：`-MR_EBUSY`（同一 RamFS 节点数据锁竞争）、`-MR_ENOSYS`（FIFO 特性关闭或 file 操作未提供）、
+`-MR_EINVAL`（不支持的节点类型/负长度）、`-MR_ENOMEM`（缓冲区扩展或队列分配失败）、`-MR_ERANGE`（普通文件写位置范围溢出）、
+`-MR_ESPIPE`（FIFO 定位）。VFS 还会在进入 RamFS callback 前产生访问模式、目录类型、路径等错误，详见 [文件系统 VFS](fs.md) 附录。

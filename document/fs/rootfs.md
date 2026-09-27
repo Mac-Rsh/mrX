@@ -21,11 +21,14 @@ RootFS 解决的问题是： **在没有任何存储后端的情况下，让系�
 
 特性：
 
-- 自动注册/根挂载：`MR_INIT_LEVEL_FS` initcall 注册 `"rootfs"`，并调用 `mr_fs_mount_root` 尝试占用全局根。该 initcall 由 `mr_user_init()` 执行，不属于 `mr_kernel_init()` 的硬编码阶段；若根已被其他文件系统占用，`-MR_EBUSY` 会被接受，RootFS 不会替换现有根。
+- 自动注册/根挂载：`MR_INIT_LEVEL_FS` initcall 注册 `"rootfs"`，并调用 `mr_fs_mount_root` 尝试占用全局根。该 initcall 由
+  `mr_user_init()` 执行，不属于 `mr_kernel_init()` 的硬编码阶段；若根已被其他文件系统占用，`-MR_EBUSY` 会被接受，RootFS
+  不会替换现有根。
 - 只管结构，不管数据：支持 `mkdir` 创建目录、`mknod` 创建任意类型的节点 （目录、普通文件、字符/块设备、FIFO），节点可携带一个私有指针。
 - 目录枚举可用（经 VFS 默认实现），枚举结果带节点类型。
 - 重命名、删除与目录管理由 VFS 提供，不需要 RootFS 提供额外回调。
-- RootFS 不提供文件数据回调：对允许进入后端的非目录节点读写通常得到 `-MR_ENOSYS`；目录、访问模式和非 REG truncate 等情况仍会先由 VFS 返回更具体的类型/权限错误。
+- RootFS 不提供文件数据回调：对允许进入后端的非目录节点读写通常得到 `-MR_ENOSYS`；目录、访问模式和非 REG truncate 等情况仍会先由
+  VFS 返回更具体的类型/权限错误。
 
 典型分工：RootFS 搭建 `/`、`/system`、`/tmp` 等目录骨架并在相应目录挂载
 [RamFS](ramfs.md) 等数据文件系统；自身只承载"结构性"节点（如设备占位节点）。
@@ -42,7 +45,8 @@ RootFS 没有专属的 `MR_CFG_*` 参数。启用后包含 VFS 头文件即可�
 #include <mrX/fs/mr_fs_file.h>
 ```
 
-前提：`MR_USE_FS` 已启用，并且启动流程执行了 `mr_user_init()`。RootFS initcall 在 FS 级别运行；若当时全局根仍为空，它会成为 `/` 的挂载实例。若根已被占用，初始化代码容忍 `-MR_EBUSY`，不会覆盖现有文件系统。
+前提：`MR_USE_FS` 已启用，并且启动流程执行了 `mr_user_init()`。RootFS initcall 在 FS 级别运行；若当时全局根仍为空，它会成为
+`/` 的挂载实例。若根已被占用，初始化代码容忍 `-MR_EBUSY`，不会覆盖现有文件系统。
 
 ### 3. 快速上手
 
@@ -74,7 +78,8 @@ static int rootfs_demo(void) {
 
 **根的建立**
 
-- 启用 `MR_USE_FS_ROOTFS` 后，`mr_user_init()` 执行到 `MR_INIT_LEVEL_FS` 时会注册 RootFS 并尝试挂载全局根。根为空时成功；根已被占用时返回 `-MR_EBUSY`，RootFS 初始化代码把它视为可接受状态。已挂载 RootFS 时再对同一根重复挂载同样得到 `-MR_EBUSY`。
+- 启用 `MR_USE_FS_ROOTFS` 后，`mr_user_init()` 执行到 `MR_INIT_LEVEL_FS` 时会注册 RootFS 并尝试挂载全局根。根为空时成功；根已被占用时返回
+  `-MR_EBUSY`，RootFS 初始化代码把它视为可接受状态。已挂载 RootFS 时再对同一根重复挂载同样得到 `-MR_EBUSY`。
 - 需要替换根文件系统时，先关闭 RootFS 上的全部打开句柄并卸载所有子挂载，再用
   `mr_fs_umount("/")` 摘除 RootFS，最后调用 `mr_fs_mount_root` 挂载其他文件系统。 RootFS 没有后端 `unmount` 回调，但仍遵循
   VFS 的正常卸载检查。
@@ -84,13 +89,17 @@ static int rootfs_demo(void) {
 - `mr_fs_mkdir(path)`：创建目录，是 RootFS 下唯一的"通用创建"途径。
 - `mr_fs_mknod(path, type, priv)`：创建 `type` 指定类型的节点；`priv` 由 RootFS 借用并保存在节点上，不拷贝、不释放，所有者须保证节点存活期间指针
   有效。
-- `MR_O_CREAT` 在**目标不存在且需要创建普通文件**时会调用 RootFS `create(..., MR_INODE_REG, ...)`，因而返回 `-MR_ENOSYS`。如果目标节点本来就存在，`MR_O_CREAT` 本身不会强制失败（`MR_O_EXCL` 另有语义）。
+- `MR_O_CREAT` 在 **目标不存在且需要创建普通文件**时会调用 RootFS `create(..., MR_INODE_REG, ...)`，因而返回 `-MR_ENOSYS`
+  。如果目标节点本来就存在，`MR_O_CREAT` 本身不会强制失败（`MR_O_EXCL` 另有语义）。
 
 **节点访问**
 
 - 非目录节点可以以任意访问模式打开（目录仍只能只读打开），用于
   `mr_fs_fstat` 读取类型/模式，以及取回创建时保存的 `priv`（打开后经句柄的 inode 私有数据访问，见第 6 节示例）。
-- RootFS 没有 `fops` 和 truncate 回调。对非目录、访问模式允许的节点执行 read/write 会到达 `-MR_ENOSYS`；目录会先返回 `-MR_EISDIR`，访问模式不符会先返回 `-MR_EBADF`。`mr_fs_ftruncate` 只有 REG 节点会因缺少 truncate 返回 `-MR_ENOSYS`，目录返回 `-MR_EISDIR`，其他非 REG 类型返回 `-MR_EINVAL`。`MR_O_TRUNC` 只对可写 REG 节点要求 truncate，因此 RootFS 的 REG 节点会被 `-MR_ENOSYS` 拒绝。
+- RootFS 没有 `fops` 和 truncate 回调。对非目录、访问模式允许的节点执行 read/write 会到达 `-MR_ENOSYS`；目录会先返回
+  `-MR_EISDIR`，访问模式不符会先返回 `-MR_EBADF`。`mr_fs_ftruncate` 只有 REG 节点会因缺少 truncate 返回 `-MR_ENOSYS`，目录返回
+  `-MR_EISDIR`，其他非 REG 类型返回 `-MR_EINVAL`。`MR_O_TRUNC` 只对可写 REG 节点要求 truncate，因此 RootFS 的 REG 节点会被
+  `-MR_ENOSYS` 拒绝。
 - 目录用 `MR_O_RDONLY | MR_O_DIRECTORY` 打开后以 `mr_fs_readdir` 枚举，
   `mr_dirent_t.type` 区分 `MR_INODE_DIR`/`MR_INODE_REG`/`MR_INODE_CHR` 等。
 - `mr_fs_rename`/`mr_fs_unlink`/`mr_fs_rmdir`
@@ -105,8 +114,8 @@ RootFS 不定义自己的公开 API，全部操作通过 [文件系统 VFS](fs.m
 | `mr_fs_mkdir`                                   | 创建目录节点（`MR_INODE_DIR`）                                                                      |
 | `mr_fs_mknod`                                   | 创建任意类型节点，`priv` 借用保存在节点上                                                           |
 | `mr_fs_open` + `MR_O_CREAT`                     | 缺失目标需创建 REG 时返回 `-MR_ENOSYS`；已有目标仍按普通 open 规则处理                              |
-| `mr_fs_read` / `mr_fs_write`                    | 允许进入 fops 路径的非目录节点返回 `-MR_ENOSYS`；目录/访问模式错误由 VFS 更早返回                    |
-| `mr_fs_ftruncate` / `MR_O_TRUNC` 打开           | REG 因无 truncate 返回 `-MR_ENOSYS`；目录/其他 inode 类型由 VFS 返回 `-MR_EISDIR`/`-MR_EINVAL`       |
+| `mr_fs_read` / `mr_fs_write`                    | 允许进入 fops 路径的非目录节点返回 `-MR_ENOSYS`；目录/访问模式错误由 VFS 更早返回                   |
+| `mr_fs_ftruncate` / `MR_O_TRUNC` 打开           | REG 因无 truncate 返回 `-MR_ENOSYS`；目录/其他 inode 类型由 VFS 返回 `-MR_EISDIR`/`-MR_EINVAL`      |
 | `mr_fs_fstat`                                   | 返回通用字段：`type`/`mode`/`size`（`size` 恒为 0）                                                 |
 | `mr_fs_readdir`                                 | VFS 默认枚举，返回兄弟节点名与类型                                                                  |
 | `mr_fs_rename` / `mr_fs_unlink` / `mr_fs_rmdir` | 正常可用（VFS 通用路径）                                                                            |
@@ -173,11 +182,13 @@ static void rootfs_skeleton_demo(void) {
 
 **Q：`mr_fs_open("/file", MR_O_RDWR | MR_O_CREAT)` 失败？**
 
-当 `/file` 不存在时，`MR_O_CREAT` 试图通过 generic `create` 创建 `MR_INODE_REG`，而 RootFS 的 `create` 只接受目录，因此返回 `-MR_ENOSYS`。用 `mr_fs_mkdir` 建目录，或用 `mr_fs_mknod` 显式创建带类型的结构节点。
+当 `/file` 不存在时，`MR_O_CREAT` 试图通过 generic `create` 创建 `MR_INODE_REG`，而 RootFS 的 `create` 只接受目录，因此返回
+`-MR_ENOSYS`。用 `mr_fs_mkdir` 建目录，或用 `mr_fs_mknod` 显式创建带类型的结构节点。
 
 **Q：启动后 `/` 是什么文件系统？**
 
-通常在执行完 `mr_user_init()` 后是 RootFS：其 FS 级 initcall 会注册并尝试根挂载。但如果根在此之前已经被占用，RootFS initcall 会接受 `-MR_EBUSY`，此时 `/` 保持原文件系统。
+通常在执行完 `mr_user_init()` 后是 RootFS：其 FS 级 initcall 会注册并尝试根挂载。但如果根在此之前已经被占用，RootFS
+initcall 会接受 `-MR_EBUSY`，此时 `/` 保持原文件系统。
 
 **Q：怎么把 `/` 换成别的文件系统？**
 
@@ -217,7 +228,9 @@ RootFS 是 VFS 之上最小化的"命名空间后端"，与数据完全解耦：
 
 1. FS 核心编译期即定义了静态全局根 dentry `"/"`（`mrX/fs/struct.c:15`，
    `MR_DENTRY_ROOT_INIT`），此时它没有绑定任何 inode。
-2. `mr_fs_rootfs_init`（`mrX/fs/rootfs/rootfs.c:84-94`）通过 `MR_INIT_EXPORT(..., MR_INIT_LEVEL_FS)` 注册为 initcall，由 `mr_user_init()` 遍历执行：先注册 `__rootfs` 描述符，再调用 `mr_fs_mount_root`。断言接受成功 `0` 或根已占用的 `-MR_EBUSY`，因此该步骤是“尝试成为全局根”，不是无条件替换。
+2. `mr_fs_rootfs_init`（`mrX/fs/rootfs/rootfs.c:84-94`）通过 `MR_INIT_EXPORT(..., MR_INIT_LEVEL_FS)` 注册为 initcall，由
+   `mr_user_init()` 遍历执行：先注册 `__rootfs` 描述符，再调用 `mr_fs_mount_root`。断言接受成功 `0` 或根已占用的
+   `-MR_EBUSY`，因此该步骤是“尝试成为全局根”，不是无条件替换。
 3. `mr_fs_mount_root`（`mrX/fs/file.c:341`）取全局根 dentry 作为挂载点， 走 `fs_mount_dentry` 的根挂载分支：`rootfs_mount`
    回调（`rootfs.c:66`） 创建根目录 inode 填入 `sb->root`，随后 `mr_dentry_instantiate` 将该 inode **原位绑定**到全局根
    dentry（根挂载不新建"已挂载根"，`mrX/fs/file.c:288`）。
@@ -254,14 +267,18 @@ MR_NULL, MR_NULL)` 创建根目录 inode（失败返回 `-MR_ENOMEM`），置
 **无 lookup 回调**：`__rootfs_inodes` 不提供 `lookup`，VFS 对缓存缺失直接返回
 `-MR_ENOENT`（"预缓存型文件系统"，`mrX/fs/dentry.c:1082-1086`）——RootFS 节点 只会经 VFS API 创建，因此缓存即全集，这是它不需要后端查找的原因。
 
-**数据操作**：inode 无 `fops`，因此在通过 VFS 的类型/权限前置检查后，read/write/ioctl 没有对应后端能力时返回 `-MR_ENOSYS`。truncate 也只在 REG 节点进入缺失回调的 `-MR_ENOSYS` 路径；目录和其他类型会由 VFS 更早拒绝。`mr_fs_readdir` 则走 VFS 默认 dentry 子节点枚举，无需 RootFS 回调。
+**数据操作**：inode 无 `fops`，因此在通过 VFS 的类型/权限前置检查后，read/write/ioctl 没有对应后端能力时返回 `-MR_ENOSYS`
+。truncate 也只在 REG 节点进入缺失回调的 `-MR_ENOSYS` 路径；目录和其他类型会由 VFS 更早拒绝。`mr_fs_readdir` 则走 VFS 默认
+dentry 子节点枚举，无需 RootFS 回调。
 
 **卸载**：无 `unmount` 回调，但仍需通过 VFS 对子挂载、`op_cnt` 与 `open_cnt`
 的检查；任一非零时 `mr_fs_umount` 返回 `-MR_EBUSY`。成功摘除后，实例的目录 结构与节点随 VFS 引用释放链回收。
 
 ### 11. 并发与中断安全
 
-RootFS 没有每个节点额外维护的数据结构或私有锁；静态 `mr_file_system_t __rootfs` 描述符在注册时会被系统链表接入。实际命名空间、inode/dentry/sblock 生命周期与并发控制都由 VFS 提供；RootFS 的 create/mknod/mount 回调主要负责分配 inode。详见 [文件系统 VFS](fs.md) 开发者篇第 11 节。
+RootFS 没有每个节点额外维护的数据结构或私有锁；静态 `mr_file_system_t __rootfs`
+描述符在注册时会被系统链表接入。实际命名空间、inode/dentry/sblock 生命周期与并发控制都由 VFS 提供；RootFS 的
+create/mknod/mount 回调主要负责分配 inode。详见 [文件系统 VFS](fs.md) 开发者篇第 11 节。
 
 需要注意的只有 `priv` 的所有权：多个调用者可同时打开同一节点并读到同一个
 `priv` 指针，指针指向对象的并发访问由其所有者自行保护。
@@ -278,7 +295,7 @@ inode 取回对象指针。需要真正数据读写时，不要扩展 RootFS，�
 | 位置                                        | 职责                                                                 |
 |---------------------------------------------|----------------------------------------------------------------------|
 | `mrX/fs/rootfs/rootfs.c:18`                 | inode 操作表（create/mknod，无 lookup/truncate）                     |
-| `mrX/fs/rootfs/rootfs.c:26-27`              | `mr_file_system_t` 描述符，名字 `"rootfs"`、仅 mount 回调          |
+| `mrX/fs/rootfs/rootfs.c:26-27`              | `mr_file_system_t` 描述符，名字 `"rootfs"`、仅 mount 回调            |
 | `mrX/fs/rootfs/rootfs.c:29` / `:43` / `:56` | 节点分配 / create 通道（仅目录）/ mknod 通道（任意类型 + priv 借用） |
 | `mrX/fs/rootfs/rootfs.c:66`                 | 挂载回调：创建根目录 inode                                           |
 | `mrX/fs/rootfs/rootfs.c:84-94`              | 自动注册 + 挂载为全局根（`MR_INIT_LEVEL_FS`）                        |

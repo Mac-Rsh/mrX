@@ -3,12 +3,12 @@
 > 格式化解析模块提供 `mr_sscanf`，按格式串从字符串中提取整数、无符号数、字符与
 > 字符串等字段，是格式化输出（Sprintf）的逆过程，常用于解析命令行参数与协议报文。
 
-| 项       | 说明                                                                                                 |
-|----------|------------------------------------------------------------------------------------------------------|
+| 项       | 说明                                                                                                         |
+|----------|--------------------------------------------------------------------------------------------------------------|
 | 功能宏   | `MR_USE_SSCANF`（默认 `vsscanf` 封装）；`MR_USE_SSCANF_STD` 宏转发标准库；`MR_USE_SSCANF_3RD` 当前仅为预留项 |
-| 头文件   | `<mrX/libc/mr_sscanf.h>`                                                                             |
-| 依赖模块 | C 库 `vsscanf`（内部实现直接转发）；[格式化输出](sprintf.md)（逆操作，无代码依赖）                   |
-| 参考测试 | `mrX/test/libc/sscanf.c`、`mrX/test/libc/sscanf_matrix.c`                                            |
+| 头文件   | `<mrX/libc/mr_sscanf.h>`                                                                                     |
+| 依赖模块 | C 库 `vsscanf`（内部实现直接转发）；[格式化输出](sprintf.md)（逆操作，无代码依赖）                           |
+| 参考测试 | `mrX/test/libc/sscanf.c`、`mrX/test/libc/sscanf_matrix.c`                                                    |
 
 ---
 
@@ -36,7 +36,7 @@
 |---------------------|----------------|--------|----------------------------------------------------|
 | `MR_USE_SSCANF`     | bool（choice） | y      | 使用内置封装（`mrX/include/mrX/libc/Kconfig:126`） |
 | `MR_USE_SSCANF_STD` | bool（choice） | n      | 宏转发标准库 `sscanf`                              |
-| `MR_USE_SSCANF_3RD` | bool（choice） | n      | 第三方解析库预留选项；当前头文件/源码没有对应实现 |
+| `MR_USE_SSCANF_3RD` | bool（choice） | n      | 第三方解析库预留选项；当前头文件/源码没有对应实现  |
 
 选择 `MR_USE_SSCANF` 并重新生成 `mr_config.h` 后，包含头文件即可使用：
 
@@ -123,7 +123,8 @@ int mr_sscanf(const char *buf, const char *fmt, ...);
 - `buf`：待解析字符串，`MR_NULL` 返回 `-1`。
 - `fmt`：格式串，`MR_NULL` 返回 `-1`。
 - `...`：与格式串对应的接收参数，均须为指针。
-- 返回：直接透传 `vsscanf` 的赋值计数 / EOF 结果；`buf` 或 `fmt` 为 `MR_NULL` 时 mrX 封装固定返回 `-1`。匹配失败可以返回 0，而不是 `-1`。
+- 返回：直接透传 `vsscanf` 的赋值计数 / EOF 结果；`buf` 或 `fmt` 为 `MR_NULL` 时 mrX 封装固定返回 `-1`。匹配失败可以返回
+  0，而不是 `-1`。
 
 ### 6. 完整示例
 
@@ -173,7 +174,8 @@ void proto_example(void) {
 
 **Q：返回 0 和返回 -1 有什么区别？**
 
-要区分 **input failure** 与 **matching failure**：空输入在需要转换时通常产生 EOF（现有测试为 `-1`）；`buf/fmt == MR_NULL` 被 mrX 封装直接映射为 `-1`；而第一个字段类型不匹配（如 `"abc"` 配 `%d`）返回 0。空格式串也返回 0。判断“解析是否完整成功”应直接比较返回值与期望赋值字段数。
+要区分 **input failure** 与 **matching failure**：空输入在需要转换时通常产生 EOF（现有测试为 `-1`）；`buf/fmt == MR_NULL` 被
+mrX 封装直接映射为 `-1`；而第一个字段类型不匹配（如 `"abc"` 配 `%d`）返回 0。空格式串也返回 0。判断“解析是否完整成功”应直接比较返回值与期望赋值字段数。
 
 **Q：`%c` 为什么把空格也读进来了？**
 
@@ -190,7 +192,8 @@ void proto_example(void) {
 
 **Q：为什么选择 `MR_USE_SSCANF` 还要链接 stdio？**
 
-内置封装的转换逻辑直接复用 C 库 `vsscanf`（`mrX/libc/sscanf.c:12` 包含 `<stdio.h>`），因此工具链的 stdio 解析部分会被引入。`MR_USE_SSCANF_3RD` 目前尚无实际代码后端；对体积敏感且只需简单解析的场合只能自行补第三方后端或使用手写解析。
+内置封装的转换逻辑直接复用 C 库 `vsscanf`（`mrX/libc/sscanf.c:12` 包含 `<stdio.h>`），因此工具链的 stdio 解析部分会被引入。
+`MR_USE_SSCANF_3RD` 目前尚无实际代码后端；对体积敏感且只需简单解析的场合只能自行补第三方后端或使用手写解析。
 
 ---
 
@@ -212,7 +215,9 @@ void proto_example(void) {
              依赖：<stdarg.h> / <stdio.h>（C 库）
 ```
 
-模块自身不实现任何转换逻辑；`MR_USE_SSCANF_STD` 时头文件直接宏转发标准库 `sscanf`，`MR_USE_SSCANF` 时调用同一工具链 C 库的 `vsscanf` 并增加 `buf/fmt` 空指针检查。正常格式解析行为因此主要来自 C 库；不要把 mrX 文档中的测试结果理解成跨所有 libc 实现完全固定的扩展行为。
+模块自身不实现任何转换逻辑；`MR_USE_SSCANF_STD` 时头文件直接宏转发标准库 `sscanf`，`MR_USE_SSCANF` 时调用同一工具链 C 库的
+`vsscanf` 并增加 `buf/fmt` 空指针检查。正常格式解析行为因此主要来自 C 库；不要把 mrX 文档中的测试结果理解成跨所有 libc
+实现完全固定的扩展行为。
 
 ### 9. 数据结构
 
@@ -235,7 +240,8 @@ void proto_example(void) {
 ### 11. 并发与中断安全
 
 - mrX 这一层本身只维护栈上的 `va_list` 与返回值，没有自己的全局解析状态。
-- 真正的解析由工具链 `vsscanf` 完成；其内部是否使用 locale、锁、堆或其他 libc 状态由具体 C 库实现决定，mrX 不能统一承诺线程/中断安全，也不能断言解析复杂度仅与输入长度线性相关。
+- 真正的解析由工具链 `vsscanf` 完成；其内部是否使用 locale、锁、堆或其他 libc 状态由具体 C 库实现决定，mrX
+  不能统一承诺线程/中断安全，也不能断言解析复杂度仅与输入长度线性相关。
 - 接收参数的类型、大小与格式串必须匹配，所指存储须在调用期间有效；这些可变参数约束无法由封装检查。
 
 ### 12. 扩展与派生
@@ -264,10 +270,11 @@ void proto_example(void) {
 
 **配置宏**
 
-| 宏                  | 说明                         |
-|---------------------|------------------------------|
-| `MR_USE_SSCANF`     | 内置封装开关（choice，默认） |
-| `MR_USE_SSCANF_STD` | 转发标准库 sscanf（choice）  |
+| 宏                  | 说明                                |
+|---------------------|-------------------------------------|
+| `MR_USE_SSCANF`     | 内置封装开关（choice，默认）        |
+| `MR_USE_SSCANF_STD` | 转发标准库 sscanf（choice）         |
 | `MR_USE_SSCANF_3RD` | 第三方解析库预留 choice；当前无实现 |
 
-**返回值**：非空参数时直接透传工具链 `vsscanf` 结果：成功为赋值字段数，matching failure 可为 0，input failure 可为 EOF（现有测试环境为 `-1`）；`buf`/`fmt == MR_NULL` 时封装固定返回 `-1`。无独立的 mr_errno 体系。
+**返回值**：非空参数时直接透传工具链 `vsscanf` 结果：成功为赋值字段数，matching failure 可为 0，input failure 可为
+EOF（现有测试环境为 `-1`）；`buf`/`fmt == MR_NULL` 时封装固定返回 `-1`。无独立的 mr_errno 体系。

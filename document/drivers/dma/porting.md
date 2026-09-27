@@ -4,7 +4,8 @@
 
 ## 1. 移植边界
 
-DMA 公共层只统一 channel 编号、存在位图、配置结构、transfer descriptor 和调用接口。请求路由、硬件 channel/stream 映射、descriptor 生命周期、cache 一致性和中断状态全部由 backend 负责。
+DMA 公共层只统一 channel 编号、存在位图、配置结构、transfer descriptor 和调用接口。请求路由、硬件 channel/stream
+映射、descriptor 生命周期、cache 一致性和中断状态全部由 backend 负责。
 
 建议实现位置：
 
@@ -67,7 +68,8 @@ ISR 应先处理/清除硬件状态，再 raise 对应事件，避免电平型�
 
 ## 6. Offset 与 busy
 
-`is_busy` 必须反映当前 channel 是否仍属于一次活动 transfer。`offset` 的含义要在 backend 中固定，例如“已完成元素数”或“当前 descriptor 内偏移”，不能随硬件路径变化。
+`is_busy` 必须反映当前 channel 是否仍属于一次活动 transfer。`offset` 的含义要在 backend 中固定，例如“已完成元素数”或“当前
+descriptor 内偏移”，不能随硬件路径变化。
 
 上层 UART/ADC/DAC stream 会依赖 busy/offset，因此这两个接口不能只做近似占位。
 

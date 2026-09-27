@@ -127,7 +127,7 @@ static void gdb_detach(mr_xvm_gdb_t *gdb) {
     }
 
     /* Detach GDB */
-    mr_xvm_dbg_probe_detach(xvm);
+    mr_xvm_debug_probe_detach(xvm);
     gdb->state = MR_XVM_GDB_DETACHED;
     gdb->xvm = MR_NULL;
     gdb->pc_nr = GDB_PC_NONE;
@@ -308,7 +308,7 @@ mr_err_t mr_xvm_gdb_attach(mr_xvm_gdb_t *gdb, mr_xvm_t *xvm) {
     }
 
     /* Implant the probe */
-    ret = mr_xvm_dbg_probe_attach(xvm, gdb_probe_entry, gdb);
+    ret = mr_xvm_debug_probe_attach(xvm, gdb_probe_entry, gdb);
     if (ret != 0) {
         mr_xvm_put(xvm);
         return ret;
@@ -322,7 +322,7 @@ mr_err_t mr_xvm_gdb_attach(mr_xvm_gdb_t *gdb, mr_xvm_t *xvm) {
     gdb->xvm = xvm;
 
     /* Find PC register number */
-    if (!gdb_pc_nr(mr_xvm_dbg_target(xvm), &gdb->pc_nr)) {
+    if (!gdb_pc_nr(mr_xvm_debug_target(xvm), &gdb->pc_nr)) {
         gdb->pc_nr = GDB_PC_NONE;
     }
     return 0;
@@ -422,7 +422,7 @@ static mr_xvm_isa_target_t *gdb_target(mr_xvm_gdb_t *gdb) {
     if ((!gdb) || (!gdb->xvm)) {
         return MR_NULL;
     }
-    return mr_xvm_dbg_target(gdb->xvm);
+    return mr_xvm_debug_target(gdb->xvm);
 }
 
 static void gdb_xml_win_init(gdb_xml_win_t *win, char *buf, mr_size_t cap,
@@ -840,9 +840,9 @@ static mr_size_t gdb_break_command(mr_xvm_gdb_t *gdb, const char *packet,
 
     /* Insert or remove breakpoint */
     if (packet[0] == 'Z') {
-        ret = mr_xvm_dbg_break_insert(gdb->xvm, addr);
+        ret = mr_xvm_debug_break_insert(gdb->xvm, addr);
     } else {
-        ret = mr_xvm_dbg_break_remove(gdb->xvm, addr);
+        ret = mr_xvm_debug_break_remove(gdb->xvm, addr);
         if (ret == (-MR_ENOENT)) {
             ret = 0;
         }
@@ -878,9 +878,9 @@ static gdb_cmd_t gdb_run(mr_xvm_gdb_t *gdb, mr_bool_t step, const char *addr,
         *reply_len = gdb_reply_err(reply);
         return GDB_CMD_REPLY;
     }
-    mr_xvm_dbg_break_skip(gdb->xvm, pc);
-    gate = step ? MR_XVM_DBG_GATE_STEP : MR_XVM_DBG_GATE_OPEN;
-    mr_xvm_dbg_probe_set_gate(gdb->xvm, gate);
+    mr_xvm_debug_break_skip(gdb->xvm, pc);
+    gate = step ? MR_XVM_DEBUG_GATE_STEP : MR_XVM_DEBUG_GATE_OPEN;
+    mr_xvm_debug_probe_set_gate(gdb->xvm, gate);
     gdb->state = MR_XVM_GDB_RUNNING;
     *reply_len = 0;
     return GDB_CMD_SILENT;
@@ -1141,7 +1141,7 @@ static void gdb_interrupt(mr_xvm_gdb_t *gdb) {
     char reply[4];
 
     /* Hold the target and report a stop */
-    mr_xvm_dbg_probe_set_gate(gdb->xvm, MR_XVM_DBG_GATE_HOLD);
+    mr_xvm_debug_probe_set_gate(gdb->xvm, MR_XVM_DEBUG_GATE_HOLD);
     gdb->state = MR_XVM_GDB_ATTACHED;
     len = gdb_reply_stop(reply, GDB_SIGNAL_INT);
     gdb_reply_packet(gdb, reply, len);

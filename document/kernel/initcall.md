@@ -9,7 +9,7 @@
 | 功能宏   | 无（始终编译；内核接线按 `MR_USE_*` 条件展开）                                                                   |
 | 头文件   | `<mrX/kernel/mr_initcall.h>`                                                                                     |
 | 依赖模块 | [平台 Platform](../platform/platform.md)、[定时器](timer.md)、[中断 Irq](irq.md)（按配置在内核初始化序列中接线） |
-| 参考测试 | `mrX/test/kernel/initcall.c`                                                                                  |
+| 参考测试 | `mrX/test/kernel/initcall.c`                                                                                     |
 
 ---
 
@@ -23,9 +23,11 @@
 特性：
 
 - 声明式注册：一行宏完成初始化函数的导出，散布在各自源文件中，无中心注册表。
-- 分级排序：所有 `MR_INIT_EXPORT` 条目按段名排序；IRQ/FS/DRIVER/MODULE/USER 只是这些导出条目的排序区间，不等同于 `mr_kernel_init` 中的硬编码初始化函数。
+- 分级排序：所有 `MR_INIT_EXPORT` 条目按段名排序；IRQ/FS/DRIVER/MODULE/USER 只是这些导出条目的排序区间，不等同于
+  `mr_kernel_init` 中的硬编码初始化函数。
 - 启动期幂等：`mr_kernel_init` / `mr_user_init` 各有普通 `volatile` 状态标记，在单执行流启动假设下重复调用会直接返回。
-- 两段式启动：`mr_kernel_init` 先运行平台/堆/定时器/中断/文件系统核心等硬编码接线；`mr_user_init` 再遍历全部导出的 initcall。
+- 两段式启动：`mr_kernel_init` 先运行平台/堆/定时器/中断/文件系统核心等硬编码接线；`mr_user_init` 再遍历全部导出的
+  initcall。
 
 不适用于：需要携带参数或返回错误中断启动流程的初始化（initcall 函数原型固定为
 `void (*)(void)`）；对执行顺序有精细要求的场合只能通过级别字符串表达。
@@ -62,19 +64,21 @@ static void app_init(void) {
 MR_INIT_EXPORT(app_init, MR_INIT_LEVEL_USER("0"));
 ```
 
-只有执行到 `mr_user_init()` 时，`app_init` 才会运行。当前 [入口 Entry](entry.md) 只自动调用 `mr_kernel_init()`，不会自动调用 `mr_user_init()`；应用需要在 `main` 或自己的启动接线中显式执行它。用户级 `8.x` 条目会排在预定义的 `1.x` IRQ/FS/DRIVER/MODULE 导出条目之后。
+只有执行到 `mr_user_init()` 时，`app_init` 才会运行。当前 [入口 Entry](entry.md) 只自动调用 `mr_kernel_init()`，不会自动调用
+`mr_user_init()`；应用需要在 `main` 或自己的启动接线中显式执行它。用户级 `8.x` 条目会排在预定义的 `1.x`
+IRQ/FS/DRIVER/MODULE 导出条目之后。
 
 ### 4. 使用说明
 
 **级别**：初始化函数按级别字符串排序执行，数值越小越先执行。框架预定义级别：
 
-| 级别宏                       | 值           | 执行阶段                              |
-|------------------------------|--------------|---------------------------------------|
-| `MR_INIT_LEVEL_IRQ`          | `"1.0"`      | initcall 排序区间：IRQ 类导出条目     |
-| `MR_INIT_LEVEL_FS`           | `"1.1"`      | initcall 排序区间：FS 类导出条目      |
-| `MR_INIT_LEVEL_DRIVER`       | `"1.2"`      | initcall 排序区间：Driver 类导出条目  |
-| `MR_INIT_LEVEL_MODULE`       | `"1.3"`      | initcall 排序区间：Module 类导出条目  |
-| `MR_INIT_LEVEL_USER(_level)` | `"8."_level` | 用户导出条目，`_level` 为自定义子级   |
+| 级别宏                       | 值           | 执行阶段                             |
+|------------------------------|--------------|--------------------------------------|
+| `MR_INIT_LEVEL_IRQ`          | `"1.0"`      | initcall 排序区间：IRQ 类导出条目    |
+| `MR_INIT_LEVEL_FS`           | `"1.1"`      | initcall 排序区间：FS 类导出条目     |
+| `MR_INIT_LEVEL_DRIVER`       | `"1.2"`      | initcall 排序区间：Driver 类导出条目 |
+| `MR_INIT_LEVEL_MODULE`       | `"1.3"`      | initcall 排序区间：Module 类导出条目 |
+| `MR_INIT_LEVEL_USER(_level)` | `"8."_level` | 用户导出条目，`_level` 为自定义子级  |
 
 约定：内核组件用预定义级别；应用代码用 `MR_INIT_LEVEL_USER("0")`、
 `MR_INIT_LEVEL_USER("1")` 等表达相对顺序。
@@ -83,24 +87,26 @@ MR_INIT_EXPORT(app_init, MR_INIT_LEVEL_USER("0"));
 
 | 操作                                   | 行为                                                         |
 |----------------------------------------|--------------------------------------------------------------|
-| 启动期串行重复调用 `mr_user_init`       | 第二次起不再遍历 initcall                                    |
-| 启动期串行重复调用 `mr_kernel_init`     | 第二次起直接返回                                              |
+| 启动期串行重复调用 `mr_user_init`      | 第二次起不再遍历 initcall                                    |
+| 启动期串行重复调用 `mr_kernel_init`    | 第二次起直接返回                                             |
 | 只调用 `mr_kernel_init`                | 只执行内核初始化序列，不执行任何 `MR_INIT_EXPORT` 导出的函数 |
 | initcall 函数中再调用 `mr_kernel_init` | 安全（幂等）                                                 |
 | initcall 函数原型                      | 固定 `void (*)(void)`，无参数、无返回值                      |
 | initcall 函数中的失败                  | 无错误传播通道，需自行处理（如置错误标志）                   |
 
-**执行时机**：所有导出的 initcall（包括 `MR_INIT_LEVEL_IRQ` 等 `1.x` 条目）都在 `mr_user_init` 内按链接顺序串行执行，并且 `mr_user_init` 会先调用 `mr_kernel_init`。因此相应 `MR_USE_*` 已启用的硬编码内核服务会先完成初始化；未启用的服务不会凭 initcall 自动出现。
+**执行时机**：所有导出的 initcall（包括 `MR_INIT_LEVEL_IRQ` 等 `1.x` 条目）都在 `mr_user_init` 内按链接顺序串行执行，并且
+`mr_user_init` 会先调用 `mr_kernel_init`。因此相应 `MR_USE_*` 已启用的硬编码内核服务会先完成初始化；未启用的服务不会凭
+initcall 自动出现。
 
 ### 5. API 参考
 
 初始化驱动：
 
-| API               | 说明                                               |
-|-------------------|----------------------------------------------------|
-| `MR_INIT_EXPORT`  | 宏：导出一个初始化函数并指定级别                   |
-| `MR_INIT_LEVEL_*` | 宏：预定义级别常量，见第 4 节表格                  |
-| `mr_kernel_init`  | 执行硬编码内核初始化序列；Entry 可自动调用         |
+| API               | 说明                                                            |
+|-------------------|-----------------------------------------------------------------|
+| `MR_INIT_EXPORT`  | 宏：导出一个初始化函数并指定级别                                |
+| `MR_INIT_LEVEL_*` | 宏：预定义级别常量，见第 4 节表格                               |
+| `mr_kernel_init`  | 执行硬编码内核初始化序列；Entry 可自动调用                      |
 | `mr_user_init`    | 确保 kernel init 后执行全部段内 initcall；需由应用/启动接线调用 |
 
 **`MR_INIT_EXPORT`**
@@ -122,7 +128,8 @@ MR_INIT_EXPORT(app_init, MR_INIT_LEVEL_USER("0"));
 void mr_kernel_init(void);
 ```
 
-执行硬编码初始化序列：按配置依次调用 platform、malloc、timer、irq，最后进入 `kernel_extensions_init`（当前在 `MR_USE_FS` 时调用 `mr_fs_file_init`）。状态位在执行这些步骤之前先置真，因此同一启动调用链里的重入会直接返回。
+执行硬编码初始化序列：按配置依次调用 platform、malloc、timer、irq，最后进入 `kernel_extensions_init`（当前在 `MR_USE_FS` 时调用
+`mr_fs_file_init`）。状态位在执行这些步骤之前先置真，因此同一启动调用链里的重入会直接返回。
 
 **`mr_user_init`**
 
@@ -167,7 +174,8 @@ static void app_late_init(void) {
 MR_INIT_EXPORT(app_late_init, MR_INIT_LEVEL_USER("1"));
 ```
 
-框架内各组件也使用 `MR_INIT_LEVEL_FS` / `DRIVER` / `MODULE` 等排序标签导出自己的初始化入口。它们不是 `mr_kernel_init` 的硬编码步骤，而是在后续 `mr_user_init` 段遍历中执行。
+框架内各组件也使用 `MR_INIT_LEVEL_FS` / `DRIVER` / `MODULE` 等排序标签导出自己的初始化入口。它们不是 `mr_kernel_init`
+的硬编码步骤，而是在后续 `mr_user_init` 段遍历中执行。
 
 ### 7. 常见问题（FAQ）
 
@@ -183,7 +191,8 @@ MR_INIT_EXPORT(app_late_init, MR_INIT_LEVEL_USER("1"));
 
 **Q：initcall 里能调用内核 API 吗？**
 
-可以使用已经被配置并由 `mr_kernel_init` 启动的服务。`mr_user_init` 确实先完成 kernel init，但 malloc/timer/irq/platform 等各项是否存在仍取决于对应 `MR_USE_*` 配置；initcall 同步运行在 `mr_user_init` 的当前调用上下文。
+可以使用已经被配置并由 `mr_kernel_init` 启动的服务。`mr_user_init` 确实先完成 kernel init，但 malloc/timer/irq/platform
+等各项是否存在仍取决于对应 `MR_USE_*` 配置；initcall 同步运行在 `mr_user_init` 的当前调用上下文。
 
 **Q：initcall 返回的错误怎么上报？**
 
@@ -229,8 +238,8 @@ MR_INIT_EXPORT(app_late_init, MR_INIT_LEVEL_USER("1"));
 `user/linker.lds:64-65`，目标平台由移植层链接脚本提供同等规则，规则模板见
 `mrX/sections.toml`）。`SORT` 保证 `mr_initcall.0.end` < `mr_initcall.1.0` < ... <
 `mr_initcall.9.end` 的字典序执行。`mr_user_init` 通过
-`__mr_initcall_start` / `__mr_initcall_end` 定界遍历（`initcall.c:72-73`）。这两个符号不是链接器生成的，
-而是本文件哨兵条目 `start` / `end` 的变量名本身（`MR_CAT(__mr_initcall_, start/end)`），链接脚本只负责收集与排序，
+`__mr_initcall_start` / `__mr_initcall_end` 定界遍历（`initcall.c:72-73`）。这两个符号不是链接器生成的， 而是本文件哨兵条目
+`start` / `end` 的变量名本身（`MR_CAT(__mr_initcall_, start/end)`），链接脚本只负责收集与排序，
 MDK（armlink）依赖其默认的按名连续放置即可，无需额外配置。
 
 `mrX/kernel/initcall.c` 内部还导出两个空函数作为段边界哨兵：`start`（`"0.end"`，
@@ -265,15 +274,19 @@ typedef struct mr_initcall {                    /* mr_initcall.h:34 */
 
 1. 检查 `__initcall_kstatus`，已初始化直接返回；否则置位（先置位再执行， 保证初始化函数中重入安全）。
 2. 按 `MR_USE_*` 依次调用平台、堆、定时器、中断的 `*_init`。
-3. 调用 `kernel_extensions_init`（当前仅在 `MR_USE_FS` 时调用 `mr_fs_file_init`）。这是硬编码 kernel extension 步骤，与后续段内 `MR_INIT_LEVEL_FS` 条目是两套机制。
+3. 调用 `kernel_extensions_init`（当前仅在 `MR_USE_FS` 时调用 `mr_fs_file_init`）。这是硬编码 kernel extension 步骤，与后续段内
+   `MR_INIT_LEVEL_FS` 条目是两套机制。
 
 **`mr_user_init`**（`initcall.c:71`）：
 
 1. `MR_ASSERT(start < end)` 校验链接器边界符号有效（`initcall.c:78`）。
 2. 先调用 `mr_kernel_init`（`initcall.c:81`），确保启用的硬编码内核服务先执行。
-3. 检查 `__initcall_ustatus`，首次调用先置真；随后按 `sizeof(mr_initcall_t)` 从 `start` 地址到 `end` 地址闭区间遍历，连两个空哨兵也会执行，并逐个调用 `call->entry()`。
+3. 检查 `__initcall_ustatus`，首次调用先置真；随后按 `sizeof(mr_initcall_t)` 从 `start` 地址到 `end`
+   地址闭区间遍历，连两个空哨兵也会执行，并逐个调用 `call->entry()`。
 
-**级别字符串边界**：排序由链接器按段名字典序完成，运行时不比较 level。`mr_user_init` 只遍历 `start`（`0.end`）到 `end`（`9.end`）之间的连续条目，因此自定义段名必须在字典序上落在这两个哨兵之间；使用预定义 `1.x` / `8.x` 宏最稳妥。不要使用会排到 `0.end` 之前或 `9.end` 之后的自定义级别。
+**级别字符串边界**：排序由链接器按段名字典序完成，运行时不比较 level。`mr_user_init` 只遍历 `start`（`0.end`）到 `end`（
+`9.end`）之间的连续条目，因此自定义段名必须在字典序上落在这两个哨兵之间；使用预定义 `1.x` / `8.x` 宏最稳妥。不要使用会排到
+`0.end` 之前或 `9.end` 之后的自定义级别。
 
 ### 11. 并发与中断安全
 
@@ -288,7 +301,8 @@ typedef struct mr_initcall {                    /* mr_initcall.h:34 */
 本模块没有对象 clazz 与派生机制；它的"扩展"是 **向初始化序列注入条目**，注入面是编译期与链接期而非运行期继承：
 
 - 组件侧：一行 `MR_INIT_EXPORT(_entry, _level)`（`mrX/include/mrX/kernel/mr_initcall.h:45`）即把自己挂进 `mr_initcall.<级别>`
-  段，用户区段可用 `MR_INIT_LEVEL_USER("0")`、`"1"` 表达子级与相对顺序；测试也验证了 1.x 先于 8.x、8.0 先于 8.1。若确实自定义 level，必须同时满足链接脚本收集规则，并保证字典序位于 `0.end` 与 `9.end` 哨兵之间；模块没有运行期级别注册表。
+  段，用户区段可用 `MR_INIT_LEVEL_USER("0")`、`"1"` 表达子级与相对顺序；测试也验证了 1.x 先于 8.x、8.0 先于 8.1。若确实自定义
+  level，必须同时满足链接脚本收集规则，并保证字典序位于 `0.end` 与 `9.end` 哨兵之间；模块没有运行期级别注册表。
 - 内核侧：新增需要启动接线的内核模块，是在 `kernel_extensions_init` 中按 `MR_USE_*` 守卫追加调用（
   `mrX/kernel/initcall.c:27-33`、`:67`），而不是派生 `mr_initcall_t`；派生类扩展无从谈起——`mr_initcall_t` 只有 `name`/
   `entry` 两个字段，无虚表、无钩子、无注销接口（`mr_initcall.h:34`）。
@@ -318,4 +332,5 @@ typedef struct mr_initcall {                    /* mr_initcall.h:34 */
 | `MR_INIT_LEVEL_USER(_level)`                                                               | 用户级别，`"8."<子级>`                     |
 | `MR_USE_PLATFORM` / `MR_USE_MALLOC` / `MR_USE_TIMER` / `MR_USE_IRQ` / `MR_USE_FS`          | 决定 `mr_kernel_init` 中接线的内核模块开关 |
 
-**错误码**：本模块 API 为 `void`，没有错误码传播通道。链接/段布局错误可能表现为链接失败、`MR_ASSERT(start < end)` 或遍历到无效 `entry` 时的断言；某个 initcall 自身失败也不会由框架自动中止并上报。
+**错误码**：本模块 API 为 `void`，没有错误码传播通道。链接/段布局错误可能表现为链接失败、`MR_ASSERT(start < end)` 或遍历到无效
+`entry` 时的断言；某个 initcall 自身失败也不会由框架自动中止并上报。

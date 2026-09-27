@@ -28,7 +28,9 @@
 不适用于：需要移除回调的场合（本模块只提供 `add`，无 remove）；回调数量不确定且 可能很大的场合（容量固定，超出返回
 `-MR_ENOMEM`）。
 
-**与时钟的关系**：本模块是通用容器，时钟内部用一个 `mr_hook_t` 保存 `mr_clock_hook_t`，`mr_clock_hook_add` 是对 `mr_hook_add` 的封装。clock 在每次 `mr_clock_increase()` 和每次 `mr_clock_tickless()` 计算时遍历该表；详见 [时钟](clock.md)。
+**与时钟的关系**：本模块是通用容器，时钟内部用一个 `mr_hook_t` 保存 `mr_clock_hook_t`，`mr_clock_hook_add` 是对
+`mr_hook_add` 的封装。clock 在每次 `mr_clock_increase()` 和每次 `mr_clock_tickless()`
+计算时遍历该表；详见 [时钟](clock.md)。
 
 ### 2. 配置与依赖
 
@@ -88,13 +90,14 @@ void my_hook_example(void) {
 | 操作                                  | 行为                                   |
 |---------------------------------------|----------------------------------------|
 | `mr_hook_add` 成功                    | 回调追加到表尾，`0` 返回               |
-| 重复添加同一个 `entry`               | 允许，占用新的槽位并在遍历时再次出现   |
+| 重复添加同一个 `entry`                | 允许，占用新的槽位并在遍历时再次出现   |
 | 容量已满时 `mr_hook_add`              | 返回 `-MR_ENOMEM`，表内容不变          |
 | `entry` 为 `MR_NULL` 时 `mr_hook_add` | 非法，断言开启时被 `MR_ASSERT` 拦截    |
 | 容量为 0（`entry` 数组为 `MR_NULL`）  | 合法构造，所有 `add` 返回 `-MR_ENOMEM` |
 | `MR_HOOK_EACH` 遍历                   | 按注册顺序访问 0 ~ 已注册数-1 的条目   |
 
-**遍历期间的限制**：`MR_HOOK_EACH` 是无锁 `for` 宏，每轮条件都会读取当前 `hook->next`。因此遍历过程中若有追加，新条目是否被当前遍历看到取决于追加发生的时机，而且遍历端与写端之间没有共同的读写锁契约。推荐在进入稳定分发阶段前完成注册。若条目被解释为回调，回调会由调用者按数组顺序同步执行。
+**遍历期间的限制**：`MR_HOOK_EACH` 是无锁 `for` 宏，每轮条件都会读取当前 `hook->next`
+。因此遍历过程中若有追加，新条目是否被当前遍历看到取决于追加发生的时机，而且遍历端与写端之间没有共同的读写锁契约。推荐在进入稳定分发阶段前完成注册。若条目被解释为回调，回调会由调用者按数组顺序同步执行。
 
 ### 5. API 参考
 
@@ -199,7 +202,8 @@ void full_example(void) {
 
 **Q：想注册"每 tick 执行一次"的回调，该用哪个 API？**
 
-使用 [时钟](clock.md) 的 `mr_clock_hook_add`。时钟钩子表容量由 `MR_CFG_CLOCK_HOOK_SIZE` 决定（默认 2）；具体启用了哪些内核模块、注册了多少 clock hook，决定剩余槽位。
+使用 [时钟](clock.md) 的 `mr_clock_hook_add`。时钟钩子表容量由 `MR_CFG_CLOCK_HOOK_SIZE` 决定（默认 2）；具体启用了哪些内核模块、注册了多少
+clock hook，决定剩余槽位。
 
 **Q：`mr_hook_add` 返回 `-MR_ENOMEM` 怎么办？**
 
@@ -277,13 +281,16 @@ typedef struct mr_hook {                /* mrX/include/mrX/kernel/mr_hook.h:26 *
 3. `next < size` 则写入 `entry[next++]`，返回 0；否则返回 `-MR_ENOMEM`（`hook.c:29-35`）。
 4. 解锁（`hook.c:38`）。
 
-**锁的实际范围**：实现只有一把全局 `__hook_lock`，所有 hook 实例的 `mr_hook_add` 都经过它。锁内只检查容量、写 `entry[next]` 并递增 `next`。代码没有为 `MR_HOOK_EACH` 提供配套锁，因此这把锁只串行化多个 add 调用，不构成 add 与遍历之间的完整互斥。
+**锁的实际范围**：实现只有一把全局 `__hook_lock`，所有 hook 实例的 `mr_hook_add` 都经过它。锁内只检查容量、写 `entry[next]`
+并递增 `next`。代码没有为 `MR_HOOK_EACH` 提供配套锁，因此这把锁只串行化多个 add 调用，不构成 add 与遍历之间的完整互斥。
 
-**遍历**：`MR_HOOK_EACH`（`mr_hook.h:75`）只是普通 `for` 宏：索引从 0 开始，每轮检查 `_i < hook->next`，再读取 `entry[_i]` 并按 `_type *` 转型。它本身既不加锁，也不调用条目；是否调用以及调用上下文完全由宏外的循环体决定。稳定用法是在初始化期完成追加、运行期只遍历。
+**遍历**：`MR_HOOK_EACH`（`mr_hook.h:75`）只是普通 `for` 宏：索引从 0 开始，每轮检查 `_i < hook->next`，再读取 `entry[_i]` 并按
+`_type *` 转型。它本身既不加锁，也不调用条目；是否调用以及调用上下文完全由宏外的循环体决定。稳定用法是在初始化期完成追加、运行期只遍历。
 
 ### 11. 并发与中断安全
 
-- `mr_hook_add` 使用 `mr_spinlock_lock_irqsave`；它能否在某个具体中断/多核场景安全使用，取决于平台 spinlock/irqsave 实现，Hook 层不再额外声明“任意上下文”。
+- `mr_hook_add` 使用 `mr_spinlock_lock_irqsave`；它能否在某个具体中断/多核场景安全使用，取决于平台 spinlock/irqsave
+  实现，Hook 层不再额外声明“任意上下文”。
 - `MR_HOOK_EACH` 无锁。若与 add 并发，`next` 和新槽位的可见性没有由 Hook 模块建立配套同步；推荐“初始化期 add、运行期只读”。
 - 如果使用者在循环体中调用函数条目，函数就在遍历者当前上下文同步执行；Hook 模块不会切换上下文，也不会限制回调是否阻塞。
 
@@ -312,7 +319,7 @@ typedef struct mr_hook {                /* mrX/include/mrX/kernel/mr_hook.h:26 *
 | `mrX/kernel/hook.c:14`                | 全局自旋锁                                  |
 | `mrX/kernel/hook.c:16`                | `mr_hook_add`：断言 + 锁内追加              |
 | `mrX/kernel/clock.c:23`               | 时钟钩子表（`MR_CFG_CLOCK_HOOK_SIZE` 容量） |
-| `mrX/kernel/clock.c:34`               | clock hook 遍历与 tickless 聚合              |
+| `mrX/kernel/clock.c:34`               | clock hook 遍历与 tickless 聚合             |
 | `mrX/kernel/clock.c:85`               | `mr_clock_hook_add`（时钟侧封装）           |
 | `mrX/test/kernel/hook.c`              | 初始化/追加/容量/遍历行为测试               |
 

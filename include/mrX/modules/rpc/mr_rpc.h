@@ -27,6 +27,7 @@ extern "C" {
  */
 
 #if defined(MR_USE_MODULE_RPC)
+struct mr_rpc_session;
 struct mr_rpc_call;
 struct mr_rpc;
 
@@ -49,7 +50,7 @@ typedef enum mr_rpc_msg_type {
 /* RPC session state type */
 typedef enum mr_rpc_session_state {
     MR_RPC_SESSION_STATE_FREE,
-    MR_RPC_SESSION_STATE_RECEIVING,
+    MR_RPC_SESSION_STATE_PENDING,
     MR_RPC_SESSION_STATE_DISPATCHING,
     MR_RPC_SESSION_STATE_HELD,
     MR_RPC_SESSION_STATE_ENCODING,
@@ -57,13 +58,14 @@ typedef enum mr_rpc_session_state {
     MR_RPC_SESSION_STATE_READY,
     MR_RPC_SESSION_STATE_SENDING,
     MR_RPC_SESSION_STATE_DONE,
+    MR_RPC_SESSION_STATE_RELEASING,
 } mr_rpc_session_state_t;
 
 /* RPC session action type */
 typedef enum mr_rpc_session_action {
     MR_RPC_SESSION_ACTION_NONE,
-    MR_RPC_SESSION_ACTION_RELEASE,
     MR_RPC_SESSION_ACTION_POLL,
+    MR_RPC_SESSION_ACTION_REPOLL,
     MR_RPC_SESSION_ACTION_UNSUBSCRIBE,
 } mr_rpc_session_action_t;
 
@@ -71,10 +73,8 @@ typedef enum mr_rpc_session_action {
 typedef enum mr_rpc_recv_state {
     MR_RPC_RECV_STATE_SYNC,
     MR_RPC_RECV_STATE_PAYLOAD,
-    MR_RPC_RECV_STATE_COMPLETE,
-    MR_RPC_RECV_STATE_PAYLOAD_CHECKSUM,
+    MR_RPC_RECV_STATE_CHECKSUM,
     MR_RPC_RECV_STATE_DISCARD,
-    MR_RPC_RECV_STATE_DISCARD_CHECKSUM,
 } mr_rpc_recv_state_t;
 
 /* RPC frame value type */
@@ -118,14 +118,21 @@ typedef struct mr_rpc_request {
 typedef struct mr_rpc_response {
     mr_rpc_frame_t frame;
     mr_rpc_idl_response_t payload;
-    mr_uint16_t checksum;
+    mr_uint8_t trailer[sizeof(mr_uint16_t)];
 } MR_PACKED mr_rpc_response_t;
 
-/* RPC session type */
+/* RPC session operations */
+typedef struct mr_rpc_session_ops {
+    void (*complete)(struct mr_rpc_session *session, mr_err_t result,
+                     void *owner);
+    void (*release)(struct mr_rpc_session *session, void *owner);
+} mr_rpc_session_ops_t;
+
+/* RPC session instance */
 typedef struct mr_rpc_session {
-    mr_rpc_session_state_t state;
-    mr_rpc_session_action_t action;
     const struct mr_rpc_call *call;
+    mr_rpc_session_action_t action;
+    mr_rpc_session_state_t state;
     mr_rpc_response_t response;
     mr_rpc_request_t request;
     struct mr_rpc *rpc;
@@ -134,6 +141,8 @@ typedef struct mr_rpc_session {
     mr_tick_t deadline;
     mr_bool_t dispatching;
     mr_list_t list;
+    const mr_rpc_session_ops_t *ops;
+    void *owner;
 } mr_rpc_session_t;
 
 /* RPC receive type */
@@ -153,8 +162,8 @@ typedef struct mr_rpc_recv {
 /* RPC send type */
 typedef struct mr_rpc_send {
     mr_rpc_session_t *session;
-    mr_list_t ready;
     mr_atomic_t running;
+    mr_list_t ready;
 } mr_rpc_send_t;
 
 /* RPC subscription type */
@@ -200,6 +209,7 @@ typedef struct mr_rpc {
     const mr_rpc_hook_t *hook;
 #endif /* defined(MR_USE_MODULE_RPC_HOOK) */
     mr_rpc_session_t sessions[MR_CFG_MODULE_RPC_SESSION_NUM];
+    mr_list_t session_pending;
     mr_list_t session_free;
     mr_rpc_recv_t recv;
     mr_rpc_send_t send;
@@ -241,7 +251,7 @@ typedef struct mr_rpc_call {
                         _method_id, _level)                                    \
     static mr_hashnode_t MR_CAT(__mr_rpc_call_hashnode_, _name);               \
     MR_USED const mr_rpc_call_t MR_CAT(__mr_rpc_call_, _name)                  \
-        MR_SECTION_ALIGN("mr_rpc_call." _level)                                \
+        MR_SECTION_ALIGN("mr_rpc." _level)                                     \
         = {                                                                    \
             .decode = (_decode),                                               \
             .invoke = (_invoke),                                               \
@@ -299,7 +309,16 @@ mr_err_t mr_rpc_del(mr_rpc_t *rpc);
 mr_ssize_t mr_rpc_input(mr_rpc_t *rpc, const void *data, mr_uint32_t size);
 
 /**
- * @brief This function parses received frames and dispatches calls.
+ * @brief This function submits an external session to the RPC executor.
+ *
+ * @param rpc The RPC object.
+ * @param session The initialized external session.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_rpc_submit(mr_rpc_t *rpc, mr_rpc_session_t *session);
+
+/**
+ * @brief This function dispatches queued sessions and received frames.
  *
  * @param rpc The RPC object.
  * @return 0 on success, a negative error code on failure.
@@ -307,21 +326,12 @@ mr_ssize_t mr_rpc_input(mr_rpc_t *rpc, const void *data, mr_uint32_t size);
 mr_err_t mr_rpc_execute(mr_rpc_t *rpc);
 
 /**
- * @brief This function sends queued responses.
+ * @brief This function sends queued responses and flushes the transport.
  *
  * @param rpc The RPC object.
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_rpc_flush(mr_rpc_t *rpc);
-
-/**
- * @brief This function encodes and queues a typed RPC response.
- *
- * @param session The RPC session.
- * @param result The RPC result.
- * @return 0 on success, a negative error code on failure.
- */
-mr_err_t mr_rpc_reply(mr_rpc_session_t *session, mr_err_t result);
 
 /**
  * @brief This function polls active RPC subscriptions.
@@ -332,12 +342,47 @@ mr_err_t mr_rpc_reply(mr_rpc_session_t *session, mr_err_t result);
 mr_err_t mr_rpc_poll(mr_rpc_t *rpc);
 
 /**
+ * @brief This function initializes an external RPC session.
+ *
+ * @param session The external session storage.
+ * @param ops The shared session operations.
+ * @param owner The session owner.
+ */
+void mr_rpc_session_init(mr_rpc_session_t *session,
+                         const mr_rpc_session_ops_t *ops, void *owner);
+
+/**
  * @brief This function holds an RPC session.
  *
  * @param session The RPC session.
  * @return 0 on success, a negative error code on failure.
  */
 mr_err_t mr_rpc_session_hold(mr_rpc_session_t *session);
+
+/**
+ * @brief This function completes an RPC session with a result.
+ *
+ * @param session The RPC session.
+ * @param result The RPC result.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_rpc_session_reply(mr_rpc_session_t *session, mr_err_t result);
+
+/**
+ * @brief This function consumes a completed external session result.
+ *
+ * @param session The external RPC session.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_rpc_session_consume(mr_rpc_session_t *session);
+
+/**
+ * @brief This function cancels an external RPC session.
+ *
+ * @param session The external RPC session.
+ * @return 0 on success, a negative error code on failure.
+ */
+mr_err_t mr_rpc_session_cancel(mr_rpc_session_t *session);
 
 /**
  * @brief This function drops a held RPC session.

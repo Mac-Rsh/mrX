@@ -13,7 +13,7 @@
 #if defined(MR_USE_MODULE_XVM)
 #include <mrX/modules/xvm/mr_xvm_isa.h>
 #if defined(MR_USE_MODULE_XVM_DEBUG)
-#include <mrX/modules/xvm/mr_xvm_dbg.h>
+#include <mrX/modules/xvm/mr_xvm_debug.h>
 #endif /* defined(MR_USE_MODULE_XVM_DEBUG) */
 #endif /* defined(MR_USE_MODULE_XVM) */
 
@@ -108,7 +108,7 @@ typedef struct mr_xvm {
     mr_atomic_t status;
     mr_atomic_t flags;
 #if defined(MR_USE_MODULE_XVM_DEBUG)
-    mr_xvm_dbg_t dbg;
+    mr_xvm_debug_t debug;
 #endif /* defined(MR_USE_MODULE_XVM_DEBUG) */
 } mr_xvm_t;
 

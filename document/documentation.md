@@ -25,11 +25,13 @@ document/
 它面向使用者，措辞以“先做什么、做完看到什么”为主，不放维护者细节。
 
 - 文档路径与源码职责保持对应，例如 `kernel/timer.md` 对应 `kernel/timer.c`。
-- 每个设备驱动目录使用 `<driver>.md` 描述公共 API 与框架行为，另用 `porting.md` 集中描述平台 backend 的实现、IRQ/DMA/HardTree 接线、参考实现和移植验收；主驱动文档只保留移植入口，不重复展开平台实现步骤。
+- 每个设备驱动目录使用 `<driver>.md` 描述公共 API 与框架行为，另用 `porting.md` 集中描述平台 backend 的实现、IRQ/DMA/HardTree
+  接线、参考实现和移植验收；主驱动文档只保留移植入口，不重复展开平台实现步骤。
 - 每个模块文档开头标注对应的 `MR_USE_*` 功能宏；没有功能宏时写明“无（始终编译）”。
 - 新增、删除或重命名文档后，同步更新 [README](README.md) 的完整文档索引，并检查目录结构说明是否仍然准确。
 - 生成文件、构建产物和临时材料不放入文档目录。
-- 某一芯片厂商的适配说明放在 `arch/<vendor>/`，与源码 `mrX/arch/<vendor>/` 对应。新增厂商文档后，同步加入 [README](README.md) 的芯片厂商适配索引。
+- 某一芯片厂商的适配说明放在 `arch/<vendor>/`，与源码 `mrX/arch/<vendor>/`
+  对应。新增厂商文档后，同步加入 [README](README.md) 的芯片厂商适配索引。
 
 ### 1.1 骨架的适用范围
 
@@ -39,8 +41,10 @@ document/
 - **主机端工具类**：`scripts/` 下的教程（含 `scripts/README.md`）。它们描述 Python 工具的输入输出， 没有 `MR_USE_*`
   功能宏与头文件，因此不要求元数据表，也不要求用户/开发者分节； 按“用法 → 参数 → 排错”组织即可，每个脚本使用独立子目录保存其文档（如
   `scripts/cli/cli.md`）。其中 `scripts/cli/cli.md` 是唯一示例性保留分节的工具文档，属自愿而非强制。
-- **驱动移植类**：`drivers/<driver>/porting.md` 只面向 backend 开发者，按“移植边界 → 操作表 → 硬件/事件/stream 接线 → HardTree → 参考实现 → 验收清单”组织，不重复驱动主文档的用户 API 说明。
-- **芯片厂商适配类**：`arch/<vendor>/` 对应源码 `mrX/arch/<vendor>/`。不替代 `platform.md` 的内核 port 契约，也不替代各驱动 `porting.md`；需在 [README](README.md) 保留可发现的厂商索引入口。
+- **驱动移植类**：`drivers/<driver>/porting.md` 只面向 backend 开发者，按“移植边界 → 操作表 → 硬件/事件/stream 接线 →
+  HardTree → 参考实现 → 验收清单”组织，不重复驱动主文档的用户 API 说明。
+- **芯片厂商适配类**：`arch/<vendor>/` 对应源码 `mrX/arch/<vendor>/`。不替代 `platform.md` 的内核 port 契约，也不替代各驱动
+  `porting.md`；需在 [README](README.md) 保留可发现的厂商索引入口。
 
 目录入口文件（如 `kernel/README.md`、`scripts/README.md`）只需给出该目录的模块清单和阅读顺序， 同样不套用骨架。
 

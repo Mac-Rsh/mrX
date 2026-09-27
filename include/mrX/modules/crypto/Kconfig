@@ -20,23 +20,30 @@ config MR_USE_MODULE_CRYPTO_SHA256
     help
         Enable SHA-256 hashing.
 
+config MR_USE_MODULE_CRYPTO_HMAC_SHA256
+    depends on MR_USE_MODULE_CRYPTO
+    select MR_USE_MODULE_CRYPTO_SHA256
+    bool "Use HMAC-SHA-256"
+    default n
+    help
+        Enable HMAC authentication based on SHA-256.
+
 # ==================================
 # ECC
 # ==================================
-config MR_USE_MODULE_CRYPTO_ECC_P256
+config MR_USE_MODULE_CRYPTO_P256
     depends on MR_USE_MODULE_CRYPTO
-    bool "Use P-256 ECC"
+    bool "Use P-256"
     default n
     help
         Enable NIST P-256/secp256r1 elliptic-curve arithmetic.
 
 config MR_USE_MODULE_CRYPTO_ECDSA_P256
     depends on MR_USE_MODULE_CRYPTO
-    select MR_USE_MODULE_CRYPTO_ECC_P256
-    select MR_USE_MODULE_CRYPTO_SHA256
+    select MR_USE_MODULE_CRYPTO_P256
     bool "Use P-256 ECDSA"
     default n
     help
-        Enable ECDSA signature verification over P-256 with SHA-256.
+        Enable ECDSA signature verification over NIST P-256.
 
 endmenu

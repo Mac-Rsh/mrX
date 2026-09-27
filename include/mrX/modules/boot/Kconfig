@@ -1,0 +1,60 @@
+menu "Boot: A/B boot and update"
+
+# ==================================
+# BOOT
+# ==================================
+config MR_USE_MODULE_BOOT
+    depends on MR_USE_MODULE
+    bool "Use Boot"
+    default n
+    help
+        Enable A/B firmware selection and streaming update support.
+
+config MR_USE_MODULE_BOOT_SHA256
+    depends on MR_USE_MODULE_BOOT
+    bool "Use SHA-256 verification"
+    default y
+    help
+        Enable SHA-256 image verification and fast validation support.
+
+config MR_USE_MODULE_BOOT_ECDSA_P256
+    depends on MR_USE_MODULE_BOOT
+    select MR_USE_MODULE_BOOT_SHA256
+    bool "Use ECDSA P-256 verification"
+    default y
+    help
+        Enable ECDSA P-256 manifest signature verification. This also enables
+        SHA-256 verification.
+
+config MR_USE_MODULE_BOOT_RECOVERY
+    depends on MR_USE_MODULE_BOOT
+    bool "Use recovery firmware"
+    default n
+    help
+        Enable a dedicated read-only recovery firmware boot slot. Recovery
+        firmware is used when no valid APP is available.
+
+config MR_USE_MODULE_BOOT_AUTH
+    depends on MR_USE_MODULE_BOOT
+    bool "Use authenticated state"
+    default y
+    help
+        Protect persistent Boot state against tampering with HMAC-SHA256.
+
+config MR_USE_MODULE_BOOT_FAST
+    depends on MR_USE_MODULE_BOOT_SHA256
+    bool "Use fast validation"
+    default n
+    help
+        Trust a previously fully verified slot when its cached manifest digest
+        is unchanged.
+
+config MR_CFG_BOOT_VERIFY_BUFFER_SIZE
+    depends on MR_USE_MODULE_BOOT_SHA256
+    int "Boot verification buffer size"
+    default 256
+    range 64 4096
+    help
+        Scratch buffer used while hashing firmware from storage.
+
+endmenu

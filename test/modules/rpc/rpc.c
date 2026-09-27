@@ -33,11 +33,23 @@ typedef struct test_rpc_packet {
     mr_uint32_t size;
 } test_rpc_packet_t;
 
+typedef struct test_rpc_owner {
+    mr_rpc_session_t session;
+    mr_err_t result;
+    mr_uint32_t complete_count;
+    mr_uint32_t release_count;
+    mr_uint32_t entry_calls_at_complete;
+    mr_bool_t cancel_on_complete;
+    mr_err_t cancel_result;
+    mr_uint32_t release_count_after_cancel;
+} test_rpc_owner_t;
+
 typedef enum test_rpc_mode {
     TEST_RPC_MODE_NORMAL,
     TEST_RPC_MODE_ERROR,
     TEST_RPC_MODE_HOLD,
     TEST_RPC_MODE_DIRECT_REPLY,
+    TEST_RPC_MODE_EMPTY_STREAM,
     TEST_RPC_MODE_MIX_BAD_TITLE,
     TEST_RPC_MODE_MIX_BAD_NOTE,
     TEST_RPC_MODE_MIX_BAD_BLOB,
@@ -54,6 +66,31 @@ static __mr_rpc_request_lab_mix_t test_rpc_last_mix;
 static __mr_rpc_request_lab_nest_t test_rpc_last_nest;
 static __mr_rpc_request_lab_table_t test_rpc_last_table;
 static __mr_rpc_request_lab_log_t test_rpc_last_log;
+
+static void test_rpc_owner_complete(mr_rpc_session_t *session, mr_err_t result,
+                                    void *owner) {
+    test_rpc_owner_t *ctx = owner;
+
+    ctx->result = result;
+    ctx->complete_count++;
+    ctx->entry_calls_at_complete = test_rpc_entry_calls;
+    if (ctx->cancel_on_complete) {
+        ctx->cancel_result = mr_rpc_session_cancel(session);
+        ctx->release_count_after_cancel = ctx->release_count;
+    }
+}
+
+static void test_rpc_owner_release(mr_rpc_session_t *session, void *owner) {
+    test_rpc_owner_t *ctx = owner;
+
+    MR_IGNORE(session);
+    ctx->release_count++;
+}
+
+static const mr_rpc_session_ops_t test_rpc_external_ops = {
+    .complete = test_rpc_owner_complete,
+    .release = test_rpc_owner_release,
+};
 
 static mr_uint16_t test_rpc_fletcher16(const void *data, mr_uint32_t size) {
     const mr_uint8_t *bytes;
@@ -321,7 +358,7 @@ MR_RPC(lab, mix) {
         return mr_rpc_session_hold(session);
     }
     if (test_rpc_mode == TEST_RPC_MODE_DIRECT_REPLY) {
-        return mr_rpc_reply(session, 23);
+        return mr_rpc_session_reply(session, 23);
     }
     if (test_rpc_mode == TEST_RPC_MODE_ERROR) {
         return -MR_EIO;
@@ -388,7 +425,10 @@ MR_RPC(lab, ping) {
         return mr_rpc_session_hold(session);
     }
     if (test_rpc_mode == TEST_RPC_MODE_DIRECT_REPLY) {
-        return mr_rpc_reply(session, 23);
+        return mr_rpc_session_reply(session, 23);
+    }
+    if (test_rpc_mode == TEST_RPC_MODE_EMPTY_STREAM) {
+        return 0;
     }
     return (test_rpc_mode == TEST_RPC_MODE_ERROR) ? -MR_EIO : 10;
 }
@@ -670,8 +710,8 @@ MR_TEST(rpc, session_hold_reply_drop_and_pool) {
     MR_TEST_EXPECT_EQ_UINT(test_rpc_held_count,
                            MR_CFG_MODULE_RPC_SESSION_NUM);
 
-    MR_TEST_ASSERT_EQ_INT(mr_rpc_reply(test_rpc_held[0], 77), 0);
-    MR_TEST_EXPECT_EQ_INT(mr_rpc_reply(test_rpc_held[0], 77), -MR_EPERM);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_session_reply(test_rpc_held[0], 77), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_reply(test_rpc_held[0], 77), -MR_EPERM);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_flush(&rpc), 0);
     MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 500U, 77), MR_TRUE);
 
@@ -697,11 +737,11 @@ MR_TEST(rpc, reply_and_hold_rejections) {
     session->rpc = &rpc;
     session->request.type = MR_RPC_MSG_REQUEST;
     session->state = MR_RPC_SESSION_STATE_FREE;
-    MR_TEST_EXPECT_EQ_INT(mr_rpc_reply(session, 0), -MR_EPERM);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_reply(session, 0), -MR_EPERM);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_session_hold(session), -MR_EPERM);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_session_drop(session), -MR_EPERM);
     session->request.type = MR_RPC_MSG_ONEWAY;
-    MR_TEST_EXPECT_EQ_INT(mr_rpc_reply(session, 0), -MR_EPERM);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_reply(session, 0), -MR_EPERM);
     session->rpc = MR_NULL;
     MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
 }
@@ -1174,10 +1214,391 @@ MR_TEST(rpc, delete_with_held_session) {
                                             1001U, 1U, 3U, MR_NULL, 0U),
                           0);
     MR_TEST_ASSERT_EQ_UINT(test_rpc_held_count, 1U);
+
+    /* The held session keeps RPC alive until drop */
     MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
-    MR_TEST_EXPECT_EQ_PTR(rpc.ops, MR_NULL);
+    MR_TEST_EXPECT_EQ_PTR(rpc.ops, &test_rpc_ops);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_session_drop(test_rpc_held[0]), 0);
     MR_TEST_EXPECT_EQ_PTR(rpc.ops, MR_NULL);
+}
+
+MR_TEST(rpc, external_session_delivery) {
+    test_rpc_owner_t owner;
+    mr_rpc_t rpc;
+
+    mr_memset(&owner, 0, sizeof(owner));
+    mr_memset(&rpc, 0, sizeof(rpc));
+    test_rpc_entries_reset();
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, MR_NULL, MR_NULL), 0);
+
+    /* A local request delivers one result before release */
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.session.request.type = MR_RPC_MSG_REQUEST;
+    owner.session.request.service = 1U;
+    owner.session.request.method = 3U;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 1U);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 0U);
+    MR_TEST_EXPECT_EQ_INT(owner.result, 10);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_consume(&owner.session), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+
+    /* ONEWAY completes and releases without a consume step */
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.session.request.type = MR_RPC_MSG_ONEWAY;
+    owner.session.request.service = 1U;
+    owner.session.request.method = 3U;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 2U);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 2U);
+    MR_TEST_EXPECT_EQ_INT(owner.result, 10);
+
+    /* A continuous subscription repolls after its result is consumed */
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.session.request.type = MR_RPC_MSG_SUBSCRIBE;
+    owner.session.request.service = 1U;
+    owner.session.request.method = 3U;
+    owner.session.request.value.subscribe = 1U | MR_RPC_SUBSCRIBE_CONTINUOUS;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 3U);
+    MR_TEST_EXPECT_EQ_INT(owner.result, 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_session_consume(&owner.session), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_poll(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 4U);
+    MR_TEST_EXPECT_EQ_INT(owner.result, 10);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_cancel(&owner.session), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 3U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+}
+
+MR_TEST(rpc, external_cancel_during_complete) {
+    test_rpc_owner_t owner;
+    mr_rpc_t rpc;
+
+    mr_memset(&owner, 0, sizeof(owner));
+    mr_memset(&rpc, 0, sizeof(rpc));
+    test_rpc_entries_reset();
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, MR_NULL, MR_NULL), 0);
+
+    /* Cancellation inside complete defers release until it returns */
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.cancel_on_complete = MR_TRUE;
+    owner.session.request.type = MR_RPC_MSG_REQUEST;
+    owner.session.request.service = 1U;
+    owner.session.request.method = 3U;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 1U);
+    MR_TEST_EXPECT_EQ_INT(owner.cancel_result, 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count_after_cancel, 0U);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+    MR_TEST_EXPECT_EQ_PTR(rpc.ops, MR_NULL);
+}
+
+MR_TEST(rpc, external_empty_stream) {
+    test_rpc_owner_t owner;
+    mr_rpc_t rpc;
+
+    mr_memset(&owner, 0, sizeof(owner));
+    mr_memset(&rpc, 0, sizeof(rpc));
+    test_rpc_entries_reset();
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, MR_NULL, MR_NULL), 0);
+
+    /* Consume the initial subscription result to enable the first stream */
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.session.request.type = MR_RPC_MSG_SUBSCRIBE;
+    owner.session.request.service = 1U;
+    owner.session.request.method = 3U;
+    owner.session.request.value.subscribe = 1U | MR_RPC_SUBSCRIBE_CONTINUOUS;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_ASSERT_EQ_UINT(owner.complete_count, 1U);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_session_consume(&owner.session), 0);
+
+    /* An empty successful stream waits without producing a completion */
+    test_rpc_mode = TEST_RPC_MODE_EMPTY_STREAM;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_poll(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 1U);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 1U);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 0U);
+    MR_TEST_EXPECT_EQ_INT(owner.session.state, MR_RPC_SESSION_STATE_WAITING);
+    MR_TEST_EXPECT_EQ_INT(owner.session.request.type, MR_RPC_MSG_STREAM);
+    MR_TEST_EXPECT_EQ_INT(owner.session.response.frame.value.result, 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.session.response.frame.payload_size, 0U);
+
+    /* The waiting external subscription remains cancellable and releasable */
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_cancel(&owner.session), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 1U);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+}
+
+MR_TEST(rpc, external_compact_codec) {
+    test_rpc_owner_t owner;
+    mr_rpc_t rpc;
+    mr_uint8_t *payload;
+    mr_uint32_t count;
+
+    mr_memset(&owner, 0, sizeof(owner));
+    mr_memset(&rpc, 0, sizeof(rpc));
+    test_rpc_entries_reset();
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, MR_NULL, MR_NULL), 0);
+
+    /* Decode a compact local request and encode a compact response */
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.session.request.type = MR_RPC_MSG_REQUEST;
+    owner.session.request.service = 1U;
+    owner.session.request.method = 0U;
+    payload = (mr_uint8_t *)&owner.session.request.payload;
+    owner.session.recv.size = test_rpc_mix_payload(payload);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_last_mix.title.size, 3U);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_last_mix.count, 0x12345678U);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_last_mix.blob.size, 3U);
+    MR_TEST_EXPECT_EQ_INT(owner.result, 7);
+    MR_TEST_EXPECT_EQ_UINT(owner.session.response.frame.payload_size, 14U);
+    payload = (mr_uint8_t *)&owner.session.response.payload;
+    MR_TEST_EXPECT_EQ_UINT(payload[0], 2U);
+    MR_TEST_EXPECT_EQ_UINT(payload[1], 'o');
+    MR_TEST_EXPECT_EQ_UINT(payload[2], 'k');
+    mr_memcpy(&count, payload + 3U, sizeof(count));
+    MR_TEST_EXPECT_EQ_UINT(count, 0x12345679U);
+    MR_TEST_EXPECT_EQ_UINT(payload[7], 3U);
+    MR_TEST_EXPECT_EQ_UINT(payload[8], 'a');
+    MR_TEST_EXPECT_EQ_UINT(payload[11], 2U);
+    MR_TEST_EXPECT_EQ_UINT(payload[13], 0x5aU);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_consume(&owner.session), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+
+    /* An invalid compact request does not reach the method */
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.session.request.type = MR_RPC_MSG_REQUEST;
+    owner.session.request.service = 1U;
+    owner.session.request.method = 0U;
+    owner.session.recv.size = 1U;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 1U);
+    MR_TEST_EXPECT_EQ_INT(owner.result, -MR_EINVAL);
+    MR_TEST_EXPECT_EQ_UINT(owner.session.response.frame.payload_size, 0U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_consume(&owner.session), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 2U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+}
+
+MR_TEST(rpc, mixed_session_priority) {
+    test_rpc_packet_t packet;
+    test_rpc_owner_t owner;
+    test_rpc_io_t io;
+    mr_rpc_t rpc;
+
+    mr_memset(&owner, 0, sizeof(owner));
+    mr_memset(&rpc, 0, sizeof(rpc));
+    test_rpc_io_reset(&io);
+    test_rpc_entries_reset();
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, &test_rpc_ops, &io), 0);
+
+    /* Queue a remote frame before submitting a local session */
+    test_rpc_packet_build(&packet, MR_RPC_MSG_REQUEST, 0U, 1101U, 1U, 3U,
+                          MR_NULL, 0U);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
+                          packet.size);
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.session.request.type = MR_RPC_MSG_REQUEST;
+    owner.session.request.service = 1U;
+    owner.session.request.method = 3U;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), 0);
+
+    /* The local result arrives before the remote method runs */
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 1U);
+    MR_TEST_EXPECT_EQ_UINT(owner.entry_calls_at_complete, 1U);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 2U);
+    MR_TEST_EXPECT_EQ_INT(owner.result, 10);
+    MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 1101U, 10), MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_consume(&owner.session), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+}
+
+MR_TEST(rpc, external_session_delete) {
+    test_rpc_owner_t ready_owner;
+    test_rpc_owner_t owner;
+    test_rpc_io_t io;
+    mr_rpc_t rpc;
+
+    mr_memset(&ready_owner, 0, sizeof(ready_owner));
+    mr_memset(&owner, 0, sizeof(owner));
+    mr_memset(&rpc, 0, sizeof(rpc));
+    test_rpc_io_reset(&io);
+    test_rpc_entries_reset();
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, &test_rpc_ops, &io), 0);
+
+    /* Deletion releases a submitted session before dispatch */
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.session.request.type = MR_RPC_MSG_REQUEST;
+    owner.session.request.service = 1U;
+    owner.session.request.method = 3U;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 0U);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+    MR_TEST_EXPECT_EQ_PTR(rpc.ops, MR_NULL);
+
+    /* A delivered result retains RPC until the owner cancels it */
+    mr_memset(&rpc, 0, sizeof(rpc));
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, &test_rpc_ops, &io), 0);
+    mr_rpc_session_init(&ready_owner.session, &test_rpc_external_ops,
+                        &ready_owner);
+    ready_owner.session.request.type = MR_RPC_MSG_REQUEST;
+    ready_owner.session.request.service = 1U;
+    ready_owner.session.request.method = 3U;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &ready_owner.session), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(ready_owner.complete_count, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+    MR_TEST_EXPECT_EQ_PTR(rpc.ops, &test_rpc_ops);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_cancel(&ready_owner.session), 0);
+    MR_TEST_EXPECT_EQ_UINT(ready_owner.release_count, 1U);
+    MR_TEST_EXPECT_EQ_PTR(rpc.ops, MR_NULL);
+
+    /* A held session retains the RPC until it is dropped */
+    mr_memset(&rpc, 0, sizeof(rpc));
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, &test_rpc_ops, &io), 0);
+    test_rpc_mode = TEST_RPC_MODE_HOLD;
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.session.request.type = MR_RPC_MSG_REQUEST;
+    owner.session.request.service = 1U;
+    owner.session.request.method = 3U;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_ASSERT_EQ_UINT(test_rpc_held_count, 1U);
+    MR_TEST_EXPECT_EQ_PTR(test_rpc_held[0], &owner.session);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+    MR_TEST_EXPECT_EQ_PTR(rpc.ops, &test_rpc_ops);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_drop(&owner.session), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 0U);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 2U);
+    MR_TEST_EXPECT_EQ_PTR(rpc.ops, MR_NULL);
+}
+
+MR_TEST(rpc, frame_header_rejections_and_resync) {
+    const mr_uint8_t invalid_types[] = {
+        MR_RPC_MSG_RESPONSE, MR_RPC_MSG_STREAM, 0xffU,
+    };
+    test_rpc_packet_t packet;
+    mr_rpc_frame_t *frame;
+    test_rpc_io_t io;
+    mr_rpc_t rpc;
+    mr_uint32_t i;
+
+    test_rpc_io_reset(&io);
+    test_rpc_entries_reset();
+    mr_memset(&rpc, 0, sizeof(rpc));
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, &test_rpc_ops, &io), 0);
+
+    /* A valid checksum cannot make an unsupported version acceptable */
+    test_rpc_packet_build(&packet, MR_RPC_MSG_REQUEST, 0U, 1500U, 1U, 3U,
+                          MR_NULL, 0U);
+    frame = (mr_rpc_frame_t *)packet.data;
+    frame->version = 2U;
+    frame->hdr_crc16 = 0U;
+    frame->hdr_crc16 = test_rpc_fletcher16(frame, sizeof(*frame));
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
+                          packet.size);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(io.size, 0U);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 0U);
+
+    /* Incoming responses and streams cannot enter server dispatch */
+    for (i = 0U; i < MR_ARRAY_SIZE(invalid_types); i++) {
+        test_rpc_packet_build(&packet,
+                              (mr_rpc_msg_type_t)invalid_types[i], 0U,
+                              1501U + i, 1U, 3U, MR_NULL, 0U);
+        MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
+                              packet.size);
+        MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
+        MR_TEST_EXPECT_EQ_UINT(io.size, 0U);
+        MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 0U);
+    }
+
+    /* The parser still finds the next valid request */
+    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST,
+                                            0U, 1510U, 1U, 3U, MR_NULL, 0U),
+                          0);
+    MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 1510U, 10), MR_TRUE);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+}
+
+MR_TEST(rpc, framed_request_byte_by_byte) {
+    mr_uint8_t payload[128];
+    test_rpc_packet_t packet;
+    test_rpc_io_t io;
+    mr_rpc_t rpc;
+    mr_uint32_t size, i;
+
+    test_rpc_io_reset(&io);
+    test_rpc_entries_reset();
+    mr_memset(&rpc, 0, sizeof(rpc));
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, &test_rpc_ops, &io), 0);
+
+    /* Header, compact payload and checksum may arrive separately */
+    size = test_rpc_mix_payload(payload);
+    test_rpc_packet_build(&packet, MR_RPC_MSG_REQUEST,
+                          MR_RPC_FRAME_FLAG_CHECKSUM, 1520U, 1U, 0U,
+                          payload, size);
+    for (i = 0U; i < packet.size; i++) {
+        MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, &packet.data[i], 1U), 1);
+        MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+        if ((i + 1U) < packet.size) {
+            MR_TEST_EXPECT_EQ_UINT(io.size, 0U);
+        }
+    }
+    MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 1520U, 7), MR_TRUE);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_last_mix.count, 0x12345678U);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+}
+
+MR_TEST(rpc, external_submit_validation) {
+    test_rpc_owner_t owner;
+    mr_rpc_t rpc;
+
+    mr_memset(&owner, 0, sizeof(owner));
+    mr_memset(&rpc, 0, sizeof(rpc));
+    test_rpc_entries_reset();
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, MR_NULL, MR_NULL), 0);
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.session.request.service = 1U;
+    owner.session.request.method = 3U;
+
+    /* Rejected submissions retain ownership with the caller */
+    owner.session.request.type = MR_RPC_MSG_RESPONSE;
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), -MR_EINVAL);
+    MR_TEST_EXPECT_EQ_PTR(owner.session.rpc, MR_NULL);
+    owner.session.request.type = MR_RPC_MSG_REQUEST;
+    owner.session.recv.size = sizeof(owner.session.request.payload) + 1U;
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), -MR_EINVAL);
+    MR_TEST_EXPECT_EQ_PTR(owner.session.rpc, MR_NULL);
+
+    /* A valid request can be submitted only once until released */
+    owner.session.recv.size = 0U;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_submit(&rpc, &owner.session), -MR_EINVAL);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 1U);
+    MR_TEST_EXPECT_EQ_INT(owner.result, 10);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 0U);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_session_consume(&owner.session), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_MODULE_RPC) */

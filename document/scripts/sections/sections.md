@@ -1,8 +1,7 @@
 # Sections 注册段脚本
 
 sections 为使用 GNU ld 风格链接脚本的工程，把 mrX 的 initcall、测试、驱动和 RPC 注册段 收集到指定输出段中。命令入口是
-scripts/plugins/sections/sections.py，会原地修改链接脚本。 Keil MDK 工程不需要使用此命令，
-armlink 默认即按名字连续放置这些注册段。
+scripts/plugins/sections/sections.py，会原地修改链接脚本。 Keil MDK 工程不需要使用此命令， armlink 默认即按名字连续放置这些注册段。
 
 ## 基本操作
 
@@ -84,13 +83,13 @@ keep = false, sort = false -> *(mr_initcall.*)
 
 ## 常见问题
 
-| 现象                          | 处理方式                                                      |
-|-------------------------------|---------------------------------------------------------------|
-| Section config file not found | 从 mrX/运行，或通过 -c 指定正确 TOML                          |
-| Missing table: [[section]]    | 确认使用数组表 [[section]]，不是 [section]                    |
-| Invalid field ... keep/sort   | TOML 中必须使用布尔值 true / false                            |
-| 找不到 SECTIONS { ... }       | 把 -i 改为最终 GNU ld 链接脚本，确认存在顶层 SECTIONS         |
-| 规则重复                      | 先确认旧条目带有 @mrX: 标记；用户手写的同名规则不会被删除     |
+| 现象                          | 处理方式                                                                                 |
+|-------------------------------|------------------------------------------------------------------------------------------|
+| Section config file not found | 从 mrX/运行，或通过 -c 指定正确 TOML                                                     |
+| Missing table: [[section]]    | 确认使用数组表 [[section]]，不是 [section]                                               |
+| Invalid field ... keep/sort   | TOML 中必须使用布尔值 true / false                                                       |
+| 找不到 SECTIONS { ... }       | 把 -i 改为最终 GNU ld 链接脚本，确认存在顶层 SECTIONS                                    |
+| 规则重复                      | 先确认旧条目带有 @mrX: 标记；用户手写的同名规则不会被删除                                |
 | MDK 工程也执行了此命令        | MDK 不要把 GNU ld 规则套到 MDK，armlink 默认放置即可，详见 [MDK 工程维护](../mdk/mdk.md) |
 
 ## 脚本关系

@@ -40,7 +40,8 @@ typedef struct mr_dac_ops {
 
 ## 3. 数据与通道
 
-`mr_dac_data_t` 中的 `ref_internal` 与 `exist_mask` 必须和实际硬件一致。平台私有数据通常保存 DAC 实例、通道映射、GPIO/模拟输出配置、触发定时器、DMA 资源和运行状态。
+`mr_dac_data_t` 中的 `ref_internal` 与 `exist_mask` 必须和实际硬件一致。平台私有数据通常保存 DAC
+实例、通道映射、GPIO/模拟输出配置、触发定时器、DMA 资源和运行状态。
 
 `channel_configuration` 应返回 backend 实际采用的配置，而不是简单回显用户请求。
 

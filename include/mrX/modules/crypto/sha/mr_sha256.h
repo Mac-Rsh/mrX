@@ -50,14 +50,18 @@ void mr_sha256_init(mr_sha256_t *sha256);
  * @param sha256 The SHA-256 object.
  * @param data The input data.
  * @param size The input data size.
+ *
+ * @note Data may be MR_NULL when size is 0.
  */
 void mr_sha256_update(mr_sha256_t *sha256, const void *data, mr_size_t size);
 
 /**
  * @brief This function finalizes a SHA-256 object.
  *
- * @param sha256 The SHA-256 object. It is cleared before return.
+ * @param sha256 The SHA-256 object.
  * @param digest The 32-byte digest output.
+ *
+ * @note The SHA-256 object is cleared before return.
  */
 void mr_sha256_final(mr_sha256_t *sha256,
                      mr_uint8_t digest[MR_SHA256_DIGEST_SIZE]);
@@ -68,6 +72,8 @@ void mr_sha256_final(mr_sha256_t *sha256,
  * @param data The input data.
  * @param size The input data size.
  * @param digest The 32-byte digest output.
+ *
+ * @note Data may be MR_NULL when size is 0.
  */
 void mr_sha256(const void *data, mr_size_t size,
                mr_uint8_t digest[MR_SHA256_DIGEST_SIZE]);

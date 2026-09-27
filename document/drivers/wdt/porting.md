@@ -75,7 +75,8 @@ MR_WDT_WAIT_TIMEOUT
 
 ## 7. HardTree 与安装
 
-`MR_HT_WDT_INSTALL` 注册 WDT 实例。HardTree 可描述 watchdog 实例、clock/IRQ 等静态资源；timeout 数值仍由运行时 configure 决定。
+`MR_HT_WDT_INSTALL` 注册 WDT 实例。HardTree 可描述 watchdog 实例、clock/IRQ 等静态资源；timeout 数值仍由运行时 configure
+决定。
 
 ## 8. 当前参考
 
@@ -85,8 +86,8 @@ MR_WDT_WAIT_TIMEOUT
 mrX/arch/st/stm32h5/platform/drivers/wdt/wdt.c
 ```
 
-该 backend 展示了 IWDG 量化、不可停止的 `stop = MR_NULL`、EWI PRETIMEOUT，
-以及 TIMEOUT 直接复位、不伪造事件。公共契约见 `mrX/test/drivers/wdt/wdt.c`。
+该 backend 展示了 IWDG 量化、不可停止的 `stop = MR_NULL`、EWI PRETIMEOUT， 以及 TIMEOUT 直接复位、不伪造事件。公共契约见
+`mrX/test/drivers/wdt/wdt.c`。
 
 ## 9. 移植检查清单
 

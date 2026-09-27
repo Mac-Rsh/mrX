@@ -47,7 +47,8 @@
 #endif /* defined(MR_USE_TEST) */
 ```
 
-构建：`cmake -S . -B build && cmake --build build`。测试由应用显式驱动：默认宿主示例 `user/main.c`（位于 `mrX/` 的上一级）运行的是 DMA/RPC 演示，不调用测试入口；要执行测试需在应用启动流程中自行调用 `mr_test_run()`（全部通过返回 `MR_TRUE`），并据此决定进程退出码。
+构建：`cmake -S . -B build && cmake --build build`。测试由应用显式驱动：默认宿主示例 `user/main.c`（位于 `mrX/` 的上一级）运行的是
+DMA/RPC 演示，不调用测试入口；要执行测试需在应用启动流程中自行调用 `mr_test_run()`（全部通过返回 `MR_TRUE`），并据此决定进程退出码。
 
 ### 3. 快速上手
 

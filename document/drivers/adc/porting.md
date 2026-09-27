@@ -4,7 +4,8 @@
 
 ## 1. 移植边界
 
-ADC 公共层负责驱动类型、通道存在性、waitable 生命周期和电压换算；平台 backend 负责把统一配置映射到实际 ADC 外设，并实现采样、可选 stream 和事件来源。
+ADC 公共层负责驱动类型、通道存在性、waitable 生命周期和电压换算；平台 backend 负责把统一配置映射到实际 ADC 外设，并实现采样、可选
+stream 和事件来源。
 
 平台实现通常放在：
 
@@ -36,7 +37,8 @@ typedef struct mr_adc_ops {
 } mr_adc_ops_t;
 ```
 
-普通通道配置与 `read` 是基础能力；stream 与 `event_control` 按平台能力实现。未实现的可选能力应保持为 `MR_NULL`，由公共层返回 `-MR_ENOSYS`。
+普通通道配置与 `read` 是基础能力；stream 与 `event_control` 按平台能力实现。未实现的可选能力应保持为 `MR_NULL`，由公共层返回
+`-MR_ENOSYS`。
 
 ## 3. 数据与通道
 
@@ -70,11 +72,13 @@ typedef struct mr_adc_ops {
 - stop 返回前停止后续 DMA/ADC 访问，或在平台文档中明确仍可能发生的访问；
 - 有 D-cache 时按平台 cache 契约处理一致性。
 
-事件通过 `mr_adc_event_raise()` 进入公共 waitable。若从 ISR raise，waiter 同步运行在该 ISR 调用链中，ISR 不应留下会持续触发而无人消费的电平型来源。
+事件通过 `mr_adc_event_raise()` 进入公共 waitable。若从 ISR raise，waiter 同步运行在该 ISR 调用链中，ISR
+不应留下会持续触发而无人消费的电平型来源。
 
 ## 6. HardTree 与安装
 
-平台可使用 `MR_HT_ADC_INSTALL` 按硬件模板实例化 ADC。HardTree 属性应只描述平台确实需要的静态资源，例如实例、通道位图、参考电压、DMA/TMR 连接和时钟资源。
+平台可使用 `MR_HT_ADC_INSTALL` 按硬件模板实例化 ADC。HardTree 属性应只描述平台确实需要的静态资源，例如实例、通道位图、参考电压、DMA/TMR
+连接和时钟资源。
 
 不要把可以由硬件运行时读取的状态重复固化到公共层。
 

@@ -84,13 +84,16 @@ void clock_demo(void) {
 
 **钩子**：
 
-- 钩子在每次 `mr_clock_increase()` 调用结束时执行一次，而不是按 `tick` 参数逐个补调用。例如 `mr_clock_increase(10)` 只执行一次钩子链；常规平台每次以 1 推进时，效果才是“每 tick 一次”。钩子运行在 `mr_clock_increase` 调用者上下文。
+- 钩子在每次 `mr_clock_increase()` 调用结束时执行一次，而不是按 `tick` 参数逐个补调用。例如 `mr_clock_increase(10)`
+  只执行一次钩子链；常规平台每次以 1 推进时，效果才是“每 tick 一次”。钩子运行在 `mr_clock_increase` 调用者上下文。
 - 返回值约定：返回"距本模块下一次需要被调度的剩余 tick 数"（须大于 0 才参与 汇总），返回 `MR_TICK_MAX` 表示无意见。所有钩子的最小正返回值即
   `mr_clock_tickless` 的结果，供低功耗场景在下一个关注点之前休眠。
 
 **高分辨率扩展**（`MR_USE_CLOCK_HIRES`）：
 
-- `mr_clock_hires_tick()` 的基准由移植层决定；`mr_hires_tick2timestamp()` 本身则固定把输入换算成从 1970-01-01 00:00:00 UTC 起的经过时间，再应用 UTC+n 时区。只有当平台 hires tick 本身采用 epoch 基准时，才能把 `mr_clock_hires_tick()` 的返回值直接传入并得到真实墙上时间；从 0 起算的平台得到的是 1970 起的相对日历结果。
+- `mr_clock_hires_tick()` 的基准由移植层决定；`mr_hires_tick2timestamp()` 本身则固定把输入换算成从 1970-01-01 00:00:00
+  UTC 起的经过时间，再应用 UTC+n 时区。只有当平台 hires tick 本身采用 epoch 基准时，才能把 `mr_clock_hires_tick()`
+  的返回值直接传入并得到真实墙上时间；从 0 起算的平台得到的是 1970 起的相对日历结果。
 - `mr_hires_tick2timestamp` 的时区参数为 UTC+n，超出 ±12 会被钳位。
 - `mr_clock_busy_wait(us)` 忙等指定微秒数，期间不让出 CPU，只适合极短延时。
 
@@ -113,11 +116,11 @@ void clock_demo(void) {
 
 换算与延时（宏）：
 
-| API                                     | 说明                         |
-|-----------------------------------------|------------------------------|
-| `MR_TICK_MSEC(ms)` / `MR_TICK_USEC(us)` | 毫秒/微秒转 tick             |
-| `MR_MSEC_TICK(tick)` / `MR_USEC_TICK(tick)` | tick 转毫秒/微秒          |
-| `mr_clock_busy_wait`                    | 忙等指定微秒数（不让出 CPU） |
+| API                                         | 说明                         |
+|---------------------------------------------|------------------------------|
+| `MR_TICK_MSEC(ms)` / `MR_TICK_USEC(us)`     | 毫秒/微秒转 tick             |
+| `MR_MSEC_TICK(tick)` / `MR_USEC_TICK(tick)` | tick 转毫秒/微秒             |
+| `mr_clock_busy_wait`                        | 忙等指定微秒数（不让出 CPU） |
 
 高分辨率（需 `MR_USE_CLOCK_HIRES`）：
 
@@ -133,7 +136,8 @@ void clock_demo(void) {
 void mr_clock_increase(mr_tick_t tick);
 ```
 
-将 tick 计数增加 `tick`（通常为 1），随后执行一次全部已注册钩子。即使 `tick == 0`，计数值不变但钩子链仍会执行；若一次补偿多个 tick，也不会逐 tick 重放钩子。该函数通常由移植层 tick 源调用。
+将 tick 计数增加 `tick`（通常为 1），随后执行一次全部已注册钩子。即使 `tick == 0`，计数值不变但钩子链仍会执行；若一次补偿多个
+tick，也不会逐 tick 重放钩子。该函数通常由移植层 tick 源调用。
 
 **`mr_clock_tick` / `mr_clock_uptime` / `mr_clock_tickless`**
 
@@ -248,7 +252,8 @@ tick 为 32 位无符号数，长期运行必然回绕，直接比较绝对值�
 
 **Q：tickless 有什么用？**
 
-每个钩子声明"距下次关心还有多少 tick"，`mr_clock_tickless` 给出所有当前钩子的最小正返回值。低功耗层可以把它作为下一关注点的参考；但唤醒后若一次用 `mr_clock_increase(n)` 补多个 tick，clock 只会执行一次 hook 链，因此具体 tickless 补偿策略还必须与 timer 等消费者的实现配合。
+每个钩子声明"距下次关心还有多少 tick"，`mr_clock_tickless` 给出所有当前钩子的最小正返回值。低功耗层可以把它作为下一关注点的参考；但唤醒后若一次用
+`mr_clock_increase(n)` 补多个 tick，clock 只会执行一次 hook 链，因此具体 tickless 补偿策略还必须与 timer 等消费者的实现配合。
 
 **Q：不用高分辨率扩展，`mr_hires_tick` 还能用吗？**
 
@@ -342,9 +347,12 @@ tickless，初值为
 
 - `__clock_tick`、`__clock_uptime`、`__clock_gen` 均为原子量，
   `mr_clock_tick` 与 `mr_clock_uptime` 的读取无锁，可在任意上下文调用。
-- `mr_clock_increase` 不使用模块级互斥锁，tick/uptime/gen 依靠原子操作与 generation 快照；末尾同步执行全部钩子。其执行上下文完全继承调用者，常见目标板会从 tick ISR 调用。
-- `mr_hook_add` 只用全局自旋锁保护“添加”操作；`MR_HOOK_EACH` 遍历时不持有该锁。因此不要把运行中的 hook 遍历与动态注册视为完整的读写并发保护，clock hook 最稳妥的注册时机仍是初始化阶段。
-- `mr_clock_tickless` 会主动再次执行整条钩子链；若它与 `mr_clock_increase` 并发调用，同一 hook 可能并发执行。需要支持这种场景的 hook 必须自行保证可重入性。
+- `mr_clock_increase` 不使用模块级互斥锁，tick/uptime/gen 依靠原子操作与 generation 快照；末尾同步执行全部钩子。其执行上下文完全继承调用者，常见目标板会从
+  tick ISR 调用。
+- `mr_hook_add` 只用全局自旋锁保护“添加”操作；`MR_HOOK_EACH` 遍历时不持有该锁。因此不要把运行中的 hook
+  遍历与动态注册视为完整的读写并发保护，clock hook 最稳妥的注册时机仍是初始化阶段。
+- `mr_clock_tickless` 会主动再次执行整条钩子链；若它与 `mr_clock_increase` 并发调用，同一 hook 可能并发执行。需要支持这种场景的
+  hook 必须自行保证可重入性。
 
 ### 12. 扩展与派生
 
@@ -374,14 +382,14 @@ tickless，初值为
 
 **配置宏**
 
-| 宏                             | 说明                                           |
-|--------------------------------|------------------------------------------------|
-| `MR_CFG_TICK_PER_SECOND`       | 每秒 tick 数，默认 1000，头文件内置同值兜底    |
-| `MR_USE_CLOCK_HIRES`           | 高分辨率扩展开关，默认 y                       |
-| `MR_CFG_HIRES_TICK_PER_SECOND` | 高分辨率 tick 频率，默认 1000000，上限 1000000 |
-| `MR_CFG_CLOCK_HOOK_SIZE`       | 钩子表容量，默认 2，最小 2                     |
-| `MR_TICK_MAX`                  | 32 位 tick 上限（全 1），clock hook 常用作"无近期关注点"返回值 |
-| `MR_MSEC_TICK` / `MR_USEC_TICK` | tick 转毫秒 / 微秒的整数换算宏                 |
+| 宏                              | 说明                                                           |
+|---------------------------------|----------------------------------------------------------------|
+| `MR_CFG_TICK_PER_SECOND`        | 每秒 tick 数，默认 1000，头文件内置同值兜底                    |
+| `MR_USE_CLOCK_HIRES`            | 高分辨率扩展开关，默认 y                                       |
+| `MR_CFG_HIRES_TICK_PER_SECOND`  | 高分辨率 tick 频率，默认 1000000，上限 1000000                 |
+| `MR_CFG_CLOCK_HOOK_SIZE`        | 钩子表容量，默认 2，最小 2                                     |
+| `MR_TICK_MAX`                   | 32 位 tick 上限（全 1），clock hook 常用作"无近期关注点"返回值 |
+| `MR_MSEC_TICK` / `MR_USEC_TICK` | tick 转毫秒 / 微秒的整数换算宏                                 |
 
 **错误码**：本模块仅 `mr_clock_hook_add` 有失败路径，钩子表满返回
 `-MR_ENOMEM`（`mrX/kernel/hook.c:34`）；`entry` 为 `MR_NULL` 在断言开启时由

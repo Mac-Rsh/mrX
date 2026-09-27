@@ -1288,7 +1288,7 @@ static mr_xvm_return_t xvm_riscv32_execute(mr_xvm_t *xvm, mr_xvm_event_t *event,
 
 #if defined(MR_USE_MODULE_XVM_DEBUG)
         /* Hit an address-compare breakpoint before fetch */
-        if (mr_xvm_dbg_break_hit(xvm, CORE_REG_PC(core))) {
+        if (mr_xvm_debug_break_hit(xvm, CORE_REG_PC(core))) {
             event->except.nr = MR_XVM_EXCEPT_NR_BREAK;
             return MR_XVM_EXCEPT;
         }
