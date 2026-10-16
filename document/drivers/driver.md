@@ -25,8 +25,8 @@
 - 通过 `MR_DRIVER_INSTALL` 宏把驱动"安装"到链接段，系统初始化时自动按优先级 依次启动，无需手工调用初始化函数。
 - `mr_driver_find` 支持按名称查找任意已安装的驱动，找到即持有引用。
 - 驱动生命周期被明确划分为"注册（init）→ 上电（setup）→ 下电（shutdown）→ 注销（del）"四步，setup/shutdown 可反复循环。
-- 驱动按大类型分类（GPIO/ADC/DAC/RAM/UART/I2C/DMA/TMR/WDT/FLASH 等），API 入口会校验类型， 把 A 类驱动指针传给 B 类 API
-  会被立即拦截。
+- 驱动按大类型分类（GPIO/ADC/DAC/RAM/UART/I2C/SPI/DMA/TMR/PWM/WDT/FLASH 等），API 入口会校验类型， 把 A 类驱动指针传给 B 类
+  API 会被立即拦截。
 
 不适用于：需要复杂总线枚举或热插拔的场景（框架只提供单层驱动模型，无总线/ 设备子树）。
 
@@ -52,19 +52,19 @@
 #include <mrX/drivers/mr_driver.h>
 
 static mr_err_t my_init(const mr_driver_t *drv) {
-    /* Power on / configure hardware here */
+    /* 在此处上电 / 配置硬件 */
     return 0;
 }
 
 static mr_err_t my_deinit(const mr_driver_t *drv) {
-    /* Power off here */
+    /* 在此处下电 */
     return 0;
 }
 
 static const mr_driver_clazz_t my_clazz = MR_DRIVER_CLAZZ_INIT(
     "my_driver", my_init, my_deinit, MR_NULL);
 
-/* Install: registered and auto-setup at boot (level "3" = normal) */
+/* 安装：注册并在开机时自动启动（级别 "3" = normal） */
 MR_DRIVER_INSTALL(my_dev, &my_clazz, MR_DRIVER_TYPE_RAM,
                   MR_NULL, MR_NULL, MR_NULL, MR_DRIVER_LEVEL_NORMAL);
 ```
@@ -82,8 +82,8 @@ MR_DRIVER_INSTALL(my_dev, &my_clazz, MR_DRIVER_TYPE_RAM,
 ```c
 mr_driver_t *drv = mr_driver_find("my_dev");
 if (drv != MR_NULL) {
-    /* ... use drv ... */
-    mr_driver_put(drv);     /* Release the reference from find */
+    /* ... 使用 drv ... */
+    mr_driver_put(drv);     /* 释放 find 持有的引用 */
 }
 ```
 
@@ -103,9 +103,9 @@ if (drv != MR_NULL) {
 
 | 操作                                                | 行为                                                                                            |
 |-----------------------------------------------------|-------------------------------------------------------------------------------------------------|
-| 对已 setup 的驱动再次 `mr_driver_setup`             | 幂等，直接返回 0，不重复执行 `init`                                                             |
+| 对已 setup 的驱动再次 `mr_driver_setup`             | 幂等，直接把状态清 0 并返回 0，不重复执行 `init`                                                |
 | 对未 setup 的驱动 `mr_driver_shutdown`              | 安全，返回 0，不执行 `deinit`                                                                   |
-| 并发同时对同一驱动 `setup`/`shutdown`               | 后到者返回 `-MR_EBUSY`                                                                          |
+| 并发同时对同一驱动 `setup`/`shutdown`               | 后到者返回 `-MR_EBUSY`，不等待                                                                  |
 | 驱动正在被删除（`del` 已调用）时 `setup`/`shutdown` | 返回 `-MR_EPERM`                                                                                |
 | clazz 未提供 `init`/`deinit` 回调                   | `setup`/`shutdown` 直接成功，视为无需硬件操作                                                   |
 | `init` 回调返回非 0                                 | `setup` 返回该错误码，驱动保持未 setup；错误码同时记录在驱动状态中，可用 `mr_driver_state` 读取 |
@@ -163,7 +163,10 @@ clazz 定义：
 |----------------------------------------------------------|------------------------------------------------------|
 | `MR_DRIVER_CLAZZ_INIT`                                   | 静态初始化一个驱动 clazz（name/init/deinit/release） |
 | `mr_driver_clazz_init`                                   | 运行时初始化一个驱动 clazz（`MR_INLINE`）            |
+| `MR_DRIVER_CLAZZES_INIT`                                 | 静态初始化一对静态/动态 clazz                        |
 | `MR_DRIVER_CLAZZES_DEFINE`                               | 定义静态/动态双通道 clazz（动态通道带 release）      |
+| `MR_DRIVER_CLAZZES_EXPORT` / `MR_DRIVER_CLAZZES_IMPORT`  | 跨文件导出 / 导入 clazzes                            |
+| `MR_DRIVER_CLAZZES_FIND`                                 | 取 clazzes 结构体指针                                |
 | `MR_DRIVER_CLAZZES_STATIK` / `MR_DRIVER_CLAZZES_DYNAMIC` | 取静态 / 动态 clazz                                  |
 
 **`mr_driver_init`**
@@ -187,6 +190,8 @@ mr_driver_t *mr_driver_create(const mr_driver_clazz_t *dclazz, mr_uint16_t type,
 ```
 
 参数含义同 `mr_driver_init`。成功返回驱动指针，内存不足返回 `MR_NULL`。
+它使用 `MR_DRIVER_CLAZZES_DYNAMIC(driver)` 通道，因此最后一次 `mr_driver_put`
+会在 `release` 阶段释放驱动对象自身的内存。
 
 **`mr_driver_setup` / `mr_driver_shutdown`**
 
@@ -216,7 +221,9 @@ mr_driver_t *mr_driver_find(const char *name);
 - `name`：安装时的驱动名，不可为 `MR_NULL` 或空串。
 - 返回：成功返回已 `get` 引用的驱动指针（用完需 `mr_driver_put`），未找到返回
   `MR_NULL`。
-- 注意：只能找到经 `MR_DRIVER_INSTALL` 安装的驱动（`MR_DRIVER_DEFINE` 仅定义 对象、不生成注册条目），且 DEFER 级别的内部占位名不可被找到。
+- 注意：只能找到经 `MR_DRIVER_INSTALL`（或 `MR_HT_DRIVER_INSTALL`）放入注册段的 驱动；`MR_DRIVER_DEFINE`
+  只定义对象、不生成注册条目，因此查找不到。`MR_DRIVER_INSTALL`
+  生成的条目连同对象一起被链接段收集，是"能被找到"的前提。DEFER 级别的内部占位名也不可被找到。
 
 **`mr_driver_is_ready`**
 
@@ -224,7 +231,7 @@ mr_driver_t *mr_driver_find(const char *name);
 mr_bool_t mr_driver_is_ready(mr_driver_t *drv);
 ```
 
-驱动非空、已初始化、已 setup、状态为 0 且未被标记删除（DYING）时返回
+驱动非空、已初始化、clazz 为 driver、已 setup、状态为 0 且未被标记删除（DYING）时返回
 `MR_TRUE`，其余返回 `MR_FALSE`。对 `MR_NULL` 安全。
 
 **`mr_driver_state_set` / `mr_driver_state`**
@@ -255,10 +262,10 @@ void lifecycle_example(void) {
         return;
     }
 
-    mr_driver_setup(drv);       /* init runs once */
-    mr_driver_setup(drv);       /* idempotent, still 0 */
-    mr_driver_shutdown(drv);    /* deinit runs */
-    mr_driver_setup(drv);       /* setup again is fine */
+    mr_driver_setup(drv);       /* init 执行一次 */
+    mr_driver_setup(drv);       /* 幂等，仍返回 0 */
+    mr_driver_shutdown(drv);    /* deinit 执行 */
+    mr_driver_setup(drv);       /* 再次 setup 没有问题 */
 
     mr_driver_del(drv);
 }
@@ -275,13 +282,13 @@ void reference_example(void) {
     if (drv == MR_NULL) {
         return;
     }
-    held = mr_driver_get(drv);  /* Second holder keeps it alive */
+    held = mr_driver_get(drv);  /* 第二个持有者使其保持存活 */
 
-    mr_driver_del(drv);         /* Mark dying; actual destroy deferred */
-    mr_driver_put(drv);         /* Release find's reference */
+    mr_driver_del(drv);         /* 标记删除；实际销毁被推迟 */
+    mr_driver_put(drv);         /* 释放 find 持有的引用 */
 
-    /* ... still safe to inspect held here ... */
-    mr_driver_put(held);        /* Last reference: driver released now */
+    /* ... 此处仍可安全访问 held ... */
+    mr_driver_put(held);        /* 最后一个引用：此时驱动被释放 */
 }
 ```
 
@@ -323,7 +330,7 @@ void reference_example(void) {
 
 ### 8. 架构总览
 
-驱动框架位于内核服务层之下、具体外设驱动之下层，是所有 `mrX/drivers/` 模块 的公共基类：
+驱动框架位于内核服务层与具体外设驱动之间，是所有 `mrX/drivers/` 模块 的公共基类：
 
 ```
         +---------------------------------------------+
@@ -344,17 +351,16 @@ void reference_example(void) {
 
 关键接线：
 
-- 内核初始化序列在 `MR_INIT_LEVEL_DRIVER`（"1.2"）调用
+- 内核初始化序列在 `MR_INIT_LEVEL_DRIVER`（"1.2"，`mrX/include/mrX/kernel/mr_initcall.h:26`）调用
   `mr_drivers_driver_init`（`mrX/drivers/driver.c:299`，注册于
-  `driver.c:319`），遍历链接段 `mr_driver.*` 中 start 到 defer 之间的条目， 逐个 `mr_driver_setup`。
-- 链接脚本以 `KEEP(*(SORT(mr_driver.*)))` 收集注册条目并按级别名排序 （`user/linker.lds:69`
-  ），这是"初始化级别决定启动顺序"的实现基础。
+  `mrX/drivers/driver.c:319`），遍历链接段 `mr_driver.*` 中 start 到 defer 之间的条目， 逐个 `mr_driver_setup`。
+- 链接脚本以 `KEEP(*(SORT(mr_driver.*)))` 收集注册条目并按级别名排序，这是"初始化级别决定启动顺序"的实现基础。
 - 具体外设驱动通过 `MR_DRIVER_CLAZZES_DEFINE(gpio, ...)` 等宏在 driver clazz 之上叠加自己的
   clazz，形成"框架管生命周期、外设管硬件操作"的分工。
 
 ### 9. 数据结构
 
-驱动对象（`mrX/include/mrX/drivers/mr_driver.h:79`）：
+驱动对象（`mrX/include/mrX/drivers/mr_driver.h:81`）：
 
 ```c
 typedef struct mr_driver {
@@ -378,7 +384,7 @@ typedef struct mr_driver {
 | `state`                 | 最近一次 setup/shutdown 的结果，0 或负错误码                                                                          |
 | `data` / `priv` / `ops` | 三个通用指针槽位：外设驱动通常用 `data` 挂模型数据（框架级 release 负责释放）、`priv` 挂寄存器实例、`ops` 挂操作表    |
 
-注册条目（`mr_driver.h:91`）：
+注册条目（`mr_driver.h:93`）：
 
 ```c
 typedef struct mr_driver_entry {
@@ -387,14 +393,19 @@ typedef struct mr_driver_entry {
 } mr_driver_entry_t;
 ```
 
-`MR_DRIVER_INSTALL`（`mr_driver.h:276`）同时生成驱动对象与该条目，并把条目 放入 `MR_USED const` +
+`MR_DRIVER_INSTALL`（`mr_driver.h:278`）同时生成驱动对象与该条目，并把条目 放入 `MR_USED const` +
 `MR_SECTION_ALIGN("mr_driver." _level)` 修饰的段； 框架自身在 `mrX/drivers/driver.c:21-23` 安装了三个占位条目
-start（"0.end"）、 defer（"8.end"）、end（"9.end"），用于在段内圈出"自动启动区"。
+start（"0.end"）、defer（"8.end"）、end（"9.end"），用于在段内圈出"自动启动区"：级别字符串排在
+"0.end" 之后、且严格早于 "8.end" 的条目属于自动启动区，"9" 级（`MR_DRIVER_LEVEL_DEFER`）
+排在 defer 占位之后，因此落在自动启动区之外。
+
+`MR_DRIVER_INSTALL` 展开出的对象名与条目名分别为 `__mr_driver_<name>` 与
+`__mr_driver_entry_<name>`，`MR_DRIVER_FIND`/`MR_DRIVER_EXPORT` 依赖该命名规则。
 
 ### 10. 核心流程
 
 **自动启动**：`mr_drivers_driver_init`（`mrX/drivers/driver.c:299`）从
-`start + 1` 遍历到 `defer`（不含），对每个条目断言 `drv` 非空后调用
+start + 1 遍历到 defer（不含），对每个条目断言 `drv` 非空后调用
 `mr_driver_setup`，并以断言拦截非 0 返回。DEFER 级别（位于 defer 与 end 之间）的驱动不在此列。
 
 **setup（`mrX/drivers/driver.c:118`）**：
@@ -413,11 +424,14 @@ start（"0.end"）、 defer（"8.end"）、end（"9.end"），用于在段内圈
 
 **删除（`mrX/drivers/driver.c:77`）**：`mr_driver_del` 先原子置
 `MR_DRIVER_FLAG_DYING`，再走对象删除通道 `mr_object_del`。对象引用计数未归零 时不立即释放；归零时触发 clazz 的 release 通道（
-`driver.c:268`）：
+`mrX/drivers/driver.c:268`）：
 `driver_obj_release` 先对仍处 SETUP 状态的驱动补一次 `deinit`（测试
 `delete_with_extra_reference` 验证了 `deinit` 推迟到引用归零），再调用
 `clazz->release` 归还外设驱动资源；动态 clazz 的 `driver_release` 额外
 `mr_free` 驱动对象本身。
+
+注意补调路径使用 `driver_del`（`mrX/drivers/driver.c:253`），它不写 `state`、
+也不清除 SETUP 标志，与 `mr_driver_shutdown` 不同。
 
 **查找（`mrX/drivers/driver.c:222`）**：线性扫描注册段，`mr_strcmp` 命中后 检查条目是否为内部 defer 占位（命中占位返回
 `MR_NULL`），否则
@@ -426,8 +440,9 @@ start（"0.end"）、 defer（"8.end"）、end（"9.end"），用于在段内圈
 ### 11. 并发与中断安全
 
 - 并发控制不使用传统互斥锁，而是 `flags` 上的原子操作：`driver_lock`
-  （`mrX/drivers/driver.c:90`）在 CAS 循环中检查 DYING/LOCK 后尝试置 LOCK，失败则重读重试；`driver_unlock`（`driver.c:113`）用
-  `fetch_and` 清除。它保证同一驱动的 `setup`/`shutdown` 互斥。
+  （`mrX/drivers/driver.c:90`）在 CAS 循环中检查 DYING/LOCK 后尝试置 LOCK；若读到 LOCK 已置位立即返回
+  `-MR_EBUSY`，读到 DYING 立即返回 `-MR_EPERM`，因此该循环只在 CAS 失败重试时才重复；`driver_unlock`
+  （`mrX/drivers/driver.c:113`）用 `fetch_and` 清除。它保证同一驱动的 `setup`/`shutdown` 互斥，但不提供排队或阻塞等待。
 - `init`/`deinit` 回调在持有 LOCK 标志期间同步执行：回调内不要再次对同一驱动调用
   `setup`/`shutdown`（会得到 `-MR_EBUSY`），也不要在 `del` 后继续使用该对象。
 - 驱动框架不统一承诺各 API 都可在中断上下文调用。特别是动态创建、最后一次 `put`、删除后的最终释放都可能进入 `deinit`/
@@ -449,8 +464,8 @@ start（"0.end"）、 defer（"8.end"）、end（"9.end"），用于在段内圈
 
 硬件描述侧通过 hardtree（`mrX/include/mrX/drivers/mr_hardtree.h`）派生：
 `.hts` 硬件模板经 `python ./scripts/cli.py htc` 生成 `mr_hardgen.h` 宏树， 驱动源文件定义 `MR_HT_COMPAT` 后用
-`MR_HT_DRIVER_INSTALL`（`mr_driver.h:679`， 默认级别取节点的 `INIT_LEVEL` 属性，缺省 DEFER）按实例批量安装驱动；
-`mr_driver.h:692` 对 DRIVER 兼容组的所有实例统一导出，免去了跨文件 import/export。具体外设 backend 的 HardTree、ops、IRQ/DMA
+`MR_HT_DRIVER_INSTALL`（`mr_driver.h:681`， 默认级别取节点的 `INIT_LEVEL` 属性，缺省 DEFER）按实例批量安装驱动；
+`mr_driver.h:696` 对 DRIVER 兼容组的所有实例统一导出，免去了跨文件 import/export。具体外设 backend 的 HardTree、ops、IRQ/DMA
 与平台资源接线不在驱动框架文档展开，请阅读对应驱动目录下的 `porting.md`
 ，例如 [GPIO 移植](gpio/porting.md)、[ADC 移植](adc/porting.md) 和 [UART 移植](uart/porting.md)。
 
@@ -460,31 +475,35 @@ start（"0.end"）、 defer（"8.end"）、end（"9.end"），用于在段内圈
 |-------------------------------------------|---------------------------------------------|
 | `mrX/include/mrX/drivers/mr_driver.h:32`  | SETUP/LOCK/DYING 标志位定义                 |
 | `mrX/include/mrX/drivers/mr_driver.h:44`  | 驱动大类型枚举                              |
-| `mrX/include/mrX/drivers/mr_driver.h:79`  | `mr_driver_t` 结构体                        |
-| `mrX/include/mrX/drivers/mr_driver.h:215` | 静态初始化宏 `MR_DRIVER_INIT`               |
-| `mrX/include/mrX/drivers/mr_driver.h:276` | 注册安装宏 `MR_DRIVER_INSTALL`              |
-| `mrX/include/mrX/drivers/mr_driver.h:505` | HardTree 驱动安装/查找宏                    |
+| `mrX/include/mrX/drivers/mr_driver.h:81`  | `mr_driver_t` 结构体                        |
+| `mrX/include/mrX/drivers/mr_driver.h:93`  | `mr_driver_entry_t` 注册条目                |
+| `mrX/include/mrX/drivers/mr_driver.h:217` | 静态初始化宏 `MR_DRIVER_INIT`               |
+| `mrX/include/mrX/drivers/mr_driver.h:278` | 注册安装宏 `MR_DRIVER_INSTALL`              |
+| `mrX/include/mrX/drivers/mr_driver.h:394` | 类型断言宏 `MR_DRIVER_ASSERT_TYPE`          |
+| `mrX/include/mrX/drivers/mr_driver.h:681` | HardTree 驱动安装宏 `MR_HT_DRIVER_INSTALL`  |
+| `mrX/include/mrX/kernel/mr_initcall.h:26` | `MR_INIT_LEVEL_DRIVER`（"1.2"）             |
 | `mrX/drivers/driver.c:21`                 | start/defer/end 三个段内占位条目            |
+| `mrX/drivers/driver.c:77`                 | `mr_driver_del`（置 DYING 后交对象删除）    |
 | `mrX/drivers/driver.c:90`                 | 原子锁获取（setup/shutdown 互斥的基础）     |
 | `mrX/drivers/driver.c:118`                | setup 流程（幂等、状态记录）                |
 | `mrX/drivers/driver.c:181`                | shutdown 流程                               |
 | `mrX/drivers/driver.c:222`                | 按名查找                                    |
+| `mrX/drivers/driver.c:253`                | 释放前的补 deinit 路径（不写 state）        |
 | `mrX/drivers/driver.c:268`                | 引用归零后的释放通道（补 deinit + release） |
 | `mrX/drivers/driver.c:299`                | 自动启动（`MR_INIT_LEVEL_DRIVER`）          |
-| `user/linker.lds:69`                      | `mr_driver.*` 段收集与排序                  |
 | `mrX/test/drivers/driver.c`               | 生命周期/引用计数/查找的行为级测试          |
 
 ### 14. 附录：配置宏与错误码
 
 **配置宏**
 
-| 宏                                                           | 说明                                                                       |
-|--------------------------------------------------------------|----------------------------------------------------------------------------|
-| `MR_USE_DRIVER`                                              | 模块开关，默认 n，自动选中 `MR_USE_WAIT`                                   |
-| `MR_DRIVER_FLAG_SETUP` / `_LOCK` / `_DYING`                  | 驱动标志位                                                                 |
-| `MR_DRIVER_LEVEL_EARLY/PRIO/NORMAL/LAST/DEFER`               | 初始化级别字符串（"1"/"2.x"/"3"/"4"/"9"）                                  |
-| `MR_DRIVER_TYPE_RAM/GPIO/UART/I2C/ADC/DAC/DMA/TMR/WDT/FLASH` | 大类型（0x0100 起，步进 0x0100）                                           |
-| `MR_DRIVER_TYPE_MASK`                                        | 类型掩码 0xff00，`MR_DRIVER_ASSERT` / `MR_DRIVER_ASSERT_TYPE` 用其比较类别 |
+| 宏                                                                   | 说明                                                                       |
+|----------------------------------------------------------------------|----------------------------------------------------------------------------|
+| `MR_USE_DRIVER`                                                      | 模块开关，默认 n，自动选中 `MR_USE_WAIT`                                   |
+| `MR_DRIVER_FLAG_SETUP` / `_LOCK` / `_DYING`                          | 驱动标志位                                                                 |
+| `MR_DRIVER_LEVEL_EARLY/PRIO/NORMAL/LAST/DEFER`                       | 初始化级别字符串（"1"/"2.x"/"3"/"4"/"9"）                                  |
+| `MR_DRIVER_TYPE_RAM/GPIO/UART/I2C/ADC/DAC/DMA/TMR/WDT/FLASH/SPI/PWM` | 大类型（0x0100 起，步进 0x0100）                                           |
+| `MR_DRIVER_TYPE_MASK`                                                | 类型掩码 0xff00，`MR_DRIVER_ASSERT` / `MR_DRIVER_ASSERT_TYPE` 用其比较类别 |
 
 **错误码**：驱动框架核心的生命周期控制主要返回 `-MR_EBUSY`（驱动正被 setup/shutdown）与 `-MR_EPERM`（驱动正在删除）；具体外设包装层还可能返回
 `-MR_EINVAL`、`-MR_ENOSYS` 等错误。错误码定义见 `mrX/include/mrX/libc/mr_errno.h`。空指针、类型不符等编程错误在断言开启时由
@@ -495,20 +514,38 @@ start（"0.end"）、 defer（"8.end"）、end（"9.end"），用于在段内圈
 ## 本目录其它驱动
 
 驱动框架只提供生命周期、引用计数和硬件树实例化。具体外设的配置项、API 与事件语义 在各自的文档中：
+跨外设的启动、事件和停止顺序见[驱动组合与进阶示例](examples.md)。
+I2C/SPI 外扩芯片还需遵守[串行总线外扩驱动共同行为](serial_peripheral.md)中的生命周期、互斥与错误恢复约束。
 
-| 驱动           | 文档                                | 对应外设类型                       |
-|----------------|-------------------------------------|------------------------------------|
-| GPIO           | [gpio.md](gpio/gpio.md)             | `MR_DRIVER_TYPE_GPIO`              |
-| UART           | [uart.md](uart/uart.md)             | `MR_DRIVER_TYPE_UART`              |
-| I2C            | [i2c.md](i2c/i2c.md)                | `MR_DRIVER_TYPE_I2C`               |
-| ADC            | [adc.md](adc/adc.md)                | `MR_DRIVER_TYPE_ADC`               |
-| DAC            | [dac.md](dac/dac.md)                | `MR_DRIVER_TYPE_DAC`               |
-| DMA            | [dma.md](dma/dma.md)                | `MR_DRIVER_TYPE_DMA`               |
-| TMR            | [tmr.md](tmr/tmr.md)                | `MR_DRIVER_TYPE_TMR`               |
-| WDT            | [wdt.md](wdt/wdt.md)                | `MR_DRIVER_TYPE_WDT`               |
-| FLASH          | [flash.md](flash/flash.md)          | `MR_DRIVER_TYPE_FLASH`             |
-| RAM 设备       | [ram.md](ram/ram.md)                | `MR_DRIVER_TYPE_RAM`（内存块设备） |
-| HC165 输入扩展 | [gpio_hc165.md](gpio/gpio_hc165.md) | GPIO 端口（输入扩展芯片）          |
-| HC595 输出扩展 | [gpio_hc595.md](gpio/gpio_hc595.md) | GPIO 端口（输出扩展芯片）          |
+每一类驱动都有两张文档： **主文档**面向应用，讲怎么用； **`porting.md`** 面向平台 backend，
+讲怎么实现。
 
-新增外设驱动时，先按本文的开发者指南实现 `MR_DRIVER_CLAZZES_DEFINE` 与 ops， 再参考类型最接近的上述文档补齐用户指南。
+| 驱动           | 用户文档（怎么用）                        | 移植文档（怎么实现）           | 对应外设类型                       |
+|----------------|-------------------------------------------|--------------------------------|------------------------------------|
+| GPIO           | [gpio.md](gpio/gpio.md)                   | [porting.md](gpio/porting.md)  | `MR_DRIVER_TYPE_GPIO`              |
+| UART           | [uart.md](uart/uart.md)                   | [porting.md](uart/porting.md)  | `MR_DRIVER_TYPE_UART`              |
+| I2C            | [i2c.md](i2c/i2c.md)                      | [porting.md](i2c/porting.md)   | `MR_DRIVER_TYPE_I2C`               |
+| SPI            | [spi.md](spi/spi.md)                      | [porting.md](spi/porting.md)   | `MR_DRIVER_TYPE_SPI`               |
+| ADC            | [adc.md](adc/adc.md)                      | [porting.md](adc/porting.md)   | `MR_DRIVER_TYPE_ADC`               |
+| DAC            | [dac.md](dac/dac.md)                      | [porting.md](dac/porting.md)   | `MR_DRIVER_TYPE_DAC`               |
+| DMA            | [dma.md](dma/dma.md)                      | [porting.md](dma/porting.md)   | `MR_DRIVER_TYPE_DMA`               |
+| TMR            | [tmr.md](tmr/tmr.md)                      | [porting.md](tmr/porting.md)   | `MR_DRIVER_TYPE_TMR`               |
+| PWM            | [pwm.md](pwm/pwm.md)                      | [porting.md](pwm/porting.md)   | `MR_DRIVER_TYPE_PWM`               |
+| WDT            | [wdt.md](wdt/wdt.md)                      | [porting.md](wdt/porting.md)   | `MR_DRIVER_TYPE_WDT`               |
+| FLASH          | [flash.md](flash/flash.md)                | [porting.md](flash/porting.md) | `MR_DRIVER_TYPE_FLASH`             |
+| RAM 设备       | [ram.md](ram/ram.md)                      | [porting.md](ram/porting.md)   | `MR_DRIVER_TYPE_RAM`（内存块设备） |
+| HC165 输入扩展 | [gpio_hc165.md](gpio/gpio_hc165.md)       | —（软件 backend 范例）         | GPIO 端口（输入扩展芯片）          |
+| HC595 输出扩展 | [gpio_hc595.md](gpio/gpio_hc595.md)       | —（软件 backend 范例）         | GPIO 端口（输出扩展芯片）          |
+| PCF8574 GPIO   | [gpio_pcf8574.md](gpio/gpio_pcf8574.md)   | —                              | I2C GPIO 扩展器                    |
+| MCP23x17 GPIO  | [gpio_mcp23x17.md](gpio/gpio_mcp23x17.md) | —                              | I2C/SPI GPIO 扩展器                |
+| PCA9555 GPIO   | [gpio_pca9555.md](gpio/gpio_pca9555.md)   | —                              | I2C GPIO 扩展器                    |
+| ADS1x15 ADC    | [adc_ads1x15.md](adc/adc_ads1x15.md)      | —                              | I2C ADC                            |
+| MCP3008 ADC    | [adc_mcp3008.md](adc/adc_mcp3008.md)      | —                              | SPI ADC                            |
+| MCP4725 DAC    | [dac_mcp4725.md](dac/dac_mcp4725.md)      | —                              | I2C DAC                            |
+| MCP4922 DAC    | [dac_mcp4922.md](dac/dac_mcp4922.md)      | —                              | SPI DAC                            |
+| PCA9685 PWM    | [pwm_pca9685.md](pwm/pwm_pca9685.md)      | —                              | I2C PWM 扩展器                     |
+
+接入 mrX 的完整流程见[框架使用指南](../usage.md)，全部文档的入口见[文档入口](../README.md)。
+
+新增外设驱动时，先按本文的开发者指南实现 `MR_DRIVER_CLAZZES_DEFINE` 与 ops， 再参考类型最接近的上述文档补齐用户指南；
+`porting.md` 按[文档编写与维护规范](../documentation.md#11-骨架的适用范围)规定的移植文档结构编写。

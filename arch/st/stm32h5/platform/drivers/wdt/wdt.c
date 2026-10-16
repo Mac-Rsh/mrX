@@ -12,7 +12,7 @@
 #include "stm32h5xx_hal_iwdg.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT                    st_stm32h5_wdt
+#define MR_HT_COMPAT st_stm32h5_wdt
 #if MR_HT_HAS_DRIVER()
 
 /* WDT operations */
@@ -35,6 +35,7 @@ MR_UNUSED static const mr_wdt_ops_t __wdt_ops = {
     .event_control = wdt_event_control,
 };
 
+/* Watchdog state, requested timing, and optional pretimeout IRQ */
 typedef struct wdt_priv {
     IWDG_HandleTypeDef handle;
     void (*clk_enable)(void);
@@ -48,20 +49,25 @@ typedef struct wdt_priv {
     mr_bool_t configured;
 } wdt_priv_t;
 
-#define WDT_LSI_KHZ                     (32ULL)
-#define WDT_PRESCALER_MAX               (1024U)
-#define WDT_RELOAD_MAX                  (4095U)
+/* LSI clock and representable IWDG timeout limits */
+#define WDT_LSI_KHZ       (32ULL)
+#define WDT_PRESCALER_MAX (1024U)
+#define WDT_RELOAD_MAX    (4095U)
 #define WDT_TIMEOUT_MAX                                                        \
     (4096ULL * WDT_PRESCALER_MAX * 1000ULL / (WDT_LSI_KHZ * 1000ULL))
-#define WDT_TICKS(_ms, _p)                                                     \
-    (((_ms) * WDT_LSI_KHZ + (_p) - 1ULL) / (_p))
-#define WDT_EVENT_MASK                  (MR_WDT_WAIT_PRETIMEOUT)
+/* Round a millisecond timeout up to the selected prescaler tick count */
+#define WDT_TICKS(_ms, _p) (((_ms) * WDT_LSI_KHZ + (_p) - 1ULL) / (_p))
+/* Event bits accepted by the watchdog event-control operation */
+#define WDT_EVENT_MASK (MR_WDT_WAIT_PRETIMEOUT)
 
 static mr_err_t wdt_quantize_timeout(mr_uint64_t timeout,
                                      mr_uint32_t *prescaler,
                                      mr_uint64_t *ticks) {
-    mr_uint64_t divider = 4ULL;
-    mr_uint32_t reg = 0U;
+    mr_uint64_t divider;
+    mr_uint32_t reg;
+
+    divider = 4ULL;
+    reg = 0U;
 
     /* Check parameter */
     if ((timeout == 0ULL) || (timeout > WDT_TIMEOUT_MAX)) {
@@ -88,7 +94,7 @@ static mr_err_t wdt_configure(const mr_driver_t *drv,
     mr_uint32_t prescaler;
     mr_err_t ret;
 
-    /* Window is disabled: feeding is allowed at any time */
+    /* Check the supported feed window */
     if (config->feed_min != 0ULL) {
         return -MR_EINVAL;
     }
@@ -98,6 +104,7 @@ static mr_err_t wdt_configure(const mr_driver_t *drv,
     }
 
     /* EWI must sit strictly inside the timeout and leave one reset tick */
+    /* Convert an optional early-warning deadline to IWDG ticks */
     pre_ticks = 0ULL;
     if (config->pretimeout != 0ULL) {
         pre_ticks = WDT_TICKS(config->pretimeout, (4ULL << prescaler));
@@ -106,6 +113,7 @@ static mr_err_t wdt_configure(const mr_driver_t *drv,
         }
     }
 
+    /* Save the hardware-representable timeout configuration */
     priv->prescaler = prescaler;
     priv->ticks = (mr_uint32_t)ticks;
     priv->ewit = (pre_ticks != 0ULL) ? (mr_uint32_t)(pre_ticks - 1ULL) : 0U;
@@ -124,11 +132,11 @@ static mr_err_t wdt_configuration(const mr_driver_t *drv,
 
     /* Report the quantized values actually used by the hardware */
     config->feed_min = 0ULL;
-    config->feed_max = (mr_uint64_t)priv->ticks * (4ULL << priv->prescaler)
-                       / WDT_LSI_KHZ;
+    config->feed_max
+        = (mr_uint64_t)priv->ticks * (4ULL << priv->prescaler) / WDT_LSI_KHZ;
     if (priv->ewit != 0U) {
         config->pretimeout = (mr_uint64_t)(priv->ewit + 1U)
-                             * (4ULL << priv->prescaler) / WDT_LSI_KHZ;
+                           * (4ULL << priv->prescaler) / WDT_LSI_KHZ;
     } else {
         config->pretimeout = 0ULL;
     }
@@ -169,12 +177,14 @@ static mr_err_t wdt_start(const mr_driver_t *drv) {
 static mr_err_t wdt_feed(const mr_driver_t *drv) {
     wdt_priv_t *priv = MR_DRIVER_PRIV(drv);
 
+    /* Reload the independent watchdog counter */
     return mr_stm32h5_hal_status(HAL_IWDG_Refresh(&priv->handle));
 }
 
 static mr_err_t wdt_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
     wdt_priv_t *priv = MR_DRIVER_PRIV(drv);
 
+    /* Report whether the watchdog has been started */
     *busy = (mr_atomic_load(&priv->running) != 0);
     return 0;
 }
@@ -191,6 +201,7 @@ static mr_err_t wdt_event_control(const mr_driver_t *drv, mr_uint32_t events,
         return -MR_ENOSYS;
     }
 
+    /* Update the early-wakeup interrupt while IWDG writes are unlocked */
     IWDG_ENABLE_WRITE_ACCESS(&priv->handle);
     if (enable) {
         priv->handle.Instance->EWCR |= IWDG_EWCR_EWIE;
@@ -202,13 +213,17 @@ static mr_err_t wdt_event_control(const mr_driver_t *drv, mr_uint32_t events,
 }
 
 void HAL_IWDG_EarlyWakeupCallback(IWDG_HandleTypeDef *hiwdg) {
-    wdt_priv_t *priv = MR_CONTAINER_OF(hiwdg, wdt_priv_t, handle);
+    wdt_priv_t *priv;
 
+    priv = MR_CONTAINER_OF(hiwdg, wdt_priv_t, handle);
+
+    /* Forward the pretimeout event to the owning watchdog driver */
     if ((mr_atomic_load(&priv->running) != 0) && (priv->drv != MR_NULL)) {
         (void)mr_wdt_event_raise(priv->drv, MR_WDT_WAIT_PRETIMEOUT);
     }
 }
 
+/* Install a watchdog instance and its optional pretimeout IRQ */
 #define ST_HT_WDT_INSTALL(_id, _ops)                                           \
     static void MR_CAT(__wdt_clk_enable_, _id)(void) {                         \
         if (!__HAL_RCC_RTC_IS_CLK_ENABLED()) {                                 \

@@ -1,6 +1,6 @@
 # Keil MDK 工程维护脚本
 
-mdk 维护 Keil uVision 的 .uvprojx 或 .uvproj XML 工程：把源文件加入或删除于指定 Target， 按磁盘文件同步工程，或重命名工程文件组。命令入口是
+mdk 维护 Keil uVision 的 .uvprojx 或 .uvproj XML 工程：向指定 Target 添加或删除源文件、按磁盘内容同步工程，或重命名工程文件组。命令入口是
 scripts/plugins/mdk/mdk.py，会直接 更新工程文件，请在执行前让工程文件处于可恢复的版本控制状态。
 
 ## 命令格式

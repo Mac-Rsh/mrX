@@ -53,11 +53,11 @@ GPIO 驱动解决的问题是： **用同一套 API 操作不同 MCU/扩展芯�
 #include <mrX/drivers/gpio/mr_gpio.h>
 
 void led_example(mr_driver_t *drv) {
-    /* Output push-pull, initial level high */
+    /* 推挽输出，初始电平为高 */
     mr_gpio_output(drv, 5, MR_GPIO_OTYPE_PP, MR_GPIO_LEVEL_HIGH);
 
-    mr_gpio_write(drv, 5, 0);       /* Logic low */
-    mr_gpio_toggle(drv, 5);         /* Flip again */
+    mr_gpio_write(drv, 5, 0);       /* 逻辑低电平 */
+    mr_gpio_toggle(drv, 5);         /* 再翻转一次 */
 }
 ```
 
@@ -69,7 +69,7 @@ mr_uint8_t level = 0;
 mr_gpio_input(drv, 12, MR_GPIO_PULL_UP);
 mr_gpio_read(drv, 12, &level);
 if (level == MR_GPIO_LEVEL_LOW) {
-    /* Button pressed (active-low wiring handled by invert_mask) */
+    /* 按键按下（低有效接线由 invert_mask 处理） */
 }
 ```
 
@@ -213,6 +213,9 @@ toggle/event_attach/event_enable/event_disable` 与属性数组版本 `MR_HT_GPI
 
 ### 6. 完整示例
 
+GPIO 中断配合 I2C 传感器 data-ready，以及 GPIO reset/enable 配合 SPI stream
+的组合用法见[驱动组合与进阶示例](../examples.md)。
+
 示例 1：动态创建 GPIO 驱动并配置/读写（改编自
 `mrX/test/drivers/gpio/gpio.c` 的 `configuration_and_io`）：
 
@@ -225,8 +228,8 @@ void gpio_dynamic_example(void) {
     if (data == MR_NULL) {
         return;
     }
-    data->exist_mask = 0xffffffffU;     /* All 32 pins exist */
-    data->invert_mask = 0x00000001U;    /* Pin 0 is active-low */
+    data->exist_mask = 0xffffffffU;     /* 32 个引脚全部存在 */
+    data->invert_mask = 0x00000001U;    /* 引脚 0 低有效 */
     drv = mr_gpio_create(data, MR_NULL, (mr_gpio_ops_t *)&board_gpio_ops);
     if (drv == MR_NULL) {
         return;
@@ -235,9 +238,9 @@ void gpio_dynamic_example(void) {
 
     mr_gpio_input(drv, 3, MR_GPIO_PULL_UP);
     mr_gpio_read(drv, 3, &value);
-    mr_gpio_output(drv, 0, MR_GPIO_OTYPE_PP, 1);    /* Physical low */
+    mr_gpio_output(drv, 0, MR_GPIO_OTYPE_PP, 1);    /* 物理低电平 */
 
-    mr_gpio_del(drv);                   /* Frees data */
+    mr_gpio_del(drv);                   /* 释放 data */
 }
 ```
 
@@ -252,7 +255,7 @@ static void key_waiter(mr_waiter_t *waiter, void *param,
     MR_IGNORE(waiter);
     MR_IGNORE(param);
     MR_IGNORE(event);
-    MR_IGNORE(data);  /* Payload semantics are backend-defined. */
+    MR_IGNORE(data);  /* payload 语义由 backend 定义 */
 }
 
 void key_example(mr_driver_t *drv) {
@@ -265,7 +268,7 @@ void key_example(mr_driver_t *drv) {
     mr_gpio_event_attach(drv, 12, &waiter);
     mr_gpio_event_enable(drv, 12, MR_GPIO_WAIT_EXTI);  /* 订阅后显式启用 */
 
-    /* Disable explicitly when the application no longer needs the event. */
+    /* 应用不再需要该事件时显式关闭 */
     mr_gpio_event_disable(drv, 12, MR_GPIO_WAIT_EXTI);
 }
 ```
@@ -339,8 +342,8 @@ GPIO 驱动是[驱动框架](../driver.md)的第一个派生模块，采用"框�
 
 ```c
 typedef struct mr_gpio_data {
-    mr_uint32_t exist_mask;     /* Pins that physically exist */
-    mr_uint32_t invert_mask;    /* Pins wired active-low */
+    mr_uint32_t exist_mask;     /* 物理存在的引脚 */
+    mr_uint32_t invert_mask;    /* 低有效接线的引脚 */
 } mr_gpio_data_t;
 ```
 

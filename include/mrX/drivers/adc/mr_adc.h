@@ -84,10 +84,16 @@ typedef struct mr_adc_seq {
 } mr_adc_seq_t;
 
 #if defined(MR_USE_DRIVER_ADC_STREAM)
+/* ADC stream source definition */
+typedef enum mr_adc_stream_source {
+    MR_ADC_STREAM_SOURCE_SOFTWARE,
+    MR_ADC_STREAM_SOURCE_EXTERNAL,
+} mr_adc_stream_source_t;
+
 /* ADC stream configuration type */
 typedef struct mr_adc_stream_config {
-    mr_uint64_t sample_rate;
-    mr_bool_t circular;
+    mr_uint8_t source: 1;
+    mr_uint8_t circular: 1;
 } mr_adc_stream_config_t;
 #endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 

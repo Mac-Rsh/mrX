@@ -50,32 +50,32 @@ mrX 的内核组件（如 [定时器](timer.md)、[工作队列](work.md)、[驱
 ```c
 #include <mrX/kernel/mr_object.h>
 
-/* Release handlers: called when the reference count drops to zero */
+/* 释放函数：引用计数归零时被调用 */
 static void my_obj_statik_release(mr_object_t *obj) {
-    /* Static object: nothing to free, storage belongs to the caller */
+    /* 静态对象：无可释放内存，存储归调用者 */
 }
 
 static void my_obj_dynamic_release(mr_object_t *obj) {
-    /* Dynamic object: free the heap block here if any */
+    /* 动态对象：如有堆块在此释放 */
 }
 
-/* Define clazzes: name, static release, dynamic release, super clazz */
+/* 定义 clazzes：名称、静态释放、动态释放、父 clazz */
 MR_CLAZZES_DEFINE(my_obj, my_obj_statik_release, my_obj_dynamic_release,
                   MR_NULL);
 
 void my_obj_example(void) {
-    /* Static initialization with MR_OBJECT_INIT */
+    /* 用 MR_OBJECT_INIT 静态初始化 */
     mr_object_t obj = MR_OBJECT_INIT(MR_CLAZZES_STATIK(my_obj));
 
-    /* (Runtime initialization: mr_object_init(&obj, clazz), equivalent) */
+    /* （运行时初始化：mr_object_init(&obj, clazz)，等价） */
 
-    /* Reference management: initial reference is held by the owner */
+    /* 引用管理：初始引用归所有者持有 */
     if (mr_object_get(&obj) != MR_NULL) {
-        /* Someone else holds the object */
+        /* 其他模块持有该对象 */
         mr_object_put(&obj);
     }
 
-    /* Delete: drops one owner reference; release runs only if this is the last ref */
+    /* 删除：归还一次所有者引用；仅当这是最后一个引用时才执行 release */
     mr_object_del(&obj);
 }
 ```
@@ -204,8 +204,8 @@ mr_bool_t mr_object_put(mr_object_t *obj);
 示例 1：组件封装——以静态/动态双通道初始化并统一删除（改编自 `mrX/test/kernel/object.c:89-104`）：
 
 ```c
-static void demo_statik_release(mr_object_t *obj) { /* nothing to free */ }
-static void demo_dynamic_release(mr_object_t *obj) { /* free heap part */ }
+static void demo_statik_release(mr_object_t *obj) { /* 无可释放内存 */ }
+static void demo_dynamic_release(mr_object_t *obj) { /* 释放堆内存部分 */ }
 MR_CLAZZES_DEFINE(demo, demo_statik_release, demo_dynamic_release, MR_NULL);
 
 void demo_example(void) {
@@ -213,11 +213,11 @@ void demo_example(void) {
     mr_object_t *held;
 
     mr_object_init(&obj, MR_CLAZZES_STATIK(demo));
-    held = mr_object_get(&obj);         /* Another module takes a reference */
-    mr_object_del(&obj);                /* Owner drops initial reference */
-    /* held is still valid until mr_object_put(held) drops the last one */
+    held = mr_object_get(&obj);         /* 其他模块取得引用 */
+    mr_object_del(&obj);                /* 所有者归还初始引用 */
+    /* held 仍然有效，直到 mr_object_put(held) 归还最后一个引用 */
     if (held != MR_NULL) {
-        mr_object_put(held);            /* Reference count reaches zero here */
+        mr_object_put(held);            /* 引用计数在此归零 */
     }
 }
 ```
@@ -230,7 +230,7 @@ void typecheck_example(mr_object_t *unknown) {
         return;
     }
     if (MR_OBJECT_IS_CLAZZES(unknown, demo)) {
-        /* Safe to treat as demo object */
+        /* 可安全当作 demo 对象处理 */
     }
 }
 ```
@@ -247,7 +247,7 @@ void derive_example(void) {
     mr_object_init(&obj, MR_CLAZZES_STATIK(demo));
     mr_object_derive(&obj, MR_CLAZZES_DYNAMIC(demo_sub));
     mr_object_del(&obj);
-    /* Release chain: demo_statik_release -> demo_sub_dynamic_release */
+    /* 释放链：demo_statik_release -> demo_sub_dynamic_release */
 }
 ```
 
@@ -320,14 +320,14 @@ clazz（包括同类型的另一个通道）会被拒绝。
 
 ```c
 typedef struct mr_clazz {
-    const char *name;                   /* Clazz name */
-    mr_object_release_t *release;       /* Release handler */
-    const struct mr_clazz *super;       /* Super clazz (NULL for root) */
+    const char *name;                   /* clazz 名称 */
+    mr_object_release_t *release;       /* 释放函数 */
+    const struct mr_clazz *super;       /* 父 clazz（根为 NULL） */
 } mr_clazz_t;
 
 typedef struct mr_clazzes {
-    const mr_clazz_t statik;            /* Clazz for static objects */
-    const mr_clazz_t dynamic;           /* Clazz for dynamic objects */
+    const mr_clazz_t statik;            /* 静态对象的 clazz */
+    const mr_clazz_t dynamic;           /* 动态对象的 clazz */
 } mr_clazzes_t;
 ```
 
@@ -338,8 +338,8 @@ typedef struct mr_clazzes {
 
 ```c
 typedef struct mr_object {
-    mr_ref_t magic_ref;                 /* Atomic ref: magic + count */
-    const mr_clazz_t *clazz;            /* Current clazz */
+    mr_ref_t magic_ref;                 /* 原子引用：magic + 计数 */
+    const mr_clazz_t *clazz;            /* 当前 clazz */
 } mr_object_t;
 ```
 

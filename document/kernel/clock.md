@@ -53,7 +53,7 @@ Kconfig 流程也能直接编译。时间换算：`MR_TICK_MSEC(1000)` 等于
 #include <mrX/kernel/mr_clock.h>
 
 static mr_tick_t my_hook(void) {
-    return MR_TICK_MAX;         /* MR_TICK_MAX means "no preference" */
+    return MR_TICK_MAX;         /* MR_TICK_MAX 表示“无意见” */
 }
 
 void clock_demo(void) {
@@ -61,7 +61,7 @@ void clock_demo(void) {
     mr_uptime_t uptime_ms;
 
     mr_clock_hook_add(my_hook);
-    mr_clock_increase(1);       /* Usually driven by the platform tick source */
+    mr_clock_increase(1);       /* 通常由平台 tick 源驱动 */
 
     now = mr_clock_tick();
     uptime_ms = mr_clock_uptime();
@@ -195,7 +195,7 @@ void mr_clock_busy_wait(mr_uint32_t us);
 ```c
 mr_uptime_t t0 = mr_clock_uptime();
 work_function();
-mr_uptime_t cost = mr_clock_uptime() - t0;      /* elapsed milliseconds */
+mr_uptime_t cost = mr_clock_uptime() - t0;      /* 耗时（毫秒） */
 ```
 
 示例 2：注册钩子参与 tickless 汇总（改编自 `mrX/test/kernel/clock.c:33`）：

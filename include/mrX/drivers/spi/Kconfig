@@ -1,0 +1,37 @@
+menu "SPI: Serial Peripheral Interface"
+
+# ==================================
+# SPI
+# ==================================
+config MR_USE_DRIVER_SPI
+    depends on MR_USE_DRIVER
+    bool "Use SPI"
+    default n
+    help
+        Enable the SPI bus controller driver framework.
+        Features:
+            - Controller-managed chip-select indexes
+            - Per-chip-select bus configurations
+            - Segmented synchronous full-duplex transfers
+            - Slave frame queues and selectable event notification
+        Master, slave, DMA, and interrupt capabilities are implemented by
+        controller backends and may return -MR_ENOSYS when unsupported.
+
+# ==================================
+# STREAM
+# ==================================
+config MR_USE_DRIVER_SPI_STREAM
+    depends on MR_USE_DRIVER_SPI
+    bool "Use SPI stream"
+    default y
+    help
+        Enable asynchronous SPI stream transfer operations.
+        Features:
+            - One message per stream
+            - DMA-based or interrupt-driven transfers
+            - Independent TX/RX buffer lengths and circular periods
+            - Directional half/full and unified stream error wait events
+            - Busy state, stop, and directional byte offset queries
+        Message arrays are not supported by this interface.
+
+endmenu

@@ -2,12 +2,12 @@
 
 > Crypto 模块提供不依赖平台硬件的 SHA-256、HMAC-SHA-256、NIST P-256 与 ECDSA P-256 验签。
 
-| 项目     | 说明                                                                                                                     |
-|----------|--------------------------------------------------------------------------------------------------------------------------|
-| 功能宏   | `MR_USE_MODULE_CRYPTO`；子功能见第 2 节                                                                                  |
+| 项目     | 说明                                                                                                                                                                  |
+|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 功能宏   | `MR_USE_MODULE_CRYPTO`；子功能见第 2 节                                                                                                                               |
 | 头文件   | `<mrX/modules/crypto/sha/mr_sha256.h>`、`<mrX/modules/crypto/sha/mr_hmac_sha256.h>`、`<mrX/modules/crypto/ecc/mr_p256.h>`、`<mrX/modules/crypto/ecc/mr_ecdsa_p256.h>` |
-| 依赖模块 | `MR_USE_MODULE`；HMAC 自动选中 SHA-256；ECDSA 自动选中 P-256                                                                                    |
-| 实现位置 | `mrX/modules/crypto/sha/sha256.c`、`mrX/modules/crypto/sha/hmac_sha256.c`、`mrX/modules/crypto/ecc/p256.c`、`mrX/modules/crypto/ecc/ecdsa_p256.c`                |
+| 依赖模块 | `MR_USE_MODULE`；HMAC 自动选中 SHA-256；ECDSA 自动选中 P-256                                                                                                          |
+| 实现位置 | `mrX/modules/crypto/sha/sha256.c`、`mrX/modules/crypto/sha/hmac_sha256.c`、`mrX/modules/crypto/ecc/p256.c`、`mrX/modules/crypto/ecc/ecdsa_p256.c`                     |
 
 ---
 
@@ -27,14 +27,14 @@ ECDSA P-256 建立在 P-256 基础层之上。P-256 当前不提供私钥生成�
 
 ### 2. 配置与依赖
 
-| 配置项                            | 默认 | 说明                             |
-|-----------------------------------|------|----------------------------------|
-| `MR_USE_MODULE`                   | y    | 上层模块总开关                   |
-| `MR_USE_MODULE_CRYPTO`            | n    | Crypto 总开关                    |
-| `MR_USE_MODULE_CRYPTO_SHA256`     | n    | SHA-256                          |
-| `MR_USE_MODULE_CRYPTO_HMAC_SHA256` | n    | HMAC-SHA-256；自动选中 SHA-256 |
-| `MR_USE_MODULE_CRYPTO_P256`       | n    | NIST P-256 基础运算              |
-| `MR_USE_MODULE_CRYPTO_ECDSA_P256` | n    | ECDSA P-256 验签；自动选中 P-256 |
+| 配置项                             | 默认 | 说明                             |
+|------------------------------------|------|----------------------------------|
+| `MR_USE_MODULE`                    | y    | 上层模块总开关                   |
+| `MR_USE_MODULE_CRYPTO`             | n    | Crypto 总开关                    |
+| `MR_USE_MODULE_CRYPTO_SHA256`      | n    | SHA-256                          |
+| `MR_USE_MODULE_CRYPTO_HMAC_SHA256` | n    | HMAC-SHA-256；自动选中 SHA-256   |
+| `MR_USE_MODULE_CRYPTO_P256`        | n    | NIST P-256 基础运算              |
+| `MR_USE_MODULE_CRYPTO_ECDSA_P256`  | n    | ECDSA P-256 验签；自动选中 P-256 |
 
 模块头文件不由 `<mrX.h>` 代为引入，使用时应显式包含需要的 Crypto 头文件。
 
@@ -100,12 +100,12 @@ P-256。签名是 `r` 和 `s` 各 32 字节大端整数的原始固定宽度形�
 
 mr_uint8_t digest[MR_SHA256_DIGEST_SIZE];
 static mr_ecdsa_p256_t ecdsa;
-mr_p256_public_key_t public_key = { /* x and y */ };
-mr_ecdsa_p256_signature_t signature = { /* r and s */ };
+mr_p256_public_key_t public_key = { /* x 与 y */ };
+mr_ecdsa_p256_signature_t signature = { /* r 与 s */ };
 
 mr_sha256(message, message_size, digest);
 if (!mr_ecdsa_p256_verify(&ecdsa, &public_key, digest, &signature)) {
-    /* Invalid public key, malformed signature, or signature mismatch. */
+    /* 公钥非法、签名格式错误或验签不匹配。 */
 }
 ```
 
@@ -114,26 +114,26 @@ if (!mr_ecdsa_p256_verify(&ecdsa, &public_key, digest, &signature)) {
 
 ### 6. API 参考
 
-| API                           | 说明                                  |
-|-------------------------------|---------------------------------------|
-| `mr_sha256_init`              | 初始化可分段更新的 SHA-256 上下文     |
-| `mr_sha256_update`            | 追加任意长度输入                      |
-| `mr_sha256_final`             | 输出 32 字节摘要并清零上下文          |
-| `mr_sha256`                   | 一次性计算完整缓冲区                  |
-| `mr_hmac_sha256_init`        | 以给定密钥初始化 HMAC 上下文          |
-| `mr_hmac_sha256_update`      | 追加认证数据                          |
-| `mr_hmac_sha256_final`       | 输出 32 字节标签并清零上下文          |
-| `mr_hmac_sha256`             | 一次性计算 HMAC-SHA-256               |
-| `mr_p256_value_from_be`       | 加载 32 字节大端 P-256 值             |
-| `mr_p256_scalar_valid`        | 校验标量范围                          |
-| `mr_p256_scalar_reduce`       | 按曲线阶约减标量                      |
-| `mr_p256_scalar_inv`          | 计算标量模逆                          |
-| `mr_p256_scalar_mul`          | 计算标量模乘                          |
-| `mr_p256_point_from_public`   | 将公钥坐标载入仿射点                  |
-| `mr_p256_point_valid`         | 校验 P-256 点                         |
-| `mr_p256_point_mul_generator` | 计算生成元标量乘                      |
-| `mr_p256_point_mul`           | 计算点标量乘                          |
-| `mr_p256_point_add`           | 计算点加                              |
+| API                           | 说明                              |
+|-------------------------------|-----------------------------------|
+| `mr_sha256_init`              | 初始化可分段更新的 SHA-256 上下文 |
+| `mr_sha256_update`            | 追加任意长度输入                  |
+| `mr_sha256_final`             | 输出 32 字节摘要并清零上下文      |
+| `mr_sha256`                   | 一次性计算完整缓冲区              |
+| `mr_hmac_sha256_init`         | 以给定密钥初始化 HMAC 上下文      |
+| `mr_hmac_sha256_update`       | 追加认证数据                      |
+| `mr_hmac_sha256_final`        | 输出 32 字节标签并清零上下文      |
+| `mr_hmac_sha256`              | 一次性计算 HMAC-SHA-256           |
+| `mr_p256_value_from_be`       | 加载 32 字节大端 P-256 值         |
+| `mr_p256_scalar_valid`        | 校验标量范围                      |
+| `mr_p256_scalar_reduce`       | 按曲线阶约减标量                  |
+| `mr_p256_scalar_inv`          | 计算标量模逆                      |
+| `mr_p256_scalar_mul`          | 计算标量模乘                      |
+| `mr_p256_point_from_public`   | 将公钥坐标载入仿射点              |
+| `mr_p256_point_valid`         | 校验 P-256 点                     |
+| `mr_p256_point_mul_generator` | 计算生成元标量乘                  |
+| `mr_p256_point_mul`           | 计算点标量乘                      |
+| `mr_p256_point_add`           | 计算点加                          |
 | `mr_ecdsa_p256_verify`        | 验证 32 字节摘要的原始 `r/s` 签名 |
 
 工作对象和输出缓冲区不能为 `MR_NULL`。SHA-256/HMAC 的输入数据为空时可传 `MR_NULL`，
@@ -176,16 +176,16 @@ API，ECDSA-P256 通过这些公开 API 完成验签，不直接依赖 P-256 文
 
 ### 10. 扩展与源码导读
 
-| 位置                                                 | 职责                               |
-|------------------------------------------------------|------------------------------------|
-| `mrX/include/mrX/modules/crypto/Kconfig`             | Crypto 及四个子功能开关            |
-| `mrX/include/mrX/modules/crypto/sha/mr_sha256.h`     | SHA-256 常量、上下文和公开 API     |
-| `mrX/modules/crypto/sha/sha256.c`                    | 分组压缩、分段更新与收尾           |
-| `mrX/include/mrX/modules/crypto/sha/mr_hmac_sha256.h` | HMAC 上下文与公开 API             |
-| `mrX/modules/crypto/sha/hmac_sha256.c`               | HMAC 密钥处理、分段计算与清理       |
-| `mrX/include/mrX/modules/crypto/ecc/mr_p256.h`       | P-256 公共类型、工作对象与基础 API |
-| `mrX/modules/crypto/ecc/p256.c`                      | P-256 大整数、标量运算与曲线点运算 |
-| `mrX/include/mrX/modules/crypto/ecc/mr_ecdsa_p256.h` | ECDSA 对象、签名类型与验签 API     |
-| `mrX/modules/crypto/ecc/ecdsa_p256.c`                | 基于 P-256 公共 API 的 ECDSA 验签  |
+| 位置                                                  | 职责                               |
+|-------------------------------------------------------|------------------------------------|
+| `mrX/include/mrX/modules/crypto/Kconfig`              | Crypto 及四个子功能开关            |
+| `mrX/include/mrX/modules/crypto/sha/mr_sha256.h`      | SHA-256 常量、上下文和公开 API     |
+| `mrX/modules/crypto/sha/sha256.c`                     | 分组压缩、分段更新与收尾           |
+| `mrX/include/mrX/modules/crypto/sha/mr_hmac_sha256.h` | HMAC 上下文与公开 API              |
+| `mrX/modules/crypto/sha/hmac_sha256.c`                | HMAC 密钥处理、分段计算与清理      |
+| `mrX/include/mrX/modules/crypto/ecc/mr_p256.h`        | P-256 公共类型、工作对象与基础 API |
+| `mrX/modules/crypto/ecc/p256.c`                       | P-256 大整数、标量运算与曲线点运算 |
+| `mrX/include/mrX/modules/crypto/ecc/mr_ecdsa_p256.h`  | ECDSA 对象、签名类型与验签 API     |
+| `mrX/modules/crypto/ecc/ecdsa_p256.c`                 | 基于 P-256 公共 API 的 ECDSA 验签  |
 
 增加算法时，应为它增加独立 Kconfig 开关和头文件，避免用户仅为一个算法引入整个 Crypto 实现。

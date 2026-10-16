@@ -28,7 +28,6 @@
 - 分发游标机制允许回调中取消自身/其他 waiter、挂接 waiter、递归 `raise`，也支持当前 waiter 自删除。删除 waitable 时则必须额外保证外层
   `raise` 返回前其存储不会被释放。
 
-与相邻模块的分工：阻塞式"等待并睡眠"语义不属于本模块，本模块是回调式分发。
 内核内已有使用者：[ADC 驱动](../drivers/adc/adc.md) 与
 [DAC 驱动](../drivers/dac/dac.md)（`mrX/drivers/adc/adc.c`、
 `mrX/drivers/dac/dac.c`）以 waitable 向异步调用者通知完成/错误事件。
@@ -67,7 +66,7 @@ static int count;
 
 static void on_event(mr_waiter_t *waiter, void *param,
                      mr_wait_event_t event, const void *data) {
-    (*(int *)param)++;      /* event is the level/edge event set; data is payload */
+    (*(int *)param)++;      /* event 是电平/边沿计算后的事件集合；data 是 payload */
 }
 
 void wait_demo(void) {
@@ -77,9 +76,9 @@ void wait_demo(void) {
 
     mr_waitable_init(&able);
     mr_waiter_init(&waiter, on_event, &count, MR_WAIT_IN);
-    mr_waiter_wait(&waiter, &able);          /* Attach to the waitable */
+    mr_waiter_wait(&waiter, &able);          /* 挂接到 waitable */
 
-    mr_waitable_raise(&able, MR_WAIT_IN, &data);   /* on_event runs here */
+    mr_waitable_raise(&able, MR_WAIT_IN, &data);   /* on_event 在此处执行 */
     mr_waiter_del(&waiter);
     mr_waitable_del(&able);
 }
@@ -239,7 +238,7 @@ void multi_waiter_demo(void) {
     mr_waiter_wait(&err_w, &able);
 
     mr_waitable_raise(&able, MR_WAIT_IN | MR_WAIT_OUT, MR_NULL);
-    /* count == 2: err waiter not matched */
+    /* count == 2：err 等待者未匹配 */
 
     mr_waiter_del(&in_w);
     mr_waiter_del(&out_w);
@@ -269,9 +268,9 @@ void edge_level_demo(void) {
     mr_waiter_wait(&level_w, &able);
 
     mr_waitable_raise(&able, MR_WAIT_IN, MR_NULL);  /* hits += 2 */
-    mr_waitable_raise(&able, MR_WAIT_IN, MR_NULL);  /* hits += 1: level only */
-    mr_waitable_raise(&able, 0, MR_NULL);           /* no hit, clears edge base */
-    mr_waitable_raise(&able, MR_WAIT_IN, MR_NULL);  /* hits += 2: new edge */
+    mr_waitable_raise(&able, MR_WAIT_IN, MR_NULL);  /* hits += 1：仅电平 */
+    mr_waitable_raise(&able, 0, MR_NULL);           /* 不触发，清零边沿基准 */
+    mr_waitable_raise(&able, MR_WAIT_IN, MR_NULL);  /* hits += 2：新边沿 */
 }
 ```
 
@@ -282,10 +281,10 @@ static mr_waiter_t *target_w;
 
 static void remove_cb(mr_waiter_t *waiter, void *param,
                       mr_wait_event_t event, const void *data) {
-    mr_waiter_cancel(waiter);           /* Cancel self */
-    mr_waiter_cancel(target_w);         /* Cancel another waiter */
+    mr_waiter_cancel(waiter);           /* 取消自身 */
+    mr_waiter_cancel(target_w);         /* 取消另一个等待者 */
 }
-/* After raise: canceled waiters leave the list, remaining ones still fire. */
+/* raise 之后：被取消的等待者离开链表，其余仍会触发。 */
 ```
 
 ### 7. 常见问题（FAQ）

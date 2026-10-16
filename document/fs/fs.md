@@ -60,19 +60,19 @@ static int fs_demo(void) {
     char buffer[16];
     mr_ssize_t ret;
 
-    /* Mount ramfs as the global root (requires MR_USE_FS_RAMFS) */
+    /* 将 ramfs 挂载为全局根（需要 MR_USE_FS_RAMFS） */
     if (mr_fs_mount_root(MR_NULL, "ramfs", 0, MR_NULL) != 0) {
         return -1;
     }
 
-    /* Create and write a file */
+    /* 创建并写入文件 */
     if (mr_fs_open(&file, "/hello.txt", MR_O_RDWR | MR_O_CREAT) != 0) {
         return -1;
     }
     mr_fs_write(&file, "hello", 5);
     mr_fs_close(&file);
 
-    /* Read it back */
+    /* 读回内容 */
     if (mr_fs_open(&file, "/hello.txt", MR_O_RDONLY) != 0) {
         return -1;
     }
@@ -283,15 +283,15 @@ static void dir_walk_demo(void) {
     mr_fs_open(&file, "/log/b.txt", MR_O_RDWR | MR_O_CREAT);
     mr_fs_close(&file);
 
-    /* Open the directory and enumerate its children */
+    /* 打开目录并枚举其子项 */
     if (mr_fs_open(&dir, "/log", MR_O_RDONLY | MR_O_DIRECTORY) == 0) {
         while ((ret = mr_fs_readdir(&dir, &dirent)) > 0) {
-            /* dirent.name and dirent.type describe one child */
+            /* dirent.name 与 dirent.type 描述一个子项 */
         }
-        /* ret == 0 means end-of-directory */
+        /* ret == 0 表示目录结束 */
         mr_fs_close(&dir);
     }
-    mr_fs_rmdir("/log");    /* Fails with -MR_ENOTEMPTY while children exist */
+    mr_fs_rmdir("/log");    /* 还有子项时失败，返回 -MR_ENOTEMPTY */
 }
 ```
 
@@ -304,16 +304,16 @@ static void mount_demo(void) {
     mr_fs_mkdir("/mnt");
     mr_fs_mount(MR_NULL, "/mnt", "ramfs", 0, MR_NULL);
 
-    /* /mnt is now the root of a separate ramfs instance */
+    /* /mnt 现在是另一个 ramfs 实例的根 */
     mr_fs_open(&file, "/mnt/data", MR_O_RDWR | MR_O_CREAT);
     mr_fs_close(&file);
 
-    mr_fs_chdir("/mnt");                        /* CWD is now /mnt */
-    mr_fs_open(&file, "data", MR_O_RDONLY);     /* Relative to CWD */
+    mr_fs_chdir("/mnt");                        /* 当前工作目录变为 /mnt */
+    mr_fs_open(&file, "data", MR_O_RDONLY);     /* 相对当前工作目录 */
     mr_fs_close(&file);
     mr_fs_chdir("/");
 
-    /* Unmount children first, then the mount itself */
+    /* 先卸载子挂载，再卸载挂载本身 */
     mr_fs_umount("/mnt");
 }
 ```

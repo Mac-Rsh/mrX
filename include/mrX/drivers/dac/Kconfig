@@ -14,6 +14,8 @@ config MR_USE_DRIVER_DAC
             - Configurable reference voltage (internal/external)
             - Voltage to raw conversion utilities (mV/uV/V)
             - Multi-channel output
+        HardTree backends include MCP4725 (I2C) and MCP4922 (SPI).
+        Enable the corresponding bus driver; these backends are synchronous.
 
 # ==================================
 # STREAM
@@ -25,6 +27,7 @@ config MR_USE_DRIVER_DAC_STREAM
     help
         Enable DAC stream output operations.
         Features:
+            - Software or external conversion start source
             - DMA-based continuous output for waveform generation
             - Interrupt-driven continuous output without DMA
             - Half/full buffer completion wait events

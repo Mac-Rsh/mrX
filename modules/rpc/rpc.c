@@ -1465,20 +1465,20 @@ mr_err_t mr_rpc_execute(mr_rpc_t *rpc) {
 
     /* Send pending responses */
     ret = rpc_send_execute(rpc, MR_FALSE);
-    if ((ret < 0) && (ret != -MR_EAGAIN)) {
-        goto _exit;
-    }
 
     /* Execute sessions */
-    while ((ret >= 0) || (ret == -MR_EAGAIN)) {
+    while (1) {
         session = rpc_session_next(rpc, &error);
         if (!session) {
             break;
         }
         rpc_session_dispatch(session, error);
-        ret = rpc_send_execute(rpc, MR_FALSE);
+        /* A transport failure must not stop local dispatch. Preserve the
+         * error and retry sending on the next execute/flush call. */
+        if ((ret >= 0) || (ret == -MR_EAGAIN)) {
+            ret = rpc_send_execute(rpc, MR_FALSE);
+        }
     }
-_exit:
     /* Flush responses */
     if ((ret == 0) || (ret == -MR_EAGAIN)) {
         ret = rpc_send_execute(rpc, MR_TRUE);

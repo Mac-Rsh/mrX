@@ -93,7 +93,6 @@ MR_TEST(tmr, configuration_and_state_transitions) {
     mr_driver_t *drv;
     mr_tmr_config_t config = {
         .period = 1000U,
-        .signal = MR_TMR_SIGNAL_UPDATE,
         .mode = MR_TMR_MODE_PERIODIC,
     };
     mr_tmr_config_t saved = {0};

@@ -53,6 +53,8 @@ typedef enum mr_driver_type {
     MR_DRIVER_TYPE_TMR = 0x0800,
     MR_DRIVER_TYPE_WDT = 0x0900,
     MR_DRIVER_TYPE_FLASH = 0x0a00,
+    MR_DRIVER_TYPE_SPI = 0x0b00,
+    MR_DRIVER_TYPE_PWM = 0x0c00,
     MR_DRIVER_TYPE_MASK = 0xff00,
 } mr_driver_type_t;
 

@@ -72,7 +72,7 @@ keep = false, sort = false -> *(mr_initcall.*)
 
 ## 与链接流程的关系
 
-注册宏把函数或描述放入 mr_initcall. *、mr_driver.*、mr_rpc.* 等输入段。链接脚本必须 同时做到：
+注册宏把函数或描述放入 `mr_initcall.*`、`mr_driver.*`、`mr_rpc.*` 等输入段。链接脚本必须 同时做到：
 
 1. 用 KEEP 保留这些段，避免 --gc-sections 丢弃注册项。
 2. 把它们聚合到可执行映像中的输出段。

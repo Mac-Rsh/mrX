@@ -17,7 +17,7 @@
 
 ### 1. 模块概述
 
-格式化输出模块解决的问题是： **在不引入完整 C 库 stdio 的目标板上，提供确定性强、 可裁剪的格式化字符串生成能力**。
+格式化输出模块解决的问题是： **在不引入完整 C 库 stdio 的目标板上，提供行为确定、可裁剪的格式化字符串生成能力**。
 
 特性：
 
@@ -188,9 +188,9 @@ void exact_buffer_example(void) {
     char buf[1];
 
     len = mr_snprintf(MR_NULL, 0, "val=%d", 12345);
-    /* len == 10, no bytes written */
+    /* len == 10，未写入任何字节 */
 
-    mr_snprintf(buf, sizeof(buf), "val=%d", 12345);   /* Truncated safely */
+    mr_snprintf(buf, sizeof(buf), "val=%d", 12345);   /* 被安全截断 */
 }
 ```
 

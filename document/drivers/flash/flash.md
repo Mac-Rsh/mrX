@@ -1,4 +1,4 @@
-# Flash Memory (FLASH)
+# 闪存驱动（FLASH）
 
 > 为片内 Flash 与片外 NOR Flash 提供统一的探测、几何查询、读取、编程与擦除接口。
 
@@ -216,6 +216,5 @@ mr_flash_ops_t backend
 | 常量 / 宏                              | 说明                          |
 |----------------------------------------|-------------------------------|
 | `MR_DRIVER_TYPE_FLASH`                 | Flash 驱动类型值              |
-| `MR_FLASH_DATA_INIT`                   | 静态初始化 `mr_flash_data_t`  |
 | `MR_FLASH_DEFINE` / `MR_FLASH_INSTALL` | 定义 / 注册静态驱动           |
 | `MR_HT_FLASH_INSTALL`                  | 通过 HardTree 注册 Flash 实例 |

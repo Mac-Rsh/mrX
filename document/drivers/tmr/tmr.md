@@ -1,6 +1,6 @@
-# Hardware Timer (TMR)
+# 硬件定时器（TMR）
 
-> 提供基础硬件定时器配置、启停、忙状态查询与 waitable 事件接口。具体计时单位、触发输出和硬件行为由 backend 定义。
+> 提供基础硬件定时器配置、启停、硬件周期信号与 waitable 事件接口。
 
 | 项目     | 说明                         |
 |----------|------------------------------|
@@ -15,11 +15,12 @@
 
 ### 1. 模块概述
 
-每个 TMR 驱动实例表示一个硬件定时器。公共配置包含 `period`、`signal` 和 `mode` 三个字段，模式枚举当前为
-`MR_TMR_MODE_PERIODIC` 与 `MR_TMR_MODE_ONESHOT`，signal 当前只定义 `MR_TMR_SIGNAL_UPDATE`。
+每个 TMR 驱动实例表示一个硬件定时器。公共配置包含 `period` 和 `mode`，模式枚举为
+`MR_TMR_MODE_PERIODIC` 与 `MR_TMR_MODE_ONESHOT`。独立的 signal 接口当前定义
+`MR_TMR_SIGNAL_PERIOD`，用于控制周期边界硬件信号。
 
-这些名称表达通用意图，但公共层不会解释 `period` 的时间单位，也不会把 `signal` 自动连接到 ADC/DMA。具体计时基准、oneshot/periodic
-的寄存器行为、UPDATE 如何映射到硬件触发输出，都由 backend 约定。
+公共层不会把 signal 自动连接到 ADC/DAC/DMA。信号的硬件输出和消费者输入映射由 HTS/backend
+固定，应用只负责使能生产者并按顺序启动消费者。
 
 树内已有 stm32h5 平台后端（`arch/st/stm32h5/platform/drivers/tmr/tmr.c`）与公共层行为测试（`test/drivers/tmr/tmr.c`
 ）；启用通用框架本身仍不会注册或驱动实际硬件。
@@ -33,30 +34,35 @@
 `MR_HT_TMR_INSTALL` 负责创建占位数据并注册 TMR 实例，不在 setup 阶段读取或配置定时器。应用须在启动定时器前显式调用
 `mr_tmr_configure`。
 
-公共层不做 `period`、`signal`、`mode` 的字段校验。`period` 的单位当前没有在公共 API 中规定；backend
-必须在自己的实现文档中说明它采用的计时单位和可表示范围。`mr_tmr_configuration` 直接把输出交给 backend 填充。
+公共层不做 `period`、`mode` 的字段校验，也不会在公共头文件中固定 `period` 的单位： **单位由 backend 定义**，
+每个 `porting.md` 必须写明自己采用的单位和可表示范围。树内 STM32H5 backend 采用 **纳秒**，其他平台移植时
+必须重新确认，不要默认继承。`mr_tmr_configuration` 直接把输出交给 backend 填充。
 
-`signal` 当前定义 `MR_TMR_SIGNAL_UPDATE`，wait event 当前定义 `MR_TMR_WAIT_TIMEOUT`。公共层不会进一步规定二者与具体硬件中断/触发源之间的映射。
+`MR_TMR_SIGNAL_PERIOD` 是硬件输出，`MR_TMR_WAIT_TIMEOUT` 是软件 wait 事件。两者独立控制；启用 signal
+不会启用中断或 waiter。
 
 ### 3. 快速上手
 
 平台后端为定时器实例提供 `mr_tmr_ops_t`，并通过 `MR_TMR_INSTALL` 或 `MR_HT_TMR_INSTALL` 注册。应用取得并 setup
-对应驱动后，配置周期、模式和触发掩码，再调用 start/stop。
+对应驱动后，配置周期和模式，按需启用周期信号，再调用 start/stop。
 
-例如配置一个周期模式，并请求 UPDATE signal（`period` 的实际单位以 backend 约定为准）：
+例如配置周期模式并启用 PERIOD signal（`period` 的实际单位以 backend 约定为准）：
 
 ```c
 mr_tmr_config_t config = {
-    .period = 500U,              /* Backend-defined time unit */
+    .period = 500U,              /* 单位由 backend 定义 */
     .mode = MR_TMR_MODE_PERIODIC,
-    .signal = MR_TMR_SIGNAL_UPDATE,
 };
 
 mr_tmr_configure(timer, &config);
+mr_tmr_signal_enable(timer, MR_TMR_SIGNAL_PERIOD);
 mr_tmr_start(timer);
 ```
 
-这个示例只展示 TMR 公共 API。若某个平台把 `MR_TMR_SIGNAL_UPDATE` 映射到 ADC/DMA 的硬件触发源，具体路由和外设启动顺序由该平台及上层协调逻辑负责。
+signal 只控制已经静态接线的硬件输出，不会启动或配置 ADC/DAC/DMA。消费者应先完成武装，再启动 TMR。
+
+TMR + ADC 周期采集和 TMR + DAC 等间隔波形输出的完整启停顺序见
+[驱动组合与进阶示例](../examples.md)。
 
 ### 4. 使用说明
 
@@ -65,10 +71,12 @@ mr_tmr_start(timer);
 - `mr_tmr_start` 同样先查询 `is_busy`，已运行时返回 `-MR_EBUSY`，否则调用必需的 `start`。
 - `mr_tmr_stop` 先查询 `is_busy`；已经空闲时公共层直接返回 0，不调用 backend `stop`，运行时才调用 `stop`。
 - `mr_tmr_configuration` 不查询 busy，直接调用 backend `configuration`。
+- `mr_tmr_signal_enable/disable` 控制 `MR_TMR_SIGNAL_PERIOD`，不改变 TMR 运行状态，也不控制 wait event。
 - `period` 的单位和范围、是否必须先 configure、PERIODIC/ONESHOT 的精确状态变化、signal 的硬件映射，都由 backend 定义。
 - setup 只初始化 waitable，shutdown 只删除 waitable；它们不会自动 configure、start 或 stop 硬件定时器。
 - event enable/disable 只通过可选 `event_control` 透传 `events` mask；公共层不校验 mask。
-- 当前 API 不提供 PWM、输入捕获、输出比较或计数值读取接口。
+- 当前 API 不提供输入捕获、输出比较或计数值读取接口；PWM 由独立的 [PWM 驱动](../pwm/pwm.md) 提供，并由 HTS 固定硬件定时器的
+  TMR/PWM 归属。
 
 ### 5. API 参考
 
@@ -82,6 +90,7 @@ mr_tmr_start(timer);
 | `mr_tmr_configuration`                                   | 查询后端生效的配置                         |
 | `mr_tmr_start` / `mr_tmr_stop`                           | 启动或停止定时器                           |
 | `mr_tmr_is_busy`                                         | 查询定时器是否正在运行                     |
+| `mr_tmr_signal_enable` / `mr_tmr_signal_disable`         | 控制周期边界硬件信号                       |
 | `mr_tmr_event_attach`                                    | 订阅 waiter，不启用后端事件源              |
 | `mr_tmr_event_enable`                                    | 按 `MR_TMR_WAIT_*` mask 启用后端支持的来源 |
 | `mr_tmr_event_disable`                                   | 按 `MR_TMR_WAIT_*` mask 停用事件来源       |
@@ -111,8 +120,8 @@ mr_err_t mr_tmr_configuration(mr_driver_t *drv,
                                   mr_tmr_config_t *config);
 ```
 
-`config` 包含 `period`、`mode` 和 `signal`。公共层在 configure 前查询运行状态，busy 时返回 `-MR_EBUSY`；字段内容不做校验。
-`configuration` 直接调用 backend 填充结构。`period` 单位以及 `MR_TMR_SIGNAL_UPDATE` 的硬件含义必须由具体 backend 说明。
+`config` 包含 `period` 和 `mode`。公共层在 configure 前查询运行状态，busy 时返回 `-MR_EBUSY`；字段内容不做校验。
+`configuration` 直接调用 backend 填充结构。
 
 **控制与状态**
 
@@ -120,6 +129,10 @@ mr_err_t mr_tmr_configuration(mr_driver_t *drv,
 MR_INLINE mr_err_t mr_tmr_start(mr_driver_t *drv);
 MR_INLINE mr_err_t mr_tmr_stop(mr_driver_t *drv);
 MR_INLINE mr_err_t mr_tmr_is_busy(mr_driver_t *drv, mr_bool_t *busy);
+MR_INLINE mr_err_t mr_tmr_signal_enable(mr_driver_t *drv,
+                                        mr_tmr_signal_t signal);
+MR_INLINE mr_err_t mr_tmr_signal_disable(mr_driver_t *drv,
+                                         mr_tmr_signal_t signal);
 ```
 
 start 和 stop 都先通过必需 `is_busy` 查询状态。start 在 busy 时由公共层返回 `-MR_EBUSY`；stop 在不 busy 时由公共层直接返回
@@ -155,8 +168,8 @@ TMR setup 只初始化框架 waitable，不配置硬件。是否允许未经 con
 
 **不启用中断还能触发 ADC 吗？**
 
-公共层不能保证。`MR_TMR_SIGNAL_UPDATE` 只是当前定义的 signal bit，能否连接到 ADC、是否需要额外路由以及 event_control
-与该触发是否独立，都取决于具体 backend/SoC。
+可以。`MR_TMR_SIGNAL_PERIOD` 与 `MR_TMR_WAIT_TIMEOUT` 独立；backend 可以只输出硬件 signal 而不开启定时器中断。
+能否连接到目标 ADC 以及具体路由仍由 HTS/backend 决定。
 
 ---
 
@@ -171,13 +184,14 @@ TMR setup 只初始化框架 waitable，不配置硬件。是否允许未经 con
 
 ### 8. 数据结构与后端契约
 
-- `mr_tmr_config_t` 包含 `period`、`signal`、`mode`；公共层没有给 `period` 指定单位。`mr_tmr_data_t.event` 是实例级
+- `mr_tmr_config_t` 包含 `period`、`mode`；公共层没有给 `period` 指定单位。`mr_tmr_data_t.event` 是实例级
   waitable，在 setup 时初始化。
-- `configure`、`configuration`、`start`、`stop`、`is_busy` 都是必需 callback；`event_control` 为可选 callback。
+- `configure`、`configuration`、`start`、`stop`、`is_busy` 都是必需 callback；`signal_control` 和
+  `event_control` 为相互独立的可选 callback。
 - configure/start/stop 的公共包装都会依赖 `is_busy`，因此 backend 的 busy 结果必须能在这些控制路径中稳定使用。
 - configure 只会在公共层观察到“不 busy”时下传；start 也一样。stop 在“不 busy”时不会调用 backend。
 - setup/shutdown 不配置、检查或停止 backend 定时器。删除路径若设备仍在运行，也不会因为 clazz deinit 自动调用 `stop`。
-- `MR_TMR_MODE_PERIODIC`、`MR_TMR_MODE_ONESHOT`、`MR_TMR_SIGNAL_UPDATE` 和 `MR_TMR_WAIT_TIMEOUT` 只提供统一符号；具体硬件时序、状态机和
+- `MR_TMR_MODE_PERIODIC`、`MR_TMR_MODE_ONESHOT`、`MR_TMR_SIGNAL_PERIOD` 和 `MR_TMR_WAIT_TIMEOUT` 提供统一语义；具体硬件时序、状态机和
   signal/event 映射由 backend 定义。
 - `event_control` 接收未经过滤的 event mask；`mr_tmr_event_raise` 通过实例 waitable 同步分发且 payload 为 `MR_NULL`。
 
@@ -188,13 +202,13 @@ backend 要求删除前先停止硬件，应由调用者按该 backend 契约显
 
 TMR 公共层也不协调 ADC/DMA 等其他外设，跨外设启动顺序属于上层逻辑。
 
-平台 TMR backend 的 period 求解、trigger signal、TIMEOUT ISR 与 HardTree 接入见 [TMR 驱动移植指南](porting.md)。
+平台 TMR backend 的 period 求解、硬件 signal、TIMEOUT ISR 与 HardTree 接入见 [TMR 驱动移植指南](porting.md)。
 
 ### 10. 源码导读
 
 | 位置                                   | 职责                                                           |
 |----------------------------------------|----------------------------------------------------------------|
-| `mrX/include/mrX/drivers/tmr/mr_tmr.h` | 公共配置、模式、触发/等待掩码、ops、初始化宏和 API             |
+| `mrX/include/mrX/drivers/tmr/mr_tmr.h` | 公共配置、模式、signal/event、ops、初始化宏和 API              |
 | `mrX/drivers/tmr/tmr.c`                | configure 的 busy 门控、configuration 分发与 waitable 生命周期 |
 | `mrX/include/mrX/drivers/tmr/Kconfig`  | TMR 功能开关                                                   |
 

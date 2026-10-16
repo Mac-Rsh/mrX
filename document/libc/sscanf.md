@@ -61,7 +61,7 @@ void example(void) {
 
     ret = mr_sscanf("42 hello", "%d %7s", &id, name);
     if (ret != 2) {
-        /* Parse failed: only ret fields assigned */
+        /* 解析失败：仅成功赋值了 ret 个字段 */
         return;
     }
     /* id == 42, name == "hello" */

@@ -30,7 +30,7 @@
   自动选中本模块，`mrX/kernel/irq.c`）。
 
 与 [软定时器 Timer](timer.md) 的分工：定时器回调运行在 `mr_clock_increase()` 调用者上下文；工作队列把真正的 work 回调推迟到
-`execute` 调用者上下文。若应用选择在线程中调用 execute，就可以把处理从 ISR/tick 路径移出，但这不是 Work 模块自动创建的上下文切换。
+`execute` 调用者上下文。
 
 ### 2. 配置与依赖
 
@@ -60,7 +60,7 @@
 
 static void my_work_entry(struct mr_work *work, void *param) {
     (*(int *)param)++;
-    /* Heavy handling runs in the execute() caller context */
+    /* 耗时处理在 execute() 调用者上下文执行 */
 }
 
 void work_demo(void) {
@@ -70,10 +70,10 @@ void work_demo(void) {
 
     mr_workqueue_init(&queue);
     mr_work_init(&work, my_work_entry, &count);
-    mr_work_bind(&work, &queue);            /* Bind before scheduling */
+    mr_work_bind(&work, &queue);            /* 调度前先绑定 */
 
-    mr_work_schedule(&work);                /* Submit: runs nothing yet */
-    mr_workqueue_execute(&queue);           /* Drain: my_work_entry runs */
+    mr_work_schedule(&work);                /* 提交：此时不执行任何回调 */
+    mr_workqueue_execute(&queue);           /* 排空：my_work_entry 在此执行 */
     mr_workqueue_del(&queue);
 }
 ```
@@ -230,8 +230,8 @@ void delayed_demo(void) {
     mr_work_bind(&work, &queue);
 
     mr_work_delayed_schedule(&work, MR_TICK_MSEC(10));
-    /* ...10 ticks later, in the main loop: */
-    mr_workqueue_execute(&queue);           /* count == 1 after due */
+    /* ……10 个 tick 之后，在主循环中： */
+    mr_workqueue_execute(&queue);           /* 到期后 count == 1 */
 
     mr_workqueue_del(&queue);
 }
@@ -242,7 +242,7 @@ void delayed_demo(void) {
 
 ```c
 static void queue_wakeup_cb(struct mr_workqueue *queue, void *param) {
-    sem_post((sem_t *)param);               /* Release the worker thread */
+    sem_post((sem_t *)param);               /* 释放工作线程 */
 }
 
 void threaded_setup(void) {
@@ -258,7 +258,7 @@ void threaded_setup(void) {
     hook.param = &sem;
     mr_workqueue_hook_set(&queue, &hook);
 
-    /* Worker thread: wait(sem); mr_workqueue_execute(&queue); in a loop */
+    /* 工作线程：循环中 wait(sem); mr_workqueue_execute(&queue); */
 }
 ```
 
@@ -269,9 +269,9 @@ static mr_work_t step_a, step_b;
 static mr_work_t *chain_next = &step_b;
 
 static void chained_entry(struct mr_work *work, void *param) {
-    /* Process one step here */
+    /* 在此处理一个步骤 */
     if (chain_next != MR_NULL) {
-        mr_work_schedule(chain_next);       /* Queued for the NEXT execute */
+        mr_work_schedule(chain_next);       /* 排队等待下一轮 execute */
         chain_next = MR_NULL;
     }
 }
@@ -282,8 +282,8 @@ void chain_demo(mr_workqueue_t *queue) {
     mr_work_bind(&step_a, queue);
     mr_work_bind(&step_b, queue);
     mr_work_schedule(&step_a);
-    mr_workqueue_execute(queue);            /* runs step_a, queues step_b */
-    mr_workqueue_execute(queue);            /* runs step_b */
+    mr_workqueue_execute(queue);            /* 执行 step_a，排队 step_b */
+    mr_workqueue_execute(queue);            /* 执行 step_b */
 }
 ```
 
@@ -373,7 +373,7 @@ typedef struct mr_workqueue {
     mr_timer_t timer;
     mr_list_t tlist;
     mr_list_t list;
-    /* The following fields exist only with MR_USE_WORKQUEUE_HOOK */
+    /* 以下字段仅 MR_USE_WORKQUEUE_HOOK 时存在 */
     const mr_workqueue_hook_t *hook;
     mr_atomic_t depth;
 } mr_workqueue_t;

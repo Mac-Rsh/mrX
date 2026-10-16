@@ -57,16 +57,16 @@ static int rootfs_demo(void) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_stat_t stat;
 
-    /* After mr_user_init(), '/' is rootfs if its auto-mount won the global root */
+    /* mr_user_init() 之后，若 rootfs 自动挂载抢占到全局根，'/' 即为 rootfs */
     mr_fs_mkdir("/system");
     mr_fs_mknod("/system/console", MR_INODE_CHR, MR_NULL);
 
-    /* Nodes can be opened for status, but hold no data */
+    /* 节点可打开以读取状态，但不承载数据 */
     mr_fs_open(&file, "/system/console", MR_O_RDONLY);
     mr_fs_fstat(&file, &stat);          /* stat.type == MR_INODE_CHR */
     mr_fs_close(&file);
 
-    /* Mount a data file system onto the skeleton */
+    /* 在骨架目录上挂载数据文件系统 */
     mr_fs_mkdir("/system/data");
     return mr_fs_mount(MR_NULL, "/system/data", "ramfs", 0, MR_NULL);
 }
@@ -146,25 +146,25 @@ static void rootfs_skeleton_demo(void) {
     int metadata = 0;
     void *node_priv;
 
-    /* Build a typed namespace tree */
+    /* 构建带类型的命名空间树 */
     mr_fs_mkdir("/system");
     mr_fs_mkdir("/system/services");
     mr_fs_mknod("/system/config", MR_INODE_REG, &metadata);
     mr_fs_mknod("/system/console", MR_INODE_CHR, MR_NULL);
 
-    /* Enumerate the directory with node types */
+    /* 带节点类型枚举目录 */
     if (mr_fs_open(&dir, "/system", MR_O_RDONLY | MR_O_DIRECTORY) == 0) {
         while (mr_fs_readdir(&dir, &dirent) > 0) {
-            /* dirent.name / dirent.type describe each child */
+            /* dirent.name / dirent.type 描述每个子项 */
         }
         mr_fs_close(&dir);
     }
 
-    /* Open a node and fetch the private pointer given at mknod time */
+    /* 打开节点并取回 mknod 时保存的私有指针 */
     if (mr_fs_open(&file, "/system/config", MR_O_RDWR) == 0) {
         node_priv = file.inode->priv;       /* == &metadata */
         (void)node_priv;
-        mr_fs_close(&file);                 /* read/write are -MR_ENOSYS */
+        mr_fs_close(&file);                 /* read/write 返回 -MR_ENOSYS */
     }
     mr_fs_rmdir("/system/services");
     mr_fs_unlink("/system/config");

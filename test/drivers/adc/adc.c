@@ -237,7 +237,7 @@ MR_TEST(adc, stream_paths) {
         .size = sizeof(buffer),
     };
     mr_adc_stream_config_t config = {
-        .sample_rate = 48000U,
+        .source = MR_ADC_STREAM_SOURCE_EXTERNAL,
         .circular = MR_TRUE,
     };
     mr_size_t offset;
@@ -255,7 +255,8 @@ MR_TEST(adc, stream_paths) {
     adc_stream_busy_ret = 0;
     MR_TEST_ASSERT_EQ_INT(mr_adc_stream_start(drv, &seq, &config), 0);
     MR_TEST_ASSERT_EQ_INT(adc_stream_start_count, 1);
-    MR_TEST_ASSERT_EQ_UINT(adc_last_stream_config.sample_rate, 48000U);
+    MR_TEST_ASSERT_EQ_INT(adc_last_stream_config.source,
+                          MR_ADC_STREAM_SOURCE_EXTERNAL);
     MR_TEST_ASSERT_EQ_INT(adc_last_stream_config.circular, MR_TRUE);
     adc_offset = sizeof(buffer) / 2;
     MR_TEST_ASSERT_EQ_INT(mr_adc_stream_offset(drv, &offset), 0);
@@ -282,7 +283,7 @@ MR_TEST(adc, stream_optional_operations) {
         .size = sizeof(buffer),
     };
     mr_adc_stream_config_t config = {
-        .sample_rate = 1000U,
+        .source = MR_ADC_STREAM_SOURCE_SOFTWARE,
         .circular = MR_FALSE,
     };
     mr_size_t offset = 99;

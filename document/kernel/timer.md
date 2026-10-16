@@ -27,7 +27,8 @@
 - 回调中允许重新启动、停止自身，便于实现"自重启"与"条件停止"模式。
 - 到期检查作为时钟钩子运行，返回距下次到期的剩余 tick 数，可供低功耗 tickless 调度使用。
 
-不适用于：微秒级高精度定时（粒度为 1 个 tick，高精度需求请使用时钟模块的 busy-wait 或硬件定时器驱动）、需要在独立线程上下文中执行的延时任务（请使用
+不适用于：微秒级高精度定时（粒度为 1 个 tick，高精度需求请使用时钟模块的 busy-wait
+或硬件定时器驱动）、需要在独立线程上下文中执行的延时任务（可将任务投递到由应用线程驱动的
 [工作队列 Work](work.md)）。
 
 ### 2. 配置与依赖
@@ -55,7 +56,7 @@
 #include <mrX/kernel/mr_timer.h>
 
 static void led_timer_entry(mr_timer_t *timer, void *param) {
-    /* Toggle LED here every 500 ms */
+    /* 每 500 ms 在此翻转 LED */
 }
 
 static int led_timer_setup(void) {
@@ -217,7 +218,7 @@ static void retry_timer_entry(mr_timer_t *timer, void *param) {
 
     (*count)++;
     if (*count < 3) {
-        /* Re-arm by itself: fire again one period later */
+        /* 自重启：一个周期后再次触发 */
         mr_timer_start(timer);
     }
 }
@@ -235,9 +236,9 @@ void retry_example(void) {
 
 ```c
 static void poll_timer_entry(mr_timer_t *timer, void *param) {
-    /* Poll hardware here */
-    if (/* done */) {
-        mr_timer_stop(timer);   /* Stop periodic re-arm from inside */
+    /* 在此轮询硬件 */
+    if (/* 完成 */) {
+        mr_timer_stop(timer);   /* 在回调内部停止周期重装载 */
     }
 }
 
@@ -250,7 +251,7 @@ void poll_example(void) {
         return;
     }
     mr_timer_start(timer);
-    /* mr_timer_del(timer) when no longer needed */
+    /* 不再需要时 mr_timer_del(timer) */
 }
 ```
 
@@ -323,12 +324,12 @@ void poll_example(void) {
 
 ```c
 typedef struct mr_timer {
-    mr_object_t parent;     /* Object base: clazz + reference count */
-    mr_tick_t   itick;      /* User period, bit31 = MR_TIMER_PERIODIC */
-    mr_tick_t   ttick;      /* Absolute timeout tick, valid while timing */
-    mr_list_t   list;       /* Node on the global timing list */
-    mr_ptr_t    entry;      /* User callback */
-    mr_ptr_t    param;      /* User callback parameter */
+    mr_object_t parent;     /* 对象基类：clazz + 引用计数 */
+    mr_tick_t   itick;      /* 用户周期，bit31 = MR_TIMER_PERIODIC */
+    mr_tick_t   ttick;      /* 绝对到期 tick，仅计时期间有效 */
+    mr_list_t   list;       /* 全局计时链表节点 */
+    mr_ptr_t    entry;      /* 用户回调 */
+    mr_ptr_t    param;      /* 用户回调参数 */
 } mr_timer_t;
 ```
 

@@ -3,7 +3,7 @@
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
- * @date 2026-09-17        MacRsh        First version
+ * @date 2024-09-06        MacRsh        First version
  */
 
 #include <mrX/platform/mr_platform.h>
@@ -11,13 +11,14 @@
 #include <mrX/drivers/uart/mr_uart.h>
 #include <mrX/drivers/gpio/mr_gpio.h>
 #if defined(MR_USE_DRIVER_UART_STREAM) && defined(MR_USE_DRIVER_DMA)
+/* Enable UART streaming only when the DMA backend is available */
 #define UART_USE_STREAM
 #include <mrX/drivers/dma/mr_dma.h>
 #endif /* UART stream + DMA */
 #include "stm32h5xx_hal_uart.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT                    st_stm32h5_uart
+#define MR_HT_COMPAT st_stm32h5_uart
 #if MR_HT_HAS_DRIVER()
 
 /* UART operations */
@@ -64,12 +65,14 @@ MR_UNUSED static const mr_uart_ops_t __uart_ops = {
     .event_control = uart_event_control,
 };
 
+/* GPIO alternate-function mapping for one UART signal */
 typedef struct uart_pin {
     mr_ht_gpio_spec_t spec;
     uint32_t alternate;
 } uart_pin_t;
 
 #if defined(UART_USE_STREAM)
+/* DMA stream state shared by completion and event paths */
 typedef struct uart_stream {
     mr_ht_dma_spec_t dma;
     mr_dma_transfer_t transfer;
@@ -83,6 +86,7 @@ typedef struct uart_stream {
 } uart_stream_t;
 #endif /* defined(UART_USE_STREAM) */
 
+/* UART instance state, pins, stream state, and event subscriptions */
 typedef struct uart_priv {
     UART_HandleTypeDef handle;
     void (*clk_enable)(void);
@@ -100,6 +104,7 @@ typedef struct uart_priv {
 #endif /* defined(UART_USE_STREAM) */
 } uart_priv_t;
 
+/* Event bits accepted by the UART event-control operation */
 #define UART_EVENT_BASE_MASK                                                   \
     (MR_UART_WAIT_RX_IDLE | MR_UART_WAIT_RX_READY | MR_UART_WAIT_TX_DONE       \
      | MR_UART_WAIT_RX_ERROR | MR_UART_WAIT_TX_ERROR)
@@ -109,7 +114,7 @@ typedef struct uart_priv {
      | MR_UART_WAIT_RX_STREAM_FULL | MR_UART_WAIT_TX_STREAM_HALF               \
      | MR_UART_WAIT_TX_STREAM_DONE)
 #else
-#define UART_EVENT_MASK                 UART_EVENT_BASE_MASK
+#define UART_EVENT_MASK UART_EVENT_BASE_MASK
 #endif /* defined(UART_USE_STREAM) */
 
 /* HAL word length includes the optional parity bit */
@@ -138,8 +143,7 @@ static const uint32_t __uart_mode[] = {
 
 static mr_err_t uart_make_init(const mr_uart_config_t *config,
                                UART_InitTypeDef *init) {
-    mr_uint32_t data_index;
-    mr_uint32_t parity_index;
+    mr_uint32_t data_index, parity_index;
 
     /* Reject invalid fields and unsupported but legal frames */
     if (config->baud_rate == 0U) {
@@ -223,6 +227,7 @@ static void uart_interrupts_update(uart_priv_t *priv) {
 }
 
 static mr_err_t uart_pin_check(const uart_pin_t *pin) {
+    /* Validate one HardTree pin and its alternate-function number */
     if ((pin->spec.drv == MR_NULL) || (pin->spec.pin > 15U)
         || (pin->alternate > 15U)) {
         return -MR_EINVAL;
@@ -234,6 +239,7 @@ static mr_err_t uart_gpio_configure(uart_priv_t *priv, mr_uint8_t mode,
                                     mr_bool_t reconfigure) {
     mr_err_t ret;
 
+    /* Release pins no longer used after a mode change */
     if (reconfigure && (priv->config.mode != MR_UART_MODE_RX)
         && (mode == MR_UART_MODE_RX)) {
         ret = mr_stm32h5_gpio_pin_release(&priv->tx.spec);
@@ -248,21 +254,20 @@ static mr_err_t uart_gpio_configure(uart_priv_t *priv, mr_uint8_t mode,
             return ret;
         }
     }
+    /* Claim the pins required by the new UART direction */
     if (!reconfigure || (priv->config.mode != mode)) {
         if (mode != MR_UART_MODE_RX) {
-            ret = mr_stm32h5_gpio_pin_alternate(&priv->tx.spec,
-                                                priv->tx.alternate,
-                                                MR_GPIO_PULL_NONE,
-                                                MR_GPIO_OTYPE_PP);
+            ret = mr_stm32h5_gpio_pin_alternate(
+                &priv->tx.spec, priv->tx.alternate, MR_GPIO_PULL_NONE,
+                MR_GPIO_OTYPE_PP);
             if (ret != 0) {
                 return ret;
             }
         }
         if (mode != MR_UART_MODE_TX) {
-            ret = mr_stm32h5_gpio_pin_alternate(&priv->rx.spec,
-                                                priv->rx.alternate,
-                                                MR_GPIO_PULL_NONE,
-                                                MR_GPIO_OTYPE_PP);
+            ret = mr_stm32h5_gpio_pin_alternate(
+                &priv->rx.spec, priv->rx.alternate, MR_GPIO_PULL_NONE,
+                MR_GPIO_OTYPE_PP);
             if (ret != 0) {
                 return ret;
             }
@@ -274,10 +279,11 @@ static mr_err_t uart_gpio_configure(uart_priv_t *priv, mr_uint8_t mode,
 static mr_err_t uart_configure(const mr_driver_t *drv,
                                const mr_uart_config_t *config) {
     uart_priv_t *priv = MR_DRIVER_PRIV(drv);
-    UART_InitTypeDef init = {0};
+    UART_InitTypeDef init;
     mr_bool_t reconfigure;
     mr_err_t ret;
 
+    init = (UART_InitTypeDef){0};
     /* Check board-provided resources */
     if ((priv->handle.Instance == MR_NULL) || (priv->clk_enable == MR_NULL)) {
         return -MR_EINVAL;
@@ -352,6 +358,7 @@ static mr_err_t uart_configuration(const mr_driver_t *drv,
                                    mr_uart_config_t *config) {
     uart_priv_t *priv = MR_DRIVER_PRIV(drv);
 
+    /* Return the frame that is currently configured in hardware */
     if (!priv->initialized) {
         return -MR_ENODEV;
     }
@@ -361,8 +368,11 @@ static mr_err_t uart_configuration(const mr_driver_t *drv,
 
 static mr_ssize_t uart_read(const mr_driver_t *drv, void *buf, mr_size_t size) {
     uart_priv_t *priv = MR_DRIVER_PRIV(drv);
-    mr_uint8_t *dst = (mr_uint8_t *)buf;
-    mr_size_t completed = 0U;
+    mr_size_t completed;
+    mr_uint8_t *dst;
+
+    dst = (mr_uint8_t *)buf;
+    completed = 0U;
 
     if (!priv->initialized) {
         return -MR_ENODEV;
@@ -391,8 +401,11 @@ static mr_ssize_t uart_read(const mr_driver_t *drv, void *buf, mr_size_t size) {
 static mr_ssize_t uart_write(const mr_driver_t *drv, const void *buf,
                              mr_size_t size) {
     uart_priv_t *priv = MR_DRIVER_PRIV(drv);
-    const mr_uint8_t *src = (const mr_uint8_t *)buf;
-    mr_size_t completed = 0U;
+    const mr_uint8_t *src;
+    mr_size_t completed;
+
+    src = (const mr_uint8_t *)buf;
+    completed = 0U;
 
     if (!priv->initialized) {
         return -MR_ENODEV;
@@ -417,6 +430,7 @@ static mr_ssize_t uart_write(const mr_driver_t *drv, const void *buf,
 
 #if defined(UART_USE_STREAM)
 static void uart_stream_waiter_release(uart_stream_t *stream) {
+    /* Detach the waiter before releasing stream ownership */
     if (stream->driver != MR_NULL) {
         (void)mr_waiter_del(&stream->waiter);
         stream->driver = MR_NULL;
@@ -426,7 +440,9 @@ static void uart_stream_waiter_release(uart_stream_t *stream) {
 static void uart_stream_dma_event(uart_priv_t *priv, uart_stream_t *stream,
                                   mr_wait_event_t event, uint32_t dma_mask,
                                   mr_bool_t receive) {
-    mr_wait_event_t uart_event = 0U;
+    mr_wait_event_t uart_event;
+
+    uart_event = 0U;
 
     /* Translate DMA events while this direction is active */
     if ((mr_atomic_load(&stream->active) == 0) || (stream->driver == MR_NULL)) {
@@ -477,7 +493,9 @@ static void uart_stream_dma_event(uart_priv_t *priv, uart_stream_t *stream,
 
 static void uart_rx_dma_event(mr_waiter_t *waiter, void *param,
                               mr_wait_event_t event, const void *data) {
-    uart_priv_t *priv = (uart_priv_t *)param;
+    uart_priv_t *priv;
+
+    priv = (uart_priv_t *)param;
 
     MR_IGNORE(waiter);
     MR_IGNORE(data);
@@ -487,7 +505,9 @@ static void uart_rx_dma_event(mr_waiter_t *waiter, void *param,
 
 static void uart_tx_dma_event(mr_waiter_t *waiter, void *param,
                               mr_wait_event_t event, const void *data) {
-    uart_priv_t *priv = (uart_priv_t *)param;
+    uart_priv_t *priv;
+
+    priv = (uart_priv_t *)param;
 
     MR_IGNORE(waiter);
     MR_IGNORE(data);
@@ -497,9 +517,9 @@ static void uart_tx_dma_event(mr_waiter_t *waiter, void *param,
 
 static mr_err_t uart_stream_stop(uart_priv_t *priv, uart_stream_t *stream,
                                  uint32_t dma_mask) {
-    mr_err_t first_error = 0;
-    mr_err_t ret;
+    mr_err_t first_error, ret;
 
+    first_error = 0;
     /* Drop UART DMA requests only when the peripheral clock is on */
     if (priv->initialized && (priv->handle.Instance != MR_NULL)) {
         CLEAR_BIT(priv->handle.Instance->CR3, dma_mask);
@@ -525,6 +545,7 @@ static mr_err_t uart_stream_stop(uart_priv_t *priv, uart_stream_t *stream,
         && ((priv->event_mask & MR_UART_WAIT_TX_DONE) == 0U)) {
         __HAL_UART_DISABLE_IT(&priv->handle, UART_IT_TC);
     }
+    /* Release stream state only after DMA has stopped successfully */
     mr_atomic_store(&stream->complete, 0);
     uart_stream_waiter_release(stream);
     stream->failed = MR_FALSE;
@@ -535,6 +556,7 @@ static mr_err_t uart_stream_stop(uart_priv_t *priv, uart_stream_t *stream,
 }
 
 static mr_err_t uart_stream_is_busy(uart_stream_t *stream, mr_bool_t *busy) {
+    /* A completed transfer is idle even before the caller stops it */
     if (mr_atomic_load(&stream->active) == 0) {
         *busy = MR_FALSE;
         return 0;
@@ -553,15 +575,16 @@ static mr_err_t uart_stream_start(const mr_driver_t *drv, uart_stream_t *stream,
                                   const void *src, void *dst, mr_size_t size,
                                   mr_bool_t circular, mr_bool_t receive) {
     uart_priv_t *priv = MR_DRIVER_PRIV(drv);
-    mr_dma_config_t dma_config = {
+    mr_dma_config_t dma_config;
+    uint32_t dma_mask;
+    mr_err_t ret;
+
+    dma_config = (mr_dma_config_t){
         .src_width = MR_DMA_WIDTH_8,
         .dst_width = MR_DMA_WIDTH_8,
         .src_burst = MR_DMA_BURST_1,
         .dst_burst = MR_DMA_BURST_1,
     };
-    uint32_t dma_mask;
-    mr_err_t ret;
-
     dma_mask = receive ? USART_CR3_DMAR : USART_CR3_DMAT;
 
     /* Check the UART is configured and the DMA stream is bound */
@@ -673,6 +696,7 @@ static mr_err_t uart_rx_stream_offset(const mr_driver_t *drv,
                                       mr_size_t *offset) {
     uart_priv_t *priv = MR_DRIVER_PRIV(drv);
 
+    /* Query the receive DMA producer position */
     if (priv->rx_stream.dma.drv == MR_NULL) {
         return -MR_ENODEV;
     }
@@ -716,6 +740,7 @@ static mr_err_t uart_tx_stream_offset(const mr_driver_t *drv,
                                       mr_size_t *offset) {
     uart_priv_t *priv = MR_DRIVER_PRIV(drv);
 
+    /* Query the transmit DMA consumer position */
     if (priv->tx_stream.dma.drv == MR_NULL) {
         return -MR_ENODEV;
     }
@@ -727,6 +752,7 @@ static mr_err_t uart_event_control(const mr_driver_t *drv, mr_uint32_t events,
                                    mr_bool_t enable) {
     uart_priv_t *priv = MR_DRIVER_PRIV(drv);
 
+    /* Validate event bits and require an initialized UART */
     if ((events == 0U) || ((events & ~UART_EVENT_MASK) != 0U)) {
         return -MR_EINVAL;
     }
@@ -739,6 +765,7 @@ static mr_err_t uart_event_control(const mr_driver_t *drv, mr_uint32_t events,
         return -MR_EBUSY;
     }
 #endif /* defined(UART_USE_STREAM) */
+    /* Update event subscriptions and synchronize UART interrupt sources */
     if (enable) {
         priv->event_mask |= events;
     } else {
@@ -749,7 +776,9 @@ static mr_err_t uart_event_control(const mr_driver_t *drv, mr_uint32_t events,
 }
 
 static void uart_irq_handle(uart_priv_t *priv) {
-    mr_wait_event_t event = 0U;
+    mr_wait_event_t event;
+
+    event = 0U;
 
     if ((__HAL_UART_GET_FLAG(&priv->handle, UART_FLAG_RXNE) != 0U)
         && (__HAL_UART_GET_IT_SOURCE(&priv->handle, UART_IT_RXNE) != 0U)) {
@@ -801,18 +830,20 @@ static void uart_irq_handle(uart_priv_t *priv) {
 }
 
 #if defined(UART_USE_STREAM)
+/* Initialize optional RX/TX DMA and waiter state from HardTree properties */
 #define UART_STREAM_INIT(_id)                                                  \
     MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_rx_dma),                         \
                 (.rx_stream.dma = MR_HT_DMA_SPEC(_id, st_rx_dma)),             \
                 (.rx_stream.dma = {0})),                                       \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_tx_dma),                         \
-                (.tx_stream.dma = MR_HT_DMA_SPEC(_id, st_tx_dma)),             \
-                (.tx_stream.dma = {0})),
+        MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_tx_dma),                     \
+                    (.tx_stream.dma = MR_HT_DMA_SPEC(_id, st_tx_dma)),         \
+                    (.tx_stream.dma = {0})),
 #else
 #define UART_STREAM_INIT(_id)
 #endif /* defined(UART_USE_STREAM) */
 
 /* clang-format off */
+/* Install a UART instance and its pin/stream mappings */
 #define ST_HT_UART_INSTALL(_id, _ops)                                          \
     static void MR_CAT(__uart_clk_enable_, _id)(void) {                        \
         MR_HT_DRIVER_PROP(_id, st_clken)();                                    \

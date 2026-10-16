@@ -24,39 +24,57 @@
 - 运行报告为 gtest 风格（`[ RUN ]` / `[ OK ]` / `[ FAILED ]` / 汇总统计）。
 - 运行入口为公开 API（`mr_test_run` / `mr_testsuite_run` / `mr_testcase_run`），由应用自行调用，并可用返回值对接 CI。
 
-适用边界：框架面向 x64 宿主模拟环境的功能验证（`./build/mrX.exe`），不在目标板 资源受限环境下使用；其依赖的 `mr_printf`
-、链接器段机制均以宿主为第一场景。
+适用边界：测试框架本身没有 x64 架构限制，可用于具备输出和注册段支持的宿主或目标板；具体用例还可能依赖
+pthread、较大内存等宿主能力，`mr_printf` 与链接器段接线由所选平台和应用工程提供。
 
 ### 2. 配置与依赖
 
-| 配置项                | 类型     | 默认值        | 说明                                                                                                                                                                                      |
-|-----------------------|----------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `MR_USE_TEST`         | bool     | n             | 启用测试框架（`mrX/include/mrX/test/Kconfig`）；自动 `select MR_USE_PRINTF`                                                                                                               |
-| `MR_USE_TEST_PTHREAD` | 编译定义 | 无 Kconfig 项 | 门控基于 pthread 的多线程并发用例（如 `mrX/test/kernel/fifo.c`、`mrX/test/fs/concurrency.c`）；由 mrX 上一级项目根的 `CMakeLists.txt` 与 `MR_USE_TEST` 一并定义（`CMakeLists.txt:78-81`） |
+| 配置项                | 类型     | 默认值        | 说明                                                                                                                                                 |
+|-----------------------|----------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `MR_USE_TEST`         | bool     | n             | 启用测试框架（`mrX/include/mrX/test/Kconfig`）；自动 `select MR_USE_PRINTF`                                                                          |
+| `MR_USE_TEST_PTHREAD` | 编译定义 | 无 Kconfig 项 | 门控基于 pthread 的多线程并发用例（如 `mrX/test/kernel/fifo.c`、`mrX/test/fs/concurrency.c`）；需要应用工程显式定义，并提供 pthread 头文件和链接支持 |
 
-注意：项目根 `CMakeLists.txt`（位于 `mrX/` 的上一级）对宿主可执行文件无条件定义 `MR_USE_TEST` 与
-`MR_USE_TEST_PTHREAD`，因此 `./build/mrX.exe` 始终编入测试，Kconfig 默认值 n 不影响宿主模拟构建。各用例文件除 `MR_USE_TEST`
-外通常还按被测模块宏二次门控 （如 `mrX/test/kernel/timer.c` 整体包在 `#if defined(MR_USE_TIMER)` 内）。
+用例不参与默认构建：框架交付物只包含框架源码本身，用例源码的收集与 `MR_USE_TEST` / `MR_USE_TEST_PTHREAD`
+的定义都由应用工程的构建系统负责。一个只在入口调用 `mr_user_init()` 的应用即使构建、运行全部正常，
+也不会执行任何 `MR_TEST` 用例——进程退出成功不代表框架单元测试通过。
+
+要运行单元测试，应用工程需要启用 `MR_USE_TEST`、纳入 `mrX/test/test.c` 和所需用例源码、保留 `mr_testcase.*` 注册段，
+并在完成 `mr_user_init()` 后显式调用运行入口。各用例还按被测模块宏二次门控；启用框架开关不代表所有模块用例都会参与编译。
 
 启用后重新生成 `mr_config.h`，测试代码经 `#if defined(MR_USE_TEST)` 门控编入：
 
 ```c
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
-/* tests */
+/* 测试代码 */
 #endif /* defined(MR_USE_TEST) */
 ```
 
-构建：`cmake -S . -B build && cmake --build build`。测试由应用显式驱动：默认宿主示例 `user/main.c`（位于 `mrX/` 的上一级）运行的是
-DMA/RPC 演示，不调用测试入口；要执行测试需在应用启动流程中自行调用 `mr_test_run()`（全部通过返回 `MR_TRUE`），并据此决定进程退出码。
+将测试源码纳入应用工程后，按该工程的构建流程编译。运行入口可用返回值对接进程退出码：
+
+```c
+int main(void) {
+    mr_user_init();
+    return mr_test_run() ? 0 : 1;
+}
+```
+
+上例需要包含 `<mrX/test/mr_test.h>`，并启用 `MR_USE_TEST`。`mr_test_run()` 的成功结果还需结合输出中的实际用例数判断：
+当前实现即使没有实际用例也可能返回 `MR_TRUE`，不能把空集合当作所需测试已执行。
 
 ### 3. 快速上手
 
-定义并自动运行一个用例（取自 `mrX/test/kernel/timer.c:55` 的模式）：
+定义并注册一个用例（取自 `mrX/test/kernel/timer.c:55` 的模式）：
 
 ```c
 #include <mrX/test/mr_test.h>
-#if defined(MR_USE_TEST)
+#include <mrX/kernel/mr_timer.h>
+#if defined(MR_USE_TEST) && defined(MR_USE_TIMER)
+
+static void test_timer_entry(mr_timer_t *timer, void *param) {
+    (void)timer;
+    (void)param;
+}
 
 MR_TEST(timer, init_del) {
     mr_timer_t timer;
@@ -73,7 +91,7 @@ MR_TEST(timer, init_del) {
 #endif /* defined(MR_USE_TEST) */
 ```
 
-编译运行后框架自动发现并执行该用例，输出：
+启用 `MR_USE_TIMER`、将用例纳入编译并显式调用 `mr_test_run()` 或对应运行入口后，框架通过注册表发现并执行该用例，输出：
 
 ```
 [ RUN      ] timer.init_del
@@ -145,11 +163,11 @@ MR_TEST(timer, start_stop) {
     int timer_inited = MR_FALSE;
 
     ret = mr_timer_init(&timer, test_timer_entry, &ctx, 2);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);          /* Hard precondition */
+    MR_TEST_ASSERT_EQ_INT(ret, 0);          /* 前置硬条件，失败即返回 */
     timer_inited = MR_TRUE;
 
     ret = mr_timer_start(&timer);
-    MR_TEST_EXPECT_EQ_INT(ret, 0);          /* Soft check, keep going */
+    MR_TEST_EXPECT_EQ_INT(ret, 0);          /* 软检查，失败后继续 */
     if (ret != 0) {
         goto _exit;
     }
@@ -163,7 +181,7 @@ MR_TEST(timer, start_stop) {
 
 _exit:
     if (timer_inited == MR_TRUE) {
-        mr_timer_del(&timer);               /* Cleanup on every path */
+        mr_timer_del(&timer);               /* 所有路径都执行清理 */
     }
 }
 ```
@@ -175,7 +193,7 @@ MR_TEST(math, near) {
     mr_f64_t v = 0.1 + 0.2;
 
     MR_TEST_NEAR(v, 0.3, 1e-9);
-    MR_TEST_EXPECT_EQ_DOUBLE(v, 0.3);       /* 1e-8 tolerance */
+    MR_TEST_EXPECT_EQ_DOUBLE(v, 0.3);       /* 容差 1e-8 */
 }
 ```
 
@@ -183,7 +201,8 @@ MR_TEST(math, near) {
 
 **Q：新写的用例没有被运行？**
 
-确认文件经构建系统收集（`mrX/test/**/*.c` 已被根 CMake 覆盖）；确认
+确认你的应用工程已把 `mrX/test/**/*.c` 纳入编译（框架不提供构建脚本，用例收集由应用工程负责，
+见第 2 节）；确认
 `MR_USE_TEST` 已启用且代码在 `#if defined(MR_USE_TEST)` 门控内；确认
 `MR_TEST(suite, name)` 没有拼错（宏展开才是注册发生的地方）。
 
@@ -239,9 +258,9 @@ ASSERT 放在最前，或改用 EXPECT + `goto _exit` 模式。
 typedef void(mr_testcase_entry)(volatile mr_uint32_t *__test_status);
 
 typedef struct mr_testcase {        /* mrX/include/mrX/test/mr_test.h:169 */
-    const char *suite;              /* Suite name string */
-    const char *name;               /* Testcase name string */
-    mr_testcase_entry *entry;       /* Test function */
+    const char *suite;              /* 套件名字符串 */
+    const char *name;               /* 用例名字符串 */
+    mr_testcase_entry *entry;       /* 用例函数 */
 } mr_testcase_t;
 ```
 
@@ -297,9 +316,9 @@ typedef struct mr_testcase {        /* mrX/include/mrX/test/mr_test.h:169 */
 
 **配置宏**
 
-| 宏                    | 说明                                                                      |
-|-----------------------|---------------------------------------------------------------------------|
-| `MR_USE_TEST`         | 框架总开关（默认 n），自动选中 `MR_USE_PRINTF`                            |
-| `MR_USE_TEST_PTHREAD` | 多线程并发用例门控（无 Kconfig 项），由项目根 `CMakeLists.txt:78-81` 定义 |
+| 宏                    | 说明                                                    |
+|-----------------------|---------------------------------------------------------|
+| `MR_USE_TEST`         | 框架总开关（默认 n），自动选中 `MR_USE_PRINTF`          |
+| `MR_USE_TEST_PTHREAD` | 多线程并发用例门控（无 Kconfig 项），由应用工程显式定义 |
 
 **错误码**：运行入口返回 `mr_bool_t`（全过 `MR_TRUE`），不使用 `mr_errno` 体系； 是否把结果映射为进程退出码由调用方（应用入口）自行决定。

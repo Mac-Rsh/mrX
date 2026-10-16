@@ -170,7 +170,7 @@ MR_TEST(dac, write_and_stream) {
         .size = sizeof(samples),
     };
     mr_dac_stream_config_t config = {
-        .update_rate = 44100U,
+        .source = MR_DAC_STREAM_SOURCE_EXTERNAL,
         .circular = MR_TRUE,
     };
     mr_size_t offset;
@@ -185,7 +185,8 @@ MR_TEST(dac, write_and_stream) {
     MR_TEST_ASSERT_EQ_UINT(dac_last_seq.channels, seq.channels);
     MR_TEST_ASSERT_EQ_INT(mr_dac_stream_start(drv, &seq, &config), 0);
     MR_TEST_ASSERT_EQ_INT(dac_stream_start_count, 1);
-    MR_TEST_ASSERT_EQ_UINT(dac_last_stream_config.update_rate, 44100U);
+    MR_TEST_ASSERT_EQ_INT(dac_last_stream_config.source,
+                          MR_DAC_STREAM_SOURCE_EXTERNAL);
     MR_TEST_ASSERT_EQ_INT(dac_last_stream_config.circular, MR_TRUE);
     dac_busy = MR_TRUE;
     MR_TEST_ASSERT_EQ_INT(mr_dac_stream_is_busy(drv, &busy), 0);
@@ -204,7 +205,7 @@ MR_TEST(dac, stream_errors_and_conversions) {
     mr_dac_ops_t empty_ops = dac_ops;
     mr_dac_seq_t seq = {.resolution = 8, .buf = MR_NULL, .size = 0};
     mr_dac_stream_config_t config = {
-        .update_rate = 1000U,
+        .source = MR_DAC_STREAM_SOURCE_SOFTWARE,
         .circular = MR_FALSE,
     };
     mr_size_t offset = 99;

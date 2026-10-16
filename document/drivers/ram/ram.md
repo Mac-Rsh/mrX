@@ -137,7 +137,7 @@ static mr_uint8_t backing[4096];
 static mr_err_t ram0_probe(const mr_driver_t *drv, mr_ram_info_t *info) {
     MR_IGNORE(drv);
     info->size = sizeof(backing);
-    info->regions_num = 0U;       /* No CPU-direct mapping */
+    info->regions_num = 0U;       /* 无 CPU 直接映射 */
     return 0;
 }
 

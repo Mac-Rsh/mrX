@@ -3,7 +3,7 @@
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
- * @date 2026-09-14        MacRsh        First version
+ * @date 2024-09-06        MacRsh        First version
  */
 
 #ifndef __MR_DRIVER_TMR_H__
@@ -27,19 +27,20 @@ extern "C" {
 /* TMR wait event definition */
 #define MR_TMR_WAIT_TIMEOUT             (1U << 0)
 
-/* TMR signal definition */
-#define MR_TMR_SIGNAL_UPDATE            (1U << 0)
-
 /* TMR mode definition */
 typedef enum mr_tmr_mode {
     MR_TMR_MODE_PERIODIC,
     MR_TMR_MODE_ONESHOT,
 } mr_tmr_mode_t;
 
+/* TMR signal definition */
+typedef enum mr_tmr_signal {
+    MR_TMR_SIGNAL_PERIOD,
+} mr_tmr_signal_t;
+
 /* TMR configuration type */
 typedef struct mr_tmr_config {
     mr_uint64_t period;
-    mr_uint8_t signal: 3;
     mr_uint8_t mode: 1;
 } mr_tmr_config_t;
 
@@ -57,6 +58,8 @@ typedef struct mr_tmr_ops {
     mr_err_t (*start)(const mr_driver_t *drv);
     mr_err_t (*stop)(const mr_driver_t *drv);
     mr_err_t (*is_busy)(const mr_driver_t *drv, mr_bool_t *busy);
+    mr_err_t (*signal_control)(const mr_driver_t *drv, mr_tmr_signal_t signal,
+                               mr_bool_t enable);
     mr_err_t (*event_control)(const mr_driver_t *drv, mr_uint32_t events,
                               mr_bool_t enable);
 } mr_tmr_ops_t;
@@ -247,6 +250,60 @@ MR_INLINE mr_err_t mr_tmr_is_busy(mr_driver_t *drv, mr_bool_t *busy) {
 
     /* Get TMR state */
     return hw_ops->is_busy(drv, busy);
+}
+
+/**
+ * @brief This function enables a TMR hardware signal.
+ *
+ * @param drv The TMR driver.
+ * @param signal The TMR signal.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_tmr_signal_enable(mr_driver_t *drv,
+                                        mr_tmr_signal_t signal) {
+    const mr_tmr_ops_t *hw_ops;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_TMR);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+
+    /* Get TMR operations */
+    hw_ops = (const mr_tmr_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Check whether signal control is supported */
+    if (!hw_ops->signal_control) {
+        return -MR_ENOSYS;
+    }
+
+    /* Enable TMR signal */
+    return hw_ops->signal_control(drv, signal, MR_TRUE);
+}
+
+/**
+ * @brief This function disables a TMR hardware signal.
+ *
+ * @param drv The TMR driver.
+ * @param signal The TMR signal.
+ * @return 0 on success, a negative error code on failure.
+ */
+MR_INLINE mr_err_t mr_tmr_signal_disable(mr_driver_t *drv,
+                                         mr_tmr_signal_t signal) {
+    const mr_tmr_ops_t *hw_ops;
+
+    /* Check parameter */
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_TMR);
+    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
+
+    /* Get TMR operations */
+    hw_ops = (const mr_tmr_ops_t *)MR_DRIVER_OPS(drv);
+
+    /* Check whether signal control is supported */
+    if (!hw_ops->signal_control) {
+        return -MR_ENOSYS;
+    }
+
+    /* Disable TMR signal */
+    return hw_ops->signal_control(drv, signal, MR_FALSE);
 }
 
 /**

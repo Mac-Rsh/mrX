@@ -29,7 +29,7 @@
 - 两段式启动：`mr_kernel_init` 先运行平台/堆/定时器/中断/文件系统核心等硬编码接线；`mr_user_init` 再遍历全部导出的
   initcall。
 
-不适用于：需要携带参数或返回错误中断启动流程的初始化（initcall 函数原型固定为
+不适用于：需要携带参数、或需要通过返回错误来中止启动流程的初始化（initcall 函数原型固定为
 `void (*)(void)`）；对执行顺序有精细要求的场合只能通过级别字符串表达。
 
 ### 2. 配置与依赖
@@ -58,7 +58,7 @@
 #include <mrX/kernel/mr_initcall.h>
 
 static void app_init(void) {
-    /* Runs automatically during mr_user_init() */
+    /* 在 mr_user_init() 期间自动执行 */
 }
 
 MR_INIT_EXPORT(app_init, MR_INIT_LEVEL_USER("0"));
@@ -155,7 +155,7 @@ static void app_init(void) {
 MR_INIT_EXPORT(app_init, MR_INIT_LEVEL_USER("0"));
 
 void app_check(void) {
-    /* Called after mr_user_init: app_state is 1 */
+    /* 在 mr_user_init 之后调用：app_state 为 1 */
 }
 ```
 
@@ -164,12 +164,12 @@ void app_check(void) {
 
 ```c
 static void app_early_init(void) {
-    /* Runs before app_late_init */
+    /* 先于 app_late_init 执行 */
 }
 MR_INIT_EXPORT(app_early_init, MR_INIT_LEVEL_USER("0"));
 
 static void app_late_init(void) {
-    /* Can rely on things prepared by app_early_init */
+    /* 可以依赖 app_early_init 准备好的内容 */
 }
 MR_INIT_EXPORT(app_late_init, MR_INIT_LEVEL_USER("1"));
 ```
@@ -234,9 +234,8 @@ MR_INIT_EXPORT(app_late_init, MR_INIT_LEVEL_USER("1"));
 和 [时钟](clock.md) 之间的桥梁；中断、平台、堆同理。新增需要启动接线的内核模块时， 在此序列中按 `MR_USE_*` 守卫追加调用。
 
 **段收集机制**：`MR_INIT_EXPORT` 把 `mr_initcall_t` 常量放入 `mr_initcall.<级别>`
-段；链接脚本以 `KEEP(*(SORT(mr_initcall.*)))` 收集（宿主构建见
-`user/linker.lds:64-65`，目标平台由移植层链接脚本提供同等规则，规则模板见
-`mrX/sections.toml`）。`SORT` 保证 `mr_initcall.0.end` < `mr_initcall.1.0` < ... <
+段；链接脚本以 `KEEP(*(SORT(mr_initcall.*)))` 收集（目标平台由移植层链接脚本提供同等规则，
+规则模板见 `mrX/sections.toml`）。`SORT` 保证 `mr_initcall.0.end` < `mr_initcall.1.0` < ... <
 `mr_initcall.9.end` 的字典序执行。`mr_user_init` 通过
 `__mr_initcall_start` / `__mr_initcall_end` 定界遍历（`initcall.c:72-73`）。这两个符号不是链接器生成的， 而是本文件哨兵条目
 `start` / `end` 的变量名本身（`MR_CAT(__mr_initcall_, start/end)`），链接脚本只负责收集与排序，
@@ -251,8 +250,8 @@ MDK（armlink）依赖其默认的按名连续放置即可，无需额外配置�
 typedef void(mr_initcall_entry_t)(void);        /* mr_initcall.h:31 */
 
 typedef struct mr_initcall {                    /* mr_initcall.h:34 */
-    const char *name;                           /* Entry name (for debug) */
-    mr_initcall_entry_t *entry;                 /* Init function */
+    const char *name;                           /* 条目名（调试用） */
+    mr_initcall_entry_t *entry;                 /* 初始化函数 */
 } mr_initcall_t;
 ```
 
@@ -293,7 +292,7 @@ typedef struct mr_initcall {                    /* mr_initcall.h:34 */
 - 整个初始化流程设计为单线程启动前提：状态标记是普通 `volatile` 布尔而非原子量， initcall 段常量位于只读段。不应在多线程环境中并发调用
   `mr_kernel_init` /
   `mr_user_init`。
-- initcall 函数同步运行在 `mr_user_init` 的调用者上下文；模块本身不会强制切换到“线程上下文”。实际设计应在正常启动路径中执行，而不要并发或从不合适的中断上下文触发整条用户初始化序列。
+- initcall 函数同步运行在 `mr_user_init` 的调用者上下文；模块本身不会强制切换到“线程上下文”。应在正常启动路径中调用它，不要并发调用，也不要从不合适的中断上下文触发整条用户初始化序列。
 - initcall 之间串行执行，无需自行加锁保护"只在本模块初始化中触碰"的数据。
 
 ### 12. 扩展与派生
@@ -319,7 +318,6 @@ typedef struct mr_initcall {                    /* mr_initcall.h:34 */
 | `mrX/kernel/initcall.c:35`                | `mr_kernel_init`：内核服务点亮序列       |
 | `mrX/kernel/initcall.c:56`                | 定时器接线（`mr_kernel_timer_init`）     |
 | `mrX/kernel/initcall.c:71`                | `mr_user_init`：幂等 + 段遍历            |
-| `user/linker.lds:65`                      | 宿主链接脚本的段收集规则                 |
 | `mrX/sections.toml`                       | 段规则模板（`mr_initcall.*` -> `.text`） |
 
 ### 14. 附录

@@ -366,7 +366,7 @@ void mr_libc_malloc_init(void) {
     /* Make the first block */
     blk = heap_block_make(__heap, sizeof(__heap));
 
-    /* Initialize heap information */
+    /* Init heap information */
     if (blk->size > 0) {
         __heap_info.total_bytes = blk->size;
         __heap_info.free_bytes = blk->size;

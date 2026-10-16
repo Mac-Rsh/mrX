@@ -68,10 +68,10 @@ static mr_slab_t  pool = MR_SLAB_INIT(pool_map, pool_buf, OBJ_SIZE, OBJ_NUM);
 void demo(void) {
     void *blk = mr_slab_alloc(&pool);
     if (blk == MR_NULL) {
-        return;                     /* Pool exhausted */
+        return;                     /* 池已耗尽 */
     }
 
-    /* Use blk (OBJ_SIZE bytes) here */
+    /* 在此使用 blk（OBJ_SIZE 字节） */
 
     mr_slab_free(&pool, blk);
 }
@@ -167,7 +167,7 @@ void mr_slab_free(mr_slab_t *slab, void *mem);
 ```
 
 - `mem`：必须是 `mr_slab_alloc` 返回的地址。
-- 返回：无。实现对地址范围和块边界做检查，不匹配时直接返回；调用者仍应把该接口限定在本 slab 产生的块指针上，不应把任意伪造地址当作可移植输入契约。
+- 返回：无。实现对地址范围和块边界做检查，不匹配时直接返回；调用者仍应只传入本 slab 分配出的块指针；“任意伪造地址也能被正确处理”不是本接口承诺的可移植契约。
 
 **`mr_slab_ptr2index` / `mr_slab_index2ptr`**
 
@@ -196,7 +196,7 @@ void slot_demo(void) {
     void *a = mr_slab_alloc(&msg_pool);
     void *b = mr_slab_alloc(&msg_pool);
 
-    /* Slots are handed out from index 0 upward */
+    /* 槽位从块号 0 起依次分配 */
     if ((a != MR_NULL) && (b != MR_NULL)) {
         int ia = mr_slab_ptr2index(&msg_pool, a);       /* 0 */
         int ib = mr_slab_ptr2index(&msg_pool, b);       /* 1 */
@@ -219,14 +219,14 @@ void exhaust_demo(void) {
         blk[i] = mr_slab_alloc(&msg_pool);
     }
     if (mr_slab_alloc(&msg_pool) == MR_NULL) {
-        /* Pool exhausted as expected */
+        /* 如预期池已耗尽 */
     }
 
     for (i = 0; i < MSG_NUM; i++) {
         mr_slab_free(&msg_pool, blk[i]);
     }
 
-    /* Freed blocks are reused from the lowest index again */
+    /* 释放的块再次从最低块号开始复用 */
     void *again = mr_slab_alloc(&msg_pool);
     if (again != MR_NULL) {
         mr_slab_free(&msg_pool, again);
@@ -304,10 +304,10 @@ slab 是内核中一个独立的固定块分配器，无功能宏开关、无初
 
 ```c
 typedef struct mr_slab {
-    mr_atomic_t *map;       /* Bitmap: one bit per block, 1 = allocated */
-    mr_uint32_t  size;      /* Block size in bytes */
-    mr_uint8_t  *buf;       /* Block buffer base */
-    mr_uint32_t  num;       /* Number of blocks (clamped to map capacity) */
+    mr_atomic_t *map;       /* 位图：每块一位，1 = 已分配 */
+    mr_uint32_t  size;      /* 单块字节数 */
+    mr_uint8_t  *buf;       /* 块缓冲基址 */
+    mr_uint32_t  num;       /* 块数（钳位到位图容量） */
 } mr_slab_t;
 ```
 
@@ -367,7 +367,7 @@ slab 无对象 clazz，也无 `MR_CLAZZES_DEFINE`/`MR_*_DERIVE_INIT` 一类的�
 
 - 桶级组合：需要多种规格时，定义多个 `mr_slab_t`（各自的位图与缓冲），由拥有者在外层按规格选桶；返回的块指针可经
   `MR_CONTAINER_OF`（`mrX/include/mrX/kernel/mr_service.h:32`）直接还原为定长外层对象，块本身不需要块头。返回值的块号可由
-  `mr_slab_ptr2index` 取得（`mr_slab.h:119`），是外层做槽位索引存储的现成抓手。
+  `mr_slab_ptr2index` 取得（`mr_slab.h:119`），可直接用作外层槽位索引存储的下标。
 - 结构体封装：自定义池类型把 `mr_slab_t` 作为成员，池的语义（复位、统计、批量回收）全部写在外层，模块不提供回调、ops
   表或注册函数。模块无函数指针成员，也无 `MR_USE_*`/`MR_CFG_*` 开关（见第 14 节），定制面仅剩 `MR_SLAB_MAP_BITS` /
   `MR_SLAB_MAP_SIZE` 换算宏与自己的位图容量。

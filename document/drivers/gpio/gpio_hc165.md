@@ -71,17 +71,17 @@ HC165 扩展解决的问题是： **片上 GPIO 引脚不够读入时，用最�
 
 void hc165_example(void) {
     mr_uint8_t level;
-    mr_driver_t *drv = mr_driver_find("gpio_hc165");    /* Name from template */
+    mr_driver_t *drv = mr_driver_find("gpio_hc165");    /* 名字取自硬件模板节点 */
 
     if (drv == MR_NULL) {
         return;
     }
-    mr_driver_setup(drv);       /* DEFER level: setup by the application */
+    mr_driver_setup(drv);       /* DEFER 级别：由应用调用 setup */
 
-    mr_gpio_input(drv, 0, MR_GPIO_PULL_NONE);   /* Initializes host pins once */
+    mr_gpio_input(drv, 0, MR_GPIO_PULL_NONE);   /* 首次调用会初始化宿主引脚 */
     mr_gpio_read(drv, 3, &level);
 
-    mr_driver_put(drv);         /* Release the reference from find */
+    mr_driver_put(drv);         /* 释放 find 获得的引用 */
 }
 ```
 
@@ -175,9 +175,9 @@ void hc165_poll_example(void) {
 
     while (1) {
         if (mr_gpio_port_read(drv, &mask) == sizeof(mask)) {
-            /* mask bit n is extended input n */
+            /* mask 的 bit n 对应扩展输入 n */
             if ((mask & (1U << 9)) != 0U) {
-                /* Input 9 active */
+                /* 输入 9 有效 */
             }
         }
     }
@@ -193,7 +193,7 @@ void hc165_active_low_example(mr_driver_t *drv) {
     mr_gpio_input(drv, 5, MR_GPIO_PULL_NONE);
     if (mr_gpio_read(drv, 5, &level) == 1) {
         if (level == MR_GPIO_LEVEL_HIGH) {
-            /* Logic high = physical released for an active-low key */
+            /* 逻辑高电平 = 低有效按键的物理释放态 */
         }
     }
 }
@@ -266,13 +266,13 @@ HC165 扩展是 [GPIO 驱动](gpio.md)框架层之下的一个 `ops` 实现，�
 
 ```c
 typedef struct drv_gpio_hc165_priv {
-    mr_ht_gpio_spec_t clk_inh;      /* Optional clock-inhibit pin */
-    mr_ht_gpio_spec_t ser;          /* Optional serial-input pin */
-    mr_ht_gpio_spec_t clk;          /* Shift clock pin */
-    mr_ht_gpio_spec_t sh;           /* Shift/load pin (SH/\!LD) */
-    mr_ht_gpio_spec_t qh;           /* Serial data-out pin */
-    mr_uint8_t cascade_num;         /* Chips in the chain, 1~4 */
-    mr_bool_t configured;           /* Host pins initialized */
+    mr_ht_gpio_spec_t clk_inh;      /* 可选时钟禁止引脚 */
+    mr_ht_gpio_spec_t ser;          /* 可选串行输入引脚 */
+    mr_ht_gpio_spec_t clk;          /* 移位时钟引脚 */
+    mr_ht_gpio_spec_t sh;           /* 移位/锁存引脚（SH/\!LD） */
+    mr_ht_gpio_spec_t qh;           /* 串行数据输出引脚 */
+    mr_uint8_t cascade_num;         /* 链上芯片数，1~4 */
+    mr_bool_t configured;           /* 宿主引脚已初始化 */
 } drv_gpio_hc165_priv_t;
 ```
 

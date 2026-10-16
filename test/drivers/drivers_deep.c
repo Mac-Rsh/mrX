@@ -1146,11 +1146,11 @@ MR_TEST(adc, d2_stream_start_zero_size_and_all_channels) {
         .size = 0,
     };
     mr_adc_stream_config_t linear = {
-        .sample_rate = 1000U,
+        .source = MR_ADC_STREAM_SOURCE_SOFTWARE,
         .circular = MR_FALSE,
     };
     mr_adc_stream_config_t circular = {
-        .sample_rate = 2000U,
+        .source = MR_ADC_STREAM_SOURCE_EXTERNAL,
         .circular = MR_TRUE,
     };
 
@@ -1164,14 +1164,16 @@ MR_TEST(adc, d2_stream_start_zero_size_and_all_channels) {
     MR_TEST_EXPECT_EQ_INT(mr_adc_stream_start(drv, &zero, &linear), 0);
     MR_TEST_EXPECT_EQ_INT(dd2_adc_stream_start_count, 1);
     MR_TEST_EXPECT_EQ_UINT(dd2_adc_last_seq.channels, 0U);
+    MR_TEST_EXPECT_EQ_INT(dd2_adc_last_stream_config.source,
+                          MR_ADC_STREAM_SOURCE_SOFTWARE);
     MR_TEST_EXPECT_EQ_INT(dd2_adc_last_stream_config.circular, MR_FALSE);
-    MR_TEST_EXPECT_EQ_UINT(dd2_adc_last_stream_config.sample_rate, 1000U);
 
     /* An all channels mask passes through without exist mask filtering */
     MR_TEST_EXPECT_EQ_INT(mr_adc_stream_start(drv, &all, &circular), 0);
     MR_TEST_EXPECT_EQ_UINT(dd2_adc_last_seq.channels, 0xffffffffU);
+    MR_TEST_EXPECT_EQ_INT(dd2_adc_last_stream_config.source,
+                          MR_ADC_STREAM_SOURCE_EXTERNAL);
     MR_TEST_EXPECT_EQ_INT(dd2_adc_last_stream_config.circular, MR_TRUE);
-    MR_TEST_EXPECT_EQ_UINT(dd2_adc_last_stream_config.sample_rate, 2000U);
 
     /* Stop after start, then a second stop, both succeed */
     MR_TEST_EXPECT_EQ_INT(mr_adc_stream_stop(drv), 0);
@@ -1251,12 +1253,18 @@ static int dd2_dac_write_count;
 static int dd2_dac_stream_start_count;
 static mr_dac_seq_t dd2_dac_last_seq;
 static mr_ssize_t dd2_dac_write_ret;
+#if defined(MR_USE_DRIVER_DAC_STREAM)
+static mr_dac_stream_config_t dd2_dac_last_stream_config;
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 
 static void dd2_dac_reset(void) {
     dd2_dac_write_count = 0;
     dd2_dac_stream_start_count = 0;
     dd2_dac_last_seq = (mr_dac_seq_t){0};
     dd2_dac_write_ret = 0;
+#if defined(MR_USE_DRIVER_DAC_STREAM)
+    dd2_dac_last_stream_config = (mr_dac_stream_config_t){0};
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 }
 
 static mr_ssize_t dd2_dac_write(const mr_driver_t *drv, mr_dac_seq_t *seq) {
@@ -1270,9 +1278,9 @@ static mr_ssize_t dd2_dac_write(const mr_driver_t *drv, mr_dac_seq_t *seq) {
 static mr_err_t dd2_dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
                                      const mr_dac_stream_config_t *config) {
     MR_IGNORE(drv);
-    MR_IGNORE(config);
     dd2_dac_stream_start_count++;
     dd2_dac_last_seq = *seq;
+    dd2_dac_last_stream_config = *config;
     return 0;
 }
 #endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
@@ -1344,7 +1352,7 @@ MR_TEST(dac, d2_stream_zero_size_and_optional_edges) {
         .size = 0,
     };
     mr_dac_stream_config_t config = {
-        .update_rate = 1000U,
+        .source = MR_DAC_STREAM_SOURCE_EXTERNAL,
         .circular = MR_TRUE,
     };
     mr_size_t offset = 77;
@@ -1360,6 +1368,9 @@ MR_TEST(dac, d2_stream_zero_size_and_optional_edges) {
     MR_TEST_EXPECT_EQ_INT(dd2_dac_stream_start_count, 1);
     MR_TEST_EXPECT_EQ_UINT(dd2_dac_last_seq.size, 0U);
     MR_TEST_EXPECT_EQ_PTR(dd2_dac_last_seq.buf, MR_NULL);
+    MR_TEST_EXPECT_EQ_INT(dd2_dac_last_stream_config.source,
+                          MR_DAC_STREAM_SOURCE_EXTERNAL);
+    MR_TEST_EXPECT_EQ_INT(dd2_dac_last_stream_config.circular, MR_TRUE);
 
     /* Unimplemented optional stream operations fail gracefully */
     MR_TEST_EXPECT_EQ_INT(mr_dac_stream_stop(drv), -MR_ENOSYS);

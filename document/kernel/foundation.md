@@ -26,7 +26,7 @@ static mr_list_t items = MR_LIST_INIT(&items);
 
 static void item_add(item_t *item) {
     mr_list_init(&item->node);
-    mr_list_add(&items, &item->node);       /* Add to tail. */
+    mr_list_add(&items, &item->node);       /* 尾插。 */
 }
 ```
 
@@ -52,7 +52,7 @@ static void item_add(item_t *item) {
 static mr_spinlock_t lock = MR_SPINLOCK_INIT();
 
 int mask = mr_spinlock_lock_irqsave(&lock);
-/* Short critical section. */
+/* 短临界区。 */
 mr_spinlock_unlock_irqrestore(&lock, mask);
 ```
 
@@ -70,10 +70,10 @@ mr_spinlock_unlock_irqrestore(&lock, mask);
 ### 4. 通用工具宏与奇偶校验
 
 `mr_service.h` 提供 `MR_CONTAINER_OF`、`MR_ARRAY_SIZE`、`MR_MIN/MAX`、`MR_ALIGN_UP/DOWN`、`MR_ROUND_DIV`、`MR_MAKE_LOCAL`
-、参数计数、拼接及条件展开等宏，以及 `mr_parity_even/odd`。
+、`MR_BSWAP16/32/64`、参数计数、拼接及条件展开等宏，以及 `mr_parity_even/odd`。
 
 `MR_MIN`、`MR_MAX` 可能多次求值参数，不得传入带自增、函数调用等副作用的表达式。`MR_ALIGN_UP/DOWN` 使用位运算，对齐值应为 2
-的幂。
+的幂。`MR_BSWAP16/32/64` 分别反转 16/32/64 位值的字节顺序，与当前 CPU 字节序无关；参数会多次求值，不得传入带副作用的表达式。
 
 ### 5. 预处理展开与版本
 

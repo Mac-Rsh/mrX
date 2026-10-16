@@ -166,11 +166,11 @@ void demo(void) {
 #include <mrX/kernel/mr_printf.h>
 
 void truncation_demo(void) {
-    /* Format result exceeds MR_CFG_PRINTF_BUF_SIZE - 1: truncated */
+    /* 格式化结果超过 MR_CFG_PRINTF_BUF_SIZE - 1：被截断 */
     int ret = mr_printf(
         "this_is_a_very_long_format_string_that_exceeds_sixty_four_bytes_%s\n",
         "done");
-    (void)ret;      /* Port receives at most MR_CFG_PRINTF_BUF_SIZE - 1 bytes */
+    (void)ret;      /* port 收到的至多 MR_CFG_PRINTF_BUF_SIZE - 1 字节 */
 }
 ```
 

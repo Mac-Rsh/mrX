@@ -49,19 +49,19 @@ static void hashmap_example(void) {
     mr_hashnode_t node;
     int value = 42;
 
-    /* Create a hashmap over caller-provided buckets */
+    /* 在调用者提供的桶数组上创建哈希表 */
     mr_hashmap_init(&map, buckets, BUCKET_NUM);
 
-    /* Add key 7 -> &value */
+    /* 添加键 7 -> &value */
     mr_hashnode_init(&node, 7, &value);
     mr_hashmap_add(&map, &node);
 
-    /* Lookup by key */
+    /* 按键查找 */
     if (mr_hashmap_find(&map, 7) == &node) {
-        /* Found: mr_hashnode_value(&node) == &value */
+        /* 命中：mr_hashnode_value(&node) == &value */
     }
 
-    /* Remove */
+    /* 删除 */
     mr_hashmap_del(&node);
 }
 ```
@@ -163,7 +163,7 @@ mr_hashnode_t *mr_hashmap_find(mr_hashmap_t *map, mr_uint32_t key);
 
 ```c
 struct my_item {
-    mr_hashnode_t node;     /* Embedded node */
+    mr_hashnode_t node;     /* 内嵌节点 */
     void *payload;
 };
 
@@ -251,14 +251,14 @@ static void drop_even_keys(mr_hashmap_t *map) {
 
 ```c
 typedef struct mr_hashmap {         /* mrX/include/mrX/kernel/mr_hashmap.h:25 */
-    mr_list_t  *buckets;            /* Caller-provided bucket array */
-    mr_uint32_t bucket_num;         /* Bucket count */
+    mr_list_t  *buckets;            /* 调用者提供的桶数组 */
+    mr_uint32_t bucket_num;         /* 桶数 */
 } mr_hashmap_t;
 
 typedef struct mr_hashnode {        /* mr_hashmap.h:31 */
-    mr_list_t   list;               /* Chain node inside a bucket */
-    mr_uint32_t key;                /* Lookup key (read-only while added) */
-    void       *value;              /* User payload */
+    mr_list_t   list;               /* 桶内冲突链节点 */
+    mr_uint32_t key;                /* 查找键（链入期间只读） */
+    void       *value;              /* 用户 payload */
 } mr_hashnode_t;
 ```
 

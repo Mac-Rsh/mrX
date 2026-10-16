@@ -54,10 +54,16 @@ typedef struct mr_dac_seq {
 } mr_dac_seq_t;
 
 #if defined(MR_USE_DRIVER_DAC_STREAM)
+/* DAC stream source definition */
+typedef enum mr_dac_stream_source {
+    MR_DAC_STREAM_SOURCE_SOFTWARE,
+    MR_DAC_STREAM_SOURCE_EXTERNAL,
+} mr_dac_stream_source_t;
+
 /* DAC stream configuration type */
 typedef struct mr_dac_stream_config {
-    mr_uint64_t update_rate;
-    mr_bool_t circular;
+    mr_uint8_t source: 1;
+    mr_uint8_t circular: 1;
 } mr_dac_stream_config_t;
 #endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 

@@ -88,7 +88,7 @@ static void mr_fs_rootfs_init(void) {
     mr_file_system_register(&__rootfs);
 
     /* Mount root */
-    ret = mr_fs_mount_root(MR_NULL, FS_NAME, 0, MR_NULL);
+    ret = mr_fs_mount_root(MR_NULL, "rootfs", 0, MR_NULL);
     MR_ASSERT((ret == 0) || (ret == (-MR_EBUSY)));
 }
 MR_INIT_EXPORT(mr_fs_rootfs_init, MR_INIT_LEVEL_FS);

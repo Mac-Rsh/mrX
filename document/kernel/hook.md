@@ -61,17 +61,17 @@ static void add_one(void) { sum += 1; }
 static void add_two(void) { sum += 2; }
 
 void my_hook_example(void) {
-    mr_ptr_t buf[4];                        /* Caller-provided storage */
+    mr_ptr_t buf[4];                        /* 调用者提供的存储区 */
     my_hook_fn_t *entry;
     mr_uint32_t i;
 
-    mr_hook_t hook = MR_HOOK_INIT(buf, 4);  /* Static initialization */
+    mr_hook_t hook = MR_HOOK_INIT(buf, 4);  /* 静态初始化 */
 
     mr_hook_add(&hook, (mr_ptr_t)add_one);
     mr_hook_add(&hook, (mr_ptr_t)add_two);
 
     MR_HOOK_EACH(i, entry, my_hook_fn_t, &hook) {
-        entry();                            /* sum == 3 after the loop */
+        entry();                            /* 循环结束后 sum == 3 */
     }
 }
 ```
@@ -192,7 +192,7 @@ void full_example(void) {
     if (mr_hook_add(&hook, (mr_ptr_t)full_example) != 0) {
         return;
     }
-    /* Third add on a 2-slot hook returns -MR_ENOMEM */
+    /* 2 槽钩子第三次 add 返回 -MR_ENOMEM */
 }
 ```
 
@@ -220,7 +220,7 @@ clock hook，决定剩余槽位。
 
 **Q：钩子容器能放栈上吗？**
 
-仅当注册与遍历都发生在同一作用域内生命周期覆盖使用全程时才可以。跨上下文使用 （如中断注册、线程遍历）应使用全局或静态存储。
+仅当容器生命周期覆盖全部使用过程、注册与遍历都发生在同一作用域内时才可以。跨上下文使用 （如中断注册、线程遍历）应使用全局或静态存储。
 
 ---
 
@@ -257,9 +257,9 @@ MR_CFG_CLOCK_HOOK_SIZE)` 构造钩子表；`mr_clock_hook_add`（`clock.c:85`）
 
 ```c
 typedef struct mr_hook {                /* mrX/include/mrX/kernel/mr_hook.h:26 */
-    mr_ptr_t *entry;                    /* Function pointer array (caller-owned) */
-    mr_uint16_t size;                   /* Capacity (number of slots) */
-    mr_uint16_t next;                   /* Number of registered entries */
+    mr_ptr_t *entry;                    /* 函数指针数组（归调用者所有） */
+    mr_uint16_t size;                   /* 容量（槽位数） */
+    mr_uint16_t next;                   /* 已注册条目数 */
 } mr_hook_t;
 ```
 

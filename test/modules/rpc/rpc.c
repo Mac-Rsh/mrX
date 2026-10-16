@@ -9,6 +9,7 @@
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST) && defined(MR_USE_MODULE_RPC)
 #include <mrX/modules/rpc/mr_rpc.h>
+#include <mrX/libc/mr_malloc.h>
 #include <mrX/libc/mr_errno.h>
 #include <mrX/libc/mr_string.h>
 
@@ -22,6 +23,10 @@ typedef struct test_rpc_io {
     mr_uint32_t size;
     mr_uint32_t limit;
     mr_err_t send_error;
+    mr_uint32_t error_after;
+    mr_rpc_t *submit_rpc;
+    mr_rpc_session_t *submit_on_error;
+    mr_err_t submit_result;
     mr_err_t flush_result;
     mr_uint32_t send_calls;
     mr_uint32_t flush_calls;
@@ -92,6 +97,86 @@ static const mr_rpc_session_ops_t test_rpc_external_ops = {
     .release = test_rpc_owner_release,
 };
 
+typedef struct test_rpc_dynamic_owner {
+    mr_rpc_session_t *session;
+    mr_err_t result;
+    mr_uint32_t complete_count;
+    mr_uint32_t release_count;
+    mr_bool_t callback_failed;
+    mr_bool_t consume_on_complete;
+    mr_err_t consume_result;
+} test_rpc_dynamic_owner_t;
+
+static void test_rpc_dynamic_complete(mr_rpc_session_t *session,
+                                      mr_err_t result, void *owner) {
+    test_rpc_dynamic_owner_t *ctx = owner;
+
+    if (ctx->session != session) {
+        ctx->callback_failed = MR_TRUE;
+    }
+    ctx->result = result;
+    ctx->complete_count++;
+    if (ctx->consume_on_complete) {
+        ctx->consume_result = mr_rpc_session_consume(session);
+        if (ctx->release_count != 0U) {
+            ctx->callback_failed = MR_TRUE;
+        }
+    }
+}
+
+static void test_rpc_dynamic_release(mr_rpc_session_t *session, void *owner) {
+    test_rpc_dynamic_owner_t *ctx = owner;
+
+    if (ctx->session != session) {
+        ctx->callback_failed = MR_TRUE;
+    }
+    ctx->session = MR_NULL;
+    ctx->release_count++;
+    mr_free(session);
+}
+
+static const mr_rpc_session_ops_t test_rpc_dynamic_ops = {
+    .complete = test_rpc_dynamic_complete,
+    .release = test_rpc_dynamic_release,
+};
+
+/* Build a dynamic session fixture using only the public core API. */
+static mr_err_t test_rpc_dynamic_submit(mr_rpc_t *rpc,
+                                        test_rpc_dynamic_owner_t *owner,
+                                        mr_uint16_t method, const void *data,
+                                        mr_uint32_t size) {
+    mr_err_t ret;
+
+    owner->session = mr_malloc(sizeof(*owner->session));
+    if (!owner->session) {
+        return -MR_ENOMEM;
+    }
+    mr_memset(owner->session, 0, sizeof(*owner->session));
+    mr_rpc_session_init(owner->session, &test_rpc_dynamic_ops, owner);
+    owner->session->request.type = MR_RPC_MSG_REQUEST;
+    owner->session->request.service = 1U;
+    owner->session->request.method = method;
+    owner->session->recv.size = size;
+    if (size != 0U) {
+        mr_memcpy(&owner->session->request.payload, data, size);
+    }
+    ret = mr_rpc_submit(rpc, owner->session);
+    if (ret < 0) {
+        mr_free(owner->session);
+        owner->session = MR_NULL;
+    }
+    return ret;
+}
+
+#if defined(MR_USE_MODULE_RPC_HOOK)
+static void test_rpc_dynamic_wakeup(mr_rpc_t *rpc, mr_rpc_event_t event,
+                                    void *param) {
+    if (event == MR_RPC_EVENT_EXECUTE) {
+        *(mr_err_t *)param = mr_rpc_execute(rpc);
+    }
+}
+#endif /* defined(MR_USE_MODULE_RPC_HOOK) */
+
 static mr_uint16_t test_rpc_fletcher16(const void *data, mr_uint32_t size) {
     const mr_uint8_t *bytes;
     mr_uint32_t sum1, sum2, n, x;
@@ -133,7 +218,13 @@ static mr_ssize_t test_rpc_send(void *priv, const void *buf,
     mr_uint32_t count;
 
     io->send_calls++;
-    if (io->send_error != 0) {
+    if ((io->send_error != 0)
+        && ((io->error_after == 0U) || (io->size >= io->error_after))) {
+        if (io->submit_on_error) {
+            io->submit_result = mr_rpc_submit(io->submit_rpc,
+                                               io->submit_on_error);
+            io->submit_on_error = MR_NULL;
+        }
         return io->send_error;
     }
     if (io->blocked) {
@@ -142,6 +233,9 @@ static mr_ssize_t test_rpc_send(void *priv, const void *buf,
     count = size;
     if ((io->limit != 0U) && (count > io->limit)) {
         count = io->limit;
+    }
+    if ((io->send_error != 0) && (io->error_after != 0U)) {
+        count = MR_MIN(count, io->error_after - io->size);
     }
     if ((io->size + count) > sizeof(io->output)) {
         return -MR_ENOMEM;
@@ -1388,6 +1482,285 @@ MR_TEST(rpc, external_compact_codec) {
     MR_TEST_EXPECT_EQ_UINT(owner.session.response.frame.payload_size, 0U);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_session_consume(&owner.session), 0);
     MR_TEST_EXPECT_EQ_UINT(owner.release_count, 2U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+}
+
+MR_TEST(rpc, dynamic_session_compact_codec) {
+    test_rpc_dynamic_owner_t owner = {0};
+    test_rpc_io_t io;
+    mr_rpc_t rpc = {0};
+    mr_rpc_frame_t response;
+    const mr_uint8_t *response_payload;
+    mr_uint8_t payload[128], compact[14];
+    mr_uint32_t size, count;
+    mr_size_t used_before;
+
+    test_rpc_io_reset(&io);
+    test_rpc_entries_reset();
+    used_before = mr_heap_information(MR_FALSE).used_bytes;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, &test_rpc_ops, &io), 0);
+
+    /* Use the generated variable-length codec through both RPC paths. */
+    size = test_rpc_mix_payload(payload);
+    io.send_error = -MR_EIO;
+    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST,
+                                            MR_RPC_FRAME_FLAG_CHECKSUM, 1303U,
+                                            1U, 0U, payload, size),
+                          -MR_EIO);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_dynamic_submit(&rpc, &owner, 0U, payload, size), 0);
+    /* The input buffer is disposable immediately after submission. */
+    mr_memset(payload, 0, sizeof(payload));
+    MR_TEST_EXPECT_EQ_INT(owner.session->state, MR_RPC_SESSION_STATE_PENDING);
+    MR_TEST_EXPECT_EQ_PTR(owner.session->ops, &test_rpc_dynamic_ops);
+    MR_TEST_EXPECT_EQ_PTR(owner.session->owner, &owner);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), -MR_EIO);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 1U);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 0U);
+    MR_TEST_EXPECT_EQ_INT(owner.result, 7);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_last_mix.title.size, 3U);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_last_mix.count, 0x12345678U);
+    MR_TEST_ASSERT_EQ_INT(owner.session->state, MR_RPC_SESSION_STATE_READY);
+    MR_TEST_EXPECT_EQ_INT(owner.session->response.frame.value.result, 7);
+    MR_TEST_ASSERT_EQ_UINT(owner.session->response.frame.payload_size,
+                           sizeof(compact));
+    mr_memcpy(compact, &owner.session->response.payload, sizeof(compact));
+    mr_memcpy(&count, compact + 3U, sizeof(count));
+    MR_TEST_EXPECT_EQ_UINT(count, 0x12345679U);
+    MR_TEST_EXPECT_EQ_UINT(compact[0], 2U);
+    MR_TEST_EXPECT_EQ_UINT(compact[13], 0x5aU);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_session_consume(owner.session), 0);
+    MR_TEST_EXPECT_EQ_PTR(owner.session, MR_NULL);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+
+    MR_TEST_EXPECT_EQ_INT(owner.callback_failed, MR_FALSE);
+
+    /* Recovery produces the same compact bytes in the remote response. */
+    io.send_error = 0;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_flush(&rpc), 0);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(response.value.result, 7);
+    MR_TEST_ASSERT_EQ_UINT(response.payload_size, sizeof(compact));
+    MR_TEST_EXPECT_EQ_INT(mr_memcmp(response_payload, compact, sizeof(compact)),
+                          0);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 2U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+    MR_TEST_EXPECT_EQ_UINT(mr_heap_information(MR_FALSE).used_bytes,
+                           used_before);
+}
+
+MR_TEST(rpc, dynamic_session_lifecycle) {
+    test_rpc_dynamic_owner_t owner = {0}, rejected = {0};
+    mr_rpc_t rpc = {0};
+    mr_rpc_session_t *held;
+    mr_size_t used_before;
+    mr_uint32_t i;
+
+    test_rpc_entries_reset();
+    used_before = mr_heap_information(MR_FALSE).used_bytes;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, MR_NULL, MR_NULL), 0);
+
+    /* Cancellation uses the core API and the supplied release frees storage. */
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_dynamic_submit(&rpc, &owner, 3U, MR_NULL, 0U), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_session_cancel(owner.session), 0);
+    MR_TEST_EXPECT_EQ_PTR(owner.session, MR_NULL);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 0U);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+
+    /* Each completion can consume immediately; release waits for its return. */
+    for (i = 0U; i < 16U; i++) {
+        mr_memset(&owner, 0, sizeof(owner));
+        owner.consume_on_complete = MR_TRUE;
+        MR_TEST_ASSERT_EQ_INT(
+            test_rpc_dynamic_submit(&rpc, &owner, 3U, MR_NULL, 0U), 0);
+        MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+        MR_TEST_EXPECT_EQ_PTR(owner.session, MR_NULL);
+        MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 1U);
+        MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+        MR_TEST_EXPECT_EQ_INT(owner.result, 10);
+        MR_TEST_EXPECT_EQ_INT(owner.consume_result, 0);
+        MR_TEST_EXPECT_EQ_INT(owner.callback_failed, MR_FALSE);
+    }
+
+#if defined(MR_USE_MODULE_RPC_HOOK)
+    {
+        mr_err_t execute_result = -MR_EIO;
+        const mr_rpc_hook_t hook = {
+            .wakeup = test_rpc_dynamic_wakeup,
+            .param = &execute_result,
+        };
+        static const mr_rpc_hook_t idle_hook = {0};
+
+        mr_memset(&owner, 0, sizeof(owner));
+        owner.consume_on_complete = MR_TRUE;
+        MR_TEST_ASSERT_EQ_INT(mr_rpc_hook_set(&rpc, &hook), 0);
+        /* The session may already be freed when submit returns. */
+        MR_TEST_ASSERT_EQ_INT(
+            test_rpc_dynamic_submit(&rpc, &owner, 3U, MR_NULL, 0U), 0);
+        MR_TEST_EXPECT_EQ_INT(execute_result, 0);
+        MR_TEST_EXPECT_EQ_PTR(owner.session, MR_NULL);
+        MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 1U);
+        MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+        MR_TEST_EXPECT_EQ_INT(owner.consume_result, 0);
+        MR_TEST_EXPECT_EQ_INT(owner.callback_failed, MR_FALSE);
+        MR_TEST_ASSERT_EQ_INT(mr_rpc_hook_set(&rpc, &idle_hook), 0);
+    }
+#endif /* defined(MR_USE_MODULE_RPC_HOOK) */
+
+    /* A held session must remain allocated after cancellation. */
+    mr_memset(&owner, 0, sizeof(owner));
+    test_rpc_mode = TEST_RPC_MODE_HOLD;
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_dynamic_submit(&rpc, &owner, 3U, MR_NULL, 0U), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_ASSERT_EQ_UINT(test_rpc_held_count, 1U);
+    MR_TEST_ASSERT_EQ_PTR(test_rpc_held[0], owner.session);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_session_cancel(owner.session), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 0U);
+    held = test_rpc_held[0];
+    test_rpc_held[0] = MR_NULL;
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_session_drop(held), 0);
+    MR_TEST_EXPECT_EQ_PTR(owner.session, MR_NULL);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 0U);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+    MR_TEST_EXPECT_EQ_INT(owner.callback_failed, MR_FALSE);
+
+    /* Ready storage retains the dying RPC while another submit is rejected. */
+    mr_memset(&owner, 0, sizeof(owner));
+    test_rpc_mode = TEST_RPC_MODE_NORMAL;
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_dynamic_submit(&rpc, &owner, 3U, MR_NULL, 0U), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_del(&rpc), 0);
+    MR_TEST_EXPECT_EQ_INT(
+        test_rpc_dynamic_submit(&rpc, &rejected, 3U, MR_NULL, 0U), -MR_ENOENT);
+    MR_TEST_EXPECT_EQ_PTR(rejected.session, MR_NULL);
+    MR_TEST_EXPECT_EQ_UINT(rejected.complete_count, 0U);
+    MR_TEST_EXPECT_EQ_UINT(rejected.release_count, 0U);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_session_consume(owner.session), 0);
+    MR_TEST_EXPECT_EQ_PTR(owner.session, MR_NULL);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+    MR_TEST_EXPECT_EQ_UINT(mr_heap_information(MR_FALSE).used_bytes,
+                           used_before);
+}
+
+MR_TEST(rpc, local_dispatch_with_failed_transport) {
+    test_rpc_owner_t owners[2];
+    test_rpc_io_t io;
+    mr_rpc_t rpc;
+    mr_uint32_t calls, i;
+
+    test_rpc_io_reset(&io);
+    test_rpc_entries_reset();
+    mr_memset(owners, 0, sizeof(owners));
+    mr_memset(&rpc, 0, sizeof(rpc));
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, &test_rpc_ops, &io), 0);
+
+    /* Keep a remote response pending before submitting local requests. */
+    io.send_error = -MR_EIO;
+    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST,
+                                            MR_RPC_FRAME_FLAG_CHECKSUM,
+                                            1301U, 1U, 3U, MR_NULL, 0U),
+                          -MR_EIO);
+    MR_TEST_ASSERT_NE_PTR(rpc.send.session, MR_NULL);
+    calls = io.send_calls;
+    for (i = 0U; i < MR_ARRAY_SIZE(owners); i++) {
+        mr_rpc_session_init(&owners[i].session, &test_rpc_external_ops,
+                             &owners[i]);
+        owners[i].session.request.type = MR_RPC_MSG_REQUEST;
+        owners[i].session.request.service = 1U;
+        owners[i].session.request.method = 3U;
+        MR_TEST_ASSERT_EQ_INT(mr_rpc_submit(&rpc, &owners[i].session), 0);
+    }
+
+    /* One failed send attempt must not block either local completion. */
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), -MR_EIO);
+    MR_TEST_EXPECT_EQ_UINT(io.send_calls, calls + 1U);
+    MR_TEST_EXPECT_EQ_UINT(io.flush_calls, 0U);
+    MR_TEST_EXPECT_EQ_UINT(io.size, 0U);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 3U);
+    for (i = 0U; i < MR_ARRAY_SIZE(owners); i++) {
+        MR_TEST_EXPECT_EQ_UINT(owners[i].complete_count, 1U);
+        MR_TEST_EXPECT_EQ_UINT(owners[i].release_count, 0U);
+        MR_TEST_EXPECT_EQ_INT(owners[i].result, 10);
+        MR_TEST_EXPECT_EQ_INT(mr_rpc_session_consume(&owners[i].session), 0);
+        MR_TEST_EXPECT_EQ_UINT(owners[i].release_count, 1U);
+    }
+
+    /* Recovery sends the original response without invoking it again. */
+    io.send_error = 0;
+    io.limit = 3U;
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_flush(&rpc), 0);
+    MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 1301U, 10), MR_TRUE);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 3U);
+    MR_TEST_EXPECT_EQ_PTR(rpc.send.session, MR_NULL);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
+}
+
+MR_TEST(rpc, local_dispatch_after_partial_send_failure) {
+    test_rpc_owner_t owner;
+    test_rpc_packet_t packet;
+    mr_uint8_t payload[128];
+    const mr_uint8_t *response_payload;
+    mr_rpc_frame_t response;
+    test_rpc_io_t io;
+    mr_rpc_t rpc;
+    mr_uint32_t count, size;
+
+    test_rpc_io_reset(&io);
+    test_rpc_entries_reset();
+    mr_memset(&owner, 0, sizeof(owner));
+    mr_memset(&rpc, 0, sizeof(rpc));
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, &test_rpc_ops, &io), 0);
+
+    /* Submit a local request when a remote send fails during this batch. */
+    mr_rpc_session_init(&owner.session, &test_rpc_external_ops, &owner);
+    owner.session.request.type = MR_RPC_MSG_REQUEST;
+    owner.session.request.service = 1U;
+    owner.session.request.method = 3U;
+    io.submit_rpc = &rpc;
+    io.submit_on_error = &owner.session;
+
+    /* Fail inside a variable-length response, after sending its header. */
+    size = test_rpc_mix_payload(payload);
+    io.limit = 3U;
+    io.error_after = TEST_RPC_FRAME_SIZE + 5U;
+    io.send_error = -MR_EIO;
+    test_rpc_packet_build(&packet, MR_RPC_MSG_REQUEST,
+                          MR_RPC_FRAME_FLAG_CHECKSUM, 1302U, 1U, 0U,
+                          payload, size);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
+                          packet.size);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), -MR_EIO);
+    MR_TEST_ASSERT_NE_PTR(rpc.send.session, MR_NULL);
+    MR_TEST_EXPECT_EQ_UINT(rpc.send.session->send.off, io.error_after);
+    MR_TEST_EXPECT_EQ_UINT(io.size, io.error_after);
+
+    /* The newly queued local request runs despite the mid-batch failure. */
+    MR_TEST_EXPECT_EQ_INT(io.submit_result, 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 1U);
+    MR_TEST_EXPECT_EQ_INT(owner.result, 10);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_consume(&owner.session), 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.release_count, 1U);
+
+    /* Continue from the saved cursor; frame parsing validates the checksum. */
+    io.send_error = 0;
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
+    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
+                                                 &response_payload),
+                          MR_TRUE);
+    MR_TEST_EXPECT_EQ_UINT(response.session, 1302U);
+    MR_TEST_EXPECT_EQ_INT(response.value.result, 7);
+    MR_TEST_EXPECT_EQ_UINT(response.payload_size, 14U);
+    MR_TEST_EXPECT_EQ_UINT(response_payload[0], 2U);
+    mr_memcpy(&count, response_payload + 3U, sizeof(count));
+    MR_TEST_EXPECT_EQ_UINT(count, 0x12345679U);
+    MR_TEST_EXPECT_EQ_UINT(response_payload[12], 0xa5U);
+    MR_TEST_EXPECT_EQ_UINT(response_payload[13], 0x5aU);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 2U);
+    MR_TEST_EXPECT_EQ_PTR(rpc.send.session, MR_NULL);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
 }
 

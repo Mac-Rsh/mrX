@@ -15,5 +15,7 @@ config MR_USE_DRIVER_GPIO
             - Triggered interrupt support (rising/falling/both/high/low)
             - Port-based batch operations for efficiency
         Fundamental for controlling LEDs, buttons, switches, and chip selects.
+        HardTree backends also support PCF8574/PCF8574A and PCA9555 over I2C,
+        and MCP23017/MCP23S17 over I2C/SPI when that bus driver is enabled.
 
 endmenu

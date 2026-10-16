@@ -6,7 +6,7 @@
 | 项       | 说明                                                                                |
 |----------|-------------------------------------------------------------------------------------|
 | 功能宏   | `MR_USE_MODULE_XVM_DEBUG`（依赖 `MR_USE_MODULE_XVM`）                               |
-| 头文件   | `<mrX/modules/xvm/mr_xvm_debug.h>`                                                    |
+| 头文件   | `<mrX/modules/xvm/mr_xvm_debug.h>`                                                  |
 | 依赖模块 | [虚拟机 XVM](xvm.md)（调试单元内嵌于 `mr_xvm_t`）                                   |
 | 参考测试 | 无独立测试（断点与门控行为由 `mrX/test/modules/xvm/gdb.c` 经 [GDB 桩](gdb.md)覆盖） |
 
@@ -22,7 +22,8 @@
 
 - 地址比较断点：ISA 在取指前上报 PC，命中即停机，无需软件插桩。
 - 探针（probe）：每个 XVM 至多一个调试代理，通过回调获知每次停机原因。
-- 步进门控（step gate）：公开常量定义暂停（HOLD）、单步（STEP）、放开（OPEN）；底层字段实际是 `mr_uint32_t` 上限值，setter 不校验只能取这三档。
+- 步进门控（step gate）：公开常量定义暂停（HOLD）、单步（STEP）、放开（OPEN）；底层字段是 `mr_uint32_t` 上限值，setter
+  不做取值校验，推荐只使用这三个公开常量。
 - 跳过（skip）：从断点处继续/单步时只消耗同地址的下一次命中，避免原地打转。
 - 目标描述（target）：向调试代理透出 ISA 的架构名与寄存器表。
 
@@ -41,7 +42,8 @@
 #include <mrX/modules/xvm/mr_xvm_debug.h>
 ```
 
-注意：断点能否生效取决于 ISA 后端是否在取指前调用 `mr_xvm_debug_break_hit`。 内置 RISCV32 后端已支持（[虚拟机 XVM](xvm.md) 第
+注意：断点能否生效取决于 ISA 后端是否在取指前调用 `mr_xvm_debug_break_hit`。 内置 RISCV32 后端已支持（[虚拟机 XVM](xvm.md)
+第
 12 节）。
 
 ### 3. 快速上手
@@ -53,7 +55,7 @@
 
 static void my_probe(void *priv, mr_xvm_return_t exec_ret,
                      mr_xvm_event_t *event) {
-    /* Called on every debug stop: breakpoint hit or completed single-step */
+    /* 每次调试停机时调用：断点命中或单步完成 */
     (void)priv;
     (void)exec_ret;
     (void)event;
@@ -61,13 +63,13 @@ static void my_probe(void *priv, mr_xvm_return_t exec_ret,
 
 void debug_once(mr_xvm_t *xvm) {
     mr_xvm_debug_probe_attach(xvm, my_probe, MR_NULL);
-    mr_xvm_debug_break_insert(xvm, 0x104);            /* Break at address */
+    mr_xvm_debug_break_insert(xvm, 0x104);            /* 在该地址设断点 */
 
     mr_xvm_debug_probe_set_gate(xvm, MR_XVM_DEBUG_GATE_OPEN);
-    /* Each mr_xvm_execute() now stops at the breakpoint; the probe fires and
-     * execution is held afterwards */
+    /* 此后每次 mr_xvm_execute() 都会在断点处停机；探针触发后
+     * 执行被 HOLD 住 */
 
-    mr_xvm_debug_probe_detach(xvm);                   /* Restore free running */
+    mr_xvm_debug_probe_detach(xvm);                   /* 恢复自由运行 */
 }
 ```
 
@@ -81,8 +83,8 @@ void debug_once(mr_xvm_t *xvm) {
 
 **步进门控**：探针附上后，每次 `mr_xvm_execute` 的步数会被门控钳制：
 
-| 门控值                               | 语义                                                                  |
-|--------------------------------------|-----------------------------------------------------------------------|
+| 门控值                                 | 语义                                                                  |
+|----------------------------------------|-----------------------------------------------------------------------|
 | `MR_XVM_DEBUG_GATE_HOLD`（0）          | 暂停：本次 `execute` 不执行任何指令                                   |
 | `MR_XVM_DEBUG_GATE_STEP`（1）          | 单步：本次最多执行 1 条；若正常跑完（返回 `MR_XVM_NONE`）视为调试停机 |
 | `MR_XVM_DEBUG_GATE_OPEN`（0xFFFFFFFF） | 放开：对传入 step 不再额外收紧，由 ISA 自己决定何时停止               |
@@ -104,15 +106,16 @@ HOLD，并向 `mr_xvm_execute` 返回 `MR_XVM_NONE`。`MR_XVM_SYSCALL` 与 `MR_X
 
 **回调上下文**：probe 回调在 `mr_xvm_execute` 调用者上下文中同步执行，且此时 XVM 的 execute lock 仍然持有。回调发生在恢复
 RUNNING / 置 HOLD **之前**：异常停机时 `status` 已是 EXCEPT，单步完成时通常仍是 RUNNING，`step_gate`
-也仍是触发本次停机的原值。回调内可直接使用不再获取 execute lock 的调试/寄存器接口；不要重入 `mr_xvm_execute`，也不要让其他上下文同时修改
+也仍是触发本次停机的原值。回调内可直接使用那些不获取 execute lock 的调试/寄存器接口；不要重入 `mr_xvm_execute`
+，也不要让其他上下文同时修改
 debug 状态。
 
 ### 5. API 参考
 
 探针管理：
 
-| API                         | 说明                                         |
-|-----------------------------|----------------------------------------------|
+| API                           | 说明                                         |
+|-------------------------------|----------------------------------------------|
 | `mr_xvm_debug_probe_attach`   | 附加探针（每个 XVM 一个），成功后门控置 HOLD |
 | `mr_xvm_debug_probe_detach`   | 摘除探针，开门并清空断点                     |
 | `mr_xvm_debug_probe_set_gate` | 设置步进门控                                 |
@@ -120,8 +123,8 @@ debug 状态。
 
 断点管理：
 
-| API                       | 说明                                        |
-|---------------------------|---------------------------------------------|
+| API                         | 说明                                        |
+|-----------------------------|---------------------------------------------|
 | `mr_xvm_debug_break_insert` | 插入地址断点（重复地址幂等）                |
 | `mr_xvm_debug_break_remove` | 移除地址断点                                |
 | `mr_xvm_debug_break_clear`  | 清空断点表与跳过标记                        |
@@ -130,8 +133,8 @@ debug 状态。
 
 内部挂钩（由 [虚拟机 XVM](xvm.md) 调用，应用一般不直接使用）：
 
-| API                      | 说明                             |
-|--------------------------|----------------------------------|
+| API                        | 说明                             |
+|----------------------------|----------------------------------|
 | `mr_xvm_debug_init`        | XVM 初始化时初始化调试单元       |
 | `mr_xvm_debug_probe_enter` | ISA 执行前按门控钳制 step        |
 | `mr_xvm_debug_probe_leave` | ISA 执行后回收调试停机、通知探针 |
@@ -154,7 +157,8 @@ mr_err_t mr_xvm_debug_probe_attach(mr_xvm_t *xvm,
 void mr_xvm_debug_probe_set_gate(mr_xvm_t *xvm, mr_uint32_t gate);
 ```
 
-推荐 `gate` 使用 `MR_XVM_DEBUG_GATE_HOLD` / `MR_XVM_DEBUG_GATE_STEP` / `MR_XVM_DEBUG_GATE_OPEN`。实现只是把任意 `mr_uint32_t`
+推荐 `gate` 使用 `MR_XVM_DEBUG_GATE_HOLD` / `MR_XVM_DEBUG_GATE_STEP` / `MR_XVM_DEBUG_GATE_OPEN`。实现只是把任意
+`mr_uint32_t`
 原样写入 `step_gate`，没有合法值检查。
 
 **`mr_xvm_debug_break_insert` / `mr_xvm_debug_break_remove`**
@@ -184,7 +188,7 @@ static void probe(void *priv, mr_xvm_return_t exec_ret, mr_xvm_event_t *event) {
     mr_xvm_t *xvm = priv;
     mr_uint64_t pc = 0;
 
-    mr_xvm_reg_load(xvm, 32, &pc);      /* 32 = PC on riscv32 */
+    mr_xvm_reg_load(xvm, 32, &pc);      /* riscv32 上 32 号为 PC */
     (void)exec_ret;
     (void)event;
 }
@@ -196,13 +200,13 @@ void step_over_breakpoint(mr_xvm_t *xvm) {
     mr_xvm_debug_break_insert(xvm, 0x104);
     mr_xvm_debug_probe_set_gate(xvm, MR_XVM_DEBUG_GATE_OPEN);
 
-    /* Runs until PC == 0x104; probe fires, gate is HOLD afterwards */
+    /* 运行至 PC == 0x104；探针触发，之后门控为 HOLD */
     mr_xvm_execute(xvm, &event, 100);
 
-    /* Single-step: skip the breakpoint at the current PC first */
+    /* 单步：先跳过当前 PC 处的断点 */
     mr_xvm_debug_break_skip(xvm, 0x104);
     mr_xvm_debug_probe_set_gate(xvm, MR_XVM_DEBUG_GATE_STEP);
-    mr_xvm_execute(xvm, &event, 100);   /* ISA step is clamped to at most one instruction */
+    mr_xvm_execute(xvm, &event, 100);   /* ISA 步数被钳制到最多一条指令 */
 }
 ```
 
@@ -212,7 +216,7 @@ void step_over_breakpoint(mr_xvm_t *xvm) {
 void continue_running(mr_xvm_t *xvm) {
     mr_xvm_debug_break_remove(xvm, 0x104);
     mr_xvm_debug_probe_set_gate(xvm, MR_XVM_DEBUG_GATE_OPEN);
-    /* Next mr_xvm_execute() resumes freely; breakpoint no longer stops */
+    /* 下次 mr_xvm_execute() 自由运行，断点不再停机 */
 }
 ```
 
@@ -267,7 +271,8 @@ BREAK”判断来源。
    探针回调（GDB 桩 / 用户代理）
 ```
 
-模块自身无独立初始化入口：`mr_xvm_debug_init` 由 `xvm_init` 在创建时调用 （`mrX/modules/xvm/xvm.c:40-43`），从 ISA 读取 target
+模块自身无独立初始化入口：`mr_xvm_debug_init` 由 `xvm_init` 在创建时调用 （`mrX/modules/xvm/xvm.c:40-43`），从 ISA 读取
+target
 指针缓存。
 
 ### 9. 数据结构
@@ -315,7 +320,8 @@ RUNNING、gate 置 HOLD，最后返回 `MR_XVM_NONE`。因此回调观察到的�
 `addr[0, num)`。
 
 **断点增删**：`break_insert`（`debug.c:156`）先查重（幂等），表满返回
-`-MR_ENOMEM`，否则尾插。`break_remove`（`debug.c:183`）用末尾条目填补被删位置， 保持紧凑。`break_clear`（`debug.c:205`）同时清 `num`
+`-MR_ENOMEM`，否则尾插。`break_remove`（`debug.c:183`）用末尾条目填补被删位置， 保持紧凑。`break_clear`（`debug.c:205`）同时清
+`num`
 与 `skip`。
 
 **"为什么这样写"**：
@@ -343,18 +349,18 @@ RUNNING、gate 置 HOLD，最后返回 `MR_XVM_NONE`。因此回调观察到的�
 
 ### 13. 源码导读
 
-| 位置                                         | 职责                                               |
-|----------------------------------------------|----------------------------------------------------|
-| `mrX/include/mrX/modules/xvm/mr_xvm_debug.h`   | 门控常量、probe/breaktable/debug 结构与全部 API 声明 |
-| `mrX/modules/xvm/debug.c:14`                   | `mr_xvm_debug_init`：缓存 target、开门、清空状态     |
-| `mrX/modules/xvm/debug.c:36`                   | 探针附加/摘除（一 XVM 一探针）                     |
-| `mrX/modules/xvm/debug.c:85`                   | probe_enter：门控钳制                              |
-| `mrX/modules/xvm/debug.c:115`                  | probe_leave：停机判定、回调、隐藏                  |
-| `mrX/modules/xvm/debug.c:156`                  | 断点插入/移除/清空（紧凑数组）                     |
-| `mrX/modules/xvm/debug.c:231`                  | break_hit：快速路径 + skip 消费 + 线性扫描         |
-| `mrX/modules/xvm/xvm.c:212`                  | XVM 核心中的 enter/leave 调用点                    |
-| `mrX/modules/xvm/isa/riscv32/riscv32.c:1291` | RISCV32 取指前的断点检查                           |
-| `mrX/test/modules/xvm/gdb.c`                 | 断点/单步/门控行为经 GDB 桩的端到端覆盖            |
+| 位置                                         | 职责                                                 |
+|----------------------------------------------|------------------------------------------------------|
+| `mrX/include/mrX/modules/xvm/mr_xvm_debug.h` | 门控常量、probe/breaktable/debug 结构与全部 API 声明 |
+| `mrX/modules/xvm/debug.c:14`                 | `mr_xvm_debug_init`：缓存 target、开门、清空状态     |
+| `mrX/modules/xvm/debug.c:36`                 | 探针附加/摘除（一 XVM 一探针）                       |
+| `mrX/modules/xvm/debug.c:85`                 | probe_enter：门控钳制                                |
+| `mrX/modules/xvm/debug.c:115`                | probe_leave：停机判定、回调、隐藏                    |
+| `mrX/modules/xvm/debug.c:156`                | 断点插入/移除/清空（紧凑数组）                       |
+| `mrX/modules/xvm/debug.c:231`                | break_hit：快速路径 + skip 消费 + 线性扫描           |
+| `mrX/modules/xvm/xvm.c:212`                  | XVM 核心中的 enter/leave 调用点                      |
+| `mrX/modules/xvm/isa/riscv32/riscv32.c:1291` | RISCV32 取指前的断点检查                             |
+| `mrX/test/modules/xvm/gdb.c`                 | 断点/单步/门控行为经 GDB 桩的端到端覆盖              |
 
 ### 14. 附录
 
@@ -364,10 +370,11 @@ RUNNING、gate 置 HOLD，最后返回 `MR_XVM_NONE`。因此回调观察到的�
 |-----------------------------|--------------------------------------------|
 | `MR_USE_MODULE_XVM_DEBUG`   | 模块开关，默认 n，依赖 `MR_USE_MODULE_XVM` |
 | `MR_CFG_XVM_BREAKPOINT_NUM` | 断点槽数，默认 16，范围 1~64               |
-| `MR_XVM_DEBUG_GATE_OPEN`      | 推荐门控值：不额外限制 step（0xFFFFFFFF）  |
-| `MR_XVM_DEBUG_GATE_STEP`      | 推荐门控值：单步并在正常完成后停住（1）    |
-| `MR_XVM_DEBUG_GATE_HOLD`      | 推荐门控值：暂停、不进入 ISA（0）          |
+| `MR_XVM_DEBUG_GATE_OPEN`    | 推荐门控值：不额外限制 step（0xFFFFFFFF）  |
+| `MR_XVM_DEBUG_GATE_STEP`    | 推荐门控值：单步并在正常完成后停住（1）    |
+| `MR_XVM_DEBUG_GATE_HOLD`    | 推荐门控值：暂停、不进入 ISA（0）          |
 
 **错误码**：`mr_xvm_debug_probe_attach` 重复附加返回 `-MR_EBUSY`；
-`mr_xvm_debug_break_insert` 表满返回 `-MR_ENOMEM`；`mr_xvm_debug_break_remove` 未找到 返回 `-MR_ENOENT`；其余无返回值。断言开启时空指针与错误类型由
+`mr_xvm_debug_break_insert` 表满返回 `-MR_ENOMEM`；`mr_xvm_debug_break_remove` 未找到 返回 `-MR_ENOENT`
+；其余无返回值。断言开启时空指针与错误类型由
 `MR_ASSERT` 拦截。

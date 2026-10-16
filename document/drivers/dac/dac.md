@@ -23,8 +23,8 @@ DAC 驱动解决的问题是： **用同一套 API 配置通道、把目标电�
 - 通道配置：7 种参考源（内部参考、4 档 VDD 分档、2 路外部参考）。
 - 序列输出 `mr_dac_seq_t`：指定通道位掩码、分辨率与源数据缓冲；公共层只约束分辨率 1~32 和 buf/size 一致性，数据布局与通道输出顺序由
   backend 定义。
-- 可选 stream（`MR_USE_DRIVER_DAC_STREAM`）：提供 start/stop/is_busy/offset 四个独立可选回调，配置结构含 `update_rate` 与
-  `circular`；具体连续输出、循环和 offset 语义由 backend 定义。
+- 可选 stream（`MR_USE_DRIVER_DAC_STREAM`）：提供 start/stop/is_busy/offset 四个独立可选回调；`source` 选择软件启动或
+  HTS 绑定的外部启动源，`circular` 只控制 buffer 读完后是否回绕。
 - 电压换算：`mr_dac_millivolt2raw`/`microvolt2raw`/`volt2raw`，目标电压直接换算 为原始码，只需参考电压与分辨率两个参数。
 - hardtree 规格宏：在硬件模板中描述"某驱动某通道"，代码用 `mr_ht_dac_spec_t`
   直接配置与输出。
@@ -60,7 +60,7 @@ void dac_example(mr_driver_t *drv) {
     mr_uint16_t raw;
     mr_dac_config_t cfg = {.ref = MR_DAC_REF_INTERNAL};
     mr_dac_seq_t seq = {
-        .channels = 1U << 3,        /* Channel 3 */
+        .channels = 1U << 3,        /* 通道 3 */
         .resolution = 12,
         .buf = &raw,
         .size = sizeof(raw),
@@ -88,7 +88,8 @@ void dac_example(mr_driver_t *drv) {
 
 **stream**：`mr_dac_stream_start(drv, &seq, &stream_cfg)` 会检查 `seq`、1~32 位分辨率、buf/size 一致性以及
 `config != MR_NULL`，之后把请求交给可选 `stream_start`。`stream_stop`、`stream_is_busy`、`stream_offset` 分别检查自己的
-callback；缺失时返回 `-MR_ENOSYS`。公共层不会解释 `update_rate`、`circular`、busy 或 offset 的具体状态机。
+callback；缺失时返回 `-MR_ENOSYS`。公共层定义 `source` 与 `circular` 的含义，但具体硬件状态机、busy 和 offset 由
+backend 实现。
 
 事件位 `MR_DAC_WAIT_STREAM_HALF` / `DONE` / `ERROR` 由公共头文件定义，但 `event_attach` 只挂接 waitable，
 `event_enable/disable` 只是把 mask 原样交给可选 `event_control`。树内 stm32h5 平台 backend 实现了全部流回调与
@@ -182,13 +183,25 @@ mr_err_t mr_dac_stream_stop(mr_driver_t *drv);
 **`mr_dac_stream_config_t`**
 
 ```c
+typedef enum mr_dac_stream_source {
+    MR_DAC_STREAM_SOURCE_SOFTWARE,
+    MR_DAC_STREAM_SOURCE_EXTERNAL,
+} mr_dac_stream_source_t;
+
 typedef struct mr_dac_stream_config {
-    mr_uint64_t update_rate;    /* Requested update rate in Hz */
-    mr_bool_t circular;         /* MR_TRUE: wrap around when buffer drained */
+    mr_uint8_t source: 1;
+    mr_uint8_t circular: 1;
 } mr_dac_stream_config_t;
 ```
 
-仅在 `MR_USE_DRIVER_DAC_STREAM` 下声明。字段名表达更新率与循环请求，但公共层只负责透传，是否支持以及具体含义由 backend 决定。
+仅在 `MR_USE_DRIVER_DAC_STREAM` 下声明：
+
+- `MR_DAC_STREAM_SOURCE_SOFTWARE`：`stream_start` 通过软件启动输出，DAC/backend 随后自行推进序列；
+- `MR_DAC_STREAM_SOURCE_EXTERNAL`：`stream_start` 只武装 DAC，每次更新由 HTS 绑定的外部信号启动；
+- `circular`：buffer 读完后是否回绕，与转换启动来源相互独立。
+
+外部启动信号的来源、路由和边沿由 HTS/backend 固定，stream 配置不重复描述这些硬件信息。DAC stream 不会配置或启停外部
+TMR/PWM；输出周期也由外部生产者决定。
 
 `stream_start`/`stream_stop`/`stream_is_busy`/`stream_offset` 是彼此独立的可选能力：对应 callback 为空时各自返回
 `-MR_ENOSYS`，否则返回 backend 结果。公共层不额外建立 stream 状态机。HardTree 包装接口只是把调用转发到同一组 API。
@@ -221,6 +234,9 @@ mr_int64_t raw = mr_ht_dac_millivolt2raw(&spec, millivolt);
 
 ### 6. 完整示例
 
+DAC + TMR 等间隔波形输出、external stream 的启停顺序与 STM32H5 路由前提见
+[驱动组合与进阶示例](../examples.md)。
+
 示例 1：动态创建 DAC 驱动并完成配置/输出/换算（改编自
 `mrX/test/drivers/dac/dac.c` 的 `configuration_and_reference` 与
 `write_and_stream`）：
@@ -236,8 +252,8 @@ void dac_dynamic_example(void) {
     if (data == MR_NULL) {
         return;
     }
-    data->ref_internal = 3300;          /* 3.3 V reference */
-    data->exist_mask = 0x0000000fU;     /* Channels 0-3 */
+    data->ref_internal = 3300;          /* 3.3 V 参考 */
+    data->exist_mask = 0x0000000fU;     /* 通道 0-3 */
     drv = mr_dac_create(data, MR_NULL, (mr_dac_ops_t *)&board_dac_ops);
     if (drv == MR_NULL) {
         return;
@@ -246,7 +262,7 @@ void dac_dynamic_example(void) {
 
     raw = (mr_uint16_t)mr_dac_millivolt2raw(3300, 12, 1650);
     mr_dac_write(drv, &seq);
-    mr_dac_del(drv);                    /* Frees data */
+    mr_dac_del(drv);                    /* 删除时释放 data */
 }
 ```
 
@@ -256,7 +272,7 @@ void dac_dynamic_example(void) {
 static void dac_stream_waiter(mr_waiter_t *waiter, void *param,
                               mr_wait_event_t event, const void *data) {
     int *count = param;
-    (*count)++;     /* Event is dispatched synchronously by mr_dac_event_raise. */
+    (*count)++;     /* 事件由 mr_dac_event_raise 同步派发。 */
 }
 
 void dac_event_example(mr_driver_t *drv) {
@@ -281,8 +297,7 @@ void dac_event_example(mr_driver_t *drv) {
 
 **Q：`mr_dac_stream_stop` 返回 `-MR_ENOSYS`？**
 
-平台 `ops` 未实现 `stream_stop`。`stream_start`/`stream_stop`/`stream_offset`
-未实现时返回 `-MR_ENOSYS`；`stream_is_busy` 未实现时也返回 `-MR_ENOSYS`。
+平台 `ops` 未实现对应流回调；四个流回调彼此独立，任一未实现时对应 API 返回 `-MR_ENOSYS`。
 
 **Q：收不到 half/full 事件？**
 
@@ -404,7 +419,7 @@ dac_init, dac_deinit, dac_release)`，`mrX/drivers/dac/dac.c:17`）。
 
 ### 12. 扩展与派生
 
-- **平台移植**：DAC backend 的操作表实现、stream/DMA/trigger 接线、HardTree 安装与验收见 [DAC 驱动移植指南](porting.md)。
+- **平台移植**：DAC backend 的操作表实现、stream/DMA/外部启动接线、HardTree 安装与验收见 [DAC 驱动移植指南](porting.md)。
 
 ### 13. 源码导读
 

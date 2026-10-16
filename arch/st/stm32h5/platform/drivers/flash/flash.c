@@ -11,13 +11,14 @@
 #include <mrX/drivers/flash/mr_flash.h>
 #include <mrX/libc/mr_string.h>
 #if defined(MR_USE_DCACHE) || defined(MR_USE_ICACHE)
+/* Enable cache invalidation after memory-mapped flash modifications */
 #define FLASH_USE_CACHE
 #include <mrX/port/mr_port_cache.h>
-#endif /* FLASH cache */
+#endif /* defined(FLASH_USE_CACHE) */
 #include "stm32h5xx_hal_flash.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT                    st_stm32h5_flash
+#define MR_HT_COMPAT st_stm32h5_flash
 #if MR_HT_HAS_DRIVER()
 
 /* Flash operations */
@@ -38,17 +39,19 @@ MR_UNUSED static const mr_flash_ops_t __flash_ops = {
     .erase = flash_erase,
 };
 
+/* STM32H5 flash erase and program geometry */
 #if !defined(FLASH_SECTOR_SIZE)
-#define FLASH_SECTOR_SIZE               (8U * 1024U)
+#define FLASH_SECTOR_SIZE (8U * 1024U)
 #endif /* !defined(FLASH_SECTOR_SIZE) */
-#define FLASH_WORD_SIZE                 (16U)
+#define FLASH_WORD_SIZE (16U)
 #if defined(STM32H503xx) || defined(STM32H523xx) || defined(STM32H533xx)
-#define FLASH_BANK_NUM                  (1U)
+#define FLASH_BANK_NUM (1U)
 #else
-#define FLASH_BANK_NUM                  (2U)
+#define FLASH_BANK_NUM (2U)
 #endif /* STM32H5 bank layout */
 
 #if defined(FLASH_USE_CACHE)
+/* Invalidate cached instruction/data aliases after flash writes */
 static void flash_cache_drop(mr_uint32_t addr, mr_uint32_t size) {
 #if defined(MR_USE_DCACHE)
     (void)mr_port_dcache_invalidate((const void *)addr, size);
@@ -61,7 +64,10 @@ static void flash_cache_drop(mr_uint32_t addr, mr_uint32_t size) {
 
 static void flash_locate(mr_uint64_t offset, uint32_t *banks,
                          uint32_t *sector) {
-    const mr_uint64_t bank_size = (mr_uint64_t)FLASH_SIZE / FLASH_BANK_NUM;
+    mr_uint64_t bank_size;
+
+    /* Convert the global offset to bank-local sector coordinates */
+    bank_size = (mr_uint64_t)FLASH_SIZE / FLASH_BANK_NUM;
 
     if ((FLASH_BANK_NUM == 2U) && (offset >= bank_size)) {
         *banks = FLASH_BANK_2;
@@ -110,6 +116,7 @@ static mr_ssize_t flash_read(const mr_driver_t *drv, mr_uint64_t offset,
 }
 
 static mr_err_t flash_program_word(mr_uint32_t addr, const mr_uint32_t *data) {
+    /* H5 flash programming writes one 128-bit quadword */
     return mr_stm32h5_hal_status(
         HAL_FLASH_Program(FLASH_TYPEPROGRAM_QUADWORD, addr, (uint32_t)data));
 }
@@ -117,10 +124,11 @@ static mr_err_t flash_program_word(mr_uint32_t addr, const mr_uint32_t *data) {
 static mr_err_t flash_program_merge(mr_uint32_t addr, mr_uint32_t skip,
                                     const mr_uint8_t *buf, mr_uint32_t size) {
     uint32_t word[FLASH_WORD_SIZE / sizeof(uint32_t)];
-    const mr_uint8_t *bytes = (const mr_uint8_t *)word;
+    const mr_uint8_t *bytes;
     mr_uint32_t i;
 
-    /* A 128-bit word programs once; skipped bytes must still be erased */
+    bytes = (const mr_uint8_t *)word;
+    /* Preserve untouched bytes in the containing quadword */
     mr_memcpy(word, (const void *)addr, sizeof(word));
     for (i = 0U; i < FLASH_WORD_SIZE; i++) {
         if ((i < skip || i >= (skip + size)) && (bytes[i] != 0xFFU)) {
@@ -133,12 +141,13 @@ static mr_err_t flash_program_merge(mr_uint32_t addr, mr_uint32_t skip,
 
 static mr_ssize_t flash_program(const mr_driver_t *drv, mr_uint64_t offset,
                                 const mr_uint8_t *buf, mr_size_t size) {
-    const mr_uint32_t base = FLASH_BASE + (mr_uint32_t)offset;
-    mr_uint32_t addr = base;
-    mr_uint32_t done = 0U;
+    mr_uint32_t base, addr, done;
     mr_err_t ret;
 
     MR_IGNORE(drv);
+    base = FLASH_BASE + (mr_uint32_t)offset;
+    addr = base;
+    done = 0U;
     if (size == 0U) {
         return 0;
     }
@@ -150,8 +159,10 @@ static mr_ssize_t flash_program(const mr_driver_t *drv, mr_uint64_t offset,
 
     /* Head: complete the partially covered 128-bit word around base */
     if ((addr & (FLASH_WORD_SIZE - 1U)) != 0U) {
-        mr_uint32_t skip = addr & (FLASH_WORD_SIZE - 1U);
-        mr_uint32_t chunk = FLASH_WORD_SIZE - skip;
+        mr_uint32_t chunk, skip;
+
+        skip = addr & (FLASH_WORD_SIZE - 1U);
+        chunk = FLASH_WORD_SIZE - skip;
 
         if (chunk > (mr_uint32_t)size) {
             chunk = (mr_uint32_t)size;
@@ -204,13 +215,15 @@ static mr_ssize_t flash_program(const mr_driver_t *drv, mr_uint64_t offset,
 
 static mr_err_t flash_erase(const mr_driver_t *drv, mr_uint64_t offset,
                             mr_uint64_t size) {
-    const mr_uint32_t base = FLASH_BASE + (mr_uint32_t)offset;
-    const mr_uint32_t erase_size = (mr_uint32_t)size;
-    FLASH_EraseInitTypeDef init;
     uint32_t banks, sector, sector_error;
-    mr_err_t ret = 0;
+    mr_uint32_t base, erase_size;
+    FLASH_EraseInitTypeDef init;
+    mr_err_t ret;
 
     MR_IGNORE(drv);
+    base = FLASH_BASE + (mr_uint32_t)offset;
+    erase_size = (mr_uint32_t)size;
+    ret = 0;
 
     /* Check parameter */
     if ((offset > (mr_uint64_t)MR_UINT32_MAX)
@@ -255,8 +268,8 @@ static mr_err_t flash_erase(const mr_driver_t *drv, mr_uint64_t offset,
     return ret;
 }
 
-#define ST_HT_FLASH_INSTALL(_id, _ops)                                         \
-    MR_HT_FLASH_INSTALL(_id, MR_NULL, _ops)
+/* Install a flash instance with its board clock-enable callback */
+#define ST_HT_FLASH_INSTALL(_id, _ops) MR_HT_FLASH_INSTALL(_id, MR_NULL, _ops)
 MR_HT_DRIVER_FOREACH(ST_HT_FLASH_INSTALL, &__flash_ops);
 #endif /* MR_HT_HAS_DRIVER() */
 #endif /* defined(MR_USE_DRIVER_FLASH) */

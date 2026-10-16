@@ -72,7 +72,8 @@ HC165/HC595 不在 `arch/` 里，但它们是目前仓库里最完整的“虚�
 3. **消费者 backend**：把已有驱动组合成新设备。私有数据保存 `mr_ht_*_spec_t` 或驱动指针，通过公共 API 操作下层。HC165/HC595
    是这一层的完整样本。
 
-禁止第三层再 `HAL_GPIO_Init` / `HAL_DMA_Init` 去操作第一层已经拥有的对象。 一块引脚、一条 DMA 通道、一个定时器在同一时刻只有一个拥有者。
+禁止第三层（消费者）再 `HAL_GPIO_Init` / `HAL_DMA_Init` 去操作第二层（拥有者）已经拥有的对象。 一块引脚、一条 DMA
+通道、一个定时器在同一时刻只有一个拥有者。
 
 ---
 
@@ -83,12 +84,12 @@ HC165/HC595 不在 `arch/` 里，但它们是目前仓库里最完整的“虚�
 
 ### 3.1 谁拥有，谁引用
 
-| 资源                 | 拥有者            | 消费者如何拿到                                    | 禁止                                                 |
-|----------------------|-------------------|---------------------------------------------------|------------------------------------------------------|
-| GPIOx 引脚、EXTI 线  | `st_<chip>_gpio`  | `mr_ht_gpio_spec_t`，属性单元 `[phandle, pin]`    | 消费者 `HAL_GPIO_Init`、另写一份时钟使能去开同一端口 |
-| GPDMA 通道           | `st_<chip>_gpdma` | `mr_ht_dma_spec_t`，属性单元 `[phandle, channel]` | 消费者保存 `DMA_HandleTypeDef` 或直接写 DMA 寄存器   |
-| TIMx                 | `st_<chip>_tmr`   | `MR_HT_DRIVER_FIND` / 驱动指针                    | 消费者 `HAL_TIM_Base_Init`                           |
-| USARTx / ADCx / DACx | 对应消费者自己    | HardTree 的 `st_uartx` 等                         | 两个实例指向同一外设基址                             |
+| 资源                 | 拥有者                   | 消费者如何拿到                                    | 禁止                                                 |
+|----------------------|--------------------------|---------------------------------------------------|------------------------------------------------------|
+| GPIOx 引脚、EXTI 线  | `st_<chip>_gpio`         | `mr_ht_gpio_spec_t`，属性单元 `[phandle, pin]`    | 消费者 `HAL_GPIO_Init`、另写一份时钟使能去开同一端口 |
+| GPDMA 通道           | `st_<chip>_gpdma`        | `mr_ht_dma_spec_t`，属性单元 `[phandle, channel]` | 消费者保存 `DMA_HandleTypeDef` 或直接写 DMA 寄存器   |
+| TIMx                 | HTS 选择的 TMR/PWM owner | 对应 TMR 驱动指针或 `mr_ht_pwm_spec_t`            | 同一 TIMx 同时声明为 TMR 与 PWM、消费者私配寄存器    |
+| USARTx / ADCx / DACx | 对应消费者自己           | HardTree 的 `st_uartx` 等                         | 两个实例指向同一外设基址                             |
 
 同一引脚不能既出现在某个 GPIO 实例的 `exist_mask` 里，又被 UART/ADC/DAC 私下改 MODER。需要给外设独占的引脚，要么从 GPIO
 `exist_mask` 去掉，要么（目标形态）由 GPIO 配置成 AF/模拟后再交给消费者使用。
@@ -118,8 +119,8 @@ HC165/HC595 已经在用的门：
   `mr_waitable_t`，也不抢向量。
 - DMA：通道数组、`DMA_HandleTypeDef` / node / queue、IRQ 处理函数按本实例声明的通道集合生成，而不是 `channels[8]` 一配到底。
 - ADC/DAC：通道表来自 `st_channels` 实际元素个数，不要按手册最大值预留空槽。
-- 消费者的 stream 字段：该实例有 `st_rx_dma` / `st_timer` 才生成 DMA waiter 和 transfer；Kconfig 打开 stream 不等于每个实例都有
-  stream。
+- 消费者的 stream 字段：该实例有对应的 `st_*_dma` 时才生成 DMA waiter 和 transfer；Kconfig 打开 stream 不等于每个实例都有
+  DMA stream。
 
 允许为“芯片全局且天然稀疏”的资源保留一张小的全局所有权表（例如 EXTI0～15 的占用者指针），但表项指向的 waitable、NVIC
 使能和向量函数仍按声明按需出现。
@@ -127,7 +128,7 @@ HC165/HC595 已经在用的门：
 ### 3.4 可选资源按属性存在与否展开
 
 对照 HC165 的 CLK-INH / SER：属性不存在就填 `{0}`，运行时看到 `spec.drv == MR_NULL` 则跳过。ST 消费者同样处理可选
-DMA、可选触发定时器、可选 RTS/CTS。
+DMA 和可选 RTS/CTS；外部 signal 生产者由应用独立持有，不嵌入消费者私有数据。
 
 ```c
 MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, clk_inh),
@@ -135,9 +136,8 @@ MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, clk_inh),
             (.clk_inh = {0})),
 ```
 
-禁止因为工程打开了 `MR_USE_DRIVER_ADC_STREAM`，就对每一个 ADC 实例强制 `MR_HT_DMA_SPEC(_id, st_dma)` 和
-`MR_HT_DRIVER_PROP(_id, st_timer)`。没有这些属性的实例应是普通轮询 ADC，stream ops 返回 `-MR_ENODEV` 或在安装时不挂 stream
-回调。
+禁止因为工程打开了 `MR_USE_DRIVER_ADC_STREAM`，就对每一个 ADC 实例强制 `MR_HT_DMA_SPEC(_id, st_dma)`。没有 DMA
+属性的实例仍可用 IRQ 承接单通道 stream；多通道 stream 缺少 DMA 时应返回 `-MR_ENODEV`。
 
 ### 3.5 懒初始化，不在安装时点亮整片 IP
 
@@ -194,8 +194,8 @@ IRQ 处理函数只在“本实例声明了这条向量”时由安装宏生成�
 
 ```c
 typedef struct drv_gpio_hc595_priv {
-    mr_ht_gpio_spec_t srclr;    /* optional */
-    mr_ht_gpio_spec_t oe;       /* optional */
+    mr_ht_gpio_spec_t srclr;    /* 可选 */
+    mr_ht_gpio_spec_t oe;       /* 可选 */
     mr_ht_gpio_spec_t ser;
     mr_ht_gpio_spec_t srclk;
     mr_ht_gpio_spec_t rclk;
@@ -278,18 +278,22 @@ void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {
   16 个 waitable。
 - 不支持的触发（STM32 EXTI 没有电平触发）返回 `-MR_ENOSYS`，不要改成边沿。
 
-### 6.2 DMA / TMR（拥有者）
+### 6.2 DMA / TMR / PWM（拥有者）
 
 - DMA 实例对应一台 GPDMA 控制器；通道集合来自模板，而不是编译期常数 8。
 - 完成与错误中断为传输正确性服务，可以不依赖 waiter 订阅；`HALF` 等纯通知类中断仍按 `event_control` 开关。
-- TMR 向量用 `st_irq_handler` 按实例生成。消费者需要特殊时序（例如 DAC 最后一次触发）时，通过平台头里的明确 helper 访问
-  **已经被自己独占的** 那个 TMR 驱动，不要再握一份 `TIM_HandleTypeDef`。
+- TMR 向量用 `st_irq_handler` 按实例生成。ADC/DAC 等消费者只配置自己的外部输入，不持有或启停 TMR/PWM
+  signal 生产者，也不要再握一份 `TIM_HandleTypeDef`。
+- 同一 TIMx 由 HTS 选择 `st_<chip>_tmr` 或 `st_<chip>_pwm` compatible，分别安装 TMR 或 PWM
+  owner；不得运行期切换角色。PWM 的通道、互补输出、fault 和 signal 资源按
+  [PWM 移植契约](../../drivers/pwm/porting.md) 声明。
 
 ### 6.3 UART / ADC / DAC（消费者）
 
-- 私有数据以 USART/ADC/DAC 句柄 + GPIO/DMA/TMR spec 为主。
+- 私有数据以 USART/ADC/DAC 句柄 + GPIO/DMA spec 为主，不保存 signal 生产者 spec。
 - 普通读写与 stream 互斥规则、stop 失败保留所有权等行为写在芯片 `README.md` 和对应 `porting.md`，不要在本文重复。
-- stream 启动顺序：先配置触发源（注意 STM32 定时器 UG 会提前出沿），再配 DMA，再使能外设请求，最后 start 定时器。失败按已取资源逆序停。
+- 外部 stream 启动顺序：先配置生产者但保持 signal 关闭（STM32 定时器 UG 可能产生更新事件），再启动消费者 stream，
+  最后启用 signal 并启动生产者。失败按已取得的资源逆序停止。
 - 没有绑定 DMA spec 时不要编译该实例的 waiter/transfer；ops 里 stream 入口对未绑定实例返回 `-MR_ENODEV`。
 
 ### 6.4 与 HC165/HC595 相同的能力诚实
@@ -318,11 +322,12 @@ pin/mode/范围。
 |---------------|-----------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
 | GPIO 事件回调 | 所有实例共用带 `event_attach` / `event_control` 的 `__gpio_ops`                   | AF helper 用 `MR_DRIVER_OPS(drv) == &__gpio_ops` 识别拥有者；未声明的 EXTI 线返回 `-MR_EPERM` |
 | EXTI waitable | 芯片全局 `__gpio_irq_map[16]` 内嵌 waitable，首次 IRQ 配置时再 `mr_waitable_init` | EXTI 线是芯片全局稀疏资源；向量函数仍只由 `st_irq_handler_n` 生成                             |
-| DMA 通道表    | 按 `st_requests` 长度分配，而不是固定 `[8]`                                       | 通道号仍是硬件下标；未列出的高编号通道不可用                                                  |
-| stream 字段   | Kconfig 打开 stream 时 waiter/transfer 仍在 priv 里                               | 缺少 `st_dma` / `st_timer` 时 spec 为零对象，`stream_start` 返回 `-MR_ENODEV`                 |
+| DMA 通道表    | 按 `st_requests` 的 request/trigger 路由长度分配，而不是固定 `[8]`                | 通道号仍是硬件下标；未列出的高编号通道不可用                                                  |
+| stream 字段   | Kconfig 打开 stream 时 waiter/transfer 仍在 priv 里                               | ADC 单通道可由 IRQ 承接；需要 DMA 的 stream 缺少 `st_dma` 时返回 `-MR_ENODEV`                 |
 | GPIO AF       | 公共 `mr_gpio_config_t.alt` 仍不能带 AF 编号                                      | 消费者走 `mr_stm32h5_gpio_pin_alternate`                                                      |
 
-芯片运行期语义（UART TC 与 DMA 完成的先后、ADC 先配定时器再启动、stop 失败保留 waiter）仍以 `mrX/arch/st/stm32h5/README.md`
+芯片运行期语义（UART TC 与 DMA 完成的先后、外部 stream 的生产者启动顺序、stop 失败保留 waiter）仍以
+[`stm32h5/README.md`](../../../arch/st/stm32h5/README.md)
 为准。
 
 ---

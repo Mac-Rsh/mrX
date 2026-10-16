@@ -9,11 +9,10 @@
 #include <mrX/platform/mr_platform.h>
 #if defined(MR_USE_DRIVER_TMR)
 #include <mrX/drivers/tmr/mr_tmr.h>
-#include <mrX/port/mr_port_irq.h>
 #include "stm32h5xx_hal_tim.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT                    st_stm32h5_tmr
+#define MR_HT_COMPAT st_stm32h5_tmr
 #if MR_HT_HAS_DRIVER()
 
 /* TMR operations */
@@ -24,6 +23,8 @@ static mr_err_t tmr_configuration(const mr_driver_t *drv,
 static mr_err_t tmr_start(const mr_driver_t *drv);
 static mr_err_t tmr_stop(const mr_driver_t *drv);
 static mr_err_t tmr_is_busy(const mr_driver_t *drv, mr_bool_t *busy);
+static mr_err_t tmr_signal_control(const mr_driver_t *drv,
+                                   mr_tmr_signal_t signal, mr_bool_t enable);
 static mr_err_t tmr_event_control(const mr_driver_t *drv, mr_uint32_t events,
                                   mr_bool_t enable);
 MR_UNUSED static const mr_tmr_ops_t __tmr_ops = {
@@ -32,9 +33,11 @@ MR_UNUSED static const mr_tmr_ops_t __tmr_ops = {
     .start = tmr_start,
     .stop = tmr_stop,
     .is_busy = tmr_is_busy,
+    .signal_control = tmr_signal_control,
     .event_control = tmr_event_control,
 };
 
+/* Timer instance state and its event/signal configuration */
 typedef struct tmr_priv {
     TIM_HandleTypeDef handle;
     void (*clk_enable)(void);
@@ -43,14 +46,14 @@ typedef struct tmr_priv {
     mr_driver_t *drv;
     mr_tmr_config_t config;
     mr_bool_t configured;
+    mr_bool_t signal_enabled;
     mr_bool_t event_enabled;
-    void (*drain_complete)(void *);
-    void *drain_param;
 } tmr_priv_t;
 
-#define TMR_NANOSECONDS                 (1000000000ULL)
-#define TMR_PRESCALER_MAX               (65536ULL)
-#define TMR_PSC_SEARCH_LIMIT            (64ULL)
+/* Nanosecond conversion and prescaler search limits */
+#define TMR_NANOSECONDS      (1000000000ULL)
+#define TMR_PRESCALER_MAX    (65536ULL)
+#define TMR_PSC_SEARCH_LIMIT (64ULL)
 
 static mr_bool_t tmr_is_apb2(TIM_TypeDef *instance) {
 #if defined(TIM1)
@@ -95,9 +98,8 @@ static mr_bool_t tmr_hw_busy(tmr_priv_t *priv) {
 }
 
 static mr_uint64_t tmr_clock(TIM_TypeDef *instance) {
+    mr_uint32_t ppre, apb_div;
     mr_uint64_t pclk;
-    mr_uint32_t ppre;
-    mr_uint32_t apb_div;
 
     if (tmr_is_apb2(instance)) {
         pclk = HAL_RCC_GetPCLK2Freq();
@@ -126,10 +128,12 @@ static mr_err_t tmr_make_period(TIM_TypeDef *instance, mr_uint64_t period,
                                 mr_uint64_t *actual) {
     mr_uint64_t timer_clock, counter_max, ticks, actual_ticks;
     mr_uint64_t psc, psc_min, search_end, counts, error;
-    mr_uint64_t best_psc = 0U, best_counts = 0U;
-    mr_uint64_t best_error = MR_UINT64_MAX;
+    mr_uint64_t best_psc, best_counts, best_error;
     mr_uint64_t seconds, remainder;
 
+    best_psc = 0U;
+    best_counts = 0U;
+    best_error = MR_UINT64_MAX;
     timer_clock = tmr_clock(instance);
     counter_max
         = IS_TIM_32B_COUNTER_INSTANCE(instance) ? (1ULL << 32) : (1ULL << 16);
@@ -196,25 +200,20 @@ static mr_err_t tmr_make_period(TIM_TypeDef *instance, mr_uint64_t period,
 static mr_err_t tmr_configure(const mr_driver_t *drv,
                               const mr_tmr_config_t *config) {
     tmr_priv_t *priv = MR_DRIVER_PRIV(drv);
-    TIM_MasterConfigTypeDef master = {0};
+    mr_uint32_t prescaler, period;
     mr_uint64_t actual_period;
-    mr_uint32_t prescaler;
-    mr_uint32_t period;
     mr_err_t ret;
 
     /* Check parameter */
     if (!IS_TIM_INSTANCE(priv->handle.Instance) || (config->period == 0U)
-        || (config->mode > MR_TMR_MODE_ONESHOT)
-        || ((config->signal & ~MR_TMR_SIGNAL_UPDATE) != 0U)) {
+        || (config->mode > MR_TMR_MODE_ONESHOT)) {
         return -MR_EINVAL;
     }
     if (priv->clk_enable == MR_NULL) {
         return -MR_ENODEV;
     }
-
-    if ((config->signal & MR_TMR_SIGNAL_UPDATE)
-        && !IS_TIM_MASTER_INSTANCE(priv->handle.Instance)) {
-        return -MR_ENOSYS;
+    if (priv->signal_enabled) {
+        return -MR_EBUSY;
     }
 
     /* Restore the timer clock before querying or programming hardware */
@@ -243,19 +242,6 @@ static mr_err_t tmr_configure(const mr_driver_t *drv,
         return ret;
     }
 
-    /* Program TRGO */
-    if (IS_TIM_MASTER_INSTANCE(priv->handle.Instance)) {
-        master.MasterOutputTrigger = (config->signal & MR_TMR_SIGNAL_UPDATE)
-                                       ? TIM_TRGO_UPDATE
-                                       : TIM_TRGO_RESET;
-        master.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-        ret = mr_stm32h5_hal_status(
-            HAL_TIMEx_MasterConfigSynchronization(&priv->handle, &master));
-        if (ret != 0) {
-            return ret;
-        }
-    }
-
     /* Select one-shot or periodic */
     if (config->mode == MR_TMR_MODE_ONESHOT) {
         SET_BIT(priv->handle.Instance->CR1, TIM_CR1_OPM);
@@ -264,6 +250,7 @@ static mr_err_t tmr_configure(const mr_driver_t *drv,
     }
 
     /* Enable the NVIC line after a successful first init */
+    /* Return only a configuration that has been applied to hardware */
     if (!priv->configured) {
         HAL_NVIC_SetPriority(priv->irqn, priv->irq_priority, 0U);
         HAL_NVIC_EnableIRQ(priv->irqn);
@@ -280,6 +267,7 @@ static mr_err_t tmr_configuration(const mr_driver_t *drv,
                                   mr_tmr_config_t *config) {
     tmr_priv_t *priv = MR_DRIVER_PRIV(drv);
 
+    /* Check that the time base has been initialized */
     if (!priv->configured) {
         return -MR_ENODEV;
     }
@@ -297,9 +285,8 @@ static mr_err_t tmr_start(const mr_driver_t *drv) {
         return -MR_ENODEV;
     }
 
-    /* Restore the configured mode after an internal DAC drain */
-    if ((priv->config.mode == MR_TMR_MODE_ONESHOT)
-        || (priv->drain_complete != MR_NULL)) {
+    /* Restore the configured mode */
+    if (priv->config.mode == MR_TMR_MODE_ONESHOT) {
         SET_BIT(priv->handle.Instance->CR1, TIM_CR1_OPM);
     } else {
         CLEAR_BIT(priv->handle.Instance->CR1, TIM_CR1_OPM);
@@ -308,7 +295,7 @@ static mr_err_t tmr_start(const mr_driver_t *drv) {
     /* Reload from 0 so the first period is complete */
     __HAL_TIM_SET_COUNTER(&priv->handle, 0U);
     __HAL_TIM_CLEAR_FLAG(&priv->handle, TIM_FLAG_UPDATE);
-    if (priv->event_enabled || (priv->drain_complete != MR_NULL)) {
+    if (priv->event_enabled) {
         status = HAL_TIM_Base_Start_IT(&priv->handle);
     } else {
         __HAL_TIM_DISABLE_IT(&priv->handle, TIM_IT_UPDATE);
@@ -319,12 +306,8 @@ static mr_err_t tmr_start(const mr_driver_t *drv) {
 
 static mr_err_t tmr_stop(const mr_driver_t *drv) {
     tmr_priv_t *priv = MR_DRIVER_PRIV(drv);
-    HAL_StatusTypeDef status;
 
-    status = HAL_TIM_Base_Stop_IT(&priv->handle);
-    priv->drain_complete = MR_NULL;
-    priv->drain_param = MR_NULL;
-    return mr_stm32h5_hal_status(status);
+    return mr_stm32h5_hal_status(HAL_TIM_Base_Stop_IT(&priv->handle));
 }
 
 static mr_err_t tmr_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
@@ -334,10 +317,42 @@ static mr_err_t tmr_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
     return 0;
 }
 
+static mr_err_t tmr_signal_control(const mr_driver_t *drv,
+                                   mr_tmr_signal_t signal, mr_bool_t enable) {
+    tmr_priv_t *priv = MR_DRIVER_PRIV(drv);
+    TIM_MasterConfigTypeDef master;
+    mr_err_t ret;
+
+    master = (TIM_MasterConfigTypeDef){0};
+    /* Check signal and hardware capability */
+    if (signal != MR_TMR_SIGNAL_PERIOD) {
+        return -MR_EINVAL;
+    }
+    /* Check signal and hardware capability */
+    if (!priv->configured) {
+        return -MR_ENODEV;
+    }
+    if (!IS_TIM_MASTER_INSTANCE(priv->handle.Instance)) {
+        return -MR_ENOSYS;
+    }
+
+    /* Select the natural update event without starting or stopping the TMR */
+    /* Select the natural update event without starting or stopping the TMR */
+    master.MasterOutputTrigger = enable ? TIM_TRGO_UPDATE : TIM_TRGO_RESET;
+    master.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+    ret = mr_stm32h5_hal_status(
+        HAL_TIMEx_MasterConfigSynchronization(&priv->handle, &master));
+    if (ret == 0) {
+        priv->signal_enabled = enable;
+    }
+    return ret;
+}
+
 static mr_err_t tmr_event_control(const mr_driver_t *drv, mr_uint32_t events,
                                   mr_bool_t enable) {
     tmr_priv_t *priv = MR_DRIVER_PRIV(drv);
 
+    /* Check parameter */
     /* Check parameter */
     if ((events == 0U) || ((events & ~MR_TMR_WAIT_TIMEOUT) != 0U)) {
         return -MR_EINVAL;
@@ -351,43 +366,7 @@ static mr_err_t tmr_event_control(const mr_driver_t *drv, mr_uint32_t events,
     return 0;
 }
 
-mr_err_t mr_stm32h5_tmr_drain(struct mr_driver *drv, void (*complete)(void *),
-                              void *param) {
-    tmr_priv_t *priv;
-    int mask;
-
-    /* This helper only accepts the H5 base-timer backend */
-    if ((drv == MR_NULL) || (MR_DRIVER_OPS(drv) != &__tmr_ops)) {
-        return -MR_EINVAL;
-    }
-    priv = MR_DRIVER_PRIV(drv);
-    if (!priv->configured) {
-        return -MR_ENODEV;
-    }
-    mask = mr_port_irq_disable();
-    (void)tmr_hw_busy(priv);
-    priv->drain_param = param;
-    priv->drain_complete = complete;
-    if (complete != MR_NULL) {
-        /* Discard the update which issued the final DMA request */
-        __HAL_TIM_CLEAR_FLAG(&priv->handle, TIM_FLAG_UPDATE);
-        SET_BIT(priv->handle.Instance->CR1, TIM_CR1_OPM);
-        __HAL_TIM_ENABLE_IT(&priv->handle, TIM_IT_UPDATE);
-    } else {
-        if (priv->config.mode != MR_TMR_MODE_ONESHOT) {
-            CLEAR_BIT(priv->handle.Instance->CR1, TIM_CR1_OPM);
-        }
-        if (!priv->event_enabled) {
-            __HAL_TIM_DISABLE_IT(&priv->handle, TIM_IT_UPDATE);
-        }
-    }
-    mr_port_irq_enable(mask);
-    return 0;
-}
-
 static void tmr_irq(tmr_priv_t *priv) {
-    void (*complete)(void *);
-    void *param;
     mr_bool_t update_pending;
 
     if (priv == MR_NULL) {
@@ -399,17 +378,6 @@ static void tmr_irq(tmr_priv_t *priv) {
         = ((__HAL_TIM_GET_FLAG(&priv->handle, TIM_FLAG_UPDATE) != 0U)
            && (__HAL_TIM_GET_IT_SOURCE(&priv->handle, TIM_IT_UPDATE) != 0U));
     HAL_TIM_IRQHandler(&priv->handle);
-    if (update_pending && !tmr_hw_busy(priv)
-        && (priv->drain_complete != MR_NULL)) {
-        complete = priv->drain_complete;
-        param = priv->drain_param;
-        priv->drain_complete = MR_NULL;
-        priv->drain_param = MR_NULL;
-        if (!priv->event_enabled) {
-            __HAL_TIM_DISABLE_IT(&priv->handle, TIM_IT_UPDATE);
-        }
-        complete(param);
-    }
     if (update_pending && priv->event_enabled) {
         (void)mr_tmr_event_raise(priv->drv, MR_TMR_WAIT_TIMEOUT);
     }

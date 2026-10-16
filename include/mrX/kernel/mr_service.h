@@ -93,6 +93,51 @@ extern "C" {
     (((_a) + ((((_a) ^ (_b)) >= 0) ? (_b) : -(_b)) / 2) / (_b))
 
 /**
+ * @brief This macro function reverses the byte order of a 16-bit value.
+ *
+ * @param _value The value to reverse.
+ * @return The value with reversed byte order.
+ *
+ * @note '_value' is evaluated multiple times and must have no side effects.
+ */
+#define MR_BSWAP16(_value)                                                     \
+    ((mr_uint16_t)(((((mr_uint16_t)(_value)) & 0x00ffU) << 8)                  \
+                   | ((((mr_uint16_t)(_value)) & 0xff00U) >> 8)))
+
+/**
+ * @brief This macro function reverses the byte order of a 32-bit value.
+ *
+ * @param _value The value to reverse.
+ * @return The value with reversed byte order.
+ *
+ * @note '_value' is evaluated multiple times and must have no side effects.
+ */
+#define MR_BSWAP32(_value)                                                     \
+    ((mr_uint32_t)(((((mr_uint32_t)(_value)) & 0x000000ffU) << 24)             \
+                   | ((((mr_uint32_t)(_value)) & 0x0000ff00U) << 8)            \
+                   | ((((mr_uint32_t)(_value)) & 0x00ff0000U) >> 8)            \
+                   | ((((mr_uint32_t)(_value)) & 0xff000000U) >> 24)))
+
+/**
+ * @brief This macro function reverses the byte order of a 64-bit value.
+ *
+ * @param _value The value to reverse.
+ * @return The value with reversed byte order.
+ *
+ * @note '_value' is evaluated multiple times and must have no side effects.
+ */
+#define MR_BSWAP64(_value)                                                     \
+    ((mr_uint64_t)(((((mr_uint64_t)(_value)) & 0x00000000000000ffULL) << 56)   \
+                   | ((((mr_uint64_t)(_value)) & 0x000000000000ff00ULL) << 40) \
+                   | ((((mr_uint64_t)(_value)) & 0x0000000000ff0000ULL) << 24) \
+                   | ((((mr_uint64_t)(_value)) & 0x00000000ff000000ULL) << 8)  \
+                   | ((((mr_uint64_t)(_value)) & 0x000000ff00000000ULL) >> 8)  \
+                   | ((((mr_uint64_t)(_value)) & 0x0000ff0000000000ULL) >> 24) \
+                   | ((((mr_uint64_t)(_value)) & 0x00ff000000000000ULL) >> 40) \
+                   | ((((mr_uint64_t)(_value)) & 0xff00000000000000ULL)        \
+                      >> 56)))
+
+/**
  * @brief This macro function makes a local variable.
  *
  * @param _type The local variable type.

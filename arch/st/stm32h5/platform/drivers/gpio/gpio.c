@@ -3,7 +3,7 @@
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
- * @date 2026-09-12        MacRsh        First version
+ * @date 2024-09-06        MacRsh        First version
  */
 
 #include <mrX/platform/mr_platform.h>
@@ -11,7 +11,7 @@
 #include <mrX/drivers/gpio/mr_gpio.h>
 
 /* HardTree compatible */
-#define MR_HT_COMPAT                    st_stm32h5_gpio
+#define MR_HT_COMPAT st_stm32h5_gpio
 #if MR_HT_HAS_DRIVER()
 
 /* GPIO operations */
@@ -90,12 +90,15 @@ static mr_uint32_t gpio_pin_from_mask(uint16_t pin_mask) {
 
 static mr_err_t gpio_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
                                    const mr_gpio_config_t *config) {
+    mr_bool_t irq_release, irq_claimed, irq_mode;
     gpio_priv_t *priv = MR_DRIVER_PRIV(drv);
-    GPIO_InitTypeDef gpio_init = {0};
-    mr_bool_t irq_release = MR_FALSE;
-    mr_bool_t irq_claimed = MR_FALSE;
-    mr_bool_t irq_mode = MR_FALSE;
+    GPIO_InitTypeDef gpio_init;
     uint16_t pin_mask;
+
+    gpio_init = (GPIO_InitTypeDef){0};
+    irq_release = MR_FALSE;
+    irq_claimed = MR_FALSE;
+    irq_mode = MR_FALSE;
 
     /* Check parameter */
     if (pin >= 16U) {
@@ -227,8 +230,8 @@ static mr_err_t gpio_pin_configure(const mr_driver_t *drv, mr_uint32_t pin,
 static mr_err_t gpio_pin_configuration(const mr_driver_t *drv, mr_uint32_t pin,
                                        mr_gpio_config_t *config) {
     gpio_priv_t *priv = MR_DRIVER_PRIV(drv);
-    uint32_t pin_mask;
     uint32_t moder, pupdr, otyper;
+    uint32_t pin_mask;
 
     /* Check parameter */
     if (pin >= 16U) {
@@ -307,8 +310,10 @@ static mr_err_t gpio_pin_read(const mr_driver_t *drv, mr_uint32_t pin,
 
 static mr_err_t gpio_port_write(const mr_driver_t *drv, mr_uint32_t mask) {
     gpio_priv_t *priv = MR_DRIVER_PRIV(drv);
-    uint16_t pin_set = (uint16_t)(mask & 0xFFFFUL);
-    uint16_t pin_reset = (uint16_t)(~mask & 0xFFFFUL);
+    uint16_t pin_set, pin_reset;
+
+    pin_set = (uint16_t)(mask & 0xFFFFUL);
+    pin_reset = (uint16_t)(~mask & 0xFFFFUL);
 
     /* HAL sets and resets both pin groups in one BSRR transaction */
     HAL_GPIO_WriteMultipleStatePin(priv->port, pin_reset, pin_set);
@@ -369,17 +374,19 @@ static mr_err_t gpio_event_control(const mr_driver_t *drv, mr_uint32_t pin,
 mr_err_t mr_stm32h5_gpio_pin_alternate(const mr_ht_gpio_spec_t *spec,
                                        mr_uint32_t af, mr_gpio_pull_t pull,
                                        mr_gpio_otype_t otype) {
+    GPIO_InitTypeDef gpio_init;
     const mr_driver_t *drv;
     gpio_priv_t *priv;
-    GPIO_InitTypeDef gpio_init = {0};
+
+    gpio_init = (GPIO_InitTypeDef){0};
 
     /* Check parameter */
     if ((spec == MR_NULL) || (spec->drv == MR_NULL)) {
         return -MR_EINVAL;
     }
     drv = spec->drv;
-    if ((MR_DRIVER_OPS(drv) != &__gpio_ops) || (spec->pin >= 16U)
-        || (af > 15U) || (pull > MR_GPIO_PULL_DOWN)) {
+    if ((MR_DRIVER_OPS(drv) != &__gpio_ops) || (spec->pin >= 16U) || (af > 15U)
+        || (pull > MR_GPIO_PULL_DOWN)) {
         return -MR_EINVAL;
     }
     priv = MR_DRIVER_PRIV(drv);
@@ -395,8 +402,8 @@ mr_err_t mr_stm32h5_gpio_pin_alternate(const mr_ht_gpio_spec_t *spec,
 
     /* Mux the pin to the requested alternate function */
     gpio_init.Pin = (uint16_t)(1UL << spec->pin);
-    gpio_init.Mode = (otype == MR_GPIO_OTYPE_PP) ? GPIO_MODE_AF_PP
-                                                 : GPIO_MODE_AF_OD;
+    gpio_init.Mode
+        = (otype == MR_GPIO_OTYPE_PP) ? GPIO_MODE_AF_PP : GPIO_MODE_AF_OD;
     gpio_init.Pull = __gpio_hal_pull[pull];
     gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     gpio_init.Alternate = af;
@@ -444,8 +451,7 @@ static void gpio_irq_handle(mr_uint32_t pin) {
 
     /* Raise GPIO EXTI event */
     data = pin;
-    mr_waitable_raise(&__gpio_irq_map[pin].waitable, MR_GPIO_WAIT_EXTI,
-                      &data);
+    mr_waitable_raise(&__gpio_irq_map[pin].waitable, MR_GPIO_WAIT_EXTI, &data);
 }
 
 /* Strong overrides ensure HAL's weak no-op callbacks reach the mrX waitable */
@@ -461,7 +467,7 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t gpio_pin) {
 #define ST_HT_GPIO_EXTI_IRQ(_id, _n)                                           \
     MR_MACRO_IF(                                                               \
         MR_HT_DRIVER_HAS_PROP(_id, MR_CAT(st_irq_handler_, _n)),               \
-        (void MR_HT_DRIVER_PROP(_id, MR_CAT(st_irq_handler_, _n))(void) {     \
+        (void MR_HT_DRIVER_PROP(_id, MR_CAT(st_irq_handler_, _n))(void) {      \
             HAL_GPIO_EXTI_IRQHandler(MR_CAT(GPIO_PIN_, _n));                   \
         }),                                                                    \
         ())
@@ -472,30 +478,31 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t gpio_pin) {
                 (| (1U << (_n))), ())
 
 /* Instance install */
+/* clang-format off */
 #define ST_HT_GPIO_INSTALL(_id, _ops)                                          \
     static void MR_CAT(__gpio_clk_enable_, _id)(void) {                        \
         MR_HT_DRIVER_PROP(_id, st_clken)();                                    \
     }                                                                          \
-    static gpio_priv_t MR_CAT(__gpio_priv_, _id)                               \
-        = {.port = MR_HT_DRIVER_PROP(_id, st_gpiox),                           \
-           .clk_enable = MR_CAT(__gpio_clk_enable_, _id),                      \
-           .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),            \
-           .exti_mask = (0U ST_HT_GPIO_EXTI_BIT(_id, 0)                        \
-                             ST_HT_GPIO_EXTI_BIT(_id, 1)                       \
-                             ST_HT_GPIO_EXTI_BIT(_id, 2)                       \
-                             ST_HT_GPIO_EXTI_BIT(_id, 3)                       \
-                             ST_HT_GPIO_EXTI_BIT(_id, 4)                       \
-                             ST_HT_GPIO_EXTI_BIT(_id, 5)                       \
-                             ST_HT_GPIO_EXTI_BIT(_id, 6)                       \
-                             ST_HT_GPIO_EXTI_BIT(_id, 7)                       \
-                             ST_HT_GPIO_EXTI_BIT(_id, 8)                       \
-                             ST_HT_GPIO_EXTI_BIT(_id, 9)                       \
-                             ST_HT_GPIO_EXTI_BIT(_id, 10)                      \
-                             ST_HT_GPIO_EXTI_BIT(_id, 11)                      \
-                             ST_HT_GPIO_EXTI_BIT(_id, 12)                      \
-                             ST_HT_GPIO_EXTI_BIT(_id, 13)                      \
-                             ST_HT_GPIO_EXTI_BIT(_id, 14)                      \
-                             ST_HT_GPIO_EXTI_BIT(_id, 15))};                   \
+    static gpio_priv_t MR_CAT(__gpio_priv_, _id) = {                           \
+        .port = MR_HT_DRIVER_PROP(_id, st_gpiox),                              \
+        .clk_enable = MR_CAT(__gpio_clk_enable_, _id),                         \
+        .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),               \
+        .exti_mask = (0U ST_HT_GPIO_EXTI_BIT(_id, 0)                           \
+                          ST_HT_GPIO_EXTI_BIT(_id, 1)                          \
+                          ST_HT_GPIO_EXTI_BIT(_id, 2)                          \
+                          ST_HT_GPIO_EXTI_BIT(_id, 3)                          \
+                          ST_HT_GPIO_EXTI_BIT(_id, 4)                          \
+                          ST_HT_GPIO_EXTI_BIT(_id, 5)                          \
+                          ST_HT_GPIO_EXTI_BIT(_id, 6)                          \
+                          ST_HT_GPIO_EXTI_BIT(_id, 7)                          \
+                          ST_HT_GPIO_EXTI_BIT(_id, 8)                          \
+                          ST_HT_GPIO_EXTI_BIT(_id, 9)                          \
+                          ST_HT_GPIO_EXTI_BIT(_id, 10)                         \
+                          ST_HT_GPIO_EXTI_BIT(_id, 11)                         \
+                          ST_HT_GPIO_EXTI_BIT(_id, 12)                         \
+                          ST_HT_GPIO_EXTI_BIT(_id, 13)                         \
+                          ST_HT_GPIO_EXTI_BIT(_id, 14)                         \
+                          ST_HT_GPIO_EXTI_BIT(_id, 15))};                      \
     ST_HT_GPIO_EXTI_IRQ(_id, 0)                                                \
     ST_HT_GPIO_EXTI_IRQ(_id, 1)                                                \
     ST_HT_GPIO_EXTI_IRQ(_id, 2)                                                \
@@ -513,6 +520,7 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t gpio_pin) {
     ST_HT_GPIO_EXTI_IRQ(_id, 14)                                               \
     ST_HT_GPIO_EXTI_IRQ(_id, 15)                                               \
     MR_HT_GPIO_INSTALL(_id, &MR_CAT(__gpio_priv_, _id), _ops)
+/* clang-format on */
 MR_HT_DRIVER_FOREACH(ST_HT_GPIO_INSTALL, &__gpio_ops);
 #endif /* MR_HT_HAS_DRIVER() */
 #endif /* defined(MR_USE_DRIVER_GPIO) */

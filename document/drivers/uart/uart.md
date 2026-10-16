@@ -29,7 +29,7 @@ UART 驱动解决的问题是： **用同一套 API 完成串口参数配置、�
   `mr_uart_putchar` 是长度为 1 的封装。公共层不规定阻塞方式或缓存策略。
 - 分方向 stream（`MR_USE_DRIVER_UART_STREAM`）：RX 与 TX 分别提供 start / stop / is_busy / offset 四组可选 backend
   回调；配置结构目前只有 `circular` 字段，具体运行语义由 backend 定义。
-- 事件通知：公共头文件定义 8 个 `MR_UART_WAIT_*` 事件位；`event_attach` 订阅 waiter，`event_enable`/`event_disable` 按 mask
+- 事件通知：公共头文件定义 9 个 `MR_UART_WAIT_*` 事件位；`event_attach` 订阅 waiter，`event_enable`/`event_disable` 按 mask
   控制后端支持的来源，平台在事件发生时可调用 `event_raise`。
 - hardtree 安装：`MR_HT_UART_INSTALL` 在硬件模板中安装整颗 UART 实例，转发到驱动框架的
   `MR_HT_DRIVER_INSTALL`，实例名与初始化级别沿用驱动框架规则。
@@ -81,10 +81,10 @@ void uart_example(mr_driver_t *drv) {
     mr_uint8_t ch;
 
     if (mr_uart_configure(drv, &config) != 0) {
-        return;                             /* Backend error */
+        return;                             /* backend 错误 */
     }
-    mr_uart_getchar(drv, &ch);              /* Semantics are defined by backend read */
-    mr_uart_putchar(drv, 'A');              /* Semantics are defined by backend write */
+    mr_uart_getchar(drv, &ch);              /* 语义由 backend read 定义 */
+    mr_uart_putchar(drv, 'A');              /* 语义由 backend write 定义 */
 }
 ```
 
@@ -249,7 +249,8 @@ MR_INLINE mr_err_t mr_uart_init(mr_driver_t *drv, mr_uart_data_t *data,
 
 - `drv` / `data` / `ops`：均不可为 `MR_NULL`（断言保护）；`priv` 可为 `MR_NULL`。
 - 返回：成功 `0`，失败负数错误码（透传 `mr_driver_init`）。
-- 注意：`data` 由调用者提供并保证生命周期；初始化为对象模型，不含硬件初始化，硬件动作在 setup（`uart_init`）阶段发生。
+- 注意：`data` 由调用者提供并保证生命周期；初始化为对象模型，不含硬件初始化。setup 阶段的 `uart_init` 只初始化模型内部的
+  `mr_waitable_t`（`mrX/drivers/uart/uart.c:51`），时钟、引脚和寄存器的动作发生在 backend 的 `configure` 中，公共层不做任何硬件访问。
 
 **`mr_uart_create`**
 
@@ -489,7 +490,7 @@ static void uart_tx_done(mr_waiter_t *waiter, void *param,
                          mr_wait_event_t event, const void *data) {
     mr_bool_t *done = param;
 
-    *done = MR_TRUE;     /* This backend chose to raise TX_DONE here. */
+    *done = MR_TRUE;     /* 本 backend 选择在此 raise TX_DONE */
 }
 
 void uart_tx_stream_example(mr_driver_t *drv) {
@@ -502,7 +503,7 @@ void uart_tx_stream_example(mr_driver_t *drv) {
     mr_uart_event_attach(drv, &waiter);      /* 先订阅，再启动 */
     mr_uart_event_enable(drv, MR_UART_WAIT_TX_DONE);
     if (mr_uart_tx_stream_start(drv, frame, sizeof(frame), &stream_cfg) == 0) {
-        /* Backend defines buffer lifetime and completion semantics. */
+        /* 缓冲区生命周期与完成语义由 backend 定义 */
     }
     mr_uart_tx_stream_stop(drv);
     mr_uart_event_disable(drv, MR_UART_WAIT_TX_DONE);
@@ -516,7 +517,7 @@ static void uart_rx_progress(mr_waiter_t *waiter, void *param,
                              mr_wait_event_t event, const void *data) {
     int *count = param;
 
-    (*count)++;     /* Event meaning is defined by the backend. */
+    (*count)++;     /* 事件含义由 backend 定义 */
 }
 
 void uart_rx_stream_example(mr_driver_t *drv) {
@@ -531,7 +532,7 @@ void uart_rx_stream_example(mr_driver_t *drv) {
     mr_uart_event_attach(drv, &waiter);
     mr_uart_event_enable(drv, MR_UART_WAIT_RX_STREAM_HALF | MR_UART_WAIT_RX_STREAM_FULL);
     mr_uart_rx_stream_start(drv, rx_buffer, sizeof(rx_buffer), &stream_cfg);
-    mr_uart_rx_stream_offset(drv, &offset);  /* Backend-defined offset. */
+    mr_uart_rx_stream_offset(drv, &offset);  /* offset 由 backend 定义 */
     mr_uart_rx_stream_stop(drv);
     mr_uart_event_disable(drv, MR_UART_WAIT_RX_STREAM_HALF
                               | MR_UART_WAIT_RX_STREAM_FULL);
@@ -626,8 +627,9 @@ typedef struct mr_uart_data {
 `mr_uart_stop_bits_t`、`mr_uart_parity_t`、`mr_uart_flow_control_t`、`mr_uart_mode_t`。例如
 `MR_UART_DATA_BITS_5`~`MR_UART_DATA_BITS_8` 表示 5~8 数据位，但枚举的底层数值本身是从 0 开始的普通枚举值；公共层不会按枚举上界做配置校验。
 
-事件位（`mr_uart.h:28`~`:35`）：8 个 `MR_UART_WAIT_*` 位分别对应 RX/TX 的半满、全满、 RX 空闲、TX 完成与两个方向错误，全部与
-`mr_wait_event_t`（`mr_uint32_t`）兼容，可组合订阅。
+事件位（`mr_uart.h:28`~`:36`）：共 9 个 `MR_UART_WAIT_*` 位——RX 空闲、RX 就绪、TX 完成、RX 错误、TX 错误，以及 RX stream
+半满/全满与 TX stream 半满/完成；全部与 `mr_wait_event_t`（`mr_uint32_t`）兼容，可组合订阅。注意全满类事件只存在于 RX 方向，
+TX 方向的结束位是 `MR_UART_WAIT_TX_STREAM_DONE`，没有 `MR_UART_WAIT_TX_STREAM_FULL`。
 
 操作表（`mr_uart.h:103`）：`configure`、`configuration`、`read`、`write` 为必需回调 （框架对应路径有 `MR_ASSERT` 非空保护）；8
 个流回调 （`rx_stream_start`/`rx_stream_stop`/`rx_stream_is_busy`/`rx_stream_offset` 与 TX 同名的 4 个） 仅在
@@ -701,32 +703,32 @@ raise 前后的 backend 状态发布顺序。
 
 ### 13. 源码导读
 
-| 位置                                         | 职责                                                                                          |
-|----------------------------------------------|-----------------------------------------------------------------------------------------------|
-| `mrX/include/mrX/drivers/uart/mr_uart.h:28`  | 9 个事件位（RX_IDLE、RX_READY、TX_DONE、RX/TX_ERROR、RX/TX STREAM HALF/FULL、TX_STREAM_DONE） |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:38`  | 数据位/停止位/校验/流控/模式枚举                                                              |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:75`  | `mr_uart_config_t` 配置结构                                                                   |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:96`  | clazz 导出与模型数据（仅事件对象）                                                            |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:103` | 操作表（必需 4 个 + 条件编译的 8 个流回调）                                                   |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:136` | `MR_UART_DEFINE` / `MR_UART_INSTALL`                                                          |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:153` | `mr_uart_init` / `create` / `del`                                                             |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:236` | 普通读写入口（断言 + 零长度短路 + 透传）                                                      |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:296` | 单字节封装 `putchar` / `getchar`                                                              |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:327` | RX 流 API（start/is_busy/stop/offset）                                                        |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:440` | TX 流 API（start/is_busy/stop/offset）                                                        |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:552` | 事件启停与挂接                                                                                |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:646` | 引用管理 `mr_uart_get` / `mr_uart_put`                                                        |
-| `mrX/include/mrX/drivers/uart/mr_uart.h:671` | `MR_HT_UART_INSTALL` 实例安装宏                                                               |
-| `mrX/drivers/uart/uart.c:17`                 | UART clazz（init/deinit/release）                                                             |
-| `mrX/drivers/uart/uart.c:19`                 | 配置路径（断言 + 透传）                                                                       |
-| `mrX/drivers/uart/uart.c:35`                 | 回读路径（透传，不校验）                                                                      |
-| `mrX/drivers/uart/uart.c:51`                 | setup：`mr_waitable_init` 创建事件                                                            |
-| `mrX/drivers/uart/uart.c:69`                 | shutdown：先停 RX/TX，再销毁事件                                                              |
-| `mrX/drivers/uart/uart.c:107`                | release：`mr_free` 释放模型数据                                                               |
-| `mrX/include/mrX/drivers/uart/Kconfig:6`     | `MR_USE_DRIVER_UART`                                                                          |
-| `mrX/include/mrX/drivers/uart/Kconfig:21`    | `MR_USE_DRIVER_UART_STREAM`                                                                   |
-| `mrX/include/mrX/drivers/mr_driver.h:677`    | `MR_HT_DRIVER_INSTALL`（HardTree 安装转发目标）                                               |
-| `mrX/test/drivers/uart/uart.c`               | UART 公共层行为测试                                                                           |
+| 位置                                         | 职责                                                                                                                         |
+|----------------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
+| `mrX/include/mrX/drivers/uart/mr_uart.h:28`  | 9 个事件位（RX_IDLE、RX_READY、TX_DONE、RX_ERROR、TX_ERROR、RX_STREAM_HALF、RX_STREAM_FULL、TX_STREAM_HALF、TX_STREAM_DONE） |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:38`  | 数据位/停止位/校验/流控/模式枚举                                                                                             |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:75`  | `mr_uart_config_t` 配置结构                                                                                                  |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:96`  | clazz 导出与模型数据（仅事件对象）                                                                                           |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:103` | 操作表（必需 4 个 + 条件编译的 8 个流回调）                                                                                  |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:136` | `MR_UART_DEFINE` / `MR_UART_INSTALL`                                                                                         |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:153` | `mr_uart_init` / `create` / `del`                                                                                            |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:236` | 普通读写入口（断言 + 零长度短路 + 透传）                                                                                     |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:296` | 单字节封装 `putchar` / `getchar`                                                                                             |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:327` | RX 流 API（start/is_busy/stop/offset）                                                                                       |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:440` | TX 流 API（start/is_busy/stop/offset）                                                                                       |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:552` | 事件启停与挂接                                                                                                               |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:646` | 引用管理 `mr_uart_get` / `mr_uart_put`                                                                                       |
+| `mrX/include/mrX/drivers/uart/mr_uart.h:671` | `MR_HT_UART_INSTALL` 实例安装宏                                                                                              |
+| `mrX/drivers/uart/uart.c:17`                 | UART clazz（init/deinit/release）                                                                                            |
+| `mrX/drivers/uart/uart.c:19`                 | 配置路径（断言 + 透传）                                                                                                      |
+| `mrX/drivers/uart/uart.c:35`                 | 回读路径（透传，不校验）                                                                                                     |
+| `mrX/drivers/uart/uart.c:51`                 | setup：`mr_waitable_init` 创建事件                                                                                           |
+| `mrX/drivers/uart/uart.c:69`                 | shutdown：先停 RX/TX，再销毁事件                                                                                             |
+| `mrX/drivers/uart/uart.c:107`                | release：`mr_free` 释放模型数据                                                                                              |
+| `mrX/include/mrX/drivers/uart/Kconfig:6`     | `MR_USE_DRIVER_UART`                                                                                                         |
+| `mrX/include/mrX/drivers/uart/Kconfig:21`    | `MR_USE_DRIVER_UART_STREAM`                                                                                                  |
+| `mrX/include/mrX/drivers/mr_driver.h:677`    | `MR_HT_DRIVER_INSTALL`（HardTree 安装转发目标）                                                                              |
+| `mrX/test/drivers/uart/uart.c`               | UART 公共层行为测试                                                                                                          |
 
 ### 14. 附录：配置宏与错误码
 

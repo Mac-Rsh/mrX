@@ -16,6 +16,8 @@ config MR_USE_DRIVER_ADC
             - Hardware oversampling support
             - Raw to voltage conversion utilities (mV/uV/V)
             - Multi-channel sequential sampling
+        HardTree backends include ADS1015/ADS1115 (I2C) and MCP3008 (SPI).
+        Enable the corresponding bus driver; these backends are synchronous.
 
 # ==================================
 # STREAM
@@ -27,6 +29,7 @@ config MR_USE_DRIVER_ADC_STREAM
     help
         Enable ADC stream sampling operations.
         Features:
+            - Software or external conversion start source
             - DMA-based continuous sampling for high-speed data streams
             - Interrupt-driven continuous sampling without DMA
             - Half/full buffer completion wait events

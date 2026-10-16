@@ -78,6 +78,9 @@ typedef struct mr_i2c_msg {
 
 ### 3. Master 传输
 
+GPIO data-ready 触发后执行 repeated START 寄存器读取的组合示例见
+[驱动组合与进阶示例](../examples.md)。
+
 ```c
 mr_ssize_t mr_i2c_transfer(mr_driver_t *drv,
                            const mr_i2c_msg_t *msgs,

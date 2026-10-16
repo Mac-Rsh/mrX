@@ -1,4 +1,4 @@
-# Direct Memory Access（DMA）
+# 直接存储器访问（DMA）
 
 > DMA 驱动为外设与内存搬运提供统一的通道配置、启停、进度和事件接口。
 
@@ -18,13 +18,13 @@
 DMA 公共层描述控制器通道、搬运配置和传输操作。SoC backend 负责寄存器、请求路由、可达内存范围、cache 一致性与硬件限制；ADC、UART、DAC
 等外设适配层则把外设数据寄存器和应用缓冲区组装成传输描述符。
 
-当前公共接口不提供通道 claim/release，也不创建公共 waitable。固定通道分配、请求映射及事件对象归 backend 和平台集成管理。
+当前公共接口不提供通道 claim/release，也不创建公共 waitable。固定通道分配、请求/trigger 映射及事件对象归 backend 和平台集成管理。
 
 ### 2. 配置与依赖
 
 | 配置项              | 默认 | 说明           |
 |---------------------|------|----------------|
-| `MR_USE_DRIVER`     | y    | 驱动框架总开关 |
+| `MR_USE_DRIVER`     | n    | 驱动框架总开关 |
 | `MR_USE_DRIVER_DMA` | n    | DMA 公共层开关 |
 
 `mr_dma_data_t.exist_mask` 为 64 位通道存在掩码：bit n 为 1 表示通道 n 存在，因此公共通道号范围为 0–63。公共操作对越界或不存在通道返回
@@ -39,7 +39,7 @@ DMA 公共层描述控制器通道、搬运配置和传输操作。SoC backend �
 
 static mr_err_t dma_send(mr_driver_t *dma, mr_uint32_t channel,
                          const void *src, void *peripheral,
-                         mr_size_t count) {
+                         mr_size_t count, mr_dma_transfer_t *transfer) {
     mr_dma_config_t config = {
         .src_width = MR_DMA_WIDTH_8,
         .dst_width = MR_DMA_WIDTH_8,
@@ -49,28 +49,33 @@ static mr_err_t dma_send(mr_driver_t *dma, mr_uint32_t channel,
         .dst_burst = MR_DMA_BURST_1,
         .direction = MR_DMA_DIR_M2P,
     };
-    mr_dma_transfer_t transfer = {
+    mr_err_t ret;
+
+    *transfer = (mr_dma_transfer_t){
         .next = MR_NULL,
         .count = count,
         .src = src,
         .dst = peripheral,
     };
-    mr_err_t ret;
 
     ret = mr_dma_configure(dma, channel, &config);
     if (ret != 0) {
         return ret;
     }
-    return mr_dma_start(dma, channel, &transfer);
+    return mr_dma_start(dma, channel, transfer);
 }
 ```
 
-使用前应先完成 `mr_driver_setup()`；删除驱动前由调用方停止所有通道。
+使用前应先完成 `mr_driver_setup()`。`transfer` 指向调用方持有的描述符；描述符、源缓冲和目标区域在传输期间必须保持有效，直到成功停止并确认
+backend 不再访问它们；不要把函数局部栈对象传入异步传输。删除驱动前由调用方停止所有通道。
 
 ### 4. 配置、传输与事件
 
 `mr_dma_config_t` 描述源/目标宽度、地址调整、burst 及传输方向。宽度支持 8/16/32/64 位，地址可递增、递减或固定，burst 枚举覆盖
 1–256，方向为 P2M、M2P 或 M2M。公共层不校验枚举组合是否可由硬件实现。
+
+外部 trigger 不属于单次软件传输参数。需要由 DRDY、定时器 TRGO 等硬件事件控制节奏时，平台应把 trigger source、极性和粒度静态绑定到
+DMA channel；应用仍使用同一组 `mr_dma_configure/start/stop` 接口。具体绑定格式和可用 trigger 由目标 backend 规定。
 
 `mr_dma_transfer_t` 含 `next`、`count`、`src`、`dst`。公共层只校验首个描述符及其 `count/src/dst`，不遍历 `next`
 ，也不复制描述符或缓冲区。链式描述符是否支持、`count` 映射为字节还是元素、对齐和生命期都由 backend 定义；`mr_dma_offset`
@@ -116,7 +121,7 @@ HardTree 为上述通道 API 提供同名 `mr_ht_dma_*` 包装，`mr_ht_dma_spec
 ```c
 static void dma_waiter(mr_waiter_t *waiter, void *param,
                        mr_wait_event_t event, const void *data) {
-    /* Keep the callback short; its context is defined by the backend. */
+    /* 回调保持简短；其执行上下文由 backend 决定。 */
 }
 
 static mr_err_t dma_events_start(mr_driver_t *dma, mr_uint32_t channel) {

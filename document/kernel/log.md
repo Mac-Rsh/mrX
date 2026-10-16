@@ -153,10 +153,10 @@ mr_uint32_t mr_log_mask(void);
 掩码第 `n` 位对应级别 `n`：置 1 输出，清 0 静默。常用值：
 
 ```c
-mr_log_mask_set(0xffffffffU);                            /* All levels on */
+mr_log_mask_set(0xffffffffU);                            /* 全部级别开启 */
 mr_log_mask_set(MR_LOG_MASK(MR_LOG_LEVEL_ERR)
-              | MR_LOG_MASK(MR_LOG_LEVEL_WRN));          /* ERR and WRN only */
-mr_log_mask_set(0U);                                     /* All levels off */
+              | MR_LOG_MASK(MR_LOG_LEVEL_WRN));          /* 仅 ERR 与 WRN */
+mr_log_mask_set(0U);                                     /* 全部级别关闭 */
 ```
 
 ### 6. 完整示例
@@ -168,12 +168,12 @@ void level_switch_demo(void) {
     mr_uint32_t saved = mr_log_mask();
 
     mr_log_mask_set(0U);
-    mr_log(MR_LOG_LEVEL_ERR, "silent now");            /* No output */
+    mr_log(MR_LOG_LEVEL_ERR, "silent now");            /* 无输出 */
 
     mr_log_mask_set(MR_LOG_MASK(MR_LOG_LEVEL_ERR));
-    mr_log(MR_LOG_LEVEL_ERR, "only err passes");       /* Output */
+    mr_log(MR_LOG_LEVEL_ERR, "only err passes");       /* 有输出 */
 
-    mr_log_mask_set(saved);                            /* Restore */
+    mr_log_mask_set(saved);                            /* 恢复 */
 }
 ```
 

@@ -53,33 +53,54 @@ offset/length 由 GDB 分片拉取；普通 `m` 读取则必须在 **单个 repl
 
 ### 3. 快速上手
 
-以环形缓冲模拟传输通道的最小会话（取材自 `mrX/test/modules/xvm/gdb.c` 的
-`test_gdb_io_t` 模式）：
+下面把会话初始化与持续收发分开，传输层通过真实的 `mr_xvm_gdb_ops_t` 注入，不依赖特定 UART 类型：
 
 ```c
 #include <mrX/modules/xvm/mr_xvm_gdb.h>
 
-static mr_ssize_t my_send(void *priv, const void *buf, mr_size_t len) {
-    return uart_write(priv, buf, len);      /* < 0: error, 0: would block */
+static mr_xvm_gdb_t gdb;
+
+/* 每个会话调用一次；ops 与 priv 在 del 之前必须保持有效。 */
+static mr_err_t gdb_service_start(mr_xvm_t *xvm,
+                                  const mr_xvm_gdb_ops_t *ops, void *priv) {
+    mr_err_t ret;
+
+    ret = mr_xvm_gdb_init(&gdb, ops, priv);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = mr_xvm_gdb_attach(&gdb, xvm);
+    if (ret != 0) {
+        (void)mr_xvm_gdb_del(&gdb);
+    }
+    return ret;
 }
 
-static const mr_xvm_gdb_ops_t ops = { .send = my_send };
+/* 由宿主主循环携带新收到的字节反复调用。 */
+static mr_ssize_t gdb_service_poll(const void *buf, mr_size_t len) {
+    mr_ssize_t consumed;
+    mr_err_t ret;
 
-void gdb_service(uart_t *uart, mr_xvm_t *xvm) {
-    static mr_xvm_gdb_t gdb;
-    char byte;
-
-    mr_xvm_gdb_init(&gdb, &ops, uart);
-    mr_xvm_gdb_attach(&gdb, xvm);           /* Holds the VM via debug probe */
-
-    while (uart_readable(uart)) {
-        uart_read(uart, &byte, 1);
-        mr_xvm_gdb_recv(&gdb, &byte, 1);    /* Feed RSP bytes one by one */
+    consumed = mr_xvm_gdb_recv(&gdb, buf, len);
+    if (consumed < 0) {
+        return consumed;
     }
-    /* Drive the VM; stops are reported to GDB automatically */
-    mr_xvm_execute(xvm, &(mr_xvm_event_t){0}, 100);
+    ret = mr_xvm_gdb_flush(&gdb);
+    if (ret != 0) {
+        /* 记录/恢复传输错误；已消费的字节保持已消费。 */
+    }
+    return consumed;
+}
+
+static mr_err_t gdb_service_stop(void) {
+    return mr_xvm_gdb_del(&gdb);
 }
 ```
+
+`ops->send` 由应用实现，可接串口、TCP 或内存队列；需要遵守下文的短写/阻塞契约。主循环应保留 `recv` 未消费的输入，
+无新输入时也可传入 `MR_NULL, 0` 重试发送。宿主还需在主循环中单独调用 `mr_xvm_execute()` 驱动虚拟机；GDB 的 gate
+在暂停状态下阻止执行，收到继续/单步命令后才放行。示例要求 XVM 和会话在主循环期间持续有效，且所有调用串行执行。
+`mr_xvm_execute` 返回的退出、异常和 syscall 事件仍由宿主按 [XVM](xvm.md) 的约定处理，示例仅展示 GDB 接线。
 
 要点：
 
@@ -208,16 +229,16 @@ static mr_ssize_t limited_send(void *priv, const void *buf, mr_size_t len) {
     test_io_t *io = priv;
 
     if (io->stall) {
-        return 0;                       /* Would block */
+        return 0;                       /* 将会阻塞 */
     }
-    io->limit = 1;                      /* Accept one byte then stall */
+    io->limit = 1;                      /* 先接受 1 字节再停顿 */
     io->stall = MR_TRUE;
     return uart_write(io->uart, buf, MR_MIN(len, 1));
 }
 
 void polled_gdb(test_io_t *io, mr_xvm_gdb_t *gdb) {
     if (mr_xvm_gdb_want_send(gdb)) {
-        mr_xvm_gdb_flush(gdb);          /* Drain the pending reply */
+        mr_xvm_gdb_flush(gdb);          /* 排空挂起的应答 */
     }
 }
 ```
@@ -226,11 +247,11 @@ void polled_gdb(test_io_t *io, mr_xvm_gdb_t *gdb) {
 `query_edges_and_errors` 末尾）：
 
 ```c
-/* A full "$qC#xx" packet arrives in three pieces */
+/* 一个完整的 "$qC#xx" 包分三片到达 */
 mr_xvm_gdb_recv(&gdb, "$q", 2);
 mr_xvm_gdb_recv(&gdb, "C#", 2);
-mr_xvm_gdb_recv(&gdb, "1a", 2);         /* Checksum digits */
-/* Reply "QC1" has been queued and sent via ops->send */
+mr_xvm_gdb_recv(&gdb, "1a", 2);         /* 两位校验和 */
+/* 应答 "QC1" 已排队并经 ops->send 发出 */
 ```
 
 更多场景（寄存器/内存读写、断点继续、Ctrl-C、无应答模式、`D`/`k` 关闭）见
@@ -331,7 +352,7 @@ GDB 桩是一个独立对象（非 XVM 内嵌组件），向下复用[调试器 
 ### 10. 核心流程
 
 **接收状态机（`gdb_parse_byte`，`gdb.c:1159`）**：IDLE 态中 0x03 在已附加时设置 HOLD、排入 `S02`、状态 ATTACHED；`$` 进入
-DATA；输入 ACK 字节忽略。DATA 为后续 NUL 保留一字节，若再收一个数据字节会使 `len + 1 >= sizeof(buf)`，则 NAK 并复位。CKSUM
+DATA；输入 ACK 字节忽略。DATA 态为末尾 NUL 预留一字节；若再收一个数据字节就会达到 `len + 1 >= sizeof(buf)`，则 NAK 并复位。CKSUM
 态校验失败 NAK；通过则先排入 ACK 再分发。0x03 只是 gate 控制，不会中途抢占已开始的 ISA execute。
 
 **命令分发（`gdb_command`，`gdb.c:972`）**按首字符路由，返回四类动作：

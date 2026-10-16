@@ -63,7 +63,7 @@ void example(void) {
 
     len = mr_strlen(dst);           /* len == 5 */
     if (mr_strcmp(dst, "hello") == 0) {
-        /* Match */
+        /* 匹配成功 */
     }
 }
 ```
@@ -165,9 +165,9 @@ mr_size_t mr_strlen(const char *s);
 ```c
 void move_example(void) {
     mr_uint8_t buf[16];
-    /* buf filled with data ... */
+    /* buf 已填入数据 ... */
 
-    /* Shift left by 5 bytes: overlapping range */
+    /* 左移 5 字节：区间重叠 */
     mr_memmove(buf, buf + 5, 8);
 }
 ```
@@ -179,10 +179,10 @@ void copy_example(void) {
     char buf[8];
 
     mr_strncpy(buf, "hi", sizeof(buf));
-    /* buf == "hi" followed by 6 '\0' */
+    /* buf == "hi" 后跟 6 个 '\0' */
 
     mr_strncpy(buf, "long_string", sizeof(buf));
-    /* buf == "long_st", no terminator appended */
+    /* buf == "long_st"，未追加终结符 */
     buf[sizeof(buf) - 1] = '\0';
 }
 ```
@@ -198,7 +198,7 @@ void strerror_example(int err) {
         /* "Out of memory" */
         (void)mr_strerror(MR_ENOMEM);
     }
-    /* Unknown code: "Unknown error" */
+    /* 未知错误码：返回 "Unknown error" */
     (void)mr_strerror(-99999);
 }
 ```

@@ -10,6 +10,7 @@
 #if defined(MR_USE_DRIVER_DMA)
 #include <mrX/drivers/dma/mr_dma.h>
 #if defined(MR_USE_DCACHE)
+/* Enable DMA cache ownership tracking when data cache support is present */
 #define DMA_USE_DCACHE
 #include <mrX/port/mr_port_cache.h>
 #endif /* defined(MR_USE_DCACHE) */
@@ -17,7 +18,7 @@
 #include "stm32h5xx_hal_dma_ex.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT                    st_stm32h5_gpdma
+#define MR_HT_COMPAT st_stm32h5_gpdma
 #if MR_HT_HAS_DRIVER()
 
 /* DMA operations */
@@ -53,6 +54,7 @@ MR_UNUSED static const mr_dma_ops_t __dma_ops = {
 #endif /* defined(MR_USE_WAIT) */
 };
 
+/* Per-channel HAL transfer state, cache tracking, and event subscription */
 typedef struct dma_channel {
     DMA_HandleTypeDef handle;
     DMA_NodeTypeDef node;
@@ -72,27 +74,33 @@ typedef struct dma_channel {
 #endif /* defined(MR_USE_WAIT) */
 } dma_channel_t;
 
+/* GPDMA request and trigger mapping for one public channel */
+typedef struct dma_route {
+    uint32_t request;
+    DMA_TriggerConfTypeDef trigger;
+} dma_route_t;
+
+/* Controller-level clock, IRQ priority, and logical channel routes */
 typedef struct dma_priv {
     DMA_TypeDef *instance;
     void (*clk_enable)(void);
-    const uint32_t *requests;
-    mr_size_t requests_num;
+    const dma_route_t *routes;
+    mr_size_t routes_num;
     mr_uint32_t irq_priority;
     dma_channel_t *channels;
 } dma_priv_t;
 
-#define DMA_CHANNELS                    (8U)
-#define DMA_CHANNEL_OFFSET              (0x50U)
-#define DMA_CHANNEL_STRIDE              (0x80U)
+/* GPDMA channel register layout and supported transfer events */
+#define DMA_CHANNELS       (8U)
+#define DMA_CHANNEL_OFFSET (0x50U)
+#define DMA_CHANNEL_STRIDE (0x80U)
 #if defined(GPDMA2)
-#define DMA_CONTROLLERS                 (2U)
+#define DMA_CONTROLLERS (2U)
 #else
-#define DMA_CONTROLLERS                 (1U)
+#define DMA_CONTROLLERS (1U)
 #endif /* defined(GPDMA2) */
-#define DMA_EVENT_MASK                                                         \
-    (MR_DMA_WAIT_HALF | MR_DMA_WAIT_DONE | MR_DMA_WAIT_ERROR)
-#define DMA_ERROR_IT                                                           \
-    (DMA_IT_DTE | DMA_IT_ULE | DMA_IT_USE | DMA_IT_TO)
+#define DMA_EVENT_MASK (MR_DMA_WAIT_HALF | MR_DMA_WAIT_DONE | MR_DMA_WAIT_ERROR)
+#define DMA_ERROR_IT   (DMA_IT_DTE | DMA_IT_ULE | DMA_IT_USE | DMA_IT_TO)
 
 static DMA_HandleTypeDef *__dma_irq_handles[DMA_CONTROLLERS][DMA_CHANNELS];
 
@@ -110,9 +118,10 @@ static const IRQn_Type __dma_irqn[DMA_CONTROLLERS][DMA_CHANNELS] = {
      GPDMA2_Channel4_IRQn, GPDMA2_Channel5_IRQn,
      GPDMA2_Channel6_IRQn, GPDMA2_Channel7_IRQn,
      },
-#endif /* defined(GPDMA2) */
+#endif  /* defined(GPDMA2) */
 };
 
+/* Public transfer widths/bursts/directions mapped to HAL encodings */
 static const uint32_t __dma_src_width[] = {
     DMA_SRC_DATAWIDTH_BYTE, DMA_SRC_DATAWIDTH_HALFWORD, DMA_SRC_DATAWIDTH_WORD};
 static const uint32_t __dma_dst_width[]
@@ -125,7 +134,8 @@ static const uint32_t __dma_direction[]
     = {DMA_PERIPH_TO_MEMORY, DMA_MEMORY_TO_PERIPH, DMA_MEMORY_TO_MEMORY};
 
 static dma_channel_t *dma_get_channel(dma_priv_t *priv, mr_uint32_t channel) {
-    if ((channel >= priv->requests_num) || (channel >= DMA_CHANNELS)) {
+    /* Reject logical channels without a board route or HAL channel */
+    if ((channel >= priv->routes_num) || (channel >= DMA_CHANNELS)) {
         return MR_NULL;
     }
     return &priv->channels[channel];
@@ -133,6 +143,7 @@ static dma_channel_t *dma_get_channel(dma_priv_t *priv, mr_uint32_t channel) {
 
 static mr_err_t dma_ctrl_index(const DMA_TypeDef *instance,
                                mr_uint32_t *index) {
+    /* Map the controller instance to the IRQ-table index */
     if (instance == GPDMA1) {
         *index = 0U;
         return 0;
@@ -147,13 +158,30 @@ static mr_err_t dma_ctrl_index(const DMA_TypeDef *instance,
 }
 
 static void dma_apply_events(dma_channel_t *channel) {
-    mr_bool_t half_required = MR_FALSE;
+    mr_bool_t half_required, completion_required;
+
+    half_required = MR_FALSE;
+    completion_required = !channel->circular;
 
 #if defined(MR_USE_WAIT)
     half_required = (channel->event_mask & MR_DMA_WAIT_HALF) != 0U;
+    completion_required |= (channel->event_mask & MR_DMA_WAIT_DONE) != 0U;
+#if defined(DMA_USE_DCACHE)
+    /* A circular P2M/M2M HALF consumer needs the block boundary to reset the
+     * destination ownership interval even when DONE is not subscribed. */
+    completion_required |= channel->circular && half_required
+                        && (channel->config.direction != MR_DMA_DIR_M2P);
+#endif /* defined(DMA_USE_DCACHE) */
 #endif /* defined(MR_USE_WAIT) */
-    /* HAL completion and error recovery must not depend on subscriptions */
-    __HAL_DMA_ENABLE_IT(&channel->handle, DMA_IT_TC | DMA_ERROR_IT);
+    /* Finite completion maintains HAL state. Circular completion is needed
+     * only for subscribed block events or cache ownership bookkeeping. */
+    if (completion_required) {
+        __HAL_DMA_ENABLE_IT(&channel->handle, DMA_IT_TC);
+    } else {
+        __HAL_DMA_DISABLE_IT(&channel->handle, DMA_IT_TC);
+    }
+    /* Error recovery must not depend on event subscriptions. */
+    __HAL_DMA_ENABLE_IT(&channel->handle, DMA_ERROR_IT);
     if (half_required) {
         __HAL_DMA_ENABLE_IT(&channel->handle, DMA_IT_HT);
     } else {
@@ -161,14 +189,25 @@ static void dma_apply_events(dma_channel_t *channel) {
     }
 }
 
+static mr_size_t dma_memory_width(const dma_channel_t *channel) {
+    /* Return the element width of the memory side, in bytes */
+    return (channel->config.direction == MR_DMA_DIR_M2P)
+             ? (mr_size_t)(1UL << channel->config.src_width)
+             : (mr_size_t)(1UL << channel->config.dst_width);
+}
+
 static mr_bool_t dma_hw_busy(const dma_channel_t *channel) {
-    HAL_DMA_StateTypeDef state = HAL_DMA_GetState(&channel->handle);
+    HAL_DMA_StateTypeDef state;
+
+    /* Treat suspended transfers as active until explicitly stopped */
+    state = HAL_DMA_GetState(&channel->handle);
 
     return ((state == HAL_DMA_STATE_BUSY) || (state == HAL_DMA_STATE_SUSPEND));
 }
 
 static mr_err_t dma_width(mr_uint32_t width, const uint32_t *table,
                           uint32_t *hal_width) {
+    /* Translate supported element widths to HAL encodings */
     if (width == MR_DMA_WIDTH_64) {
         return -MR_ENOSYS;
     }
@@ -181,6 +220,7 @@ static mr_err_t dma_width(mr_uint32_t width, const uint32_t *table,
 
 static mr_err_t dma_adjust(mr_uint32_t adjust, uint32_t increment,
                            uint32_t *hal_adjust) {
+    /* Translate supported address adjustments to HAL encodings */
     if (adjust == MR_DMA_ADJ_DEC) {
         return -MR_ENOSYS;
     }
@@ -192,6 +232,7 @@ static mr_err_t dma_adjust(mr_uint32_t adjust, uint32_t increment,
 }
 
 static mr_err_t dma_burst(mr_uint32_t burst, uint32_t *hal_burst) {
+    /* Translate supported burst sizes and reject unsupported larger bursts */
     if (burst >= MR_DMA_BURST_128) {
         return (burst <= MR_DMA_BURST_256) ? -MR_ENOSYS : -MR_EINVAL;
     }
@@ -201,15 +242,25 @@ static mr_err_t dma_burst(mr_uint32_t burst, uint32_t *hal_burst) {
 
 static mr_err_t dma_request(const dma_priv_t *priv, mr_uint32_t channel,
                             mr_uint32_t direction, uint32_t *request) {
+    /* Memory-to-memory uses the software request; other paths need a route */
     if (direction == MR_DMA_DIR_M2M) {
         *request = DMA_REQUEST_SW;
         return 0;
     }
-    if ((priv->requests == MR_NULL) || (channel >= priv->requests_num)) {
+    if ((priv->routes == MR_NULL) || (channel >= priv->routes_num)) {
         return -MR_EINVAL;
     }
-    *request = priv->requests[channel];
+    *request = priv->routes[channel].request;
     return 0;
+}
+
+static const DMA_TriggerConfTypeDef *dma_trigger(const dma_priv_t *priv,
+                                                 mr_uint32_t channel) {
+    /* Return the optional trigger mapping for a routed channel */
+    if ((priv->routes == MR_NULL) || (channel >= priv->routes_num)) {
+        return MR_NULL;
+    }
+    return &priv->routes[channel].trigger;
 }
 
 static mr_err_t dma_make_config(const mr_dma_config_t *config, uint32_t request,
@@ -257,8 +308,15 @@ static mr_err_t dma_make_config(const mr_dma_config_t *config, uint32_t request,
     /* Fill the remaining channel initialization fields */
     init->BlkHWRequest = DMA_BREQ_SINGLE_BURST;
     init->Priority = DMA_LOW_PRIORITY_HIGH_WEIGHT;
+    /* Port 0 serves peripherals; port 1 serves memory on STM32H5. */
     init->TransferAllocatedPort
-        = DMA_SRC_ALLOCATED_PORT0 | DMA_DEST_ALLOCATED_PORT0;
+        = ((config->direction == MR_DMA_DIR_M2P) ? DMA_SRC_ALLOCATED_PORT1
+                                                 : DMA_SRC_ALLOCATED_PORT0)
+        | ((config->direction == MR_DMA_DIR_P2M)
+               ? DMA_DEST_ALLOCATED_PORT1
+               : ((config->direction == MR_DMA_DIR_M2M)
+                      ? DMA_DEST_ALLOCATED_PORT1
+                      : DMA_DEST_ALLOCATED_PORT0));
     init->TransferEventMode = DMA_TCEM_BLOCK_TRANSFER;
     init->Mode = DMA_NORMAL;
     return 0;
@@ -266,15 +324,17 @@ static mr_err_t dma_make_config(const mr_dma_config_t *config, uint32_t request,
 
 static DMA_Channel_TypeDef *dma_instance(const dma_priv_t *priv,
                                          mr_uint32_t channel) {
-    mr_uintptr_t address = (mr_uintptr_t)priv->instance + DMA_CHANNEL_OFFSET
-                         + ((mr_uintptr_t)channel * DMA_CHANNEL_STRIDE);
+    mr_uintptr_t address;
+
+    /* Resolve the channel register block from the controller base address */
+    address = (mr_uintptr_t)priv->instance + DMA_CHANNEL_OFFSET
+            + ((mr_uintptr_t)channel * DMA_CHANNEL_STRIDE);
 
     return (DMA_Channel_TypeDef *)address;
 }
 
 static mr_size_t dma_current_offset(const dma_channel_t *channel) {
-    mr_size_t remaining;
-    mr_size_t offset;
+    mr_size_t remaining, offset;
 
     if (channel->size == 0U) {
         return 0U;
@@ -293,6 +353,7 @@ static mr_size_t dma_current_offset(const dma_channel_t *channel) {
 #if defined(DMA_USE_DCACHE)
 static mr_size_t dma_memory_size(mr_size_t count, mr_uint32_t adjust,
                                  mr_uint32_t width) {
+    /* Return the byte span touched by incrementing or fixed addresses */
     return (adjust == MR_DMA_ADJ_INC) ? count : ((mr_size_t)1U << width);
 }
 
@@ -301,6 +362,7 @@ static mr_err_t dma_cache_prepare(dma_channel_t *channel,
     mr_size_t size;
     mr_err_t ret;
 
+    /* Clean source and prepare destination ownership for the transfer */
     switch (channel->config.direction) {
         case MR_DMA_DIR_M2P: {
             size = dma_memory_size(transfer->count, channel->config.src_adj,
@@ -331,9 +393,10 @@ static mr_err_t dma_cache_prepare(dma_channel_t *channel,
 
 static mr_err_t dma_cache_invalidate_dst(dma_channel_t *channel,
                                          mr_size_t start, mr_size_t end) {
-    const mr_uint8_t *dst = channel->dst;
+    const mr_uint8_t *dst;
     mr_size_t size;
 
+    dst = channel->dst;
     if (channel->config.direction == MR_DMA_DIR_M2P) {
         return 0;
     }
@@ -350,9 +413,10 @@ static mr_err_t dma_cache_invalidate_dst(dma_channel_t *channel,
 #if defined(MR_USE_WAIT)
 static mr_err_t dma_cache_clean_src(dma_channel_t *channel, mr_size_t start,
                                     mr_size_t end) {
-    const mr_uint8_t *src = channel->src;
+    const mr_uint8_t *src;
     mr_size_t size;
 
+    src = channel->src;
     if (channel->config.direction == MR_DMA_DIR_P2M) {
         return 0;
     }
@@ -368,15 +432,17 @@ static mr_err_t dma_cache_clean_src(dma_channel_t *channel, mr_size_t start,
 #endif /* defined(MR_USE_WAIT) */
 
 static mr_err_t dma_cache_complete(dma_channel_t *channel, mr_size_t offset) {
+    mr_size_t bytes;
     mr_err_t ret;
 
+    bytes = offset * dma_memory_width(channel);
     if ((channel->config.direction == MR_DMA_DIR_M2P)
-        || (offset <= channel->cache_offset)) {
+        || (bytes <= channel->cache_offset)) {
         return 0;
     }
-    ret = dma_cache_invalidate_dst(channel, channel->cache_offset, offset);
+    ret = dma_cache_invalidate_dst(channel, channel->cache_offset, bytes);
     if (ret == 0) {
-        channel->cache_offset = offset;
+        channel->cache_offset = bytes;
     }
     return ret;
 }
@@ -400,16 +466,27 @@ static void dma_raise_event(dma_channel_t *channel, mr_wait_event_t event) {
 #endif /* defined(MR_USE_WAIT) */
 
 static void dma_transfer_complete(DMA_HandleTypeDef *handle) {
-    dma_channel_t *channel = handle->Parent;
+    dma_channel_t *channel;
 #if defined(DMA_USE_DCACHE)
-    mr_err_t ret = 0;
+    mr_err_t ret;
 #if defined(MR_USE_WAIT)
-    mr_size_t half = channel->size / 2U;
+    mr_size_t half;
+#endif /* defined(MR_USE_WAIT) */
+#endif /* defined(DMA_USE_DCACHE) */
+
+    channel = handle->Parent;
+#if defined(DMA_USE_DCACHE)
+    ret = 0;
+#if defined(MR_USE_WAIT)
+    half = channel->size / 2U;
 #endif /* defined(MR_USE_WAIT) */
 #endif /* defined(DMA_USE_DCACHE) */
 
     if (!channel->circular) {
-        mr_atomic_store(&channel->last_offset, (mr_atomic_t)channel->size);
+        /* Public offsets are bytes; channel->size counts data items */
+        mr_atomic_store(&channel->last_offset,
+                        (mr_atomic_t)(channel->size
+                                      * dma_memory_width(channel)));
 #if defined(DMA_USE_DCACHE)
         /* Finite completion returns the remaining DMA-written memory to CPU
          * ownership even when DONE is not subscribed. */
@@ -433,7 +510,9 @@ static void dma_transfer_complete(DMA_HandleTypeDef *handle) {
         /* Circular DONE hands the completed second half to the synchronous
          * waiter. DMA-written memory is made visible before raise. */
         if (channel->config.direction != MR_DMA_DIR_M2P) {
-            ret = dma_cache_invalidate_dst(channel, half, channel->size);
+            ret = dma_cache_invalidate_dst(
+                channel, half * dma_memory_width(channel),
+                channel->size * dma_memory_width(channel));
             if (ret != 0) {
                 dma_raise_event(channel, MR_DMA_WAIT_ERROR);
                 channel->cache_offset = 0U;
@@ -446,7 +525,9 @@ static void dma_transfer_complete(DMA_HandleTypeDef *handle) {
         /* TX/M2M user updates made during synchronous raise() must be visible
          * to DMA before the completed second half is reused next cycle. */
         if (channel->config.direction != MR_DMA_DIR_P2M) {
-            ret = dma_cache_clean_src(channel, half, channel->size);
+            ret = dma_cache_clean_src(
+                channel, half * dma_memory_width(channel),
+                channel->size * dma_memory_width(channel));
             if (ret != 0) {
                 dma_raise_event(channel, MR_DMA_WAIT_ERROR);
             }
@@ -462,12 +543,21 @@ static void dma_transfer_complete(DMA_HandleTypeDef *handle) {
 }
 
 static void dma_half_complete(DMA_HandleTypeDef *handle) {
-    dma_channel_t *channel = handle->Parent;
+    dma_channel_t *channel;
 #if defined(MR_USE_WAIT)
 #if defined(DMA_USE_DCACHE)
-    mr_size_t half = channel->size / 2U;
+    mr_size_t half;
     mr_err_t ret;
+#endif /* defined(DMA_USE_DCACHE) */
+#endif /* defined(MR_USE_WAIT) */
 
+    channel = handle->Parent;
+#if defined(MR_USE_WAIT) && defined(DMA_USE_DCACHE)
+    half = channel->size / 2U;
+#endif /* defined(MR_USE_WAIT) && defined(DMA_USE_DCACHE) */
+
+#if defined(MR_USE_WAIT)
+#if defined(DMA_USE_DCACHE)
     /* HALF exists only when subscribed. DMA-written memory must be visible
      * before the synchronous waiter runs. */
     ret = dma_cache_complete(channel, half);
@@ -481,7 +571,8 @@ static void dma_half_complete(DMA_HandleTypeDef *handle) {
     /* TX/M2M user updates made during synchronous raise() must be visible
      * to DMA before the completed first half is reused next cycle. */
     if (channel->circular && (channel->config.direction != MR_DMA_DIR_P2M)) {
-        ret = dma_cache_clean_src(channel, 0U, half);
+        ret = dma_cache_clean_src(channel, 0U,
+                                  half * dma_memory_width(channel));
         if (ret != 0) {
             dma_raise_event(channel, MR_DMA_WAIT_ERROR);
         }
@@ -493,10 +584,14 @@ static void dma_half_complete(DMA_HandleTypeDef *handle) {
 }
 
 static void dma_transfer_error(DMA_HandleTypeDef *handle) {
-    dma_channel_t *channel = handle->Parent;
-    mr_size_t offset = dma_current_offset(channel);
+    dma_channel_t *channel;
+    mr_size_t offset;
 
-    mr_atomic_store(&channel->last_offset, (mr_atomic_t)offset);
+    channel = handle->Parent;
+    offset = dma_current_offset(channel);
+
+    mr_atomic_store(&channel->last_offset,
+                    (mr_atomic_t)(offset * dma_memory_width(channel)));
 #if defined(DMA_USE_DCACHE)
     (void)dma_cache_complete(channel, offset);
 #endif /* defined(DMA_USE_DCACHE) */
@@ -507,11 +602,14 @@ static void dma_transfer_error(DMA_HandleTypeDef *handle) {
 #endif /* defined(MR_USE_WAIT) */
 }
 
-static mr_err_t dma_build_linked_list(dma_channel_t *dma_channel, uint32_t src,
-                                      uint32_t dst, uint32_t count) {
-    DMA_NodeConfTypeDef node_config = {0};
+static mr_err_t dma_build_linked_list(dma_channel_t *dma_channel,
+                                      const DMA_TriggerConfTypeDef *trigger,
+                                      uint32_t src, uint32_t dst,
+                                      uint32_t count) {
+    DMA_NodeConfTypeDef node_config;
     mr_err_t ret;
 
+    node_config = (DMA_NodeConfTypeDef){0};
     /* Rebuild the single-node circular list for this transfer */
     ret = mr_stm32h5_hal_status(HAL_DMAEx_List_ResetQ(&dma_channel->queue));
     if (ret != 0) {
@@ -522,9 +620,7 @@ static mr_err_t dma_build_linked_list(dma_channel_t *dma_channel, uint32_t src,
     node_config.DataHandlingConfig.DataExchange = DMA_EXCHANGE_NONE;
     node_config.DataHandlingConfig.DataAlignment
         = DMA_DATA_RIGHTALIGN_ZEROPADDED;
-    node_config.TriggerConfig.TriggerMode = DMA_TRIGM_BLOCK_TRANSFER;
-    node_config.TriggerConfig.TriggerPolarity = DMA_TRIG_POLARITY_MASKED;
-    node_config.TriggerConfig.TriggerSelection = 0U;
+    node_config.TriggerConfig = *trigger;
     node_config.SrcAddress = src;
     node_config.DstAddress = dst;
     node_config.DataSize = count;
@@ -547,12 +643,23 @@ static mr_err_t dma_build_linked_list(dma_channel_t *dma_channel, uint32_t src,
         HAL_DMAEx_List_LinkQ(&dma_channel->handle, &dma_channel->queue));
 }
 
-static mr_err_t dma_set_mode(dma_channel_t *dma_channel, mr_bool_t circular) {
+static mr_err_t dma_init_linear(dma_channel_t *dma_channel,
+                                const DMA_TriggerConfTypeDef *trigger) {
     mr_err_t ret;
 
-    if (!circular) {
-        ret = mr_stm32h5_hal_status(HAL_DMA_Init(&dma_channel->handle));
-    } else {
+    ret = mr_stm32h5_hal_status(HAL_DMA_Init(&dma_channel->handle));
+    if (ret != 0) {
+        return ret;
+    }
+    return mr_stm32h5_hal_status(
+        HAL_DMAEx_ConfigTrigger(&dma_channel->handle, trigger));
+}
+
+static mr_err_t dma_set_mode(dma_channel_t *dma_channel, mr_bool_t circular,
+                             const DMA_TriggerConfTypeDef *trigger) {
+    mr_err_t ret;
+
+    if (circular) {
         dma_channel->handle.InitLinkedList.Priority
             = DMA_LOW_PRIORITY_HIGH_WEIGHT;
         dma_channel->handle.InitLinkedList.LinkStepMode
@@ -564,6 +671,8 @@ static mr_err_t dma_set_mode(dma_channel_t *dma_channel, mr_bool_t circular) {
         dma_channel->handle.InitLinkedList.LinkedListMode
             = DMA_LINKEDLIST_CIRCULAR;
         ret = mr_stm32h5_hal_status(HAL_DMAEx_List_Init(&dma_channel->handle));
+    } else {
+        ret = dma_init_linear(dma_channel, trigger);
     }
     if (ret == 0) {
         dma_channel->circular = circular;
@@ -575,13 +684,15 @@ static mr_err_t dma_channel_configure(const mr_driver_t *drv,
                                       mr_uint32_t channel,
                                       const mr_dma_config_t *config) {
     dma_priv_t *priv = MR_DRIVER_PRIV(drv);
+    const DMA_TriggerConfTypeDef *trigger;
     dma_channel_t *dma_channel;
-    DMA_InitTypeDef init = {0};
     HAL_DMA_StateTypeDef state;
+    DMA_InitTypeDef init;
     mr_uint32_t ctrl;
     uint32_t request;
     mr_err_t ret;
 
+    init = (DMA_InitTypeDef){0};
     /* Check parameter */
     dma_channel = dma_get_channel(priv, channel);
     if (dma_channel == MR_NULL) {
@@ -606,6 +717,10 @@ static mr_err_t dma_channel_configure(const mr_driver_t *drv,
     if (ret != 0) {
         return ret;
     }
+    trigger = dma_trigger(priv, channel);
+    if (trigger == MR_NULL) {
+        return -MR_EINVAL;
+    }
     ret = dma_make_config(config, request, &init);
     if (ret != 0) {
         return ret;
@@ -626,7 +741,7 @@ static mr_err_t dma_channel_configure(const mr_driver_t *drv,
     dma_channel->handle.Instance = dma_instance(priv, channel);
     dma_channel->handle.Init = init;
     dma_channel->handle.Parent = dma_channel;
-    ret = mr_stm32h5_hal_status(HAL_DMA_Init(&dma_channel->handle));
+    ret = dma_init_linear(dma_channel, trigger);
     if (ret != 0) {
         return ret;
     }
@@ -668,10 +783,10 @@ static mr_err_t dma_channel_configuration(const mr_driver_t *drv,
 static mr_err_t dma_start(const mr_driver_t *drv, mr_uint32_t channel,
                           const mr_dma_transfer_t *transfer) {
     dma_priv_t *priv = MR_DRIVER_PRIV(drv);
+    const DMA_TriggerConfTypeDef *trigger;
     dma_channel_t *dma_channel;
     mr_bool_t circular;
-    uint32_t src;
-    uint32_t dst;
+    uint32_t src, dst;
     mr_err_t ret;
 
     /* Check parameter */
@@ -689,10 +804,14 @@ static mr_err_t dma_start(const mr_driver_t *drv, mr_uint32_t channel,
     if (dma_hw_busy(dma_channel)) {
         return -MR_EBUSY;
     }
+    trigger = dma_trigger(priv, channel);
+    if (trigger == MR_NULL) {
+        return -MR_EINVAL;
+    }
     if (transfer->count > DMA_CBR1_BNDT) {
         return -MR_ERANGE;
     }
-    ret = dma_set_mode(dma_channel, circular);
+    ret = dma_set_mode(dma_channel, circular, trigger);
     if (ret != 0) {
         return ret;
     }
@@ -713,7 +832,7 @@ static mr_err_t dma_start(const mr_driver_t *drv, mr_uint32_t channel,
 
     /* Build the circular descriptor before cache maintenance and start */
     if (dma_channel->circular) {
-        ret = dma_build_linked_list(dma_channel, src, dst,
+        ret = dma_build_linked_list(dma_channel, trigger, src, dst,
                                     (uint32_t)transfer->count);
         if (ret != 0) {
             return ret;
@@ -773,12 +892,14 @@ static mr_err_t dma_stop(const mr_driver_t *drv, mr_uint32_t channel) {
         /* HAL_DMA_Abort() only accepts BUSY. Preserve any DMA-written data,
          * then rebuild the channel from the saved mrX configuration. */
         offset = dma_current_offset(dma_channel);
-        mr_atomic_store(&dma_channel->last_offset, (mr_atomic_t)offset);
+        mr_atomic_store(&dma_channel->last_offset,
+                        (mr_atomic_t)(offset * dma_memory_width(dma_channel)));
 #if defined(DMA_USE_DCACHE)
         (void)dma_cache_complete(dma_channel, offset);
 #endif /* defined(DMA_USE_DCACHE) */
         ret = dma_channel_configure(drv, channel, &dma_channel->config);
-        mr_atomic_store(&dma_channel->last_offset, (mr_atomic_t)offset);
+        mr_atomic_store(&dma_channel->last_offset,
+                        (mr_atomic_t)(offset * dma_memory_width(dma_channel)));
         return ret;
     }
     if (state == HAL_DMA_STATE_SUSPEND) {
@@ -790,7 +911,8 @@ static mr_err_t dma_stop(const mr_driver_t *drv, mr_uint32_t channel) {
 
     /* Save the current progress before aborting the channel */
     offset = dma_current_offset(dma_channel);
-    mr_atomic_store(&dma_channel->last_offset, (mr_atomic_t)offset);
+    mr_atomic_store(&dma_channel->last_offset,
+                    (mr_atomic_t)(offset * dma_memory_width(dma_channel)));
     ret = mr_stm32h5_hal_status(HAL_DMA_Abort(&dma_channel->handle));
 #if defined(DMA_USE_DCACHE)
     if (ret == 0) {
@@ -834,8 +956,11 @@ static mr_err_t dma_offset(const mr_driver_t *drv, mr_uint32_t channel,
         return -MR_ENODEV;
     }
     if (dma_hw_busy(dma_channel)) {
-        mr_atomic_store(&dma_channel->last_offset,
-                        (mr_atomic_t)dma_current_offset(dma_channel));
+        /* Public offsets are bytes; dma_current_offset() counts data items */
+        mr_atomic_store(
+            &dma_channel->last_offset,
+            (mr_atomic_t)(dma_current_offset(dma_channel)
+                          * dma_memory_width(dma_channel)));
     }
     *offset = (mr_size_t)mr_atomic_load(&dma_channel->last_offset);
     return 0;
@@ -877,7 +1002,7 @@ static mr_err_t dma_event_control(const mr_driver_t *drv, mr_uint32_t channel,
         return -MR_ENODEV;
     }
 
-    /* Subscription changes do not disable HAL completion or error handling */
+    /* Recompute subscribed sources and mandatory internal handling. */
     if (enable) {
         dma_channel->event_mask |= events;
     } else {
@@ -893,6 +1018,7 @@ static mr_err_t dma_event_control(const mr_driver_t *drv, mr_uint32_t channel,
 static void dma_irq_handle(mr_uint32_t ctrl, mr_uint32_t channel) {
     DMA_HandleTypeDef *handle;
 
+    /* Validate the IRQ table slot and forward the interrupt to HAL */
     if ((ctrl >= DMA_CONTROLLERS) || (channel >= DMA_CHANNELS)) {
         return;
     }
@@ -906,34 +1032,41 @@ static void dma_irq_handle(mr_uint32_t ctrl, mr_uint32_t channel) {
 #define ST_HT_DMA_IRQ(_id, _n)                                                 \
     MR_MACRO_IF(                                                               \
         MR_HT_DRIVER_HAS_PROP(_id, MR_CAT(st_irq_handler_, _n)),               \
-        (void MR_HT_DRIVER_PROP(_id, MR_CAT(st_irq_handler_, _n))(void) {     \
+        (void MR_HT_DRIVER_PROP(_id, MR_CAT(st_irq_handler_, _n))(void) {      \
             dma_irq_handle(MR_HT_DRIVER_PROP(_id, st_ctrl), (_n));             \
         }),                                                                    \
         ())
 
-#define __ST_HT_DMA_REQUEST_IMPL(_elem, _node, _prop)                          \
-    MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0)
+#define __ST_HT_DMA_ROUTE_IMPL(_elem, _node, _prop)                            \
+    {                                                                          \
+        .request = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0),               \
+        .trigger = {.TriggerMode = MR_HT_NODE_PROP_ELEM_OR(                    \
+                        _node, _prop, _elem, 1, DMA_TRIGM_BLOCK_TRANSFER),     \
+                    .TriggerPolarity = MR_HT_NODE_PROP_ELEM_OR(                \
+                        _node, _prop, _elem, 2, DMA_TRIG_POLARITY_MASKED),     \
+                    .TriggerSelection                                          \
+                    = MR_HT_NODE_PROP_ELEM_OR(_node, _prop, _elem, 3, 0U)}     \
+    }
 #define ST_HT_DMA_INSTALL(_id, _ops)                                           \
     static void MR_CAT(__dma_clk_enable_, _id)(void) {                         \
         MR_HT_DRIVER_PROP(_id, st_clken)();                                    \
     }                                                                          \
-    static const uint32_t MR_CAT(__dma_requests_, _id)[]                       \
+    static const dma_route_t MR_CAT(__dma_routes_, _id)[]                      \
         = {MR_HT_DRIVER_PROP_ELEM_FOREACH(_id, st_requests,                    \
-                                          __ST_HT_DMA_REQUEST_IMPL)};          \
-    static dma_channel_t MR_CAT(__dma_channels_, _id)                          \
-        [MR_ARRAY_SIZE(MR_CAT(__dma_requests_, _id))];                         \
+                                          __ST_HT_DMA_ROUTE_IMPL)};            \
+    static dma_channel_t MR_CAT(                                               \
+        __dma_channels_, _id)[MR_ARRAY_SIZE(MR_CAT(__dma_routes_, _id))];      \
     static dma_priv_t MR_CAT(__dma_priv_, _id)                                 \
         = {.instance = MR_HT_DRIVER_PROP(_id, st_gpdmax),                      \
            .clk_enable = MR_CAT(__dma_clk_enable_, _id),                       \
-           .requests = MR_CAT(__dma_requests_, _id),                           \
-           .requests_num = MR_ARRAY_SIZE(MR_CAT(__dma_requests_, _id)),        \
+           .routes = MR_CAT(__dma_routes_, _id),                               \
+           .routes_num = MR_ARRAY_SIZE(MR_CAT(__dma_routes_, _id)),            \
            .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),            \
            .channels = MR_CAT(__dma_channels_, _id)};                          \
-    static mr_dma_data_t MR_CAT(__mr_dma_data_, _id) = MR_DMA_DATA_INIT(       \
-        MR_HT_DRIVER_PROP_OR(                                                  \
+    static mr_dma_data_t MR_CAT(__mr_dma_data_, _id)                           \
+        = MR_DMA_DATA_INIT(MR_HT_DRIVER_PROP_OR(                               \
             _id, exist_mask,                                                   \
-            ((1ULL << MR_ARRAY_SIZE(MR_CAT(__dma_requests_, _id)))             \
-             - 1ULL)));                                                        \
+            ((1ULL << MR_ARRAY_SIZE(MR_CAT(__dma_routes_, _id))) - 1ULL)));    \
     ST_HT_DMA_IRQ(_id, 0)                                                      \
     ST_HT_DMA_IRQ(_id, 1)                                                      \
     ST_HT_DMA_IRQ(_id, 2)                                                      \

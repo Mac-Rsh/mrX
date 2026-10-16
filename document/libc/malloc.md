@@ -17,7 +17,7 @@
 ### 1. 模块概述
 
 内存分配模块解决的问题是： **在没有操作系统堆服务、也不想引入完整 C 库堆的目标板上，
-提供一个确定大小、行为可预期的通用内存分配器**。
+提供一个基于编译期固定大小堆池、行为可预期的通用内存分配器**。
 
 特性：
 
@@ -28,8 +28,8 @@
 - `mr_calloc`（清零分配）与 `mr_realloc`（扩缩容并保留数据）完备。
 - `mr_heap_region_add` 支持在初始化阶段追加额外的内存区域（如外部 SRAM）。
 - `mr_heap_information` 提供总量、占用、空闲、失败次数、碎片数、最大空闲块等统计信息。
-- 分配类 API 通过 `MR_NULL` 表示失败，并维护部分分配失败统计；释放/查询接口仍要求调用者传入满足其所有权前置条件的指针，magic
-  只能发现部分误用，不能把任意野指针变成安全输入。
+- 分配类 API 通过 `MR_NULL` 表示失败，并维护部分分配失败统计；释放/查询接口要求调用者传入满足其所有权前置条件的指针，magic
+  校验的能力边界见第 5 节 API 参考。
 
 与 [内核 Slab](../kernel/slab.md) 的分工：两者相互独立、互不依赖。slab 在调用者缓冲上按 **固定块大小**
 用原子位图管理，没有每块头部和变长堆的外部碎片问题；本模块在通用堆上按 **任意大小**
@@ -68,11 +68,11 @@ void example(void) {
 
     buf = mr_malloc(128);
     if (buf == MR_NULL) {
-        /* Allocation failed: heap exhausted */
+        /* 分配失败：堆已耗尽 */
         return;
     }
 
-    /* Use buf here */
+    /* 在此使用 buf */
 
     mr_free(buf);
 }
@@ -99,9 +99,9 @@ void example(void) {
 **释放语义**
 
 - `mr_free(MR_NULL)` 安全。
-- 除 `MR_NULL` 外，`mr_free` 的输入应是当前内置分配器返回且尚未释放的块首地址。实现会先通过 `mem - sizeof(block)` 读取块头，再检查
-  magic，因此 **不能**用它安全探测任意野指针；重复 free 也不属于受保证用法。
-- `mr_malloc_usable_size(MR_NULL)` 返回 0；非空参数同样应是当前有效分配块。magic 不匹配时返回 0，但这不是对任意地址的内存安全校验。
+- 除 `MR_NULL` 外，`mr_free` 的输入应是当前内置分配器返回且尚未释放的块首地址，重复 free 也不属于受保证用法；magic 校验为何
+  不能用于探测任意野指针，见第 5 节 API 参考。
+- `mr_malloc_usable_size(MR_NULL)` 返回 0；非空参数同样应是当前有效分配块，具体行为见第 5 节 API 参考。
 
 **调用上下文**
 
@@ -214,10 +214,10 @@ void realloc_example(void) {
         return;
     }
 
-    /* Grow to 256 bytes, old data prefix is preserved */
+    /* 扩容到 256 字节，保留原有数据前缀 */
     newp = mr_realloc(p, 256);
     if (newp == MR_NULL) {
-        mr_free(p);                 /* realloc failure keeps the old block valid */
+        mr_free(p);                 /* realloc 失败时旧块保持有效 */
         return;
     }
     p = newp;
@@ -240,7 +240,7 @@ void heap_stat_example(void) {
     (void)info;
 
     mr_free(p);
-    info = mr_heap_information(MR_FALSE);   /* Full scan for frag ratio */
+    info = mr_heap_information(MR_FALSE);   /* 完整扫描以刷新碎片比例 */
 }
 ```
 
@@ -382,7 +382,7 @@ typedef struct mr_heap_block {
 - `mr_malloc_usable_size` 没有锁，只应在调用者独占该活动块生命周期时查询；`mr_calloc/realloc` 的 memset/memcpy
   在基础分配临界区之外完成。
 - `mr_heap_region_add` 无内部锁，仅限堆已初始化且并发堆操作开始前调用，并由调用者外部串行化。
-- `magic` 是 `volatile` 状态标志而非原子同步或地址验证机制；多核和同一块的并发生命周期操作需要更高层同步。
+- `magic` 是 `volatile` 状态标志而非原子同步机制，其对误用的检测能力边界见第 5 节 API 参考；多核和同一块的并发生命周期操作需要更高层同步。
 
 ### 12. 扩展与派生
 

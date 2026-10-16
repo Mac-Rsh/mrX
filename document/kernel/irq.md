@@ -32,8 +32,8 @@
   的上下文中（需 `MR_USE_IRQ_DEFER`）。
 - 生命周期安全：控制器与动作均有引用/pending 跟踪，删除不会使分发流程悬空。
 
-不适用于：直接操作具体外设的中断寄存器（属于控制器 `ops` 与 `priv` 的职责）、 需要比中断上下文更低延迟的零拷贝路径（defer
-会引入一次上下文切换）。
+不适用于：直接操作具体外设的中断寄存器（属于控制器 `ops` 与 `priv` 的职责）、 需要立即完成的硬实时处理（defer
+会延后到应用调用 `mr_irq_defer_execute()` 时执行，本身不创建线程或自动切换上下文）。
 
 ### 2. 配置与依赖
 
@@ -60,11 +60,11 @@
 ```c
 #include <mrX/kernel/mr_irq.h>
 
-/* Controller hardware operations. Core dereferences the six callbacks directly. */
-static const mr_irq_ops_t mock_ops = { /* fill with mock_* functions */ };
+/* 控制器硬件操作。核心直接解引用这六个回调。 */
+static const mr_irq_ops_t mock_ops = { /* 填入 mock_* 函数 */ };
 
 static mr_irq_return_t button_handler(mr_uint32_t irq, void *owner) {
-    /* Handle button press here */
+    /* 在此处理按键按下 */
     return MR_IRQ_HANDLED;
 }
 
@@ -72,13 +72,13 @@ static int irq_setup(void) {
     static mr_irq_t gpio_irq;
     mr_err_t ret;
 
-    /* Register controller: irq line 0 of this controller */
+    /* 注册控制器：本控制器的 0 号中断线 */
     ret = mr_irq_init(&gpio_irq, 0, 0, &mock_ops, MR_NULL);
     if (ret != 0) {
         return ret;
     }
 
-    /* Request line 0 with a rising-edge handler */
+    /* 以上升沿处理器申请 0 号线 */
     ret = mr_irq_request(0, button_handler, &gpio_irq, MR_IRQ_EDGE_RISING);
     if (ret != 0) {
         return ret;
@@ -86,7 +86,7 @@ static int irq_setup(void) {
     return 0;
 }
 
-/* In the controller's top-level ISR */
+/* 在控制器的顶层 ISR 中 */
 void gpio_isr(void) {
     mr_irq_handle(0);
 }
@@ -272,8 +272,8 @@ mr_err_t mr_irq_defer_hook_set(const mr_irq_defer_hook_t *hook);
 
 ```c
 static mr_irq_return_t handler_a(mr_uint32_t irq, void *owner) {
-    if (/* not mine */) {
-        return MR_IRQ_NONE;         /* Let next handler run */
+    if (/* 不是本所有者的中断 */) {
+        return MR_IRQ_NONE;         /* 交给下一个处理器 */
     }
     return MR_IRQ_HANDLED;
 }
@@ -286,11 +286,11 @@ void shared_example(void) {
     static mr_irq_t irq;
 
     mr_irq_init(&irq, 3, 3, &mock_ops, MR_NULL);
-    /* First requester decides the flags, must carry MR_IRQ_SHARED */
+    /* 首个申请者决定 flags，必须携带 MR_IRQ_SHARED */
     mr_irq_request(3, handler_a, handler_a, MR_IRQ_SHARED | MR_IRQ_EDGE_RISING);
     mr_irq_request(3, handler_b, handler_b, MR_IRQ_SHARED | MR_IRQ_EDGE_RISING);
 
-    mr_irq_handle(3);               /* Dispatches A then B */
+    mr_irq_handle(3);               /* 依次分发 A、B */
 
     mr_irq_free(3, handler_a);
     mr_irq_free(3, handler_b);
@@ -304,12 +304,12 @@ void shared_example(void) {
 static volatile int work_done = 0;
 
 static mr_irq_return_t top_half(mr_uint32_t irq, void *owner) {
-    /* Ack hardware, grab data, keep it short */
-    return MR_IRQ_DEFERRED;         /* Hand over to bottom half */
+    /* 应答硬件、取走数据，保持简短 */
+    return MR_IRQ_DEFERRED;         /* 交给下半部 */
 }
 
 static mr_irq_return_t bottom_half(mr_uint32_t irq, void *owner) {
-    work_done++;                    /* Lengthy processing runs here */
+    work_done++;                    /* 耗时处理在这里执行 */
     return MR_IRQ_HANDLED;
 }
 
@@ -318,8 +318,8 @@ void defer_example(void) {
 
     mr_irq_init(&irq, 4, 4, &mock_ops, MR_NULL);
     mr_irq_defer_request(4, top_half, &irq, MR_IRQ_EDGE_RISING, bottom_half);
-    mr_irq_handle(4);               /* In ISR: runs top_half only */
-    mr_irq_defer_execute();         /* In thread: runs bottom_half */
+    mr_irq_handle(4);               /* 在 ISR 中：只执行 top_half */
+    mr_irq_defer_execute();         /* 在线程中：执行 bottom_half */
     mr_irq_free(4, &irq);
     mr_irq_del(&irq);
 }
@@ -431,9 +431,8 @@ flags 编码：低 4 位为触发类型（`IRQ_FLAG_TYPE_MASK`，`irq.c:35`）�
 
 **深度嵌套的钳位**：`irq_depth_enable` 用 `fetch_sub` 检测 1→0 跃迁，非跃迁时若深度 已非正则回写 0（`irq.c:327-333`）；
 `irq_depth_disable`（`irq.c:71`）对称地用
-`fetch_add` 检测 0→1 跃迁，非跃迁且无动作时回写 1。这保证了重复 enable/disable 不重复操作硬件，且无动作时深度回到确定的静态（测试
-`depth_saturation_without_action`
-覆盖）。
+`fetch_add` 检测 0→1 跃迁，非跃迁且无动作时回写 1。这保证了重复 enable/disable 不重复操作硬件，且无动作时深度收敛到确定值
+（disable 钳回 1、enable 钳回 0，测试 `depth_saturation_without_action` 覆盖）。
 
 **分发**：`mr_irq_handle`（`irq.c:660`）：
 

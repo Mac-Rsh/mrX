@@ -1,4 +1,4 @@
-# Watchdog Timer (WDT)
+# 看门狗定时器（WDT）
 
 > 提供硬件看门狗配置、启停、喂狗、忙状态查询与 waitable 事件接口。时间字段的单位和硬件语义由 backend 定义。
 
@@ -19,7 +19,9 @@
 。这些名称用于表达喂狗窗口和提前预警相关参数，但公共层没有规定时间单位、0 值特殊含义或三者之间的数学关系，具体解释由 backend
 决定。
 
-当前平台树尚无 WDT 平台后端；公共层契约的行为级测试见 `mrX/test/drivers/wdt/wdt.c`。启用通用框架本身不会注册或驱动实际硬件。
+当前 STM32H5 平台提供 IWDG backend，时间单位为毫秒，支持 EWI pretimeout，
+但启动后不可停止，且 timeout 直接复位而不上报可等待事件。其他 backend
+可以有不同单位和能力，应以平台文档为准。
 
 ### 2. 配置与依赖
 
@@ -34,6 +36,9 @@
 `mr_wdt_configuration` 直接调用 backend 填充配置结构，公共层不缓存或换算数值。
 
 ### 3. 快速上手
+
+采集与控制通路只在完成一轮有效工作后喂狗的示例见
+[驱动组合与进阶示例](../examples.md)。
 
 平台 backend 为看门狗实例提供 `mr_wdt_ops_t`，并通过 `MR_WDT_INSTALL` 或 `MR_HT_WDT_INSTALL` 注册。应用取得并 setup
 对应驱动后，可按 backend 约定配置参数、启动并调用 feed。
@@ -50,7 +55,7 @@ mr_wdt_config_t config = {
 mr_wdt_configure(wdt, &config);
 mr_wdt_start(wdt);
 
-/* Feed while the backend reports the WDT as running. */
+/* backend 报告看门狗运行期间喂狗 */
 mr_wdt_feed(wdt);
 ```
 

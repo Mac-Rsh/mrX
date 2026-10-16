@@ -76,7 +76,7 @@ XVM 解决的问题是： **在 MCU 上以受控地址映射和指令解释执�
 
 static void run(void) {
     mr_uint8_t data[512];
-    /* ADDI a7, x0, 1; ECALL with nr = 1 */
+    /* ADDI a7, x0, 1，随后 ECALL，nr = 1 */
     mr_uint8_t image[8] = {
         0x93, 0x08, 0x10, 0x00,        /* ADDI a7, x0, 1 */
         0x73, 0x00, 0x00, 0x00,        /* ECALL          */
@@ -98,7 +98,7 @@ static void run(void) {
     for (;;) {
         mr_xvm_return_t er = mr_xvm_execute(&xvm, &event, 100);
         if (er == MR_XVM_SYSCALL) {
-            /* Handle syscall: nr = event.syscall.nr, args in param[0..n] */
+            /* 处理系统调用：nr = event.syscall.nr，参数在 param[0..n] */
             *event.syscall.ret = 0;
             mr_xvm_resume(&xvm);
             continue;
@@ -166,6 +166,64 @@ static void run(void) {
 **数据内存访问**：`mr_xvm_datamem_load`/`mr_xvm_datamem_store` 按客户机地址读写， 会正确落在镜像区（只读，store 返回
 `-MR_EPERM`）或 RAM 区；`mr_xvm_datamem_map`
 直接给出宿主侧指针，用于零拷贝共享，跨区访问需按返回的映射长度分段。
+
+**宿主运行环境：通过 RPC 异步处理 syscall**
+
+一种典型的运行方式是：XVM 在一个 work/thread 中执行，[RPC](../rpc/rpc.md) 在另一个 work/thread 中执行。
+宿主手动建立运行环境，负责 syscall 分发、调用上下文、调度通知和 session 生命周期；XVM 提供执行与暂停/恢复能力，
+RPC 提供外部 session 的提交、完成和消费能力。syscall 编号、参数布局以及对应的 RPC executor、service/method 由宿主与客户机约定。
+
+一次需要等待响应的调用按以下流程处理：
+
+1. **捕获 syscall**：XVM 所属的 work/thread 调用 `mr_xvm_execute`，返回 `MR_XVM_SYSCALL` 时 XVM 已进入
+   `MR_XVM_STATUS_PAUSED`。宿主根据 `event.syscall.nr` 选择处理程序，由该处理程序把请求转交给指定 RPC。
+2. **建立调用上下文并复制请求**：宿主创建新的 `mr_rpc_session_t`，通过 `mr_rpc_session_init` 以运行环境作为 owner，设置
+   `complete/release` 回调。
+   保存本次 syscall 的返回值槽、客户机响应地址和容量等信息，校验客户机内存范围，把按 RPC codec 约定打包的请求复制到
+   `session->request.payload`，填写 `request.type = MR_RPC_MSG_REQUEST`、service/method 和 `recv.size`。
+3. **提交并等待**：在提交前登记 pending session 并建立等待状态，再调用 `mr_rpc_submit`。运行环境通过 RPC hook 或自己的
+   调度通知安排 RPC 所属的 work/thread 执行；等待期间保持 XVM 暂停，停止其后续执行调度。
+4. **执行 RPC 并通知完成**：RPC 所属的 work/thread 调用 `mr_rpc_execute`，完成方法调用和响应编码后，通过
+   `complete(session, result, owner)` 通知运行环境。回调发布结果就绪状态，并唤醒 XVM 线程或重新提交 XVM work。
+   若方法持有 session，完成通知发生在后续 `mr_rpc_session_reply` 产生结果时。
+5. **回到 XVM 上下文写回**：XVM 所属的 work/thread 先处理 pending session，检查响应长度与客户机输出范围，把
+   `session->response.payload` 中的实际响应复制回客户机内存，并把服务结果写入保存的 syscall 返回值槽。
+   客户机 ABI 若约定了实际响应长度字段，也在此写入。
+6. **消费、释放并继续执行**：写回完成后调用 `mr_rpc_session_consume`，一次性请求随后通过 `release` 回调释放或归还
+   session。运行环境清除本次 pending 调用，调用 `mr_xvm_resume` 并继续执行；当前 RISCV32 在下次 execute 时把返回槽的值写回
+   A0。
+
+```mermaid
+sequenceDiagram
+    participant Guest as 客户机
+    participant XVM as XVM work/thread（宿主运行环境）
+    participant RPC as RPC work/thread
+    Guest->>XVM: syscall，XVM 自动暂停
+    Note over XVM: 按调用号分发，创建 session，复制请求，登记等待状态
+    XVM->>RPC: mr_rpc_submit，通知 RPC 调度
+    Note over XVM: 停止 XVM 执行调度，等待结果
+    RPC->>RPC: mr_rpc_execute，处理请求并准备响应
+    RPC-->>XVM: complete 发布完成状态并通知
+    Note over XVM: 唤醒后复制响应，写 syscall 返回值
+    XVM->>XVM: mr_rpc_session_consume
+    Note over XVM,RPC: release 回调最终回收 session
+    XVM->>Guest: mr_xvm_resume，继续执行
+```
+
+运行环境需要保证以下时序与生命周期约定：
+
+- **work 等待方式**：XVM work 等待响应时结束本轮回调，不再重新提交；完成通知到达后再安排执行。独立线程可以等待信号。
+  不在 XVM work 内阻塞整个 workqueue。完成回调只负责发布状态和通知，客户机内存访问与恢复执行集中在 XVM 所属上下文。
+  `complete` 运行在产生完成的上下文中，异步 reply 时可能来自其他线程。
+- **完成先于等待**：RPC 可能在 `mr_rpc_submit` 返回前完成请求。先保存调用上下文和等待状态，使用带同步保证的完成标志、
+  事件队列或计数信号，确保通知先到达时不会丢失，也不会在提交返回后把已完成状态覆盖成等待状态。
+- **调用上下文有效期**：syscall 中的参数和返回槽是指针，复制 event 不会延长底层存储的生命周期。等待期间保证 XVM、
+  ISA 数据区、客户机输出缓冲区和 owner 有效；本次调用结束前不重载镜像或提前恢复客户机。必要时使用 `mr_xvm_get/put`
+  保活对象，静态 RAM 与 owner 存储仍由宿主管理。
+- **失败与收尾**：提交失败时 session 尚归宿主，由宿主回收并写回错误；完成后的写回失败由运行环境决定重试或结束调用。
+  已提交的 session 通过 `consume/cancel` 收尾，只在 `release` 回调中释放或复用。`consume` 不保证 release 在返回前发生，
+  owner 必须保留到 release 完成；取消和 RPC 销毁也不保证产生 complete，运行环境须自行结束等待。已 HELD 的 session
+  取消后仍要等待生产者 reply/drop，XVM 已进入销毁流程的调用只做收尾，不再写回或恢复。
 
 ### 5. API 参考
 
@@ -331,11 +389,11 @@ mr_xvm_t xvm;
 mr_xvm_init(&xvm, "riscv32", data, sizeof(data));
 mr_xvm_load(&xvm, image, sizeof(image), 0x100);
 
-/* RAM region at 0x100 is writable */
+/* 0x100 处的 RAM 区可写 */
 mr_xvm_datamem_store(&xvm, 0x100, source, sizeof(source));
 mr_xvm_datamem_load(&xvm, 0x100, target, sizeof(target));
 
-/* Image region at 0 is read-only: returns -MR_EPERM */
+/* 0 处的镜像区只读：返回 -MR_EPERM */
 mr_xvm_datamem_store(&xvm, 0, source, sizeof(source));
 
 mr_xvm_del(&xvm);
@@ -345,20 +403,20 @@ mr_xvm_del(&xvm);
 `exception_pause_resume_and_interrupt`）：
 
 ```c
-mr_uint8_t image[4] = {0xff, 0xff, 0xff, 0xff};    /* Illegal instruction */
+mr_uint8_t image[4] = {0xff, 0xff, 0xff, 0xff};    /* 非法指令 */
 mr_xvm_event_t event = {0};
 
 test_xvm_prepare(&xvm, data, image, sizeof(image));
-mr_xvm_interrupt(&xvm, 1, MR_TRUE);                /* Assert irq 1 */
+mr_xvm_interrupt(&xvm, 1, MR_TRUE);                /* 断言中断 1 */
 
 if (mr_xvm_execute(&xvm, &event, 1) == MR_XVM_EXCEPT) {
-    /* event.except.nr == MR_XVM_EXCEPT_NR_ILLEGAL here */
+    /* 此处 event.except.nr == MR_XVM_EXCEPT_NR_ILLEGAL */
     switch (event.except.nr) {
         case MR_XVM_EXCEPT_NR_ILLEGAL:
-            mr_xvm_del(&xvm);                      /* Terminate */
+            mr_xvm_del(&xvm);                      /* 终止执行 */
             break;
         default:
-            mr_xvm_resume(&xvm);                   /* Clear and continue */
+            mr_xvm_resume(&xvm);                   /* 清除并继续 */
             break;
     }
 }
@@ -473,7 +531,8 @@ ISA 抽象（`mr_xvm_isa.h:69`）：`name`（注册名）、`next`（注册表�
 ### 10. 核心流程
 
 **创建与绑定**：`xvm_init`（`xvm.c:19`）先 `mr_xvm_isa_find(isa_name)` 查表并持有 引用（找不到返回 `-MR_ENOENT`
-），随后初始化状态/flags/内存/镜像字段并在启用调试时 调用 `mr_xvm_debug_init`，最后 `mr_object_init`；对象初始化失败要回滚 ISA
+），随后初始化状态/flags/内存/镜像字段并在启用调试时 调用 `mr_xvm_debug_init`，最后 `mr_object_init`；对象初始化失败要回滚
+ISA
 引用。
 
 **加载（load）**：`mr_xvm_load`（`xvm.c:140`）在单执行者锁内完成：清零 RAM → 记录镜像描述符 → 调用 `isa->ops->load`（RISCV32 在
@@ -555,7 +614,7 @@ RISCV32 后端即按此模式实现（`riscv32.c:26-82`），可作为模板参�
 | `mrX/modules/xvm/xvm.c:112`                      | 单执行者锁（CAS）与 dying 检查                                                     |
 | `mrX/modules/xvm/xvm.c:181`                      | execute 主流程（锁 → 门控 → ISA → 状态迁移）                                       |
 | `mrX/modules/xvm/xvm.c:243`                      | datamem 读写/映射（mem_map 封装）                                                  |
-| `mrX/modules/xvm/isa/isa.c:88`                       | ISA 表插入/删除/查找（自旋锁 + 引用计数）                                          |
+| `mrX/modules/xvm/isa/isa.c:88`                   | ISA 表插入/删除/查找（自旋锁 + 引用计数）                                          |
 | `mrX/modules/xvm/isa/riscv32/riscv32.c:1263`     | RISCV32 执行主循环（中断 → 断点 → 取指 → 译码 → 执行）                             |
 | `mrX/modules/xvm/isa/riscv32/riscv32.c:1237`     | 系统调用事件封装（A7/A0~A6/EXIT 约定）                                             |
 | `mrX/modules/xvm/isa/riscv32/riscv32.c:130`      | trap 进入（mstatus 维护、向量跳转）                                                |

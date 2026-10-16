@@ -57,25 +57,25 @@ static int ramfs_demo(void) {
     char buffer[16];
     mr_ssize_t ret;
 
-    /* Mount ramfs at a directory of the current root */
+    /* 在当前根的某个目录挂载 ramfs */
     if ((mr_fs_mkdir("/tmp") != 0)
         || (mr_fs_mount(MR_NULL, "/tmp", "ramfs", 0, MR_NULL) != 0)) {
         return -1;
     }
 
-    /* Create a regular file and write it */
+    /* 创建普通文件并写入 */
     if (mr_fs_open(&file, "/tmp/note.txt", MR_O_RDWR | MR_O_CREAT) != 0) {
         return -1;
     }
     mr_fs_write(&file, "hello ramfs", 11);
     mr_fs_close(&file);
 
-    /* Read it back */
+    /* 读回内容 */
     mr_fs_open(&file, "/tmp/note.txt", MR_O_RDONLY);
     ret = mr_fs_read(&file, buffer, sizeof(buffer));
     mr_fs_close(&file);
 
-    mr_fs_umount("/tmp");    /* All ramfs data of this mount is freed */
+    mr_fs_umount("/tmp");    /* 该挂载的全部 ramfs 数据被释放 */
     return (ret == 11) ? 0 : -1;
 }
 ```
@@ -156,15 +156,15 @@ static void hole_write_demo(void) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_stat_t stat;
 
-    /* Create a file, write a prefix, seek past EOF and write a tail */
+    /* 创建文件，写入前缀，越过 EOF 定位后写入尾部 */
     mr_fs_open(&file, "/reclaim", MR_O_RDWR | MR_O_CREAT | MR_O_EXCL);
     mr_fs_write(&file, "prefix", 6);
     mr_fs_lseek(&file, 64, MR_SEEK_SET);
-    mr_fs_write(&file, "tail", 4);        /* Hole [6, 64) reads as zero */
+    mr_fs_write(&file, "tail", 4);        /* 空洞 [6, 64) 读出为零 */
 
     mr_fs_fstat(&file, &stat);          /* stat.size == 68 */
-    mr_fs_ftruncate(&file, 3);          /* Shrink to "pre" */
-    mr_fs_ftruncate(&file, 0);          /* Shrink to empty, buffer freed */
+    mr_fs_ftruncate(&file, 3);          /* 收缩到 "pre" */
+    mr_fs_ftruncate(&file, 0);          /* 收缩为空，释放缓冲区 */
     mr_fs_close(&file);
     mr_fs_unlink("/reclaim");
 }
@@ -179,19 +179,19 @@ static void fifo_demo(void) {
     char buffer[40];
     mr_ssize_t n;
 
-    mr_fs_mkfifo("/fifo");                          /* Default capacity 32 */
+    mr_fs_mkfifo("/fifo");                          /* 默认容量 32 */
     mr_fs_open(&file, "/fifo", MR_O_RDWR);
 
-    mr_fs_write(&file, "ABCDEFGHIJKLMNOPQRST", 20); /* 20 bytes in */
-    mr_fs_read(&file, buffer, 5);                   /* Drain 5 */
-    mr_fs_write(&file, "VWXYZ12345", 10);           /* Refill, wraps ring */
-    mr_fs_write(&file, "6789abcdef", 10);           /* Clamped to 7 (space) */
-    mr_fs_write(&file, "x", 1);                     /* Full: writes 0 */
+    mr_fs_write(&file, "ABCDEFGHIJKLMNOPQRST", 20); /* 写入 20 字节 */
+    mr_fs_read(&file, buffer, 5);                   /* 读出 5 字节 */
+    mr_fs_write(&file, "VWXYZ12345", 10);           /* 回填并发生回绕 */
+    mr_fs_write(&file, "6789abcdef", 10);           /* 被截到 7（受剩余空间限制） */
+    mr_fs_write(&file, "x", 1);                     /* 已满：写入 0 字节 */
     mr_fs_lseek(&file, 0, MR_SEEK_SET);             /* -MR_ESPIPE */
 
-    /* Drain the rest in order */
+    /* 按顺序读出剩余数据 */
     while ((n = mr_fs_read(&file, buffer, sizeof(buffer))) > 0) {
-        /* Consume n bytes */
+        /* 消费 n 字节 */
     }
     mr_fs_close(&file);
     mr_fs_unlink("/fifo");

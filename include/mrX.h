@@ -74,6 +74,9 @@
 #if defined(MR_USE_DRIVER_I2C)
 #include <mrX/drivers/i2c/mr_i2c.h>
 #endif /* defined(MR_USE_DRIVER_I2C) */
+#if defined(MR_USE_DRIVER_SPI)
+#include <mrX/drivers/spi/mr_spi.h>
+#endif /* defined(MR_USE_DRIVER_SPI) */
 #if defined(MR_USE_DRIVER_ADC)
 #include <mrX/drivers/adc/mr_adc.h>
 #endif /* defined(MR_USE_DRIVER_ADC) */
@@ -86,6 +89,9 @@
 #if defined(MR_USE_DRIVER_TMR)
 #include <mrX/drivers/tmr/mr_tmr.h>
 #endif /* defined(MR_USE_DRIVER_TMR) */
+#if defined(MR_USE_DRIVER_PWM)
+#include <mrX/drivers/pwm/mr_pwm.h>
+#endif /* defined(MR_USE_DRIVER_PWM) */
 #if defined(MR_USE_DRIVER_WDT)
 #include <mrX/drivers/wdt/mr_wdt.h>
 #endif /* defined(MR_USE_DRIVER_WDT) */

@@ -70,19 +70,19 @@ HC595 扩展解决的问题是： **片上 GPIO 引脚不够输出时，用最�
 #include <mrX/drivers/gpio/mr_gpio.h>
 
 void hc595_example(void) {
-    mr_driver_t *drv = mr_driver_find("gpio_hc595");    /* Name from template */
+    mr_driver_t *drv = mr_driver_find("gpio_hc595");    /* 名字取自硬件模板节点 */
 
     if (drv == MR_NULL) {
         return;
     }
-    mr_driver_setup(drv);       /* DEFER level: setup by the application */
+    mr_driver_setup(drv);       /* DEFER 级别：由应用调用 setup */
 
     mr_gpio_output(drv, 5, MR_GPIO_OTYPE_PP, MR_GPIO_LEVEL_HIGH);
-    /* First configure initializes host pins, shifts 0 and enables output */
+    /* 首次配置会初始化宿主引脚、移入全 0 并使能输出 */
 
-    mr_gpio_toggle(drv, 5);     /* Toggle the current output once */
+    mr_gpio_toggle(drv, 5);     /* 翻转一次当前输出 */
 
-    mr_driver_put(drv);         /* Release the reference from find */
+    mr_driver_put(drv);         /* 释放 find 获得的引用 */
 }
 ```
 
@@ -181,8 +181,8 @@ void hc595_seg_example(void) {
     mr_driver_setup(drv);
     mr_gpio_output(drv, 0, MR_GPIO_OTYPE_PP, MR_GPIO_LEVEL_LOW);
 
-    mask = seg_table[3];                        /* Bit n is segment n */
-    mr_gpio_port_write(drv, mask);              /* One shift-latch cycle */
+    mask = seg_table[3];                        /* bit n 对应段 n */
+    mr_gpio_port_write(drv, mask);              /* 一轮移位锁存 */
 }
 ```
 
@@ -190,9 +190,9 @@ void hc595_seg_example(void) {
 
 ```c
 void hc595_relay_example(mr_driver_t *drv) {
-    mr_gpio_output(drv, 2, MR_GPIO_OTYPE_PP, MR_GPIO_LEVEL_LOW);    /* Off */
-    mr_gpio_write(drv, 2, 1);                   /* Logic high closes relay */
-    mr_gpio_toggle(drv, 2);                     /* Physical-level flip */
+    mr_gpio_output(drv, 2, MR_GPIO_OTYPE_PP, MR_GPIO_LEVEL_LOW);    /* 断开 */
+    mr_gpio_write(drv, 2, 1);                   /* 逻辑高电平闭合继电器 */
+    mr_gpio_toggle(drv, 2);                     /* 物理电平翻转 */
 }
 ```
 
@@ -264,14 +264,14 @@ HC595 扩展是 [GPIO 驱动](gpio.md)框架层之下的一个 `ops` 实现，�
 
 ```c
 typedef struct drv_gpio_hc595_priv {
-    mr_ht_gpio_spec_t srclr;        /* Optional clear pin (active-low) */
-    mr_ht_gpio_spec_t oe;           /* Optional output-enable pin */
-    mr_ht_gpio_spec_t ser;          /* Serial data-in pin */
-    mr_ht_gpio_spec_t srclk;        /* Shift clock pin */
-    mr_ht_gpio_spec_t rclk;         /* Latch clock pin */
-    mr_uint8_t cascade_num;         /* Chips in the chain, 1~4 */
-    mr_uint32_t shadow;             /* Last written value */
-    mr_bool_t configured;           /* Host pins initialized */
+    mr_ht_gpio_spec_t srclr;        /* 可选清零引脚（低有效） */
+    mr_ht_gpio_spec_t oe;           /* 可选输出使能引脚 */
+    mr_ht_gpio_spec_t ser;          /* 串行数据输入引脚 */
+    mr_ht_gpio_spec_t srclk;        /* 移位时钟引脚 */
+    mr_ht_gpio_spec_t rclk;         /* 锁存时钟引脚 */
+    mr_uint8_t cascade_num;         /* 链上芯片数，1~4 */
+    mr_uint32_t shadow;             /* 最后写入的值 */
+    mr_bool_t configured;           /* 宿主引脚已初始化 */
 } drv_gpio_hc595_priv_t;
 ```
 

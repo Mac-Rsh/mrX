@@ -96,26 +96,6 @@ extern mr_err_t mr_stm32h5_gpio_pin_alternate(const mr_ht_gpio_spec_t *spec,
 extern mr_err_t mr_stm32h5_gpio_pin_release(const mr_ht_gpio_spec_t *spec);
 #endif /* defined(MR_USE_DRIVER_GPIO) */
 
-#if defined(MR_USE_DRIVER_TMR)
-struct mr_driver;
-
-/**
- * @brief This function stops an H5 timer at its next update boundary.
- *
- * @param drv The exclusively owned STM32H5 basic timer driver.
- * @param complete The timer IRQ callback, or MR_NULL to cancel a drain.
- * @param param The callback parameter.
- * @return 0 on success, a negative error code on failure.
- *
- * @note The timer must be configured. Its current counter is preserved.
- * A stopped timer is armed for one period on its next start. Cancel before
- * releasing the driver, including after a failed start. The caller must arm
- * this before the next update; the period must exceed DMA IRQ latency.
- */
-extern mr_err_t mr_stm32h5_tmr_drain(struct mr_driver *drv,
-                                     void (*complete)(void *), void *param);
-#endif /* defined(MR_USE_DRIVER_TMR) */
-
 /** @} */
 
 #ifdef __cplusplus

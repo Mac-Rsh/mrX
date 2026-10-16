@@ -22,7 +22,7 @@ FIFO 解决的问题是： **在两个执行流之间传递定长元素，且不
   `mr_fifo_read` / `mr_fifo_peek` / `mr_fifo_skip` / `mr_fifo_overwrite`。
 - 零拷贝接口 `mr_fifo_*_claim` / `mr_fifo_*_finish`，避免中间缓冲搬运。
 - 普通 `push/write/write_claim+finish` 只推进 `widx`，普通 `pop/read/skip/read_claim+finish` 只推进 `ridx`，适合一写一读并发。
-- 大部分数据操作以“实际完成元素数”为返回值，队满/队空或 `fifo->buf == MR_NULL` 时常返回 0；这不是通用参数校验机制，调用者仍必须传入有效的
+- 大部分数据操作以“实际完成元素数”为返回值，队满/队空或 `fifo->buf == MR_NULL` 时通常返回 0；这不是通用参数校验机制，调用者仍必须传入有效的
   `mr_fifo_t *` 和数据指针。
 - 内核内已有使用者：[根文件系统 ramfs](../fs/ramfs.md) 与 RPC 组件 （`mrX/fs/ramfs/ramfs.c`、`mrX/modules/rpc/rpc.c`）。
 
@@ -61,7 +61,7 @@ void fifo_demo(void) {
     sample_t out;
 
     if (mr_fifo_init(&fifo, buf, sizeof(buf), sizeof(sample_t)) == 0) {
-        return;                     /* Invalid parameters */
+        return;                     /* 参数非法 */
     }
 
     if (mr_fifo_push(&fifo, &in) == 1) {
@@ -236,12 +236,12 @@ void wrap_demo(void) {
         mr_fifo_push(&fifo, &v);
     }
     for (v = 0; v < cap / 2; v++) {
-        mr_fifo_pop(&fifo, &v);         /* Discard oldest half */
+        mr_fifo_pop(&fifo, &v);         /* 丢弃最旧的一半 */
     }
     for (v = cap; v < cap + cap / 2; v++) {
-        mr_fifo_push(&fifo, &v);        /* Wraps around the buffer end */
+        mr_fifo_push(&fifo, &v);        /* 回绕跨越缓冲区末端 */
     }
-    /* mr_fifo_len(&fifo) == cap, order preserved */
+    /* mr_fifo_len(&fifo) == cap，顺序保持 */
 }
 ```
 
@@ -256,7 +256,7 @@ void log_setup(void) {
 }
 
 void log_sample(const sample_t *s) {
-    /* Full fifo keeps only the newest capacity samples */
+    /* 队满时仅保留最新 capacity 个采样 */
     mr_fifo_overwrite(&log_fifo, s, 1);
 }
 ```
@@ -271,7 +271,7 @@ void zero_copy_demo(mr_fifo_t *fifo, const mr_uint8_t *src, mr_uint32_t len) {
     while (n < len) {
         mr_uint32_t got = mr_fifo_write_claim(fifo, 0, (void **)&p, len - n);
         if (got == 0) {
-            break;                      /* No space left */
+            break;                      /* 无剩余空间 */
         }
         mr_memcpy(p, src + n, got);
         mr_fifo_write_finish(fifo, got);
@@ -284,8 +284,9 @@ void zero_copy_demo(mr_fifo_t *fifo, const mr_uint8_t *src, mr_uint32_t len) {
 
 **Q：可以在两个线程同时 push 吗？**
 
-不可以。普通 FIFO 路径只适合 **单写单读**：生产者拷贝到当前写槽后推进 `widx`，消费者从当前读槽拷贝后推进 `ridx`。两个生产者即使最后
-CAS 能区分游标提交，也可能先同时写同一物理槽位；多个消费者同理。专项 pthread 测试也是一生产者一消费者。
+不可以。普通 FIFO 路径只适合 **单写单读**：生产者拷贝到当前写槽后推进 `widx`，消费者从当前读槽拷贝后推进 `ridx`。即使 CAS
+能保证游标提交本身的原子性，
+两个生产者仍可能同时向同一物理槽位写入；多个消费者同理。专项 pthread 测试也是一生产者一消费者。
 
 另外，`mr_fifo_overwrite` / `mr_fifo_overwrite_finish` 在空间不足时由写侧推进 `ridx`，会打破“读游标只由消费者修改”的 SPSC
 分工；若消费者同时运行，应在外部同步。

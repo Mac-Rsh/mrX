@@ -1,0 +1,20 @@
+menu "PWM: Pulse-Width Modulation"
+
+# ==================================
+# PWM
+# ==================================
+config MR_USE_DRIVER_PWM
+    depends on MR_USE_DRIVER
+    bool "Use PWM"
+    default n
+    help
+        Enable the pulse-width modulation driver framework.
+        Features:
+            - Controller timing and per-channel output configuration
+            - Atomic multi-channel updates
+            - Complementary outputs and dead time
+            - Fault inputs and controller-level hardware signals
+        The PCA9685 HardTree backend requires I2C and supports continuous,
+        edge-aligned PWM with immediate updates, without advanced signals.
+
+endmenu
