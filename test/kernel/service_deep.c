@@ -17,9 +17,6 @@ typedef struct {
     int last;
 } deep_svc_container_t;
 
-/* Tests */
-
-/* Test: container_of with the member at offset zero */
 MR_TEST(service, deep_container_of_first) {
     deep_svc_container_t obj;
     deep_svc_container_t *out;
@@ -33,7 +30,6 @@ MR_TEST(service, deep_container_of_first) {
     MR_TEST_ASSERT_EQ_INT(out->last, 3);
 }
 
-/* Test: container_of with the member at a non-zero offset */
 MR_TEST(service, deep_container_of_last) {
     deep_svc_container_t obj;
     deep_svc_container_t *out;
@@ -47,7 +43,6 @@ MR_TEST(service, deep_container_of_last) {
     MR_TEST_ASSERT_EQ_INT(out->middle, 8);
 }
 
-/* Test: container_of on every element of an array of containers */
 MR_TEST(service, deep_container_of_array) {
     deep_svc_container_t objs[3];
     deep_svc_container_t *out;
@@ -65,7 +60,6 @@ MR_TEST(service, deep_container_of_array) {
     }
 }
 
-/* Test: min and max on unsigned and equal operands */
 MR_TEST(service, deep_min_max_unsigned) {
     MR_TEST_ASSERT_EQ_UINT(MR_MIN(0U, 1U), 0U);
     MR_TEST_ASSERT_EQ_UINT(MR_MAX(0U, 1U), 1U);
@@ -77,20 +71,16 @@ MR_TEST(service, deep_min_max_unsigned) {
     MR_TEST_ASSERT_EQ_INT(MR_MIN(-5, -1), -5);
 }
 
-/* Test: alignment boundaries for power of two alignments */
 MR_TEST(service, deep_align_edges) {
     MR_TEST_ASSERT_EQ_UINT(MR_ALIGN_UP(1U, 1U), 1U);
     MR_TEST_ASSERT_EQ_UINT(MR_ALIGN_DOWN(1U, 1U), 1U);
     MR_TEST_ASSERT_EQ_UINT(MR_ALIGN_DOWN(0U, 8U), 0U);
     MR_TEST_ASSERT_EQ_UINT(MR_ALIGN_DOWN(0x17U, 8U), 0x10U);
     MR_TEST_ASSERT_EQ_UINT(MR_ALIGN_DOWN(0xFFFFFFFFU, 16U), 0xFFFFFFF0U);
-    MR_TEST_ASSERT_EQ_UINT(MR_ALIGN_UP(0x10000001U, 0x10000000U),
-                           0x20000000U);
-    MR_TEST_ASSERT_EQ_UINT(MR_ALIGN_UP(0x20000000U, 0x10000000U),
-                           0x20000000U);
+    MR_TEST_ASSERT_EQ_UINT(MR_ALIGN_UP(0x10000001U, 0x10000000U), 0x20000000U);
+    MR_TEST_ASSERT_EQ_UINT(MR_ALIGN_UP(0x20000000U, 0x10000000U), 0x20000000U);
 }
 
-/* Test: integer division with rounding for negative operands */
 MR_TEST(service, deep_round_div_negative) {
     /* Results round half away from zero */
     MR_TEST_ASSERT_EQ_INT(MR_ROUND_DIV(-5, 2), -3);
@@ -102,7 +92,6 @@ MR_TEST(service, deep_round_div_negative) {
     MR_TEST_ASSERT_EQ_INT(MR_ROUND_DIV(0, -2), 0);
 }
 
-/* Test: round division rounding direction around zero */
 MR_TEST(service, deep_round_div_direction) {
     MR_TEST_ASSERT_EQ_INT(MR_ROUND_DIV(3, 2), 2);
     MR_TEST_ASSERT_EQ_INT(MR_ROUND_DIV(-3, 2), -2);
@@ -110,7 +99,6 @@ MR_TEST(service, deep_round_div_direction) {
     MR_TEST_ASSERT_EQ_INT(MR_ROUND_DIV(-7, 4), -2);
 }
 
-/* Test: argument counting including the empty case */
 MR_TEST(service, deep_va_args_num_edges) {
     MR_TEST_ASSERT_EQ_INT(MR_VA_ARGS_NUM(), 0);
     MR_TEST_ASSERT_EQ_INT(MR_VA_ARGS_NUM(a), 1);
@@ -119,7 +107,6 @@ MR_TEST(service, deep_va_args_num_edges) {
     MR_TEST_ASSERT_EQ_INT(MR_VA_ARGS_NUM(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 10);
 }
 
-/* Test: token concatenation with several arguments and separators */
 MR_TEST(service, deep_cat_and_sep) {
     MR_TEST_ASSERT_EQ_INT(MR_CAT(1, 2, 3), 123);
     MR_TEST_ASSERT_EQ_INT(MR_CAT(1, 2, 3, 4, 5), 12345);
@@ -127,7 +114,6 @@ MR_TEST(service, deep_cat_and_sep) {
     MR_TEST_ASSERT_EQ_INT(MR_CAT_SEP(7, 8), 78);
 }
 
-/* Test: macro used detection for enabled and disabled macros */
 MR_TEST(service, deep_macro_is_used) {
     MR_TEST_ASSERT_EQ_INT(MR_MACRO_IS_USED(MR_USE_TEST), 1);
 #if defined(MR_USE_TIMER)
@@ -137,7 +123,6 @@ MR_TEST(service, deep_macro_is_used) {
     MR_TEST_EXPECT_EQ_INT(MR_MACRO_IS_USED(MR_CFG_LOG_LEVEL), 0);
 }
 
-/* Test: parity of empty input and full bit patterns */
 MR_TEST(service, deep_parity_edges) {
     mr_uint32_t val;
     mr_uint8_t byte;
@@ -165,7 +150,6 @@ MR_TEST(service, deep_parity_edges) {
     MR_TEST_ASSERT_EQ_INT(mr_parity_odd(&val, 2), MR_FALSE);
 }
 
-/* Test: make_local builds compound literals of various shapes */
 MR_TEST(service, deep_make_local_shapes) {
     deep_svc_container_t *obj;
     mr_uint32_t *u;

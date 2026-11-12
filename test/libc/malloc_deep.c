@@ -11,7 +11,6 @@
 #if defined(MR_USE_MALLOC)
 #include <mrX/libc/mr_malloc.h>
 
-/* Utility: fill a region with a seed based pattern                         */
 static void deep_fill(void *p, mr_size_t size, mr_uint8_t seed) {
     mr_uint8_t *data;
     mr_size_t i;
@@ -21,7 +20,6 @@ static void deep_fill(void *p, mr_size_t size, mr_uint8_t seed) {
     }
 }
 
-/* Utility: verify a seed based pattern, returns 1 on match                 */
 static int deep_verify(void *p, mr_size_t size, mr_uint8_t seed) {
     mr_uint8_t *data;
     mr_size_t i;
@@ -34,10 +32,9 @@ static int deep_verify(void *p, mr_size_t size, mr_uint8_t seed) {
     return 1;
 }
 
-/* Test: small and boundary sizes return aligned usable memory              */
 MR_TEST(malloc, small_sizes_alignment) {
-    static const mr_size_t sizes[] = {1,  2,  3,  7,  8,  9,  15, 16,
-                                      17, 31, 63, 64, 65, 95, 96, 97};
+    static const mr_size_t sizes[]
+        = {1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 63, 64, 65, 95, 96, 97};
     void *p;
     mr_size_t usable, i;
 
@@ -57,7 +54,6 @@ MR_TEST(malloc, small_sizes_alignment) {
     }
 }
 
-/* Test: simultaneous small blocks stay aligned and do not overlap          */
 MR_TEST(malloc, blocks_no_overlap) {
     enum {
         NUM = 8,
@@ -102,8 +98,8 @@ MR_TEST(malloc, blocks_no_overlap) {
     }
     for (i = 0; i < NUM; i++) {
         if (arr[i] != MR_NULL) {
-            MR_TEST_EXPECT_EQ_INT(deep_verify(arr[i], SZ,
-                                              (mr_uint8_t)(0x40U + i)), 1);
+            MR_TEST_EXPECT_EQ_INT(
+                deep_verify(arr[i], SZ, (mr_uint8_t)(0x40U + i)), 1);
         }
     }
 
@@ -112,7 +108,6 @@ MR_TEST(malloc, blocks_no_overlap) {
     }
 }
 
-/* Test: zero and empty requests behave as specified                        */
 MR_TEST(malloc, edge_zero_requests) {
     void *p;
 
@@ -124,7 +119,6 @@ MR_TEST(malloc, edge_zero_requests) {
     MR_TEST_EXPECT_EQ_UINT(mr_malloc_usable_size((void *)&p), 0);
 }
 
-/* Test: overflow sized requests fail without corrupting the heap           */
 MR_TEST(malloc, overflow_sizes) {
     void *p;
 
@@ -147,7 +141,6 @@ MR_TEST(malloc, overflow_sizes) {
     mr_free(p);
 }
 
-/* Test: free of MR_NULL is a harmless no-op                                */
 MR_TEST(malloc, free_null_noop) {
     mr_heap_info_t before;
     mr_heap_info_t after;
@@ -159,7 +152,6 @@ MR_TEST(malloc, free_null_noop) {
     MR_TEST_EXPECT_EQ_UINT(after.free_bytes, before.free_bytes);
 }
 
-/* Test: calloc rejects zero products and multiplication overflow           */
 MR_TEST(malloc, calloc_edge_sizes) {
     void *p;
 
@@ -188,7 +180,6 @@ MR_TEST(malloc, calloc_edge_sizes) {
     mr_free(p);
 }
 
-/* Test: calloc zeroes every requested byte                                 */
 MR_TEST(malloc, calloc_zero_full_range) {
     enum {
         SZ = 512
@@ -210,7 +201,6 @@ MR_TEST(malloc, calloc_zero_full_range) {
     mr_free(p);
 }
 
-/* Test: realloc with size zero releases the old block                      */
 MR_TEST(malloc, realloc_zero_frees) {
     mr_heap_info_t before;
     mr_heap_info_t after;
@@ -238,7 +228,6 @@ MR_TEST(malloc, realloc_zero_frees) {
     MR_TEST_EXPECT_EQ_UINT(after.free_bytes, before.free_bytes);
 }
 
-/* Test: realloc grow and shrink preserve the copied prefix                 */
 MR_TEST(malloc, realloc_grow_shrink_prefix) {
     void *p, *q, *r;
 
@@ -274,7 +263,6 @@ MR_TEST(malloc, realloc_grow_shrink_prefix) {
     mr_free(r);
 }
 
-/* Test: chained growth preserves every byte written so far                 */
 MR_TEST(malloc, realloc_chain_growth) {
     mr_size_t size, old, i, k;
     void *p, *q;
@@ -309,7 +297,6 @@ MR_TEST(malloc, realloc_chain_growth) {
     mr_free(p);
 }
 
-/* Test: allocated and freed blocks coalesce back to the baseline           */
 MR_TEST(malloc, frag_coalesce_restore) {
     mr_heap_info_t base;
     mr_heap_info_t end;
@@ -346,7 +333,6 @@ _exit:
     mr_free(c);
 }
 
-/* Test: heap information invariants hold before and during allocation      */
 MR_TEST(malloc, heap_info_invariants) {
     mr_heap_info_t before;
     mr_heap_info_t during;
@@ -377,7 +363,6 @@ MR_TEST(malloc, heap_info_invariants) {
     MR_TEST_EXPECT_EQ_UINT(after.free_bytes, before.free_bytes);
 }
 
-/* Test: failed allocations increment the fail counter                      */
 MR_TEST(malloc, fail_count_tracks) {
     mr_heap_info_t before;
     mr_heap_info_t after;
@@ -392,7 +377,6 @@ MR_TEST(malloc, fail_count_tracks) {
     MR_TEST_EXPECT_EQ_UINT(after.fail_count, before.fail_count + 1);
 }
 
-/* Test: the whole usable region is writable and keeps its content          */
 MR_TEST(malloc, usable_region_writable) {
     void *p;
     mr_size_t usable;
@@ -412,7 +396,6 @@ MR_TEST(malloc, usable_region_writable) {
     MR_TEST_EXPECT_EQ_UINT(mr_malloc_usable_size(p), 0);
 }
 
-/* Test: interleaved allocation churn preserves survivor patterns           */
 MR_TEST(malloc, alloc_free_churn) {
     enum {
         NUM = 24
@@ -459,11 +442,11 @@ MR_TEST(malloc, alloc_free_churn) {
             size = 32 * (i % 4 + 1);
         }
         if (arr[i] != MR_NULL) {
-            MR_TEST_EXPECT_EQ_INT(deep_verify(arr[i], size,
-                                              (mr_uint8_t)(i % 3 != 0
-                                                               ? i * 3U + 7U
-                                                               : i * 5U + 11U)),
-                                  1);
+            MR_TEST_EXPECT_EQ_INT(
+                deep_verify(
+                    arr[i], size,
+                    (mr_uint8_t)(i % 3 != 0 ? i * 3U + 7U : i * 5U + 11U)),
+                1);
         }
     }
 

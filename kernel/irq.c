@@ -806,7 +806,7 @@ static void irq_workqueue_hook_wakeup(mr_workqueue_t *queue, void *param) {
 
     /* Check irq defer wakeup hook */
     hook = *(const mr_irq_defer_hook_t **)param;
-    if (!hook->wakeup) {
+    if ((!hook) || (!hook->wakeup)) {
         return;
     }
 
@@ -821,7 +821,7 @@ static void irq_workqueue_hook_suspend(mr_workqueue_t *queue, void *param) {
 
     /* Check irq defer suspend hook */
     hook = *(const mr_irq_defer_hook_t **)param;
-    if (!hook->suspend) {
+    if ((!hook) || (!hook->suspend)) {
         return;
     }
 

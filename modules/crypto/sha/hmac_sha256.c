@@ -11,55 +11,43 @@
 #include <mrX/libc/mr_assert.h>
 #include <mrX/libc/mr_string.h>
 
-/* HMAC-SHA-256 definition */
+/* HMAC inner and outer pad bytes */
 #define HMAC_SHA256_IPAD                (0x36U)
 #define HMAC_SHA256_OPAD                (0x5cU)
-
-static void hmac_sha256_zeroize(void *data, mr_size_t size) {
-    volatile mr_uint8_t *bytes;
-
-    bytes = data;
-    while (size-- != 0U) {
-        *bytes++ = 0U;
-    }
-}
 
 void mr_hmac_sha256_init(mr_hmac_sha256_t *hmac, const void *key,
                          mr_size_t key_size) {
     mr_uint8_t key_block[MR_SHA256_BLOCK_SIZE];
-    mr_uint8_t key_digest[MR_SHA256_DIGEST_SIZE];
     mr_uint32_t i;
 
     /* Check parameter */
     MR_ASSERT(hmac != MR_NULL);
     MR_ASSERT((key != MR_NULL) || (key_size == 0U));
 
-    /* Normalize key */
+    /* Hash long keys and zero-pad */
     mr_memset(key_block, 0, sizeof(key_block));
     if (key_size > MR_SHA256_BLOCK_SIZE) {
-        mr_sha256(key, key_size, key_digest);
-        mr_memcpy(key_block, key_digest, sizeof(key_digest));
+        mr_sha256(key, key_size, key_block);
     } else if (key_size != 0U) {
         mr_memcpy(key_block, key, key_size);
     }
 
-    /* Init inner hash */
+    /* Seed inner hash with key XOR ipad */
     for (i = 0U; i < MR_SHA256_BLOCK_SIZE; i++) {
         key_block[i] ^= HMAC_SHA256_IPAD;
     }
     mr_sha256_init(&hmac->inner);
     mr_sha256_update(&hmac->inner, key_block, sizeof(key_block));
 
-    /* Convert ipad to opad and init outer hash */
+    /* Switch to opad and seed the outer hash */
     for (i = 0U; i < MR_SHA256_BLOCK_SIZE; i++) {
         key_block[i] ^= (HMAC_SHA256_IPAD ^ HMAC_SHA256_OPAD);
     }
     mr_sha256_init(&hmac->outer);
     mr_sha256_update(&hmac->outer, key_block, sizeof(key_block));
 
-    /* Clear key material */
-    hmac_sha256_zeroize(key_digest, sizeof(key_digest));
-    hmac_sha256_zeroize(key_block, sizeof(key_block));
+    /* Clear the padded key block */
+    mr_memset(key_block, 0, sizeof(key_block));
 }
 
 void mr_hmac_sha256_update(mr_hmac_sha256_t *hmac, const void *data,
@@ -68,7 +56,6 @@ void mr_hmac_sha256_update(mr_hmac_sha256_t *hmac, const void *data,
     MR_ASSERT(hmac != MR_NULL);
     MR_ASSERT((data != MR_NULL) || (size == 0U));
 
-    /* Update inner hash */
     mr_sha256_update(&hmac->inner, data, size);
 }
 
@@ -80,14 +67,14 @@ void mr_hmac_sha256_final(mr_hmac_sha256_t *hmac,
     MR_ASSERT(hmac != MR_NULL);
     MR_ASSERT(auth != MR_NULL);
 
-    /* Finalize inner and outer hash */
+    /* Feed the inner digest into the outer hash */
     mr_sha256_final(&hmac->inner, digest);
     mr_sha256_update(&hmac->outer, digest, sizeof(digest));
     mr_sha256_final(&hmac->outer, auth);
 
     /* Clear working memory */
-    hmac_sha256_zeroize(digest, sizeof(digest));
-    hmac_sha256_zeroize(hmac, sizeof(*hmac));
+    mr_memset(digest, 0, sizeof(digest));
+    mr_memset(hmac, 0, sizeof(*hmac));
 }
 
 void mr_hmac_sha256(const void *key, mr_size_t key_size, const void *data,
@@ -99,7 +86,7 @@ void mr_hmac_sha256(const void *key, mr_size_t key_size, const void *data,
     MR_ASSERT((data != MR_NULL) || (size == 0U));
     MR_ASSERT(auth != MR_NULL);
 
-    /* Calculate HMAC-SHA-256 */
+    /* Authenticate the complete input with a local context */
     mr_hmac_sha256_init(&hmac, key, key_size);
     mr_hmac_sha256_update(&hmac, data, size);
     mr_hmac_sha256_final(&hmac, auth);

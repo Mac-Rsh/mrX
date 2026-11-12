@@ -13,7 +13,6 @@
 #include <mrX/libc/mr_string.h>
 #include <limits.h>
 
-/* Test: every flag combined on one hex conversion left justifies             */
 MR_TEST(sprintf, fmt3_flag_kitchen_hex) {
     char buf[32];
     int ret;
@@ -26,7 +25,6 @@ MR_TEST(sprintf, fmt3_flag_kitchen_hex) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "0x00ab      "), 0);
 }
 
-/* Test: plus flag wins over the space flag for signed output                 */
 MR_TEST(sprintf, fmt3_both_sign_flags) {
     char buf[32];
     int ret;
@@ -36,7 +34,6 @@ MR_TEST(sprintf, fmt3_both_sign_flags) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "+12|-0012"), 0);
 }
 
-/* Test: negative star width combined with negative and positive precision    */
 MR_TEST(sprintf, fmt3_star_neg_width_prec) {
     char buf[32];
     int ret;
@@ -47,7 +44,6 @@ MR_TEST(sprintf, fmt3_star_neg_width_prec) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "12      |0012    "), 0);
 }
 
-/* Test: uppercase hex with alternate prefix zero pad and precision at once   */
 MR_TEST(sprintf, fmt3_upper_hex_all) {
     char buf[32];
     int ret;
@@ -57,7 +53,6 @@ MR_TEST(sprintf, fmt3_upper_hex_all) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "0X00000000AB"), 0);
 }
 
-/* Test: octal alternate form of zero with a large precision                  */
 MR_TEST(sprintf, fmt3_octal_hash_big_prec_zero) {
     char buf[32];
     int ret;
@@ -70,7 +65,6 @@ MR_TEST(sprintf, fmt3_octal_hash_big_prec_zero) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "0000000000"), 0);
 }
 
-/* Test: zero character with field width and left justification               */
 MR_TEST(sprintf, fmt3_char_zero_width) {
     char buf[16];
     int ret;
@@ -86,7 +80,6 @@ MR_TEST(sprintf, fmt3_char_zero_width) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "Z     "), 0);
 }
 
-/* Test: string precision still stops before an embedded null                 */
 MR_TEST(sprintf, fmt3_string_prec_embedded_nul) {
     char src[6] = {'a', 'b', '\0', 'c', 'd', 'e'};
     char buf[16];
@@ -103,7 +96,6 @@ MR_TEST(sprintf, fmt3_string_prec_embedded_nul) {
     MR_TEST_EXPECT_EQ_UINT((mr_uint8_t)buf[3], 0xaaU);
 }
 
-/* Test: pointer with explicit width and left justification                   */
 MR_TEST(sprintf, fmt3_pointer_left_width) {
     const void *ptr = (void *)0x1234;
     char buf[32];
@@ -121,7 +113,6 @@ MR_TEST(sprintf, fmt3_pointer_left_width) {
     MR_TEST_ASSERT_EQ_INT(buf[20], '\0');
 }
 
-/* Test: half and byte length modifiers wrap the narrowed argument            */
 MR_TEST(sprintf, fmt3_length_wrap_hd) {
     char buf[32];
     int ret;
@@ -134,7 +125,6 @@ MR_TEST(sprintf, fmt3_length_wrap_hd) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "-32768|255"), 0);
 }
 
-/* Test: long long boundaries across signed decimal and hex                   */
 MR_TEST(sprintf, fmt3_ll_boundaries) {
     char buf[64];
     int ret;
@@ -142,11 +132,11 @@ MR_TEST(sprintf, fmt3_ll_boundaries) {
     ret = mr_sprintf(buf, "%llu|%lld|%llx", ULLONG_MAX, LLONG_MIN,
                      (unsigned long long)4294967296ULL);
     MR_TEST_ASSERT_EQ_INT(ret, 51);
-    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf,
-        "18446744073709551615|-9223372036854775808|100000000"), 0);
+    MR_TEST_ASSERT_EQ_INT(
+        mr_strcmp(buf, "18446744073709551615|-9223372036854775808|100000000"),
+        0);
 }
 
-/* Test: an unknown conversion between valid ones consumes no argument        */
 MR_TEST(sprintf, fmt3_arg_discipline_unknown) {
     char buf[32];
     int ret;
@@ -159,7 +149,6 @@ MR_TEST(sprintf, fmt3_arg_discipline_unknown) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "1%q2"), 0);
 }
 
-/* Test: successive star widths each consume one argument                     */
 MR_TEST(sprintf, fmt3_star_successive) {
     char buf[32];
     int ret;
@@ -169,20 +158,16 @@ MR_TEST(sprintf, fmt3_star_successive) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "    12|    -12"), 0);
 }
 
-/* Test: literal characters around the doubled percent escape                 */
 MR_TEST(sprintf, fmt3_literal_between) {
     char buf[32];
     int ret;
 
-    /* Documented deviation: %% echoes two percents instead of one, so the
-     * trailing d stays a literal character and no argument is consumed
-     */
-    ret = mr_sprintf(buf, "%d%%d", 7);
+    /* The percent escape leaves the next argument and literal intact. */
+    ret = mr_sprintf(buf, "%d%%d%d", 7, 8);
     MR_TEST_ASSERT_EQ_INT(ret, 4);
-    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "7%%d"), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "7%d8"), 0);
 }
 
-/* Test: snprintf return value at every truncation boundary                   */
 MR_TEST(sprintf, fmt3_snprintf_boundary) {
     char buf[8];
     int ret;
@@ -213,7 +198,6 @@ MR_TEST(sprintf, fmt3_snprintf_boundary) {
 #if defined(MR_USE_SSCANF)
 #include <mrX/libc/mr_sscanf.h>
 
-/* Test: %s width limit splits the input across two conversions               */
 MR_TEST(sscanf, fmt3_s_width_limit) {
     char first[8] = {0};
     char second[8] = {0};
@@ -225,8 +209,6 @@ MR_TEST(sscanf, fmt3_s_width_limit) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(second, "def"), 0);
 }
 
-/* Test: %c with a width consumes exactly that many bytes and does not        */
-/* terminate the buffer                                                       */
 MR_TEST(sscanf, fmt3_c_multiple) {
     char first[4] = {0};
     char second[4] = {0};
@@ -239,7 +221,6 @@ MR_TEST(sscanf, fmt3_c_multiple) {
     MR_TEST_ASSERT_EQ_INT(first[2], '\0');
 }
 
-/* Test: a doubled percent in the format matches a literal percent            */
 MR_TEST(sscanf, fmt3_percent_literal) {
     int value = -1;
     int ret;

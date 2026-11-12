@@ -1,7 +1,9 @@
 # Sections 注册段脚本
 
-sections 为使用 GNU ld 风格链接脚本的工程，把 mrX 的 initcall、测试、驱动和 RPC 注册段 收集到指定输出段中。命令入口是
-scripts/plugins/sections/sections.py，会原地修改链接脚本。 Keil MDK 工程不需要使用此命令， armlink 默认即按名字连续放置这些注册段。
+sections 为使用 GNU ld 风格链接脚本的工程，把 mrX 的 initcall、测试、驱动和 RPC 注册段
+收集到指定输出段中。命令入口是
+scripts/plugins/sections/sections.py，会原地修改链接脚本。 Keil MDK 工程不需要使用此命令，
+armlink 默认即按名字连续放置这些注册段。
 
 ## 基本操作
 
@@ -22,8 +24,10 @@ python ./scripts/cli.py sections -i path/to/app.ld
 python ./scripts/cli.py sections -i build/board.ld -c config/sections.toml
 ~~~
 
-命令要求输入中存在顶层 SECTIONS { ... } 块。找不到、括号不匹配、配置无效或文件不可读 时会失败；成功时输出
-`Build: <linker script>`。对同一输入重复执行会先移除由 mrX 标记的 旧规则，再按当前 TOML 重写，因此可以在生成步骤中重复调用。
+命令要求输入中存在顶层 SECTIONS { ... } 块。找不到、括号不匹配、配置无效或文件不可读
+时会失败；成功时输出
+`Build: <linker script>`。对同一输入重复执行会先移除由 mrX 标记的 旧规则，再按当前
+TOML 重写，因此可以在生成步骤中重复调用。
 
 ## sections.toml 格式
 
@@ -67,18 +71,21 @@ keep = false, sort = true  -> *(SORT(mr_initcall.*))
 keep = false, sort = false -> *(mr_initcall.*)
 ~~~
 
-生成条目前会写入 `/* @mrX: <comment> */` 标记。脚本只重写这些已标记条目，并保留同一 输出段中的用户规则；修改 TOML
+生成条目前会写入 `/* @mrX: <comment> */` 标记。脚本只重写这些已标记条目，并保留同一
+输出段中的用户规则；修改 TOML
 后再次运行即可刷新规则。
 
 ## 与链接流程的关系
 
-注册宏把函数或描述放入 `mr_initcall.*`、`mr_driver.*`、`mr_rpc.*` 等输入段。链接脚本必须 同时做到：
+注册宏把函数或描述放入 `mr_initcall.*`、`mr_driver.*`、`mr_rpc.*` 等输入段。链接脚本必须
+同时做到：
 
 1. 用 KEEP 保留这些段，避免 --gc-sections 丢弃注册项。
 2. 把它们聚合到可执行映像中的输出段。
 3. 按需要用 SORT 保证初始化级别或注册顺序稳定。
 
-因此应在最终交给 GNU ld 的链接脚本上运行命令，且运行后不要让后续生成步骤覆盖这些修改。 非 GNU ld
+因此应在最终交给 GNU ld 的链接脚本上运行命令，且运行后不要让后续生成步骤覆盖这些修改。
+非 GNU ld
 工具链请按该工具链语法手工实现同等的保留、聚合和排序规则。
 
 ## 常见问题

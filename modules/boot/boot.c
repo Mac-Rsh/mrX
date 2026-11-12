@@ -848,7 +848,7 @@ static mr_err_t boot_enter_recovery(mr_boot_t *boot) {
         boot_rescue(boot);
         return 0;
     }
-    (void)boot->ops->jump(boot, boot->launch.offset);
+    boot->ops->jump(boot, boot->launch.offset);
     boot_rescue(boot);
     return 0;
 #else
@@ -874,7 +874,7 @@ static mr_err_t boot_boot_candidate(mr_boot_t *boot, mr_boot_slot_t slot,
     }
 
     /* A return means the image did not run */
-    (void)boot->ops->jump(boot, boot->launch.offset);
+    boot->ops->jump(boot, boot->launch.offset);
     return -MR_EIO;
 }
 
@@ -1024,7 +1024,7 @@ mr_err_t mr_boot_start(mr_boot_t *boot) {
             if (ret != 0) {
                 return ret;
             }
-            (void)boot->ops->jump(boot, boot->launch.offset);
+            boot->ops->jump(boot, boot->launch.offset);
             return boot_fallback(boot, slot);
         }
         case MR_BOOT_SOURCE_RECOVERY: {

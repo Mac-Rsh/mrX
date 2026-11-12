@@ -14,7 +14,6 @@
 #include <mrX/libc/mr_malloc.h>
 #endif /* defined(MR_USE_MALLOC) */
 
-/* Utility: returns index of the first differing byte or -1                 */
 static int bytes_first_diff(const char *actual, const char *expected,
                             mr_size_t size) {
     mr_size_t i;
@@ -27,7 +26,6 @@ static int bytes_first_diff(const char *actual, const char *expected,
     return -1;
 }
 
-/* Utility: copy a base buffer and apply a byte range move as reference     */
 static void range_reference(mr_uint8_t *expected, const mr_uint8_t *base,
                             mr_size_t total, mr_size_t dst_off,
                             mr_size_t src_off, mr_size_t size) {
@@ -41,7 +39,6 @@ static void range_reference(mr_uint8_t *expected, const mr_uint8_t *base,
     }
 }
 
-/* Utility: copy a base buffer and apply a byte fill as reference           */
 static void fill_reference(mr_uint8_t *expected, const mr_uint8_t *base,
                            mr_size_t total, mr_size_t offset, mr_size_t size,
                            mr_uint8_t value) {
@@ -55,7 +52,6 @@ static void fill_reference(mr_uint8_t *expected, const mr_uint8_t *base,
     }
 }
 
-/* Test: strncpy exact fit writes the terminator as the last byte           */
 MR_TEST(string, strncpy_exact_fit) {
     char buf[9];
     char guard;
@@ -69,7 +65,6 @@ MR_TEST(string, strncpy_exact_fit) {
     MR_TEST_EXPECT_EQ_INT((mr_uint8_t)buf[8], 0xA5);
 }
 
-/* Test: truncated strncpy fills no terminator and no padding               */
 MR_TEST(string, strncpy_truncate_guard) {
     char buf[8];
 
@@ -82,7 +77,6 @@ MR_TEST(string, strncpy_truncate_guard) {
     MR_TEST_EXPECT_EQ_INT((mr_uint8_t)buf[7], 0xAA);
 }
 
-/* Test: strncpy with zero size and an embedded terminator                  */
 MR_TEST(string, strncpy_zero_and_embedded_nul) {
     const char src[] = {'a', '\0', 'b', 'c'};
     char buf[6];
@@ -101,7 +95,6 @@ MR_TEST(string, strncpy_zero_and_embedded_nul) {
     MR_TEST_EXPECT_EQ_INT(buf[3], '\0');
 }
 
-/* Test: memccpy returns one past the match at any position                 */
 MR_TEST(string, memccpy_match_positions) {
     const char src[] = {'x', 'y', 'z', 'w'};
     char dst[8];
@@ -129,7 +122,6 @@ MR_TEST(string, memccpy_match_positions) {
     MR_TEST_EXPECT_EQ_INT((mr_uint8_t)dst[4], 0xCC);
 }
 
-/* Test: memccpy copies raw bytes and never stops at a terminator           */
 MR_TEST(string, memccpy_raw_copy) {
     const char src[] = {'a', 'b', '\0', 'd', 'e', 'f'};
     char dst[8];
@@ -148,7 +140,6 @@ MR_TEST(string, memccpy_raw_copy) {
     MR_TEST_EXPECT_EQ_INT(bytes_first_diff(dst, "ab\0def", 6), -1);
 }
 
-/* Test: memcmp covers embedded NULs, boundaries and unsigned order         */
 MR_TEST(string, memcmp_range_edges) {
     const char a[] = {0, 'a', 0, 'b'};
     const char b[] = {0, 'a', 0, 'b'};
@@ -166,7 +157,6 @@ MR_TEST(string, memcmp_range_edges) {
     MR_TEST_EXPECT_GT_INT(mr_memcmp(high, low, 1), 0);
 }
 
-/* Test: strcmp ordering with prefixes and high bit bytes                   */
 MR_TEST(string, strcmp_prefix_and_high_bit) {
     const char x[] = {'a', 'b', (char)0x80, '\0'};
     const char y[] = {'a', 'b', (char)0x80, '\0'};
@@ -180,7 +170,6 @@ MR_TEST(string, strcmp_prefix_and_high_bit) {
     MR_TEST_EXPECT_LT_INT(mr_strcmp("ab", x), 0);
 }
 
-/* Test: strncmp stops at terminator and at the limit                       */
 MR_TEST(string, strncmp_edges) {
     const char abd[] = {'a', 'b', '\0', 'd'};
 
@@ -193,7 +182,6 @@ MR_TEST(string, strncmp_edges) {
     MR_TEST_EXPECT_LT_INT(mr_strncmp("", "a", 1), 0);
 }
 
-/* Test: strnlen clamps at the limit and at the terminator                  */
 MR_TEST(string, strnlen_clamp) {
     const char s[] = "hello";
     const char embedded[] = {'a', 'b', '\0', 'c', 'd'};
@@ -208,7 +196,6 @@ MR_TEST(string, strnlen_clamp) {
     MR_TEST_EXPECT_EQ_UINT(mr_strnlen(embedded, 2), 2);
 }
 
-/* Test: memmove self copy, abutting and maximum overlap ranges             */
 MR_TEST(string, memmove_self_abut_overlap) {
     enum {
         BUFFER_SIZE = 96
@@ -217,9 +204,15 @@ MR_TEST(string, memmove_self_abut_overlap) {
         mr_size_t dst_off;
         mr_size_t src_off;
         mr_size_t size;
-    } cases[] = {{16, 16, 32}, {40, 8, 24}, {32, 8, 24},
-                 {31, 8, 24},  {16, 8, 24}, {40, 8, 40},
-                 {44, 4, 20}};
+    } cases[] = {
+        {16, 16, 32},
+        {40,  8, 24},
+        {32,  8, 24},
+        {31,  8, 24},
+        {16,  8, 24},
+        {40,  8, 40},
+        {44,  4, 20}
+    };
     union {
         mr_uintptr_t align;
         mr_uint8_t bytes[BUFFER_SIZE];
@@ -232,18 +225,18 @@ MR_TEST(string, memmove_self_abut_overlap) {
         for (j = 0; j < BUFFER_SIZE; j++) {
             storage.bytes[j] = (mr_uint8_t)(j * 37U + 0x80U);
         }
-        range_reference(expected, storage.bytes, BUFFER_SIZE,
-                        cases[i].dst_off, cases[i].src_off, cases[i].size);
+        range_reference(expected, storage.bytes, BUFFER_SIZE, cases[i].dst_off,
+                        cases[i].src_off, cases[i].size);
         ret = mr_memmove(storage.bytes + cases[i].dst_off,
                          storage.bytes + cases[i].src_off, cases[i].size);
         MR_TEST_EXPECT_EQ_PTR(ret, storage.bytes + cases[i].dst_off);
         MR_TEST_EXPECT_EQ_INT(bytes_first_diff((const char *)storage.bytes,
                                                (const char *)expected,
-                                               BUFFER_SIZE), -1);
+                                               BUFFER_SIZE),
+                              -1);
     }
 }
 
-/* Test: memmove word aligned overlap in both directions                    */
 MR_TEST(string, memmove_aligned_word_overlap) {
     enum {
         BUFFER_SIZE = 96
@@ -262,13 +255,13 @@ MR_TEST(string, memmove_aligned_word_overlap) {
         for (k = 0; k < BUFFER_SIZE; k++) {
             storage.bytes[k] = (mr_uint8_t)(k * 13U + 5U);
         }
-        range_reference(expected, storage.bytes, BUFFER_SIZE, 16, 8,
-                        sizes[i]);
+        range_reference(expected, storage.bytes, BUFFER_SIZE, 16, 8, sizes[i]);
         ret = mr_memmove(storage.bytes + 16, storage.bytes + 8, sizes[i]);
         MR_TEST_EXPECT_EQ_PTR(ret, storage.bytes + 16);
         MR_TEST_EXPECT_EQ_INT(bytes_first_diff((const char *)storage.bytes,
                                                (const char *)expected,
-                                               BUFFER_SIZE), -1);
+                                               BUFFER_SIZE),
+                              -1);
     }
 
     /* Backward into lower addresses with identical alignment */
@@ -276,17 +269,16 @@ MR_TEST(string, memmove_aligned_word_overlap) {
         for (k = 0; k < BUFFER_SIZE; k++) {
             storage.bytes[k] = (mr_uint8_t)(k * 13U + 5U);
         }
-        range_reference(expected, storage.bytes, BUFFER_SIZE, 8, 16,
-                        sizes[i]);
+        range_reference(expected, storage.bytes, BUFFER_SIZE, 8, 16, sizes[i]);
         ret = mr_memmove(storage.bytes + 8, storage.bytes + 16, sizes[i]);
         MR_TEST_EXPECT_EQ_PTR(ret, storage.bytes + 8);
         MR_TEST_EXPECT_EQ_INT(bytes_first_diff((const char *)storage.bytes,
                                                (const char *)expected,
-                                               BUFFER_SIZE), -1);
+                                               BUFFER_SIZE),
+                              -1);
     }
 }
 
-/* Test: memcpy crosses the machine word size boundary correctly            */
 MR_TEST(string, memcpy_word_boundaries) {
     enum {
         BUFFER_SIZE = 64
@@ -317,15 +309,14 @@ MR_TEST(string, memcpy_word_boundaries) {
             MR_TEST_EXPECT_EQ_PTR(mr_memcpy(destination.bytes + off,
                                             source.bytes + off, sizes[i]),
                                   destination.bytes + off);
-            MR_TEST_EXPECT_EQ_INT(bytes_first_diff(
-                                      (const char *)destination.bytes,
-                                      (const char *)expected, BUFFER_SIZE),
-                                  -1);
+            MR_TEST_EXPECT_EQ_INT(
+                bytes_first_diff((const char *)destination.bytes,
+                                 (const char *)expected, BUFFER_SIZE),
+                -1);
         }
     }
 }
 
-/* Test: memset truncates the value to one byte at every alignment          */
 MR_TEST(string, memset_value_truncation) {
     enum {
         BUFFER_SIZE = 64
@@ -350,22 +341,20 @@ MR_TEST(string, memset_value_truncation) {
                 for (i = 0; i < BUFFER_SIZE; i++) {
                     storage.bytes[i] = (mr_uint8_t)(i * 19U + 9U);
                 }
-                fill_reference(expected, storage.bytes, BUFFER_SIZE,
-                               offsets[o], sizes[s],
-                               (mr_uint8_t)values[v]);
+                fill_reference(expected, storage.bytes, BUFFER_SIZE, offsets[o],
+                               sizes[s], (mr_uint8_t)values[v]);
                 ret = mr_memset(storage.bytes + offsets[o], values[v],
                                 sizes[s]);
                 MR_TEST_EXPECT_EQ_PTR(ret, storage.bytes + offsets[o]);
-                MR_TEST_EXPECT_EQ_INT(bytes_first_diff(
-                                          (const char *)storage.bytes,
-                                          (const char *)expected,
-                                          BUFFER_SIZE), -1);
+                MR_TEST_EXPECT_EQ_INT(
+                    bytes_first_diff((const char *)storage.bytes,
+                                     (const char *)expected, BUFFER_SIZE),
+                    -1);
             }
         }
     }
 }
 
-/* Test: memchr finds first, last and high bit bytes                        */
 MR_TEST(string, memchr_positions) {
     const char buf[] = {'a', 'b', 'c', 'd', 'b'};
     const char high[] = {0x01, (char)0xFF, 0x02, (char)0xFF};
@@ -384,7 +373,6 @@ MR_TEST(string, memchr_positions) {
 }
 
 #if defined(MR_USE_MALLOC)
-/* Test: strcpy handles long heap buffers and empty strings                 */
 MR_TEST(string, strcpy_long_and_empty) {
     char src[201];
     char *dst;
@@ -414,7 +402,6 @@ MR_TEST(string, strcpy_long_and_empty) {
 }
 #endif /* defined(MR_USE_MALLOC) */
 
-/* Test: strchr locates the terminator and high bit characters              */
 MR_TEST(string, strchr_positions) {
     const char text[] = {'q', (char)0x80, 'r', '\0', 's'};
 

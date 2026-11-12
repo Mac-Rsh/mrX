@@ -3,7 +3,7 @@
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
- * @date 2026-10-15        MacRsh        First version
+ * @date 2024-09-06        MacRsh        First version
  */
 
 #include <mrX/platform/mr_platform.h>
@@ -13,10 +13,10 @@
 #include "stm32h5xx_hal_tim.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT st_stm32h5_pwm
+#define MR_HT_COMPAT                    st_stm32h5_pwm
 #if MR_HT_HAS_DRIVER()
 
-/* PWM operations */
+/* Driver PWM operations */
 static mr_err_t pwm_configure(const mr_driver_t *drv,
                               const mr_pwm_config_t *config);
 static mr_err_t pwm_configuration(const mr_driver_t *drv,
@@ -58,7 +58,7 @@ MR_UNUSED static const mr_pwm_ops_t __pwm_ops = {
     .event_control = MR_NULL,
 };
 
-/* Hardware mapping and configured output state for one logical PWM channel */
+/* PWM channel type */
 typedef struct pwm_channel {
     mr_ht_gpio_spec_t gpio;
     uint32_t hal_channel;
@@ -69,7 +69,7 @@ typedef struct pwm_channel {
     mr_bool_t configured;
 } pwm_channel_t;
 
-/* Timer instance state shared by the PWM channels */
+/* PWM private data type */
 typedef struct pwm_priv {
     TIM_HandleTypeDef handle;
     void (*clk_enable)(void);
@@ -82,10 +82,12 @@ typedef struct pwm_priv {
     mr_uint8_t signal;
 } pwm_priv_t;
 
-/* Nanosecond conversion and prescaler search limits */
-#define PWM_NANOSECONDS      (1000000000ULL)
-#define PWM_PRESCALER_MAX    (65536ULL)
-#define PWM_PSC_SEARCH_LIMIT (64ULL)
+/* PWM time conversion definition */
+#define PWM_NANOSECONDS                 (1000000000ULL)
+
+/* PWM prescaler limit definition */
+#define PWM_PRESCALER_MAX               (65536ULL)
+#define PWM_PSC_SEARCH_LIMIT            (64ULL)
 
 static mr_bool_t pwm_is_apb2(TIM_TypeDef *instance) {
 #if defined(TIM1)
@@ -120,6 +122,7 @@ static mr_uint64_t pwm_clock(TIM_TypeDef *instance) {
     mr_uint32_t ppre, apb_div;
     mr_uint64_t pclk;
 
+    /* Get the timer's APB clock and prescaler */
     if (pwm_is_apb2(instance)) {
         pclk = HAL_RCC_GetPCLK2Freq();
         ppre = (RCC->CFGR2 & RCC_CFGR2_PPRE2) >> RCC_CFGR2_PPRE2_Pos;
@@ -127,6 +130,8 @@ static mr_uint64_t pwm_clock(TIM_TypeDef *instance) {
         pclk = HAL_RCC_GetPCLK1Freq();
         ppre = (RCC->CFGR2 & RCC_CFGR2_PPRE1) >> RCC_CFGR2_PPRE1_Pos;
     }
+
+    /* Apply the timer clock multiplier selected by TIMPRE */
     if (ppre < 4U) {
         return pclk;
     }
@@ -145,6 +150,7 @@ static mr_err_t pwm_nanoseconds_to_ticks(mr_uint64_t clock,
                                          mr_uint64_t *ticks) {
     mr_uint64_t seconds, remainder;
 
+    /* Split whole seconds to avoid overflowing the multiplication */
     seconds = nanoseconds / PWM_NANOSECONDS;
     remainder = nanoseconds % PWM_NANOSECONDS;
     if (seconds > (MR_UINT64_MAX / clock)) {
@@ -164,6 +170,7 @@ static mr_uint64_t pwm_ticks_to_nanoseconds(mr_uint64_t clock,
                                             mr_uint64_t ticks) {
     mr_uint64_t seconds, remainder;
 
+    /* Convert whole seconds and remaining ticks separately */
     seconds = ticks / clock;
     remainder = ticks % clock;
 
@@ -180,6 +187,7 @@ static mr_err_t pwm_make_period(TIM_TypeDef *instance, mr_uint64_t period,
     mr_uint64_t psc_min, search_end, psc, counts;
     mr_err_t ret;
 
+    /* Convert the requested period to timer clock ticks */
     clock = pwm_clock(instance);
     best_psc = 0U;
     best_counts = 0U;
@@ -193,14 +201,14 @@ static mr_err_t pwm_make_period(TIM_TypeDef *instance, mr_uint64_t period,
     }
 
     factor = (alignment == MR_PWM_ALIGN_CENTER) ? 2U : 1U;
-    /* CCR must also represent ARR + 1 for a full-duty output. Reserving
-     * that compare value avoids wrapping 100% duty back to zero. */
+    /* Reserve ARR + 1 in CCR so 100% duty cannot wrap to zero */
     counter_max = IS_TIM_32B_COUNTER_INSTANCE(instance) ? ((1ULL << 32) - 1U)
                                                         : ((1ULL << 16) - 1U);
     if (ticks > (counter_max * PWM_PRESCALER_MAX * factor)) {
         return -MR_ERANGE;
     }
 
+    /* Search supported prescalers for the closest representable period */
     psc_min = (ticks + (counter_max * factor) - 1U) / (counter_max * factor);
     if (psc_min == 0U) {
         psc_min = 1U;
@@ -230,6 +238,7 @@ static mr_err_t pwm_make_period(TIM_TypeDef *instance, mr_uint64_t period,
         return -MR_ERANGE;
     }
 
+    /* Return timer settings and the resulting period */
     *prescaler = (uint32_t)(best_psc - 1U);
     *arr = (uint32_t)(best_counts - 1U);
     *actual = pwm_ticks_to_nanoseconds(clock, best_counts * best_psc * factor);
@@ -241,6 +250,7 @@ static mr_err_t pwm_make_pulse(const pwm_priv_t *priv, mr_uint64_t pulse,
     mr_uint64_t clock, divider, factor, ticks, counts;
     mr_err_t ret;
 
+    /* Convert the pulse width using the configured timer period */
     clock = pwm_clock(priv->handle.Instance);
     divider = (mr_uint64_t)priv->handle.Init.Prescaler + 1U;
     factor = (priv->config.alignment == MR_PWM_ALIGN_CENTER) ? 2U : 1U;
@@ -259,6 +269,7 @@ static mr_err_t pwm_make_pulse(const pwm_priv_t *priv, mr_uint64_t pulse,
         return -MR_ERANGE;
     }
 
+    /* Return the compare value and resulting pulse width */
     *compare = (uint32_t)counts;
     *actual = pwm_ticks_to_nanoseconds(clock, counts * divider * factor);
     return 0;
@@ -267,6 +278,7 @@ static mr_err_t pwm_make_pulse(const pwm_priv_t *priv, mr_uint64_t pulse,
 static pwm_channel_t *pwm_channel_find(pwm_priv_t *priv, mr_uint32_t index) {
     mr_size_t i;
 
+    /* Find the logical channel in the board mapping */
     for (i = 0U; i < priv->channels_num; i++) {
         if (priv->channels[i].index == index) {
             return &priv->channels[i];
@@ -283,6 +295,7 @@ static mr_bool_t pwm_hal_channel_valid(uint32_t channel) {
 static void pwm_compare_write_immediate(pwm_priv_t *priv,
                                         const pwm_channel_t *output,
                                         uint32_t compare) {
+    /* Bypass preload when the output must change immediately */
     __HAL_TIM_DISABLE_OCxPRELOAD(&priv->handle, output->hal_channel);
     __HAL_TIM_SET_COMPARE(&priv->handle, output->hal_channel, compare);
     __HAL_TIM_ENABLE_OCxPRELOAD(&priv->handle, output->hal_channel);
@@ -296,9 +309,7 @@ static mr_err_t pwm_configure(const mr_driver_t *drv,
     mr_err_t ret;
     mr_size_t i;
 
-    /* Prepare the returned configuration without changing caller data */
-    actual = *config;
-    /* This first H5 backend intentionally leaves finite cycles to IRQ work */
+    /* Check timer and configuration support */
     if (!IS_TIM_INSTANCE(priv->handle.Instance)) {
         return -MR_EINVAL;
     }
@@ -314,6 +325,7 @@ static mr_err_t pwm_configure(const mr_driver_t *drv,
     }
 
     /* Calculate timer settings from the requested period */
+    actual = *config;
     priv->clk_enable();
     ret = pwm_make_period(priv->handle.Instance, config->period,
                           (mr_pwm_alignment_t)config->alignment, &prescaler,
@@ -326,8 +338,7 @@ static mr_err_t pwm_configure(const mr_driver_t *drv,
     priv->handle.Init.Prescaler = prescaler;
     priv->handle.Init.Period = period;
     priv->handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-    /* Center-aligned counters update at both ends. Repetition 1 turns the two
-     * half-period updates into one full-period preload/signal boundary. */
+    /* Repetition 1 makes center-aligned updates occur once per period */
     priv->handle.Init.RepetitionCounter
         = (config->alignment == MR_PWM_ALIGN_CENTER) ? 1U : 0U;
     priv->handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -354,6 +365,7 @@ static mr_err_t pwm_configure(const mr_driver_t *drv,
     if (ret != 0) {
         return ret;
     }
+    /* Invalidate channel settings derived from the previous time base */
     priv->config = actual;
     priv->configured = MR_TRUE;
     for (i = 0U; i < priv->channels_num; i++) {
@@ -384,9 +396,7 @@ static mr_err_t pwm_channel_configure(const mr_driver_t *drv,
     uint32_t compare;
     mr_err_t ret;
 
-    /* Prepare the HAL channel structure and normalized result */
-    oc = (TIM_OC_InitTypeDef){0};
-    actual = *config;
+    /* Check timer and channel support */
     if (!priv->configured) {
         return -MR_ENODEV;
     }
@@ -407,10 +417,13 @@ static mr_err_t pwm_channel_configure(const mr_driver_t *drv,
     }
 
     /* Convert the requested pulse width to a compare value */
+    actual = *config;
     ret = pwm_make_pulse(priv, config->pulse, &compare, &actual.pulse);
     if (ret != 0) {
         return ret;
     }
+
+    /* Route the timer channel through the board-selected alternate function */
     ret = mr_stm32h5_gpio_pin_alternate(&output->gpio, output->alternate,
                                         MR_GPIO_PULL_NONE, MR_GPIO_OTYPE_PP);
     if (ret != 0) {
@@ -418,6 +431,7 @@ static mr_err_t pwm_channel_configure(const mr_driver_t *drv,
     }
 
     /* Configure the channel output mode and polarity */
+    oc = (TIM_OC_InitTypeDef){0};
     oc.OCMode = TIM_OCMODE_PWM1;
     oc.Pulse = compare;
     oc.OCPolarity = (config->polarity == MR_PWM_POLARITY_ACTIVE_HIGH)
@@ -429,13 +443,15 @@ static mr_err_t pwm_channel_configure(const mr_driver_t *drv,
                        ? TIM_OCIDLESTATE_SET
                        : TIM_OCIDLESTATE_RESET;
     oc.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-    /* Apply the channel configuration and save its normalized values */
+
+    /* Apply the channel configuration */
     ret = mr_stm32h5_hal_status(
         HAL_TIM_PWM_ConfigChannel(&priv->handle, &oc, output->hal_channel));
     if (ret != 0) {
         return ret;
     }
 
+    /* Save the normalized configuration */
     output->config = actual;
     output->compare = compare;
     output->configured = MR_TRUE;
@@ -450,7 +466,6 @@ static mr_err_t pwm_channel_configuration(const mr_driver_t *drv,
 
     /* Find the channel and return its saved configuration */
     output = pwm_channel_find(priv, channel);
-
     if ((output == MR_NULL) || !output->configured) {
         return -MR_ENODEV;
     }
@@ -529,7 +544,7 @@ static mr_err_t pwm_start(const mr_driver_t *drv, mr_uint32_t channels) {
         enable_mask |= TIM_CCER_CC1E << output->hal_channel;
     }
 
-    /* Set initial output values before starting the counter */
+    /* Load compare values before enabling outputs to avoid a stale pulse */
     irq_state = mr_port_irq_disable();
     for (index = 0U; index < 32U; index++) {
         if ((channels & (1UL << index)) != 0U) {
@@ -544,6 +559,7 @@ static mr_err_t pwm_start(const mr_driver_t *drv, mr_uint32_t channels) {
                                   : 0U);
         __HAL_TIM_CLEAR_FLAG(&priv->handle, TIM_FLAG_UPDATE);
     }
+    /* Enable the selected outputs before starting the shared counter */
     SET_BIT(priv->handle.Instance->CCER, enable_mask);
     if (IS_TIM_BREAK_INSTANCE(priv->handle.Instance)) {
         __HAL_TIM_MOE_ENABLE(&priv->handle);
@@ -561,10 +577,9 @@ static mr_err_t pwm_stop(const mr_driver_t *drv, mr_uint32_t channels) {
     mr_uint32_t index;
     int irq_state;
 
-    /* Prepare the requested idle states before updating channel outputs */
+    /* Validate every requested channel before applying any idle state */
     enable_mask = 0U;
     disable_mask = 0U;
-    /* Validate every requested channel before applying any idle state */
     for (index = 0U; index < 32U; index++) {
         if ((channels & (1UL << index)) == 0U) {
             continue;
@@ -601,6 +616,7 @@ static mr_err_t pwm_stop(const mr_driver_t *drv, mr_uint32_t channels) {
         }
     }
 
+    /* Preserve driven idle levels while disabling unneeded outputs */
     CLEAR_BIT(priv->handle.Instance->CCER, disable_mask);
     SET_BIT(priv->handle.Instance->CCER, enable_mask);
     priv->running_mask &= ~channels;
@@ -633,9 +649,7 @@ static mr_err_t pwm_signal_configure(const mr_driver_t *drv,
         return (config->offset == 0U) ? 0 : -MR_EINVAL;
     }
 
-    /* A safe COMPARE mapping needs a statically reserved channel and a
-     * direction-specific TRGO/TRGO2 route. Keep it unsupported until those
-     * resources are represented by the H5 HardTree contract. */
+    /* COMPARE needs a reserved channel and direction-specific TRGO/TRGO2 */
     return (signal == MR_PWM_SIGNAL_COMPARE) ? -MR_ENOSYS : -MR_EINVAL;
 }
 
@@ -661,8 +675,7 @@ static mr_err_t pwm_signal_control(const mr_driver_t *drv,
     TIM_MasterConfigTypeDef master;
     mr_err_t ret;
 
-    /* Prepare the master trigger configuration */
-    master = (TIM_MasterConfigTypeDef){0};
+    /* Check timer and signal support */
     if (!priv->configured) {
         return -MR_ENODEV;
     }
@@ -680,10 +693,10 @@ static mr_err_t pwm_signal_control(const mr_driver_t *drv,
     }
 
     /* Enable or reset the timer update trigger */
+    master = (TIM_MasterConfigTypeDef){0};
     master.MasterOutputTrigger = enable ? TIM_TRGO_UPDATE : TIM_TRGO_RESET;
     master.MasterOutputTrigger2 = TIM_TRGO2_RESET;
     master.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-    /* Save signal state only after HAL accepts the configuration */
     ret = mr_stm32h5_hal_status(
         HAL_TIMEx_MasterConfigSynchronization(&priv->handle, &master));
     if (ret == 0) {
@@ -693,37 +706,39 @@ static mr_err_t pwm_signal_control(const mr_driver_t *drv,
     return ret;
 }
 
-/* Convert each HardTree channel tuple to a HAL/board mapping */
-/* clang-format off */
-#define __ST_HT_PWM_CHANNEL_IMPL(_elem, _node, _prop)                          \
-    {                                                                          \
-        .index = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0),                 \
-        .hal_channel = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 1),           \
-        .gpio = {                                                              \
-            .drv = MR_HT_DRIVER_FIND(                                          \
-                MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 2)),                 \
-            .pin = (mr_uint8_t)MR_HT_NODE_PROP_ELEM(                           \
-                _node, _prop, _elem, 3),                                       \
-        },                                                                     \
-        .alternate = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 4),             \
-}
-/* clang-format on */
-
-/* Install a PWM instance with its timer and channel mappings */
+/* Instance install with a board channel map and timer state */
 #define ST_HT_PWM_INSTALL(_id, _ops)                                           \
     static void MR_CAT(__pwm_clk_enable_, _id)(void) {                         \
         MR_HT_DRIVER_PROP(_id, st_clken)();                                    \
     }                                                                          \
-    static pwm_channel_t MR_CAT(__pwm_channel_, _id)[]                         \
-        = {MR_HT_DRIVER_PROP_ELEM_FOREACH(_id, st_channels,                    \
-                                          __ST_HT_PWM_CHANNEL_IMPL)};          \
+    static pwm_channel_t MR_CAT(__pwm_channel_, _id)[] = {                     \
+        MR_HT_DRIVER_PROP_ELEM_FOREACH(_id, st_channels,                       \
+                                       __ST_HT_PWM_CHANNEL_IMPL)               \
+    };                                                                         \
     static pwm_priv_t MR_CAT(__pwm_priv_, _id) = {                             \
-        .handle = {.Instance = MR_HT_DRIVER_PROP(_id, st_timx)},               \
+        .handle = {                                                            \
+            .Instance = MR_HT_DRIVER_PROP(_id, st_timx),                       \
+        },                                                                     \
         .clk_enable = MR_CAT(__pwm_clk_enable_, _id),                          \
         .channels = MR_CAT(__pwm_channel_, _id),                               \
         .channels_num = MR_ARRAY_SIZE(MR_CAT(__pwm_channel_, _id)),            \
     };                                                                         \
     MR_HT_PWM_INSTALL(_id, &MR_CAT(__pwm_priv_, _id), _ops)
+
+/* HardTree channel tuple mapping */
+#define __ST_HT_PWM_CHANNEL_IMPL(_elem, _node, _prop)                          \
+    {                                                                          \
+        .gpio = {                                                              \
+            .drv =                                                             \
+                MR_HT_DRIVER_FIND(                                             \
+                    MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 2)),             \
+            .pin =                                                             \
+                (mr_uint8_t)MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 3),      \
+        },                                                                     \
+        .hal_channel = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 1),           \
+        .alternate = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 4),             \
+        .index = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0),                 \
+    }
 MR_HT_DRIVER_FOREACH(ST_HT_PWM_INSTALL, &__pwm_ops);
 #endif /* MR_HT_HAS_DRIVER() */
 #endif /* defined(MR_USE_DRIVER_PWM) && defined(MR_USE_DRIVER_GPIO) */

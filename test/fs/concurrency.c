@@ -7,7 +7,8 @@
  */
 
 #include <mrX/test/mr_test.h>
-#if defined(MR_USE_TEST) && defined(MR_USE_FS) && defined(MR_USE_TEST_PTHREAD)
+#if defined(MR_USE_TEST) && defined(MR_USE_FS) && defined(MR_USE_FS_RAMFS)     \
+    && defined(MR_USE_TEST_PTHREAD)
 #include <mrX.h>
 #include <pthread.h>
 #include <mrX/test/fs/fs_test.h>
@@ -143,5 +144,6 @@ _exit:
     }
 }
 
-#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS)                           \
-        * && defined(MR_USE_TEST_PTHREAD) */
+#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) &&                        \
+          defined(MR_USE_FS_RAMFS)                                             \
+          && defined(MR_USE_TEST_PTHREAD) */

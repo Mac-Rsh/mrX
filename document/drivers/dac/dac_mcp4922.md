@@ -1,12 +1,13 @@
 # MCP4922 DAC
 
-复用 [DAC API](dac.md)，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
+复用 [DAC API](dac.md)
+，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
 
-| 项目 | 说明 |
-|---|---|
-| 功能宏 | `MR_USE_DRIVER_DAC`，及对应的 `MR_USE_DRIVER_SPI` |
-| 头文件 | `<mrX/drivers/dac/mr_dac.h>` |
-| 依赖模块 | SPI、Driver；仅 HardTree 有实例时编译 |
+| 项目     | 说明                                              |
+|----------|---------------------------------------------------|
+| 功能宏   | `MR_USE_DRIVER_DAC`，及对应的 `MR_USE_DRIVER_SPI` |
+| 头文件   | `<mrX/drivers/dac/mr_dac.h>`                      |
+| 依赖模块 | SPI、Driver；仅 HardTree 有实例时编译             |
 
 ## 用户指南
 
@@ -22,8 +23,8 @@ dac2: dac2 {
 
 启用 DAC/SPI。`spi` 必需，`exist_mask` 缺省 3 并裁剪为 2 位。
 SPI 请求 1 MHz、mode 0、8 位、MSB first；
-每样本两个字节，CS 在样本间释放。
-**LDAC 必须接低，SHDN 必须保持高**，VREFA/VREFB 由板级电路提供。
+每样本两个字节，CS 在样本间释放。 **LDAC 必须接低，SHDN 必须保持高**，VREFA/VREFB
+由板级电路提供。
 此版本不接管 LDAC/SHDN GPIO。
 
 ### API 行为

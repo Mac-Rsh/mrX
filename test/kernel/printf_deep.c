@@ -11,7 +11,10 @@
 #if defined(MR_USE_PRINTF)
 #include <mrX/kernel/mr_printf.h>
 
-/* Helpers */
+#if !defined(MR_CFG_PRINTF_BUF_SIZE)
+#define MR_CFG_PRINTF_BUF_SIZE (64)
+#endif /* !defined(MR_CFG_PRINTF_BUF_SIZE) */
+
 static int vprintf_wrapper(const char *fmt, ...) {
     mr_va_list args;
     int ret;
@@ -22,18 +25,10 @@ static int vprintf_wrapper(const char *fmt, ...) {
     return ret;
 }
 
-/* Tests */
-
-/* The return value of mr_printf equals the number of characters actually
- * emitted, so exact lengths can be verified without capturing the output
- */
 MR_TEST(printf, percent_percent) {
-    /* Documented implementation behavior: "%%" echoes two percent signs
-     * instead of the standard single one (see document/libc/sprintf.md)
-     */
-    MR_TEST_ASSERT_EQ_INT(mr_printf("%%"), 2);
-    MR_TEST_ASSERT_EQ_INT(mr_printf("a%%b"), 4);
-    MR_TEST_ASSERT_EQ_INT(mr_printf("%%%%"), 4);
+    MR_TEST_ASSERT_EQ_INT(mr_printf("%%"), 1);
+    MR_TEST_ASSERT_EQ_INT(mr_printf("a%%b"), 3);
+    MR_TEST_ASSERT_EQ_INT(mr_printf("%%%%"), 2);
 }
 
 MR_TEST(printf, unknown_and_trailing_specifier) {
@@ -138,15 +133,13 @@ MR_TEST(printf, precision_zero_zero_value) {
 }
 
 MR_TEST(printf, truncation_boundary) {
-    /* MR_CFG_PRINTF_BUF_SIZE is 64, so at most 63 characters are emitted */
-    MR_TEST_ASSERT_EQ_INT(mr_printf("%62s", "A"), 62);
-    MR_TEST_ASSERT_EQ_INT(mr_printf("%63s", "A"), 63);
-    MR_TEST_ASSERT_EQ_INT(mr_printf("%64s", "A"), 63);
-    MR_TEST_ASSERT_EQ_INT(mr_printf("%200s", "A"), 63);
-    MR_TEST_ASSERT_EQ_INT(mr_printf("%s",
-                                    "0123456789012345678901234567890123456789"
-                                    "0123456789012345678901234567890123456789"
-                                    "012345678901234567890"), 63);
+    const int limit = MR_CFG_PRINTF_BUF_SIZE - 1;
+
+    /* The terminator occupies the last byte of the configured buffer. */
+    MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit - 1, "A"), limit - 1);
+    MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit, "A"), limit);
+    MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit + 1, "A"), limit);
+    MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit + 100, "A"), limit);
 }
 
 MR_TEST(printf, pointer_format) {
@@ -189,8 +182,10 @@ MR_TEST(printf, length_modifiers) {
 }
 
 MR_TEST(printf, vprintf_truncation_boundary) {
-    MR_TEST_ASSERT_EQ_INT(vprintf_wrapper("%200s", "A"), 63);
-    MR_TEST_ASSERT_EQ_INT(vprintf_wrapper("%64s|", "A"), 63);
+    const int limit = MR_CFG_PRINTF_BUF_SIZE - 1;
+
+    MR_TEST_ASSERT_EQ_INT(vprintf_wrapper("%*s|", limit - 1, "A"), limit);
+    MR_TEST_ASSERT_EQ_INT(vprintf_wrapper("%*s|", limit, "A"), limit);
 }
 
 #endif /* defined(MR_USE_PRINTF) */

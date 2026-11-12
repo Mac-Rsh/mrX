@@ -17,17 +17,20 @@
 
 ### 1. 模块概述
 
-日志解决的问题是： **让散落在各模块的调试输出拥有统一的时间戳、统一的模块标签和 统一的级别开关**，且能在发布版本中零成本裁剪。
+日志解决的问题是： **让散落在各模块的调试输出拥有统一的时间戳、统一的模块标签和
+统一的级别开关**，且能在发布版本中零成本裁剪。
 
 特性：
 
 - 五个级别：`ERR` / `WRN` / `INF` / `DBG` / `TRC`，严重度递减。
 - 编译期过滤：`MR_CFG_LOG_LEVEL` 之下的级别宏被整体替换为空语句，不产生任何代码。
 - 运行期过滤：32 位级别掩码可动态开/关任意级别组合，无需重新编译。
-- 每条日志自动附带时间戳与 `[级别/标签]` 前缀，标签由各编译单元的 `MR_LOG_TAG` 决定。
+- 每条日志自动附带时间戳与 `[级别/标签]` 前缀，标签由各编译单元的 `MR_LOG_TAG`
+  决定。
 - 级别敏感的输出经 [格式化输出 Printf](printf.md)，格式语法与其一致。
 
-不适用于：需要落盘/网络回传的结构化日志（本模块只负责输出到平台输出通道）、 对吞吐敏感的大量逐条打印（每条一次格式化 + 输出）。
+不适用于：需要落盘/网络回传的结构化日志（本模块只负责输出到平台输出通道）、
+对吞吐敏感的大量逐条打印（每条一次格式化 + 输出）。
 
 ### 2. 配置与依赖
 
@@ -37,10 +40,13 @@
 | `MR_CFG_LOG_LEVEL`     | 整型 | 4      | 编译期最高日志级别，范围 0~4（`Kconfig:119`）                                  |
 | `MR_CFG_LOG_TIME_ZONE` | 整型 | 8      | 高分辨率时间戳的时区（UTC 偏移小时数），范围 -12~12（`Kconfig:133`）           |
 
-`MR_CFG_LOG_LEVEL` 的实际代码语义由 `mr_log.h` 定义：0 = 仅 `ERR`，1 = `WRN` 及以上，2 = `INF` 及以上，3 = `DBG` 及以上，4 =
-全部（含 `TRC`）。仅当编译单元定义了 `MR_LOG_TAG` 时这些级别宏才会生成调用。当前 Kconfig help 中的文字标签仍是旧定义，应以头文件常量为准。
+`MR_CFG_LOG_LEVEL` 的实际代码语义由 `mr_log.h` 定义：0 = 仅 `ERR`，1 = `WRN`
+及以上，2 = `INF` 及以上，3 = `DBG` 及以上，4 =
+全部（含 `TRC`）。仅当编译单元定义了 `MR_LOG_TAG` 时这些级别宏才会生成调用。当前
+Kconfig help 中的文字标签仍是旧定义，应以头文件常量为准。
 
-`MR_CFG_LOG_TIME_ZONE` 仅在高分辨率时钟路径（`MR_USE_CLOCK_HIRES`）下参与换算， Kconfig 中也依赖该选项。
+`MR_CFG_LOG_TIME_ZONE` 仅在高分辨率时钟路径（`MR_USE_CLOCK_HIRES`）下参与换算，
+Kconfig 中也依赖该选项。
 
 启用 `MR_USE_LOG` 并重新生成 `mr_config.h` 后，包含头文件即可使用：
 
@@ -80,7 +86,8 @@ void demo(void) {
 
 **级别与标签**
 
-- 每个编译单元用一个 `MR_LOG_TAG` 字符串标识自己（如 `"timer"`、`"gpio"`）， 输出前缀为 `" [级别/标签] "`。
+- 每个编译单元用一个 `MR_LOG_TAG` 字符串标识自己（如 `"timer"`、`"gpio"`）， 输出前缀为
+  `" [级别/标签] "`。
 - 级别宏与级别的对应：`MR_LOG_ERR`(0) / `MR_LOG_WRN`(1) / `MR_LOG_INF`(2) /
   `MR_LOG_DBG`(3) / `MR_LOG_TRC`(4)。
 
@@ -91,13 +98,16 @@ void demo(void) {
 | 编译期 | `MR_CFG_LOG_LEVEL` 低于当前级别的宏被替换为 `((void)0)` | 该编译单元定义了 `MR_LOG_TAG`        |
 | 运行期 | 32 位掩码 `mr_log_mask_set` / `mr_log_mask`             | 始终生效（直接调 `mr_log` 时也生效） |
 
-掩码按位对应级别：`MR_LOG_MASK(level)` 生成第 `level` 位的掩码，可按位或组合。 初始掩码为 `0xffffffff`（全部开启），与
+掩码按位对应级别：`MR_LOG_MASK(level)` 生成第 `level` 位的掩码，可按位或组合。
+初始掩码为 `0xffffffff`（全部开启），与
 `MR_CFG_LOG_LEVEL` 无关——后者只做 编译期裁剪。
 
 **时间戳**
 
-- 高分辨率路径（`MR_USE_CLOCK_HIRES`）：`[年-月-日-时:分:秒:毫秒:微秒]`。`mr_log` 把 `mr_clock_hires_tick()` 直接交给
-  `mr_hires_tick2timestamp`，后者按“自 Unix epoch 起的 tick”解释；只有平台 hires tick 本身采用该基准时，这个结果才是真实墙钟时间。
+- 高分辨率路径（`MR_USE_CLOCK_HIRES`）：`[年-月-日-时:分:秒:毫秒:微秒]`。`mr_log` 把
+  `mr_clock_hires_tick()` 直接交给
+  `mr_hires_tick2timestamp`，后者按“自 Unix epoch 起的 tick”解释；只有平台 hires
+  tick 本身采用该基准时，这个结果才是真实墙钟时间。
 - 普通路径：`[运行秒.毫秒]`（秒占 9 位右对齐），来自时钟模块 uptime。
 
 **调用约束**
@@ -200,26 +210,32 @@ int sensor_read(int *val) {
 
 **Q：`MR_LOG_INF(...)` 编译后完全没有输出，连运行期掩码也开了？**
 
-检查该编译单元是否定义了 `MR_LOG_TAG`：未定义时级别宏无条件展开为 `((void)0)`。 同时确认 `MR_CFG_LOG_LEVEL`
+检查该编译单元是否定义了 `MR_LOG_TAG`：未定义时级别宏无条件展开为 `((void)0)`。
+同时确认 `MR_CFG_LOG_LEVEL`
 不低于所用级别（裁剪发生在编译期）。
 
 **Q：`MR_CFG_LOG_LEVEL` 设为 0 后 `mr_log_mask` 仍返回 `0xffffffff`？**
 
-正常。`MR_CFG_LOG_LEVEL` 只影响级别宏是否编译进代码；运行期掩码独立初始化为全开， 直接调用 `mr_log` 不受编译期配置约束。
+正常。`MR_CFG_LOG_LEVEL` 只影响级别宏是否编译进代码；运行期掩码独立初始化为全开，
+直接调用 `mr_log` 不受编译期配置约束。
 
 **Q：时间戳怎么从 uptime 变成了日期时间？**
 
-启用了高分辨率时钟（`MR_USE_CLOCK_HIRES`）后，日志会切换到日期时间格式，时区由 `MR_CFG_LOG_TIME_ZONE`
-决定。但日期是否对应真实墙钟时间仍取决于平台提供的 hires tick 是否以 Unix epoch 为基准。
+启用了高分辨率时钟（`MR_USE_CLOCK_HIRES`）后，日志会切换到日期时间格式，时区由
+`MR_CFG_LOG_TIME_ZONE`
+决定。但日期是否对应真实墙钟时间仍取决于平台提供的 hires tick 是否以 Unix epoch
+为基准。
 
 **Q：输出内容交错/乱码？**
 
-日志本身不加锁：时间戳与正文经由 [格式化输出 Printf](printf.md) 输出，多上下文 并发输出请启用 `MR_USE_PRINTF_SAFE`
+日志本身不加锁：时间戳与正文经由 [格式化输出 Printf](printf.md) 输出，多上下文
+并发输出请启用 `MR_USE_PRINTF_SAFE`
 （每个格式化调用使用独立缓冲），并确保平台 输出通道 `mr_port_output` 本身线程/中断安全。
 
 **Q：如何临时静默某个模块的日志？**
 
-运行期掩码是全局的，无法按模块过滤；如需模块级静默，可用条件编译包裹或在输出端 按 `[级别/标签]` 前缀过滤。
+运行期掩码是全局的，无法按模块过滤；如需模块级静默，可用条件编译包裹或在输出端 按
+`[级别/标签]` 前缀过滤。
 
 ---
 
@@ -245,7 +261,8 @@ int sensor_read(int *val) {
              依赖：Printf（文本输出）、Clock（时间戳）、sprintf（格式化）
 ```
 
-- `MR_USE_LOG` 在 Kconfig 中 `select MR_USE_PRINTF`（`Kconfig:111`），保证底层 输出可用。
+- `MR_USE_LOG` 在 Kconfig 中 `select MR_USE_PRINTF`（`Kconfig:111`），保证底层
+  输出可用。
 - 高分辨率路径额外依赖 `MR_USE_CLOCK_HIRES`（`log.c:17` 编译分支）。
 
 ### 9. 数据结构
@@ -264,7 +281,8 @@ int sensor_read(int *val) {
 ### 10. 核心流程
 
 **编译期裁剪**：每个级别宏的守卫为 `defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >=
-级别)`（如 `mr_log.h:70`）。条件不满足时宏展开为 `((void)0)`，格式串与参数一并 消失——这是发布版本去除调试日志的零开销途径。
+级别)`（如 `mr_log.h:70`）。条件不满足时宏展开为 `((void)0)`，格式串与参数一并
+消失——这是发布版本去除调试日志的零开销途径。
 
 **运行期输出**：`mr_log`（`mrX/kernel/log.c:54`）：
 
@@ -273,31 +291,38 @@ int sensor_read(int *val) {
 3. `log_timestamp_print`（`log.c:18` / `log.c:37`）输出时间戳前缀：
     - 高分辨率路径：`mr_clock_hires_tick` → `mr_hires_tick2timestamp(tick,
      MR_CFG_LOG_TIME_ZONE)` → `[年-月-日-时:分:秒:毫秒:微秒]`（`log.c:29-34`）。
-    - 普通路径：`mr_clock_uptime` 除以 1000 拆分为秒与毫秒， 输出 `[9 位秒.毫秒]`（`log.c:43-50`）。
+    - 普通路径：`mr_clock_uptime` 除以 1000 拆分为秒与毫秒， 输出 `[9 位秒.毫秒]`（
+      `log.c:43-50`）。
 4. `mr_vprintf` 可变参输出正文（`log.c:72-74`），换行已在格式串内。
 
-**掩码读写**：`mr_log_mask_set` / `mr_log_mask` 直接赋值/读取全局变量 （`log.c:77-85`），无锁。
+**掩码读写**：`mr_log_mask_set` / `mr_log_mask` 直接赋值/读取全局变量 （
+`log.c:77-85`），无锁。
 
 ### 11. 并发与中断安全
 
-- 模块内部无锁：`__log_level` 是普通 `mr_uint32_t`，`mr_log_mask_set` / `mr_log_mask`
+- 模块内部无锁：`__log_level` 是普通 `mr_uint32_t`，`mr_log_mask_set` /
+  `mr_log_mask`
   只是直接写读，没有原子或锁语义。存在并发读写时应由调用者提供同步；常见做法是在初始化或受控配置阶段修改掩码。
-- `mr_log` 本身没有阻止中断上下文调用，但能否安全这样使用取决于下游 Printf、动态内存模式以及 `mr_port_output`
+- `mr_log` 本身没有阻止中断上下文调用，但能否安全这样使用取决于下游
+  Printf、动态内存模式以及 `mr_port_output`
   的平台实现，框架没有给出统一 ISR-safe 保证。
 - 时间戳与正文是两次独立输出调用，多上下文并发时可能交错。
 
 ### 12. 扩展与派生
 
 日志无对象 clazz、无输出后端回调或 ops 表（`mr_log.h` 只声明 `mr_log` /
-`mr_log_mask_set` / `mr_log_mask` 三个函数），扩展面是以下几处既有开关，且没有可 替换的后端：
+`mr_log_mask_set` / `mr_log_mask` 三个函数），扩展面是以下几处既有开关，且没有可
+替换的后端：
 
-- 每个编译单元定义自己的 `MR_LOG_TAG` 字面量，由 `__MR_LOG_FORMAT` 拼进前缀 （`mr_log.h:66-67`，用例
+- 每个编译单元定义自己的 `MR_LOG_TAG` 字面量，由 `__MR_LOG_FORMAT` 拼进前缀 （
+  `mr_log.h:66-67`，用例
   `mrX/test/kernel/log_deep.c:16`）；不定义标签时级别宏 整体展开为空。
 - 编译期用 `MR_CFG_LOG_LEVEL` 裁剪（`mr_log.h:38-40`、
   `mrX/include/mrX/kernel/Kconfig:119`），运行期用 32 位掩码 `mr_log_mask_set` /
   `mr_log_mask` 开关任意级别组合（`log.c:63`）。
-- 输出终点不归本模块替换：正文经 `mr_vprintf` → `mr_port_output`（`printf.c:52`） 送出，替换点是移植层实现（
-  `mrX/arch/win/platform/port/output.c:13`）；模块既无 颜色宏，也无前缀格式的覆写开关，级别常量与 `__MR_LOG_FORMAT` 均无条件定义。
+- 输出终点不归本模块替换：正文经 `mr_vprintf` → `mr_port_output`（`printf.c:52`）
+  送出，替换点是 `mr_port_output` 对应的移植层实现；模块既无 颜色宏，也无前缀格式的覆写开关，级别常量与
+  `__MR_LOG_FORMAT` 均无条件定义。
 
 ### 13. 源码导读
 
@@ -325,4 +350,5 @@ int sensor_read(int *val) {
 | `MR_LOG_MASK(_level)`                   | 级别位掩码生成宏                                 |
 | `MR_LOG_TAG`                            | 编译单元自定标签（用户侧定义，非 Kconfig 项）    |
 
-**错误码**：本模块 API 无返回值、不产生错误码；`mr_log` 对 `level >= 32`、空指针格式串和空格式串静默忽略。时间戳路径没有错误返回通道；其绝对时间含义由底层时钟基准决定。
+**错误码**：本模块 API 无返回值、不产生错误码；`mr_log` 对 `level >= 32`
+、空指针格式串和空格式串静默忽略。时间戳路径没有错误返回通道；其绝对时间含义由底层时钟基准决定。

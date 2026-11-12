@@ -68,8 +68,6 @@ static void test_slab_free_unique(void **mem, mr_size_t count) {
     }
 }
 
-/* Tests */
-
 MR_TEST(slab, basic) {
     void *p = MR_NULL;
 

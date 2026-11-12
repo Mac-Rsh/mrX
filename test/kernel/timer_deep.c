@@ -54,9 +54,6 @@ static void deep_timer_rearm_entry(mr_timer_t *timer, void *param) {
     }
 }
 
-/* Tests */
-
-/* Test: the periodic bit is stored verbatim and reported by tick get */
 MR_TEST(timer, deep_periodic_bit_preserved) {
     mr_timer_t timer;
     mr_timer_t *created;
@@ -67,8 +64,8 @@ MR_TEST(timer, deep_periodic_bit_preserved) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_UINT(mr_timer_tick(&timer), 1000 | MR_TIMER_PERIODIC);
 
-    created = mr_timer_create(deep_timer_mark_a, MR_NULL,
-                              2000 | MR_TIMER_PERIODIC);
+    created
+        = mr_timer_create(deep_timer_mark_a, MR_NULL, 2000 | MR_TIMER_PERIODIC);
     MR_TEST_ASSERT_NE_PTR(created, MR_NULL);
     MR_TEST_ASSERT_EQ_UINT(mr_timer_tick(created), 2000 | MR_TIMER_PERIODIC);
 
@@ -76,7 +73,6 @@ MR_TEST(timer, deep_periodic_bit_preserved) {
     MR_TEST_ASSERT_EQ_INT(mr_timer_del(created), 0);
 }
 
-/* Test: a oneshot timer fires exactly once inside its window */
 MR_TEST(timer, deep_oneshot_fire_window) {
     mr_timer_t timer;
     int count = 0;
@@ -99,7 +95,6 @@ MR_TEST(timer, deep_oneshot_fire_window) {
     MR_TEST_ASSERT_EQ_INT(mr_timer_del(&timer), 0);
 }
 
-/* Test: two oneshot timers expire in deadline order */
 MR_TEST(timer, deep_fire_order_two_oneshots) {
     mr_timer_t timer_a;
     mr_timer_t timer_b;
@@ -131,7 +126,6 @@ MR_TEST(timer, deep_fire_order_two_oneshots) {
     MR_TEST_ASSERT_EQ_INT(mr_timer_del(&timer_b), 0);
 }
 
-/* Test: timers sharing a deadline fire in start order */
 MR_TEST(timer, deep_same_deadline_fifo_order) {
     mr_timer_t timer_a;
     mr_timer_t timer_b;
@@ -158,7 +152,6 @@ MR_TEST(timer, deep_same_deadline_fifo_order) {
     MR_TEST_ASSERT_EQ_INT(mr_timer_del(&timer_b), 0);
 }
 
-/* Test: a periodic timer fires once per period over several periods */
 MR_TEST(timer, deep_periodic_count_window) {
     mr_timer_t timer;
     int count = 0;
@@ -182,7 +175,6 @@ MR_TEST(timer, deep_periodic_count_window) {
     MR_TEST_ASSERT_EQ_INT(mr_timer_del(&timer), 0);
 }
 
-/* Test: a stopped timer never expires */
 MR_TEST(timer, deep_stop_prevents_expiry) {
     mr_timer_t timer;
     int count = 0;
@@ -200,7 +192,6 @@ MR_TEST(timer, deep_stop_prevents_expiry) {
     MR_TEST_ASSERT_EQ_INT(mr_timer_del(&timer), 0);
 }
 
-/* Test: deleting a running timer stops it without firing */
 MR_TEST(timer, deep_delete_running_prevents_expiry) {
     mr_timer_t timer;
     int count = 0;
@@ -215,8 +206,6 @@ MR_TEST(timer, deep_delete_running_prevents_expiry) {
     MR_TEST_ASSERT_EQ_INT(count, 0);
 }
 
-/* Test: restarting a running timer pushes its deadline into the future */
-/* Test: tick set on a running timer stops it with the new period */
 MR_TEST(timer, deep_tick_set_stops_running) {
     mr_timer_t timer;
     int count = 0;
@@ -250,7 +239,6 @@ MR_TEST(timer, deep_tick_set_stops_running) {
     MR_TEST_ASSERT_EQ_INT(mr_timer_del(&timer), 0);
 }
 
-/* Test: an entry can rearm itself with a new period */
 MR_TEST(timer, deep_rearm_with_new_period_in_entry) {
     mr_timer_t timer;
     int count = 0;
@@ -274,7 +262,6 @@ MR_TEST(timer, deep_rearm_with_new_period_in_entry) {
     MR_TEST_ASSERT_EQ_INT(mr_timer_del(&timer), 0);
 }
 
-/* Test: an entry may start another stopped timer */
 MR_TEST(timer, deep_entry_starts_other_timer) {
     mr_timer_t timer_a;
     mr_timer_t timer_b;
@@ -302,7 +289,6 @@ MR_TEST(timer, deep_entry_starts_other_timer) {
     MR_TEST_ASSERT_EQ_INT(mr_timer_del(&timer_b), 0);
 }
 
-/* Test: starting a timer twice keeps a single deadline */
 MR_TEST(timer, deep_start_twice_single_fire) {
     mr_timer_t timer;
     int count = 0;
@@ -321,7 +307,6 @@ MR_TEST(timer, deep_start_twice_single_fire) {
     MR_TEST_ASSERT_EQ_INT(mr_timer_del(&timer), 0);
 }
 
-/* Test: deadlines past the 32-bit tick wrap boundary still expire */
 MR_TEST(timer, deep_wraparound_expiry) {
     mr_timer_t near_timer;
     mr_timer_t far_timer;
@@ -341,8 +326,7 @@ MR_TEST(timer, deep_wraparound_expiry) {
     MR_TEST_ASSERT_EQ_INT(mr_timer_start(&near_timer), 0);
 
     /* The far timer deadline wraps to about 0x80000200 */
-    ret = mr_timer_init(&far_timer, deep_timer_mark_b, &far_count,
-                        0x7FFFFFFFU);
+    ret = mr_timer_init(&far_timer, deep_timer_mark_b, &far_count, 0x7FFFFFFFU);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_timer_start(&far_timer), 0);
 

@@ -17,7 +17,8 @@
 
 ### 1. 模块概述
 
-格式化输出模块解决的问题是： **在不引入完整 C 库 stdio 的目标板上，提供行为确定、可裁剪的格式化字符串生成能力**。
+格式化输出模块解决的问题是： **在不引入完整 C 库 stdio
+的目标板上，提供行为确定、可裁剪的格式化字符串生成能力**。
 
 特性：
 
@@ -29,7 +30,8 @@
 - `%s` 传入 `MR_NULL` 输出 `"(null)"`，不崩溃。
 - 不支持浮点转换（`f e g E G F` 参数会被消费后原样回显说明符）。
 
-与 [内核格式化输出](../kernel/printf.md) 的分工：本模块只负责"格式串 + 参数 → 缓冲 字符串"；内核 printf
+与 [内核格式化输出](../kernel/printf.md) 的分工：本模块只负责"格式串 + 参数 → 缓冲
+字符串"；内核 printf
 在其之上叠加设备输出与日志级别。需要在任何地方打印内容时， 最终都经由本模块完成数字到文本的转换。
 
 ### 2. 配置与依赖
@@ -89,7 +91,7 @@ void example(void) {
 | `%p`           | 指针                | **未显式指定宽度时**自动使用 `sizeof(void*) * 2 + 2`、`0x` 前缀与前导零；显式宽度时按普通十六进制规则，前缀需 `#` |
 | `f e g E G F`  | 不支持              | 参数按浮点消费后，`%` 与说明符原样回显到输出                                                                      |
 | 其他未知说明符 | 原样回显            | 输出 `%` 与该字符                                                                                                 |
-| `%%`           | 原样回显            | 输出两个 `%` 字符（见 FAQ），标准 C 中输出一个                                                                    |
+| `%%`           | 字面百分号          | 输出一个 `%` 字符，不消费参数，与标准 C 一致                                                                      |
 
 **标志位、宽度与精度**
 
@@ -104,11 +106,13 @@ void example(void) {
 | `.数字` 或 `.*` | 整数最小数字位数（补前导 0）；字符串最大字符数                           |
 
 **长度修饰**：`hh`（`signed/unsigned char`）、`h`（short）、`l`（long）、
-`L`（`long long`，与 `ll` 等价）、`ll`（long long）、`z`（`mr_ssize_t` / `mr_size_t`）。 无修饰时按 `int` / `unsigned int` 取参。
+`L`（`long long`，与 `ll` 等价）、`ll`（long long）、`z`（`mr_ssize_t` / `mr_size_t`）。
+无修饰时按 `int` / `unsigned int` 取参。
 
 **返回值与截断行为**
 
-- `mr_snprintf(buf, size, ...)`：返回不含 `\0` 的输出总长度；`size` 不足时只写入 前 `size - 1` 个字符并保证
+- `mr_snprintf(buf, size, ...)`：返回不含 `\0` 的输出总长度；`size` 不足时只写入 前
+  `size - 1` 个字符并保证
   `buf[size - 1] == '\0'`；`size` 为 0 或 `buf` 为
   `MR_NULL` 时不写入任何内容，仅返回长度。
 - `mr_sprintf(buf, ...)`：无长度上限，缓冲由调用者保证足够大。
@@ -129,10 +133,12 @@ void example(void) {
 int mr_snprintf(char *buf, mr_size_t size, const char *fmt, ...);
 ```
 
-- `buf`：输出缓冲。跨后端可移植的长度统计用法是 `buf = MR_NULL, size = 0`；内置实现只要发现 `buf == MR_NULL` 就会强制按
+- `buf`：输出缓冲。跨后端可移植的长度统计用法是 `buf = MR_NULL, size = 0`；内置实现只要发现
+  `buf == MR_NULL` 就会强制按
   `size = 0` 处理。
 - `size`：缓冲总大小，含 `\0` 结尾占位。
-- `fmt`：内置实现允许 `MR_NULL` 并直接返回 0；该路径不改写 `buf`。切换 STD 后端后应遵循标准库对格式串的前置条件，不要依赖这一扩展。
+- `fmt`：内置实现允许 `MR_NULL` 并直接返回 0；该路径不改写 `buf`。切换 STD
+  后端后应遵循标准库对格式串的前置条件，不要依赖这一扩展。
 - 返回：不含 `\0` 的输出字符数；截断时为"完整输出"的长度而非实际写入数。
 
 **`mr_sprintf`**
@@ -150,7 +156,8 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args);
 int mr_vsprintf(char *buf, const char *fmt, mr_va_list args);
 ```
 
-供封装可变参数的辅助函数使用；行为分别与 `mr_snprintf` / `mr_sprintf` 一致。 调用前需 `mr_va_start`、调用后 `mr_va_end`（见第
+供封装可变参数的辅助函数使用；行为分别与 `mr_snprintf` / `mr_sprintf` 一致。 调用前需
+`mr_va_start`、调用后 `mr_va_end`（见第
 6 节示例）。
 
 ### 6. 完整示例
@@ -212,14 +219,14 @@ mr_snprintf(buf, sizeof(buf), "%10s", "test");/* "      test" */
 
 **Q：支持浮点（`%f`）吗？**
 
-不支持。`f e g E G F` 的参数会被按浮点消费掉（保证后续参数不错位），但输出中 只回显 `%` 与说明符本身，不会转换数值。需要打印浮点可自行拆成整数与小数部分
+不支持。`f e g E G F` 的参数会被按浮点消费掉（保证后续参数不错位），但输出中 只回显
+`%` 与说明符本身，不会转换数值。需要打印浮点可自行拆成整数与小数部分
 （见第 3 节示例的 `%d.%02u` 手法）。
 
-**Q：为什么 `%%` 输出了两个百分号？**
+**Q：如何输出字面的百分号？**
 
-这是实现行为：`%%` 走未知说明符路径，输出 `%` 与 `%` 两个字符，与标准 C （输出一个 `%`）不同，已由 `mrX/test/libc/sprintf.c` 的
-`unsigned_octal_bin`
-用例固定。需要在输出中保留字面 `%` 时请知悉此差异。
+在格式串中使用 `%%`，输出一个 `%`，不消费参数。例如格式串 `"%d%%"` 配合整数参数
+`50` 输出 `"50%"`。
 
 **Q：`mr_snprintf` 被截断时返回值是什么？**
 
@@ -232,8 +239,10 @@ mr_snprintf(buf, sizeof(buf), "%10s", "test");/* "      test" */
 
 **Q：`%p` 的输出格式是什么样？**
 
-当且仅当没有显式宽度时，内置实现自动设置宽度 `sizeof(void*) * 2 + 2`，并同时启用 `0x` 前缀与 `0` 填充（如 32 位平台
-`0x12345678`）。一旦显式给出宽度，就不再自动设置这两个修饰；若仍需要前缀要写 `%#...p`，填充规则也按普通数字格式处理。
+当且仅当没有显式宽度时，内置实现自动设置宽度 `sizeof(void*) * 2 + 2`，并同时启用
+`0x` 前缀与 `0` 填充（如 32 位平台
+`0x12345678`）。一旦显式给出宽度，就不再自动设置这两个修饰；若仍需要前缀要写
+`%#...p`，填充规则也按普通数字格式处理。
 
 ---
 
@@ -255,7 +264,8 @@ mr_snprintf(buf, sizeof(buf), "%10s", "test");/* "      test" */
              依赖：mr_types.h（va_list、定宽类型）
 ```
 
-内核侧入口：`mrX/kernel/printf.c` 先准备格式化缓冲（默认静态缓冲，`MR_USE_PRINTF_SAFE`
+内核侧入口：`mrX/kernel/printf.c` 先准备格式化缓冲（默认静态缓冲，
+`MR_USE_PRINTF_SAFE`
 时为动态缓冲），再调用本模块完成格式化并交给平台输出。用户代码也可直接调用本模块。
 
 ### 9. 数据结构
@@ -263,41 +273,52 @@ mr_snprintf(buf, sizeof(buf), "%10s", "test");/* "      test" */
 本模块无持久数据结构。核心是 `mr_vsnprintf` 栈上的两个游标与修饰位集合：
 
 - `str` / `end`（`mrX/libc/sprintf.c:206`）：写指针与越界哨兵；所有写入都经过
-  `if (str < end)` 判断，超出部分只累加计数不落盘，这是 `mr_snprintf` 截断 语义与 `MR_NULL` 缓冲统计长度的实现基础。
-- `mod` 位集（`sprintf.c:13-20`）：`SPRINTF_MOD_ZEROPAD` / `SPRINTF_MOD_SIGN` / `SPRINTF_MOD_PLUS` /
-  `SPRINTF_MOD_SPACE` / `SPRINTF_MOD_LEFT` / `SPRINTF_MOD_SPECIAL`（`#` 前缀）/ `SPRINTF_MOD_LARGE`（大写 十六进制）/
+  `if (str < end)` 判断，超出部分只累加计数不落盘，这是 `mr_snprintf` 截断 语义与
+  `MR_NULL` 缓冲统计长度的实现基础。
+- `mod` 位集（`sprintf.c:13-20`）：`SPRINTF_MOD_ZEROPAD` / `SPRINTF_MOD_SIGN` /
+  `SPRINTF_MOD_PLUS` /
+  `SPRINTF_MOD_SPACE` / `SPRINTF_MOD_LEFT` / `SPRINTF_MOD_SPECIAL`（`#` 前缀）/
+  `SPRINTF_MOD_LARGE`（大写 十六进制）/
   `SPRINTF_MOD_NEGATIVE`（负数绝对值标记）。
-- 数字逆序缓冲 `tmp[64]`（`sprintf.c:26`）：`format_number` 先按 base 逆序 生成数位，再正向回填，最大覆盖 64 位二进制输出。
+- 数字逆序缓冲 `tmp[64]`（`sprintf.c:26`）：`format_number` 先按 base 逆序
+  生成数位，再正向回填，最大覆盖 64 位二进制输出。
 
 ### 10. 核心流程
 
 **主循环**：`mr_vsnprintf`（`mrX/libc/sprintf.c:189`）逐字符扫描格式串：
 
 1. 普通字符直接写入（受 `str < end` 保护）。
-2. 遇 `%` 后依序解析：标志位（`- + 空格 0 #`，`sprintf.c:217`）、宽度 （数字或 `*`，负宽度转左对齐，`sprintf.c:233`）、精度（`.`
+2. 遇 `%` 后依序解析：标志位（`- + 空格 0 #`，`sprintf.c:217`）、宽度 （数字或 `*`
+   ，负宽度转左对齐，`sprintf.c:233`）、精度（`.`
    数字或 `.*`，
    `sprintf.c:248`）、长度修饰（`h hh l ll z`，`sprintf.c:266`）。
-3. 按转换说明符分派：`c` / `s` / `p` 各自内联处理并 `continue`；整数类 （`d i u x X b o`）设置符号与进制后落到公共取参路径。
-4. 取参按 `SPRINTF_MOD_SIGN` 与长度修饰选择正确的 `mr_va_arg` 类型 （`sprintf.c:427-489`）；有符号数以"取绝对值 +
+3. 按转换说明符分派：`c` / `s` / `p` 各自内联处理并 `continue`；整数类 （
+   `d i u x X b o`）设置符号与进制后落到公共取参路径。
+4. 取参按 `SPRINTF_MOD_SIGN` 与长度修饰选择正确的 `mr_va_arg` 类型 （
+   `sprintf.c:427-489`）；有符号数以"取绝对值 +
    `SPRINTF_MOD_NEGATIVE`
    "方式转换为 无符号量，避免 `INT64_MIN` 取负的未定义行为（`sprintf.c:456`）。
 
-**数字装配**：`format_number`（`sprintf.c:22`）按序输出：符号 → 左填充 （`0` 填充时符号提前）→ `#` 前缀（`0b` / `0` / `0x` /
+**数字装配**：`format_number`（`sprintf.c:22`）按序输出：符号 → 左填充 （`0`
+填充时符号提前）→ `#` 前缀（`0b` / `0` / `0x` /
 `0X`）→ 精度前导零 → 数位 → 右填充。所有宽度都先扣除符号与前缀占位，保证总宽恰好为指定宽度。
 
-**`%s` / `%c` / `%p`**：`%s` 串长度受精度截断（`sprintf.c:321`），空串指针 替换为 `"(null)"`；`%c` 以宽度 1 为下限做左右填充；
+**`%s` / `%c` / `%p`**：`%s` 串长度受精度截断（`sprintf.c:321`），空串指针 替换为
+`"(null)"`；`%c` 以宽度 1 为下限做左右填充；
 `%p` 未指定宽度时启用
 `SPRINTF_MOD_SPECIAL | SPRINTF_MOD_ZEROPAD` 并把宽度定为 `sizeof(void*) * 2 + 2`
 （`sprintf.c:357`）。
 
-**收尾**：`size > 0` 时在 `str` 或 `end[-1]` 处写 `\0`（`sprintf.c:497`）， 返回 `str - buf`。`buf == MR_NULL` 时以栈上哑元替代并置
+**收尾**：`size > 0` 时在 `str` 或 `end[-1]` 处写 `\0`（`sprintf.c:497`）， 返回
+`str - buf`。`buf == MR_NULL` 时以栈上哑元替代并置
 `size = 0`
 （`sprintf.c:201`），实现"只统计不输出"。
 
 ### 11. 并发与中断安全
 
 - 内置实现无可变全局状态，解析状态与临时数字缓冲都在调用栈上，因此不同调用实例之间不共享格式化状态，可重入。
-- 内置实现不分配堆、不加锁，执行量主要随格式串、宽度/精度和理论输出长度增长。是否适合 ISR
+- 内置实现不分配堆、不加锁，执行量主要随格式串、宽度/精度和理论输出长度增长。是否适合
+  ISR
   还取决于调用者可接受的最坏格式化时延与栈空间预算；本模块本身不会阻塞。
 - 唯一的外部约定：调用者保证输出缓冲在调用期间有效且足够大（`mr_sprintf`
   无越界保护）。
@@ -306,13 +327,17 @@ mr_snprintf(buf, sizeof(buf), "%10s", "test");/* "      test" */
 
 扩展面与 libc 家族其余模块一致，是 **编译期后端 choice**；本模块没有 clazz 与派生机制：
 
-- `MR_USE_SPRINTF_STD` 时头文件把 `mr_sprintf` / `mr_snprintf` / `mr_vsprintf` / `mr_vsnprintf` 整体宏转发标准库（
-  `mrX/include/mrX/libc/mr_sprintf.h:29-33`），`MR_USE_SPRINTF` 时使用内置实现（`mr_sprintf.h:34-76`，实现见
+- `MR_USE_SPRINTF_STD` 时头文件把 `mr_sprintf` / `mr_snprintf` / `mr_vsprintf` /
+  `mr_vsnprintf` 整体宏转发标准库（
+  `mrX/include/mrX/libc/mr_sprintf.h:29-33`），`MR_USE_SPRINTF` 时使用内置实现（
+  `mr_sprintf.h:34-76`，实现见
   `mrX/libc/sprintf.c:10` 起）。
-- `MR_USE_SPRINTF_3RD` 已在 choice 中定义（`mrX/include/mrX/libc/Kconfig:97`），但头文件只有上述两个分支，代码中没有任何
+- `MR_USE_SPRINTF_3RD` 已在 choice 中定义（`mrX/include/mrX/libc/Kconfig:97`
+  ），但头文件只有上述两个分支，代码中没有任何
   `MR_USE_SPRINTF_3RD` 分支——第三方格式化库的接入点当前并不存在，属于预留选项。
-- 切换后端会改变可观测行为：内置实现不支持浮点转换、`%%` 输出两个百分号（`mr_sprintf.h:29-33` 转发后行为由工具链 C
-  库决定），因此"换后端"不是纯粹的实现替换，会连带改变输出。模块未提供自定义说明符或输出回调注册入口，需要不同格式语义只能在调用方组合
+- 切换后端会改变可观测行为：内置实现不支持浮点转换（`mr_sprintf.h:29-33` 转发后行为由工具链
+  C 库决定），因此"换后端"
+  不是纯粹的实现替换，会连带改变输出。模块未提供自定义说明符或输出回调注册入口，需要不同格式语义只能在调用方组合
   `mr_snprintf`。
 
 ### 13. 源码导读
@@ -339,5 +364,6 @@ mr_snprintf(buf, sizeof(buf), "%10s", "test");/* "      test" */
 | `MR_USE_SPRINTF_STD` | 转发标准库 sprintf/snprintf（choice） |
 | `MR_USE_SPRINTF_3RD` | 第三方格式化库预留 choice；当前无实现 |
 
-**返回值**：内置实现返回不含 `\0` 的理论输出字符数，截断时仍计完整长度；`fmt == MR_NULL` 返回 0；当前内置实现没有负数错误码路径。STD
+**返回值**：内置实现返回不含 `\0` 的理论输出字符数，截断时仍计完整长度；
+`fmt == MR_NULL` 返回 0；当前内置实现没有负数错误码路径。STD
 后端则完全继承所用 C 库的返回/错误语义。

@@ -47,8 +47,8 @@ static mr_err_t atomic_fs_inode_rename(mr_inode_t *old_dir,
                                        mr_dentry_t *new_dentry);
 static void atomic_fs_inode_destroy(mr_inode_t *inode);
 static mr_err_t atomic_fs_file_readdir(mr_file_t *file, mr_dirent_t *dirent);
-static mr_err_t atomic_fs_mount(mr_sblock_t *sb, const char *source,
-                                int flags, void *data);
+static mr_err_t atomic_fs_mount(mr_sblock_t *sb, const char *source, int flags,
+                                void *data);
 static void atomic_fs_unmount(mr_sblock_t *sb);
 static mr_uint32_t atomic_fs_dentry_hash(const char *name, mr_uint32_t len);
 static mr_bool_t atomic_fs_dentry_compare(const char *a, const char *b,
@@ -71,8 +71,8 @@ static const mr_file_ops_t __atomic_fs_file_ops = {
     .readdir = atomic_fs_file_readdir,
 };
 
-static mr_file_system_t __atomic_fs = MR_FILE_SYSTEM_INIT(
-    "atomicfs", atomic_fs_mount, atomic_fs_unmount);
+static mr_file_system_t __atomic_fs
+    = MR_FILE_SYSTEM_INIT("atomicfs", atomic_fs_mount, atomic_fs_unmount);
 
 static mr_uint8_t atomic_fs_dentry_fold(char ch) {
     if ((ch >= 'A') && (ch <= 'Z')) {
@@ -333,8 +333,8 @@ static mr_err_t atomic_fs_file_readdir(mr_file_t *file, mr_dirent_t *dirent) {
     return 1;
 }
 
-static mr_err_t atomic_fs_mount(mr_sblock_t *sb, const char *source,
-                                int flags, void *data) {
+static mr_err_t atomic_fs_mount(mr_sblock_t *sb, const char *source, int flags,
+                                void *data) {
     atomic_fs_context_t *context;
     mr_inode_t *root;
 
@@ -382,9 +382,16 @@ MR_TEST(fs, atomic) {
 
     /* Register test filesystem */
     ret = mr_file_system_register(&__atomic_fs);
-    MR_TEST_ASSERT_EQ_INT(ret, 0);
+    if (ret == -MR_EEXIST) {
+        MR_TEST_ASSERT_EQ_PTR(mr_file_system_find(__atomic_fs.name),
+                              &__atomic_fs);
+    } else {
+        MR_TEST_ASSERT_EQ_INT(ret, 0);
+    }
 
-    /* Record heap state */
+    /* Record the heap state with no filesystem mounted at the root. */
+    ret = mr_fs_umount("/");
+    MR_TEST_ASSERT_EQ_INT((ret == 0) || (ret == -MR_ENOENT), MR_TRUE);
     heap_before = mr_heap_information(MR_TRUE);
 
     /* Mount test filesystem */
@@ -433,8 +440,8 @@ MR_TEST(fs, atomic) {
             : 0,
         1);
     destroy_calls = context->destroy_calls;
-    atomic_fs_expect(__test_status, "rmdir lifetime",
-                     mr_fs_rmdir("lifetime"), 0);
+    atomic_fs_expect(__test_status, "rmdir lifetime", mr_fs_rmdir("lifetime"),
+                     0);
     atomic_fs_size_expect(__test_status, "destroy unlinked inode",
                           context->destroy_calls, destroy_calls + 1);
     atomic_fs_bool_expect(__test_status, "backing lifetime absent",
@@ -573,6 +580,7 @@ MR_TEST(fs, atomic) {
     atomic_fs_expect(__test_status, "umount atomicfs after close",
                      mr_fs_umount("/"), 0);
 
+#if defined(MR_USE_FS_RAMFS)
     /* A replacement mount uses its own case-sensitive dentry operations */
     atomic_fs_expect(__test_status, "mount replacement ramfs",
                      fs_test_mount_root("ramfs", 0, MR_NULL), 0);
@@ -584,11 +592,14 @@ MR_TEST(fs, atomic) {
                      mr_fs_mkdir("casename"), 0);
     atomic_fs_expect(__test_status, "umount replacement ramfs",
                      mr_fs_umount("/"), 0);
-    atomic_fs_expect(__test_status, "restore rootfs",
-                     fs_test_mount_root("rootfs", 0, MR_NULL), 0);
+#endif /* defined(MR_USE_FS_RAMFS) */
     heap_after = mr_heap_information(MR_TRUE);
     atomic_fs_size_expect(__test_status, "heap restored", heap_after.used_bytes,
                           heap_before.used_bytes);
+#if defined(MR_USE_FS_ROOTFS)
+    atomic_fs_expect(__test_status, "restore rootfs",
+                     fs_test_mount_root("rootfs", 0, MR_NULL), 0);
+#endif /* defined(MR_USE_FS_ROOTFS) */
     return;
 }
 

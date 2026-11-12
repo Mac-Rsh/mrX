@@ -352,16 +352,52 @@ static void rpc_subs_rearm(mr_rpc_t *rpc, mr_rpc_session_t *session) {
     }
 }
 
+static void rpc_session_consume_locked(mr_rpc_session_t *session) {
+    /* End one-shot or cancelled sessions after result consumption */
+    if (session->action != MR_RPC_SESSION_ACTION_POLL) {
+        session->state = MR_RPC_SESSION_STATE_DONE;
+        return;
+    }
+
+    /* Keep subscription storage for the next stream result */
+    session->request.type = MR_RPC_MSG_STREAM;
+    if (session->request.value.subscribe & MR_RPC_SUBSCRIBE_CONTINUOUS) {
+        session->action = MR_RPC_SESSION_ACTION_REPOLL;
+    }
+    session->state = MR_RPC_SESSION_STATE_WAITING;
+}
+
+static mr_rpc_t *rpc_session_detach_locked(mr_rpc_session_t *session) {
+    mr_uint32_t i;
+    mr_rpc_t *rpc;
+
+    /* Remove subscription registration */
+    rpc = session->rpc;
+    if ((session->request.type == MR_RPC_MSG_SUBSCRIBE)
+        || (session->request.type == MR_RPC_MSG_STREAM)) {
+        for (i = 0; i < MR_ARRAY_SIZE(rpc->subs.sessions); i++) {
+            if (rpc->subs.sessions[i] == session) {
+                rpc->subs.sessions[i] = MR_NULL;
+                break;
+            }
+        }
+    }
+
+    /* Detach session before handing storage back to its owner */
+    mr_list_del(&session->list);
+    session->state = MR_RPC_SESSION_STATE_RELEASING;
+    return rpc;
+}
+
 static void rpc_session_finish(mr_rpc_session_t *session) {
     mr_err_t result;
-    mr_uint32_t i;
     mr_rpc_t *rpc;
     int mask;
 
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__rpc_lock);
 
-    /* Check session state */
+    /* Defer completion while a handler or callback still owns the session */
     if (((session->state != MR_RPC_SESSION_STATE_WAITING)
          && (session->state != MR_RPC_SESSION_STATE_READY)
          && (session->state != MR_RPC_SESSION_STATE_DONE))
@@ -369,59 +405,52 @@ static void rpc_session_finish(mr_rpc_session_t *session) {
         goto _exit;
     }
 
-    /* Check ready session */
+    /* Deliver each result before scheduling or releasing the session */
     if (session->state == MR_RPC_SESSION_STATE_READY) {
-        /* Check empty stream */
         if ((session->request.type == MR_RPC_MSG_STREAM)
             && (session->response.frame.value.result == 0)
             && (session->response.frame.payload_size == 0U)) {
+            /* Retry empty streams after the subscription period */
             session->state = MR_RPC_SESSION_STATE_WAITING;
-        } else if (session->action != MR_RPC_SESSION_ACTION_UNSUBSCRIBE) {
-            /* Check whether RPC is dying */
-            if (!mr_atomic_load(&session->rpc->dying)) {
-                /* Set session dispatching */
-                result = session->response.frame.value.result;
-                session->dispatching = MR_TRUE;
+        } else if ((session->action != MR_RPC_SESSION_ACTION_UNSUBSCRIBE)
+                   && (!mr_atomic_load(&session->rpc->dying))) {
+            /* Prevent consume or cancel from releasing callback storage */
+            result = session->response.frame.value.result;
+            session->dispatching = MR_TRUE;
 
-                /* Unlock */
-                mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
+            /* Unlock */
+            mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
 
-                /* Complete session */
-                session->ops->complete(session, result, session->owner);
+            /* Complete session */
+            session->ops->complete(session, result, session->owner);
 
-                /* Lock */
-                mask = mr_spinlock_lock_irqsave(&__rpc_lock);
+            /* Lock */
+            mask = mr_spinlock_lock_irqsave(&__rpc_lock);
 
-                /* Clear session dispatching */
-                session->dispatching = MR_FALSE;
-                if (session->request.type == MR_RPC_MSG_ONEWAY) {
-                    session->state = MR_RPC_SESSION_STATE_DONE;
-                }
+            /* Oneway results need no explicit consumption */
+            session->dispatching = MR_FALSE;
+            if (session->request.type == MR_RPC_MSG_ONEWAY) {
+                session->state = MR_RPC_SESSION_STATE_DONE;
             }
         }
     }
 
-    /* Check session action */
-    if (session->action == MR_RPC_SESSION_ACTION_UNSUBSCRIBE) {
+    /* Recheck cancellation and deletion after the completion callback */
+    if ((session->action == MR_RPC_SESSION_ACTION_UNSUBSCRIBE)
+        || mr_atomic_load(&session->rpc->dying)) {
         session->state = MR_RPC_SESSION_STATE_DONE;
     }
 
-    /* Check whether RPC is dying */
-    if (mr_atomic_load(&session->rpc->dying)) {
-        session->state = MR_RPC_SESSION_STATE_DONE;
-    }
-
-    /* Check waiting session */
+    /* Schedule consumed results or retry empty streams */
     if (session->state == MR_RPC_SESSION_STATE_WAITING) {
 #if defined(MR_USE_MODULE_RPC_HOOK)
-        /* Get RPC for wakeup */
+        /* Retain RPC across the unlocked poll notification */
         rpc = MR_NULL;
         if (session->action == MR_RPC_SESSION_ACTION_REPOLL) {
             rpc = mr_rpc_get(session->rpc);
         }
 #endif /* defined(MR_USE_MODULE_RPC_HOOK) */
 
-        /* Rearm subscription */
         rpc_subs_rearm(session->rpc, session);
 
         /* Unlock */
@@ -437,28 +466,13 @@ static void rpc_session_finish(mr_rpc_session_t *session) {
         return;
     }
 
-    /* Check session state */
+    /* Retain ready results until transport or owner consumption */
     if (session->state != MR_RPC_SESSION_STATE_DONE) {
         goto _exit;
     }
 
-    /* Remove subscription */
-    if ((session->request.type == MR_RPC_MSG_SUBSCRIBE)
-        || (session->request.type == MR_RPC_MSG_STREAM)) {
-        for (i = 0; i < MR_ARRAY_SIZE(session->rpc->subs.sessions); i++) {
-            if (session->rpc->subs.sessions[i] == session) {
-                session->rpc->subs.sessions[i] = MR_NULL;
-                break;
-            }
-        }
-    }
-    mr_list_del(&session->list);
-
-    /* Set session releasing */
-    session->state = MR_RPC_SESSION_STATE_RELEASING;
-
-    /* Get RPC */
-    rpc = session->rpc;
+    /* Detach session while retaining its RPC reference */
+    rpc = rpc_session_detach_locked(session);
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
@@ -466,10 +480,9 @@ static void rpc_session_finish(mr_rpc_session_t *session) {
     /* Release session */
     session->ops->release(session, session->owner);
 
-    /* Put RPC */
+    /* Session storage may be freed by the release callback */
     mr_rpc_put(rpc);
     return;
-
 _exit:
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
@@ -1054,21 +1067,6 @@ static mr_err_t rpc_subs_cancel(mr_rpc_t *rpc, mr_rpc_session_t *request) {
     return ret;
 }
 
-static void rpc_session_consume_locked(mr_rpc_session_t *session) {
-    /* Check session action */
-    if (session->action != MR_RPC_SESSION_ACTION_POLL) {
-        session->state = MR_RPC_SESSION_STATE_DONE;
-        return;
-    }
-
-    /* Prepare stream */
-    session->request.type = MR_RPC_MSG_STREAM;
-    if (session->request.value.subscribe & MR_RPC_SUBSCRIBE_CONTINUOUS) {
-        session->action = MR_RPC_SESSION_ACTION_REPOLL;
-    }
-    session->state = MR_RPC_SESSION_STATE_WAITING;
-}
-
 static void rpc_session_encode_frame(mr_rpc_session_t *session,
                                      mr_rpc_msg_type_t type) {
     const mr_uint32_t payload_size = session->response.frame.payload_size;
@@ -1100,50 +1098,6 @@ static void rpc_session_encode_frame(mr_rpc_session_t *session,
         session->send.size += RPC_CHECKSUM_SIZE;
     }
     session->send.off = 0U;
-}
-
-static mr_err_t rpc_reply(mr_rpc_session_t *session, mr_err_t result,
-                          mr_uint32_t payload_size) {
-    mr_rpc_session_action_t action;
-    int mask;
-
-    /* Check payload */
-    if (payload_size > sizeof(session->response.payload)) {
-        result = -MR_ENOMEM;
-    }
-    if (result < 0) {
-        payload_size = 0U;
-    }
-
-    /* Set response */
-    session->response.frame.payload_size = payload_size;
-    session->response.frame.value.result = result;
-
-    /* Set session action */
-    action = MR_RPC_SESSION_ACTION_NONE;
-    if (((session->request.type == MR_RPC_MSG_SUBSCRIBE)
-         || (session->request.type == MR_RPC_MSG_STREAM))
-        && (result >= 0)) {
-        action = MR_RPC_SESSION_ACTION_POLL;
-    }
-
-    /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__rpc_lock);
-
-    /* Set session state */
-    if (session->action != MR_RPC_SESSION_ACTION_UNSUBSCRIBE) {
-        session->state = MR_RPC_SESSION_STATE_READY;
-        session->action = action;
-    } else {
-        session->state = MR_RPC_SESSION_STATE_DONE;
-    }
-
-    /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
-
-    /* Finish session */
-    rpc_session_finish(session);
-    return 0;
 }
 
 static mr_err_t rpc_result_prepare(mr_rpc_session_t *session, mr_err_t result,
@@ -1185,6 +1139,7 @@ static mr_err_t rpc_result_prepare(mr_rpc_session_t *session, mr_err_t result,
 
 static mr_err_t rpc_session_respond(mr_rpc_session_t *session, mr_err_t result,
                                     mr_bool_t automatic) {
+    mr_rpc_session_action_t action;
     mr_uint32_t payload_size;
     mr_bool_t cancelled;
     int mask;
@@ -1192,33 +1147,58 @@ static mr_err_t rpc_session_respond(mr_rpc_session_t *session, mr_err_t result,
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__rpc_lock);
 
-    /* Check session state */
+    /* Claim the response storage before encoding outside the lock */
     if ((session->state != MR_RPC_SESSION_STATE_DISPATCHING)
         && (automatic || (session->state != MR_RPC_SESSION_STATE_HELD))) {
         mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
         return automatic ? 0 : -MR_EPERM;
     }
-
-    /* Check session action */
-    cancelled = (session->action == MR_RPC_SESSION_ACTION_UNSUBSCRIBE);
-
-    /* Check whether RPC is dying */
-    if (mr_atomic_load(&session->rpc->dying)) {
-        cancelled = MR_TRUE;
-    }
-
-    /* Set session encoding */
+    cancelled = (session->action == MR_RPC_SESSION_ACTION_UNSUBSCRIBE)
+             || mr_atomic_load(&session->rpc->dying);
     session->state = MR_RPC_SESSION_STATE_ENCODING;
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
 
-    /* Prepare result */
+    /* Prepare compact response data */
     payload_size = 0U;
     if ((!cancelled) && (result >= 0)) {
         result = rpc_result_prepare(session, result, &payload_size);
     }
-    return rpc_reply(session, result, payload_size);
+    if (payload_size > sizeof(session->response.payload)) {
+        result = -MR_ENOMEM;
+    }
+    if (result < 0) {
+        payload_size = 0U;
+    }
+
+    /* Continue subscriptions only after successful results */
+    action = MR_RPC_SESSION_ACTION_NONE;
+    if (((session->request.type == MR_RPC_MSG_SUBSCRIBE)
+         || (session->request.type == MR_RPC_MSG_STREAM))
+        && (result >= 0)) {
+        action = MR_RPC_SESSION_ACTION_POLL;
+    }
+
+    /* Lock */
+    mask = mr_spinlock_lock_irqsave(&__rpc_lock);
+
+    /* Publish the result without overwriting cancellation during encoding */
+    session->response.frame.payload_size = payload_size;
+    session->response.frame.value.result = result;
+    if (session->action != MR_RPC_SESSION_ACTION_UNSUBSCRIBE) {
+        session->state = MR_RPC_SESSION_STATE_READY;
+        session->action = action;
+    } else {
+        session->state = MR_RPC_SESSION_STATE_DONE;
+    }
+
+    /* Unlock */
+    mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
+
+    /* Deliver or release session */
+    rpc_session_finish(session);
+    return 0;
 }
 
 static const mr_rpc_call_t *rpc_call_find(mr_uint32_t call_id) {

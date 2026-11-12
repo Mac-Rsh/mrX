@@ -214,6 +214,16 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
             continue;
         }
 
+        /* Literal percent */
+        if (fmt[1] == '%') {
+            if (str < end) {
+                *str = '%';
+            }
+            str++;
+            fmt++;
+            continue;
+        }
+
         /* Get format modifier */
         for (fmt++, mod = 0; *fmt; fmt++) {
             if (*fmt == '-') {

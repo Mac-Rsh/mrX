@@ -11,7 +11,6 @@
 #if defined(MR_USE_LOG)
 #include <mrX/kernel/mr_log.h>
 
-/* Tests */
 MR_TEST(log, mask_default) {
     MR_TEST_ASSERT_EQ_UINT(mr_log_mask(), 0xffffffffU);
 }

@@ -1,7 +1,9 @@
 # HTC 硬件描述编译脚本
 
-HTC（Hardware Tree Compiler）把 DTS 风格的 .hts / .htsi 文件编译成 C 头文件，供 mrX 驱动通过节点路径、label、alias 和
-compatible 查找板级硬件。命令入口是 scripts/plugins/htc/htc.py，编译流水线由同目录的 frontend、semantic、validation 和
+HTC（Hardware Tree Compiler）把 DTS 风格的 .hts / .htsi 文件编译成 C 头文件，供 mrX
+驱动通过节点路径、label、alias 和
+compatible 查找板级硬件。命令入口是 scripts/plugins/htc/htc.py，编译流水线由同目录的
+frontend、semantic、validation 和
 backend 组成。
 
 ## 基本命令
@@ -31,8 +33,10 @@ include/mrX/mr_hardgen.h。输出目录不存在时会自动创建；输入、�
 python ./scripts/cli.py htc -i boards/demo.hts -I boards/include -o build/include/mr_hardgen.h --no-cpp
 ~~~
 
-默认模式会按顺序寻找 gcc、clang、cpp 并优先使用找到的 C 预处理器；找不到时自动 回退到内置预处理器。--no-cpp
-可让不同机器使用一致的有限预处理行为。外部预处理器 已经报告语法错误时，脚本会直接报告错误，不会把错误输入当成成功结果。
+默认模式会按顺序寻找 gcc、clang、cpp 并优先使用找到的 C 预处理器；找不到时自动
+回退到内置预处理器。--no-cpp
+可让不同机器使用一致的有限预处理行为。外部预处理器
+已经报告语法错误时，脚本会直接报告错误，不会把错误输入当成成功结果。
 
 ## 编写 .hts 文件
 
@@ -76,8 +80,10 @@ python ./scripts/cli.py htc -i boards/demo.hts -I boards/include -o build/includ
 | /delete-node/ target;            | 删除节点及其子树                                    |
 | /delete-property/ name;          | 删除当前节点中的属性                                |
 
-属性值支持字符串、十进制/十六进制/二进制/八进制数字、浮点数、标识符和节点引用。 节点引用可以写
-&label、&{/absolute/path}，也可以在路径中使用 unit address。 compatible 应是字符串或字符串列表；只有带 compatible
+属性值支持字符串、十进制/十六进制/二进制/八进制数字、浮点数、标识符和节点引用。
+节点引用可以写
+&label、&{/absolute/path}，也可以在路径中使用 unit address。 compatible
+应是字符串或字符串列表；只有带 compatible
 且状态启用的节点会进入驱动 实例索引。
 
 ### 包含和条件编译
@@ -89,8 +95,10 @@ python ./scripts/cli.py htc -i boards/demo.hts -I boards/include -o build/includ
 /include/ "board-common.hts"
 ~~~
 
-#include "..." 先查当前文件目录，再查 -I 目录；`#include <...>` 查 -I 目录。内置 预处理器支持对象式
-#define、#undef、#if、#ifdef、#ifndef、#elif、#else 和 #endif。 包含路径必须是相对路径，不能使用绝对路径或 .. 穿越目录。
+#include "..." 先查当前文件目录，再查 -I 目录；`#include <...>` 查 -I 目录。内置
+预处理器支持对象式
+#define、#undef、#if、#ifdef、#ifndef、#elif、#else 和 #endif。
+包含路径必须是相对路径，不能使用绝对路径或 .. 穿越目录。
 
 ## status 与初始化顺序
 
@@ -105,7 +113,8 @@ status 缺省为 "okay"。HTC 还支持 mrX 用于驱动初始化排序的扩展
 | "prio(0)" 到 "prio(9)" | 指定优先级的初始化             |
 | "disabled"             | 不生成该节点的节点宏或驱动实例 |
 
-父节点被禁用时，子节点也按禁用处理。--strict 会提示 early、last、defer、prio (n)、裸数字、浮点数和裸标识符等 HTC
+父节点被禁用时，子节点也按禁用处理。--strict 会提示 early、last、defer、prio (n)
+、裸数字、浮点数和裸标识符等 HTC
 扩展；不加该选项时这些语法是合法的 mrX 扩展。
 
 ## 生成结果如何被驱动使用
@@ -116,7 +125,8 @@ status 缺省为 "okay"。HTC 还支持 mrX 用于驱动初始化排序的扩展
 2. label 和 aliases 的符号映射。
 3. 按 compatible 分组的实例数量和实例路径索引。
 
-驱动通常通过 `<mrX/drivers/mr_driver.h>` 间接获得这些定义，再使用对应驱动文档中说明的 MR_HT_* 宏。应用修改硬件描述后，必须重新运行
+驱动通常通过 `<mrX/drivers/mr_driver.h>` 间接获得这些定义，再使用对应驱动文档中说明的
+MR_HT_* 宏。应用修改硬件描述后，必须重新运行
 HTC，不能手工改 mr_hardgen.h。
 
 ## 常见问题

@@ -23,7 +23,6 @@ backend 负责总线状态机、START/RESTART/STOP、地址阶段、ACK/NACK、�
 mrX/arch/<vendor>/<target>/platform/drivers/i2c/
 ```
 
-当前 `mrX/arch/st/stm32h5/` 下 **没有** I2C backend；树内唯一的实现是
 `mrX/drivers/i2c/i2c_gpio.c` 的 GPIO 软件 Master（见第 8 节），它同时是
 “只实现部分能力”的参考样板。
 
@@ -131,7 +130,8 @@ backend 应明确处理并在平台文档中列出：
 
 ## 7. HardTree 与安装
 
-`MR_HT_I2C_INSTALL(_id, _priv, _ops)` 安装整颗 controller，不创建 I2C client/device
+`MR_HT_I2C_INSTALL(_id, _priv, _ops)` 安装整颗 controller，不创建 I2C
+client/device
 对象。HardTree 可描述 controller 实例、pins、clock/IRQ 以及平台需要的静态资源。
 
 ## 8. GPIO 软件 Master

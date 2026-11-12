@@ -7,7 +7,7 @@
  */
 
 #include <mrX/test/mr_test.h>
-#if defined(MR_USE_TEST) && defined(MR_USE_FS)
+#if defined(MR_USE_TEST) && defined(MR_USE_FS) && defined(MR_USE_FS_ROOTFS)
 #include <mrX.h>
 #include <mrX/test/fs/fs_test.h>
 #include <mrX/fs/mr_fs_dentry.h>
@@ -161,8 +161,8 @@ MR_TEST(fs, rootfs) {
                   mr_fs_unlink("/system/console"), 0);
     rootfs_expect(__test_status, "rmdir rootfs services",
                   mr_fs_rmdir("/system/services"), 0);
-    rootfs_expect(__test_status, "rmdir rootfs system",
-                  mr_fs_rmdir("/system"), 0);
+    rootfs_expect(__test_status, "rmdir rootfs system", mr_fs_rmdir("/system"),
+                  0);
 
     /* Unmount and verify all namespace allocations were released */
     rootfs_expect(__test_status, "umount rootfs", mr_fs_umount("/"), 0);
@@ -171,7 +171,6 @@ MR_TEST(fs, rootfs) {
                   heap_after.used_bytes == heap_before.used_bytes, MR_TRUE);
     return;
 }
-/* ==== from nsp.c ==== */
 MR_TEST(fs, nsp_init_root_get_failure) {
     mr_fs_struct_t *current;
     mr_fs_struct_t fs_struct = {0};
@@ -226,4 +225,5 @@ MR_TEST(fs, nsp_root_lock_and_init) {
     }
 }
 
-#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */
+#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) &&                        \
+          defined(MR_USE_FS_ROOTFS) */

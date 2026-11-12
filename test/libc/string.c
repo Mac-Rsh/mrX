@@ -13,7 +13,6 @@
 #include <mrX/libc/mr_malloc.h>
 #include <mrX/libc/mr_errno.h>
 
-/* Utilities: fill / verify canary pattern */
 static void canary_fill(void *p, mr_size_t n) {
     mr_uint8_t *d;
     mr_size_t i;
@@ -130,7 +129,6 @@ _exit:
 }
 #endif /* defined(MR_USE_MALLOC) */
 
-/* Test: memcmp detects differences */
 MR_TEST(string, memcmp_diff) {
     const char a[] = {0, 1, 2, 3, 4, 5, 6, 7};
     const char b[] = {0, 1, 2, 3, 4, 5, 6, 8};
@@ -139,7 +137,6 @@ MR_TEST(string, memcmp_diff) {
     MR_TEST_ASSERT_NE_INT(mr_memcmp(a, b, sizeof(a)), 0);
 }
 
-/* Test: memmove preserves data for overlapping and unaligned ranges */
 MR_TEST(string, memmove_overlap_matrix) {
     typedef struct memmove_case {
         mr_size_t dst_offset;
@@ -147,18 +144,18 @@ MR_TEST(string, memmove_overlap_matrix) {
         mr_size_t size;
     } memmove_case_t;
     const memmove_case_t cases[] = {
-        {0, 8, 32},
-        {8, 0, 32},
-        {1, 9, 31},
-        {9, 1, 31},
-        {1, 2, 29},
-        {2, 1, 29},
-        {5, 0, 3},
-        {0, 5, 3},
-        {3, 3, 20},
-        {0, 40, 16},
-        {40, 0, 16},
-        {7, 11, 0},
+        { 0,  8, 32},
+        { 8,  0, 32},
+        { 1,  9, 31},
+        { 9,  1, 31},
+        { 1,  2, 29},
+        { 2,  1, 29},
+        { 5,  0,  3},
+        { 0,  5,  3},
+        { 3,  3, 20},
+        { 0, 40, 16},
+        {40,  0, 16},
+        { 7, 11,  0},
     };
     union {
         mr_uintptr_t align;
@@ -182,7 +179,6 @@ MR_TEST(string, memmove_overlap_matrix) {
     }
 }
 
-/* Test: memmove does not alter an independent source buffer */
 MR_TEST(string, memmove_nonoverlap_source_preserved) {
     union {
         mr_uintptr_t align;
@@ -201,16 +197,15 @@ MR_TEST(string, memmove_nonoverlap_source_preserved) {
     for (i = 0; i < 31; i++) {
         expected[i + 3] = source.bytes[i + 5];
     }
-    MR_TEST_ASSERT_EQ_PTR(mr_memmove(destination.bytes + 3, source.bytes + 5,
-                                     31),
-                          destination.bytes + 3);
+    MR_TEST_ASSERT_EQ_PTR(
+        mr_memmove(destination.bytes + 3, source.bytes + 5, 31),
+        destination.bytes + 3);
     for (i = 0; i < sizeof(source.bytes); i++) {
         MR_TEST_ASSERT_EQ_INT(source.bytes[i], source_before[i]);
         MR_TEST_ASSERT_EQ_INT(destination.bytes[i], expected[i]);
     }
 }
 
-/* Test: memmove handles every small overlapping range and alignment offset */
 MR_TEST(string, memmove_exhaustive_small_ranges) {
     enum {
         BUFFER_SIZE = 32
@@ -231,12 +226,12 @@ MR_TEST(string, memmove_exhaustive_small_ranges) {
             for (size = 0; size <= max_size; size++) {
                 memmove_pattern_fill(storage.bytes, sizeof(storage.bytes));
                 memmove_reference(expected, storage.bytes,
-                                  sizeof(storage.bytes), dst_offset,
-                                  src_offset, size);
-                MR_TEST_ASSERT_EQ_PTR(
-                    mr_memmove(storage.bytes + dst_offset,
-                               storage.bytes + src_offset, size),
-                    storage.bytes + dst_offset);
+                                  sizeof(storage.bytes), dst_offset, src_offset,
+                                  size);
+                MR_TEST_ASSERT_EQ_PTR(mr_memmove(storage.bytes + dst_offset,
+                                                 storage.bytes + src_offset,
+                                                 size),
+                                      storage.bytes + dst_offset);
                 for (i = 0; i < sizeof(storage.bytes); i++) {
                     MR_TEST_ASSERT_EQ_INT(storage.bytes[i], expected[i]);
                 }
@@ -245,7 +240,6 @@ MR_TEST(string, memmove_exhaustive_small_ranges) {
     }
 }
 
-/* Test: memcpy preserves all bytes outside each aligned and unaligned range */
 MR_TEST(string, memcpy_alignment_matrix) {
     enum {
         BUFFER_SIZE = 64,
@@ -271,10 +265,10 @@ MR_TEST(string, memcpy_alignment_matrix) {
                 for (i = 0; i < size; i++) {
                     expected[dst_offset + i] = source.bytes[src_offset + i];
                 }
-                MR_TEST_ASSERT_EQ_PTR(
-                    mr_memcpy(destination.bytes + dst_offset,
-                              source.bytes + src_offset, size),
-                    destination.bytes + dst_offset);
+                MR_TEST_ASSERT_EQ_PTR(mr_memcpy(destination.bytes + dst_offset,
+                                                source.bytes + src_offset,
+                                                size),
+                                      destination.bytes + dst_offset);
                 for (i = 0; i < sizeof(expected); i++) {
                     MR_TEST_ASSERT_EQ_INT(destination.bytes[i], expected[i]);
                 }
@@ -283,7 +277,6 @@ MR_TEST(string, memcpy_alignment_matrix) {
     }
 }
 
-/* Test: memset stores the low byte and preserves range boundaries */
 MR_TEST(string, memset_alignment_matrix) {
     enum {
         BUFFER_SIZE = 64,
@@ -308,10 +301,9 @@ MR_TEST(string, memset_alignment_matrix) {
                 for (i = 0; i < size; i++) {
                     expected[offset + i] = (mr_uint8_t)values[value_index];
                 }
-                MR_TEST_ASSERT_EQ_PTR(
-                    mr_memset(storage.bytes + offset, values[value_index],
-                              size),
-                    storage.bytes + offset);
+                MR_TEST_ASSERT_EQ_PTR(mr_memset(storage.bytes + offset,
+                                                values[value_index], size),
+                                      storage.bytes + offset);
                 for (i = 0; i < sizeof(expected); i++) {
                     MR_TEST_ASSERT_EQ_INT(storage.bytes[i], expected[i]);
                 }
@@ -320,7 +312,6 @@ MR_TEST(string, memset_alignment_matrix) {
     }
 }
 
-/* Test: memchr finds the first occurrence of a byte                          */
 MR_TEST(string, memchr_find) {
     const char buf[] = "0123456789ABCDEF";
 
@@ -328,7 +319,6 @@ MR_TEST(string, memchr_find) {
     MR_TEST_ASSERT_EQ_PTR(mr_memchr(buf, 'X', sizeof(buf)), MR_NULL);
 }
 
-/* Test: memccpy stops after the sentinel character                           */
 MR_TEST(string, memccpy_stop) {
     const char src[] = "Hello\0World";
     char dst[sizeof(src)];
@@ -364,7 +354,6 @@ _exit:
 }
 #endif /* defined(MR_USE_MALLOC) */
 
-/* Test: strerror copies C-string including terminator */
 MR_TEST(string, strerror_basic) {
     mr_strerror(0);
     mr_strerror(MR_EPERM);
@@ -378,10 +367,10 @@ MR_TEST(string, strerror_basic) {
     mr_strerror(MR_EINVAL);
     mr_strerror(MR_ENOSYS);
     mr_strerror(MR_ETIMEDOUT);
+    mr_strerror(MR_ECANCELED);
     mr_strerror(-99999);
 }
 
-/* Test: strncpy copies at most n bytes                                       */
 MR_TEST(string, strncpy_trunc) {
     const char long_src[] = "long_string";
     const char short_src[] = "str";
@@ -396,7 +385,6 @@ MR_TEST(string, strncpy_trunc) {
     MR_TEST_ASSERT_EQ_INT(mr_memcmp(buf, "str", 4), 0);
 }
 
-/* Test: strcmp / strncmp compare lexicographically                           */
 MR_TEST(string, strcmp_strncmp) {
     const char a[] = "abc";
     const char b[] = "abd";
@@ -409,7 +397,6 @@ MR_TEST(string, strcmp_strncmp) {
     MR_TEST_ASSERT_EQ_INT(mr_strncmp(c, d, 3), 0);
 }
 
-/* Test: strlen / strnlen return correct lengths                              */
 MR_TEST(string, strlen_strnlen) {
     const char s[] = "0123456789";
 
@@ -418,7 +405,6 @@ MR_TEST(string, strlen_strnlen) {
     MR_TEST_ASSERT_EQ_UINT(mr_strnlen(s, 20), 10);
 }
 
-/* Test: strchr locates first occurrence of character                         */
 MR_TEST(string, strchr_find) {
     const char s[] = "test_string";
 
@@ -427,7 +413,6 @@ MR_TEST(string, strchr_find) {
     MR_TEST_ASSERT_EQ_PTR(mr_strchr(s, 'X'), MR_NULL);
 }
 
-/* Test: ffs32 basic cases                                                 */
 MR_TEST(string, ffs32_basic) {
     MR_TEST_ASSERT_EQ_INT(mr_ffs32(0), 0);
     MR_TEST_ASSERT_EQ_INT(mr_ffs32(1), 1);
@@ -436,7 +421,6 @@ MR_TEST(string, ffs32_basic) {
     MR_TEST_ASSERT_EQ_INT(mr_ffs32(0x000000FFU), 1);
 }
 
-/* Test: ffs64 basic cases                                                 */
 MR_TEST(string, ffs64_basic) {
     MR_TEST_ASSERT_EQ_INT(mr_ffs64(0), 0);
     MR_TEST_ASSERT_EQ_INT(mr_ffs64(1ULL), 1);
@@ -445,7 +429,6 @@ MR_TEST(string, ffs64_basic) {
     MR_TEST_ASSERT_EQ_INT(mr_ffs64(0x00000000000000FFULL), 1);
 }
 
-/* Test: fls32 basic cases                                                 */
 MR_TEST(string, fls32_basic) {
     MR_TEST_ASSERT_EQ_INT(mr_fls32(0), 0);
     MR_TEST_ASSERT_EQ_INT(mr_fls32(1), 1);
@@ -454,7 +437,6 @@ MR_TEST(string, fls32_basic) {
     MR_TEST_ASSERT_EQ_INT(mr_fls32(0x000000FFU), 8);
 }
 
-/* Test: fls64 basic cases                                                 */
 MR_TEST(string, fls64_basic) {
     MR_TEST_ASSERT_EQ_INT(mr_fls64(0), 0);
     MR_TEST_ASSERT_EQ_INT(mr_fls64(1ULL), 1);
@@ -463,7 +445,6 @@ MR_TEST(string, fls64_basic) {
     MR_TEST_ASSERT_EQ_INT(mr_fls64(0x00000000000000FFULL), 8);
 }
 
-/* Test: zero-size memory operations leave buffers unchanged                  */
 MR_TEST(string, zero_size) {
     char src[8];
     char dst[8];
@@ -484,7 +465,6 @@ MR_TEST(string, zero_size) {
 }
 
 #if defined(MR_USE_STRING_SAFE)
-/* Test: safe memmove rejects invalid source and destination pointers */
 MR_TEST(string, memmove_safe_invalid_pointer) {
     char byte = 0;
 
@@ -493,7 +473,6 @@ MR_TEST(string, memmove_safe_invalid_pointer) {
 }
 #endif /* defined(MR_USE_STRING_SAFE) */
 
-/* Test: memcmp reports the sign of the first differing byte                  */
 MR_TEST(string, memcmp_order) {
     const char a[] = {0, 1, 2, 3};
     const char b[] = {0, 1, 2, 4};
@@ -503,7 +482,6 @@ MR_TEST(string, memcmp_order) {
     MR_TEST_ASSERT_EQ_INT(mr_memcmp(a, b, 3), 0);
 }
 
-/* Test: byte comparisons use unsigned byte ordering */
 MR_TEST(string, memcmp_high_bit_order) {
     const char low[] = {0x00};
     const char high[] = {(char)0x80};
@@ -512,7 +490,6 @@ MR_TEST(string, memcmp_high_bit_order) {
     MR_TEST_ASSERT_GT_INT(mr_memcmp(high, low, sizeof(low)), 0);
 }
 
-/* Test: string ordering is independent of the signedness of char */
 MR_TEST(string, strcmp_high_bit_order) {
     const char low[] = {0x00, '\0'};
     const char high[] = {(char)0x80, '\0'};
@@ -521,7 +498,6 @@ MR_TEST(string, strcmp_high_bit_order) {
     MR_TEST_ASSERT_GT_INT(mr_strcmp(high, low), 0);
 }
 
-/* Test: bounded string comparison keeps unsigned byte ordering */
 MR_TEST(string, strncmp_high_bit_order) {
     const char low[] = {0x01, '\0'};
     const char high[] = {(char)0x81, '\0'};
@@ -531,7 +507,6 @@ MR_TEST(string, strncmp_high_bit_order) {
     MR_TEST_ASSERT_EQ_INT(mr_strncmp(low, high, 0), 0);
 }
 
-/* Test: byte searches accept a value above the signed char range */
 MR_TEST(string, memchr_high_bit) {
     const char bytes[] = {0x01, (char)0xff, 0x02};
 
@@ -539,7 +514,6 @@ MR_TEST(string, memchr_high_bit) {
     MR_TEST_ASSERT_EQ_PTR(mr_memchr(bytes, 0x80, sizeof(bytes)), MR_NULL);
 }
 
-/* Test: strchr inherits high-bit search semantics from the byte search */
 MR_TEST(string, strchr_high_bit) {
     const char text[] = {(char)0x80, 'a', (char)0xff, '\0'};
 
@@ -548,7 +522,6 @@ MR_TEST(string, strchr_high_bit) {
     MR_TEST_ASSERT_EQ_PTR(mr_strchr(text, 0x81), MR_NULL);
 }
 
-/* Test: memccpy stops after copying a high-bit sentinel */
 MR_TEST(string, memccpy_high_bit) {
     const char src[] = {(char)0xff, 0x02};
     char dst[sizeof(src)] = {0};
@@ -560,7 +533,6 @@ MR_TEST(string, memccpy_high_bit) {
     MR_TEST_ASSERT_EQ_INT(dst[1], 0);
 }
 
-/* Test: memccpy copies the whole range when the sentinel is absent           */
 MR_TEST(string, memccpy_not_found) {
     const char src[] = "abcd";
     char dst[8];
@@ -573,7 +545,6 @@ MR_TEST(string, memccpy_not_found) {
     MR_TEST_ASSERT_EQ_INT((unsigned char)dst[4], 0xAA);
 }
 
-/* Test: strncpy pads the remainder with NULs                                 */
 MR_TEST(string, strncpy_pad) {
     char buf[8];
     mr_size_t i;
@@ -587,7 +558,6 @@ MR_TEST(string, strncpy_pad) {
     }
 }
 
-/* Test: strncpy handles exact limits and protects bytes outside the range */
 MR_TEST(string, strncpy_boundary_ranges) {
     const char source[] = {'a', 'b', 'c', 'd'};
     char buffer[8];
@@ -611,7 +581,6 @@ MR_TEST(string, strncpy_boundary_ranges) {
     MR_TEST_ASSERT_EQ_INT(buffer[4], 0x5A);
 }
 
-/* Test: strnlen counts correctly when a terminator is at the limit */
 MR_TEST(string, strnlen_boundary_ranges) {
     const char terminated[] = {'a', 'b', '\0', 'c'};
     const char unterminated[] = {'a', 'b', 'c', 'd'};
@@ -627,7 +596,6 @@ MR_TEST(string, strnlen_boundary_ranges) {
                            sizeof(unterminated));
 }
 
-/* Test: empty strings and strchr on the terminator                           */
 MR_TEST(string, empty_and_terminator) {
     const char s[] = "ab";
     const char empty[] = "";
@@ -643,21 +611,22 @@ MR_TEST(string, empty_and_terminator) {
     MR_TEST_ASSERT_EQ_PTR(mr_strchr(empty, '\0'), empty);
 }
 
-/* Test: strerror returns a non-empty string for known and unknown codes      */
 MR_TEST(string, strerror_text) {
     MR_TEST_ASSERT_NE_PTR(mr_strerror(0), MR_NULL);
     MR_TEST_ASSERT_NE_PTR(mr_strerror(MR_EPERM), MR_NULL);
     MR_TEST_ASSERT_NE_PTR(mr_strerror(MR_ELOOP), MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(mr_strerror(MR_ECANCELED), MR_NULL);
     MR_TEST_ASSERT_NE_PTR(mr_strerror(-99999), MR_NULL);
     MR_TEST_ASSERT_GT_UINT(mr_strlen(mr_strerror(0)), 0);
     MR_TEST_ASSERT_GT_UINT(mr_strlen(mr_strerror(-99999)), 0);
 #if !defined(MR_USE_STRING_STD)
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(mr_strerror(0), "Success"), 0);
+    MR_TEST_ASSERT_EQ_INT(
+        mr_strcmp(mr_strerror(MR_ECANCELED), "Operation canceled"), 0);
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(mr_strerror(-99999), "Unknown error"), 0);
 #endif /* !defined(MR_USE_STRING_STD) */
 }
 
-/* Test: ffs/fls for every single-bit position                                */
 MR_TEST(string, ffs_fls_all_bits) {
     int i;
 

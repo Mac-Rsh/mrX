@@ -121,7 +121,6 @@ static void test_waitable_delete_cb(mr_waiter_t *waiter, void *param,
     mr_waitable_del(ctx->delete_able);
 }
 
-/* Tests */
 MR_TEST(wait, waitable_derive_init) {
     static mr_waitable_t waitable
         = MR_WAITABLE_DERIVE_INIT(&waitable, &test_waitable_clazz);

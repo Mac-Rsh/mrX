@@ -12,7 +12,6 @@
 
 static volatile mr_tick_t hook_ret;
 
-/* Helpers */
 static void test_clock_reset(void) {
     hook_ret = 0;
 }
@@ -21,7 +20,6 @@ static mr_tick_t clock_test_hook(void) {
     return hook_ret;
 }
 
-/* Tests */
 MR_TEST(clock, increase) {
     mr_tick_t base;
 
@@ -84,8 +82,6 @@ MR_TEST(clock, increase_zero) {
 }
 
 #if defined(MR_USE_CLOCK_HIRES)
-/* Test: hires tick is monotonic and setting it to the current value keeps
- * continuity */
 MR_TEST(clock, hires_tick_set_get) {
     mr_hires_tick_t before;
     mr_hires_tick_t after;

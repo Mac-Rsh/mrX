@@ -17,14 +17,16 @@
 
 ### 1. 模块概述
 
-GPIO 驱动解决的问题是： **用同一套 API 操作不同 MCU/扩展芯片的数字引脚**， 应用只面对"引脚号 + 配置 + 电平"，硬件差异由具体
+GPIO 驱动解决的问题是： **用同一套 API 操作不同 MCU/扩展芯片的数字引脚**，
+应用只面对"引脚号 + 配置 + 电平"，硬件差异由具体
 `ops` 实现消化。
 
 特性：
 
 - 8 种引脚模式：模拟、输入、输出与 5 种中断触发模式（上升沿/下降沿/双沿/ 高电平/低电平）。
 - 引脚级读/写/翻转与端口级（32 位掩码）批量读/写/翻转。
-- `exist_mask`（存在掩码）约束可用引脚范围，`invert_mask`（反相掩码）统一 处理低有效电路，应用始终使用逻辑电平。
+- `exist_mask`（存在掩码）约束可用引脚范围，`invert_mask`（反相掩码）统一
+  处理低有效电路，应用始终使用逻辑电平。
 - 便捷函数：`mr_gpio_input`/`mr_gpio_output` 一行完成常用配置。
 - 可选的引脚事件挂接（EXTI），基于等待队列实现回调通知。
 - hardtree 规格宏：可在硬件模板中声明"某驱动某引脚"，代码用
@@ -43,7 +45,8 @@ GPIO 驱动解决的问题是： **用同一套 API 操作不同 MCU/扩展芯�
 #include <mrX/drivers/gpio/mr_gpio.h>
 ```
 
-引脚编号固定为 0~31（对应 `mr_gpio_data_t` 中掩码的 32 个位），一个驱动实例 代表一个 32 位宽的 GPIO 端口（或芯片的全部引脚）。
+引脚编号固定为 0~31（对应 `mr_gpio_data_t` 中掩码的 32 个位），一个驱动实例 代表一个
+32 位宽的 GPIO 端口（或芯片的全部引脚）。
 
 ### 3. 快速上手
 
@@ -79,29 +82,35 @@ if (level == MR_GPIO_LEVEL_LOW) {
 
 **配置模型**：引脚属性集中在 `mr_gpio_config_t`：`mode`（8 种模式之一）、
 `alt`（复用功能开关）、`pull`（none/up/down）、`otype`（推挽/开漏）、
-`level`（输出初始电平）。`mr_gpio_configure` 一次写入全部属性；输出模式下 初始电平作为配置的一部分（框架按 `invert_mask`
+`level`（输出初始电平）。`mr_gpio_configure` 一次写入全部属性；输出模式下
+初始电平作为配置的一部分（框架按 `invert_mask`
 反相换算后）随
 `pin_configure` 一并交给底层写入，框架不再单独调用 `pin_write`。
 `mr_gpio_configuration` 回读当前配置。
 
 **逻辑电平与物理电平**：`mr_gpio_write`/`mr_gpio_read`/`mr_gpio_port_write`/
-`mr_gpio_port_read` 操作的是逻辑电平，框架自动按 `invert_mask` 取反后交给 硬件。存在掩码校验只出现在配置与事件挂接路径（返回
+`mr_gpio_port_read` 操作的是逻辑电平，框架自动按 `invert_mask` 取反后交给
+硬件。存在掩码校验只出现在配置与事件挂接路径（返回
 `-MR_EINVAL`）；引脚级 读写仅断言引脚号小于 32，端口批量读写将存在掩码之外的位直接过滤。
 `mr_gpio_toggle`/
 `mr_gpio_port_toggle` 直接翻转硬件电平（读硬件值取反写回），不经过反相 换算。
 
-**事件（EXTI）**：`mr_gpio_configure` 可以用 `MR_GPIO_MODE_IRQ_*` 把触发模式交给 backend，但公共 GPIO 层不自动启用事件源。通常先配置
-IRQ 模式，再用 `mr_waiter_init` 初始化 waiter 并调用 `mr_gpio_event_attach`，最后显式调用 `mr_gpio_event_enable`；关闭时调用
+**事件（EXTI）**：`mr_gpio_configure` 可以用 `MR_GPIO_MODE_IRQ_*` 把触发模式交给
+backend，但公共 GPIO 层不自动启用事件源。通常先配置
+IRQ 模式，再用 `mr_waiter_init` 初始化 waiter 并调用 `mr_gpio_event_attach`
+，最后显式调用 `mr_gpio_event_enable`；关闭时调用
 `mr_gpio_event_disable`。
 
-公共层只负责检查引脚是否存在以及 `event_attach`/`event_control` 回调是否实现，`events` mask 会原样传给
-backend，因此具体支持哪些事件位、非法 mask 返回什么错误、切换到非 IRQ 模式时是否自动关闭硬件事件，都属于平台实现语义。树内
-stm32h5 后端要求 mask 恰好为 `MR_GPIO_WAIT_EXTI`，并在同一驱动把该 pin 重新配置为非 IRQ 模式时关闭并释放对应 EXTI。GPIO
-公共头文件没有定义统一的事件 payload 类型；等待者回调中的 `data` 由 backend 约定。stm32h5 后端在 EXTI 中断路径中附带触发
-pin 值，因此该平台上的 waiter 会在中断上下文被同步调用。
+公共层只负责检查引脚是否存在以及 `event_attach`/`event_control` 回调是否实现，
+`events` mask 会原样传给
+backend，因此具体支持哪些事件位、非法 mask 返回什么错误、切换到非 IRQ
+模式时是否自动关闭硬件事件，都属于平台实现语义。GPIO 公共头文件提供
+`mr_gpio_event_data_t`，其 `pin` 字段用于携带触发引脚号。
+当 backend 选择以该结构发送事件时，数据指针仅在同步回调期间有效。
 
 **生命周期**：GPIO 驱动对象本身遵循[驱动框架](../driver.md)的生命周期；注意
-`mr_gpio_create` 传入的 `mr_gpio_data_t` 必须用 `mr_malloc` 分配——驱动删除 时框架会释放它。
+`mr_gpio_create` 传入的 `mr_gpio_data_t` 必须用 `mr_malloc` 分配——驱动删除
+时框架会释放它。
 
 ### 5. API 参考
 
@@ -162,7 +171,8 @@ mr_ssize_t mr_gpio_write(mr_driver_t *drv, mr_uint32_t pin, mr_uint8_t value);
 mr_ssize_t mr_gpio_read(mr_driver_t *drv, mr_uint32_t pin, mr_uint8_t *value);
 ```
 
-按逻辑电平读写（`invert_mask` 由框架处理）。成功返回 `sizeof(value)` 即 1， 底层失败返回负数错误码。
+按逻辑电平读写（`invert_mask` 由框架处理）。成功返回 `sizeof(value)` 即 1，
+底层失败返回负数错误码。
 
 **`mr_gpio_port_write` / `mr_gpio_port_read`**
 
@@ -171,7 +181,8 @@ mr_ssize_t mr_gpio_port_write(mr_driver_t *drv, mr_uint32_t mask);
 mr_ssize_t mr_gpio_port_read(mr_driver_t *drv, mr_uint32_t *mask);
 ```
 
-整端口掩码读写。写入前框架做 `mask ^ invert_mask` 再 `& exist_mask`，读取后 做同样换算，保证掩码语义与引脚级一致。成功返回
+整端口掩码读写。写入前框架做 `mask ^ invert_mask` 再 `& exist_mask`，读取后
+做同样换算，保证掩码语义与引脚级一致。成功返回
 `sizeof(mask)` 即 4。
 
 **`mr_gpio_event_attach`**
@@ -194,11 +205,12 @@ MR_INLINE mr_err_t mr_gpio_event_disable(mr_driver_t *drv, mr_uint32_t pin,
                                          mr_uint32_t mask);
 ```
 
-公共层不会解释 `events` 的位含义，只检查 pin 是否存在以及 `event_control` 是否实现，然后把 mask 原样传给 backend。引脚不存在返回
+公共层不会解释 `events` 的位含义，只检查 pin 是否存在以及 `event_control`
+是否实现，然后把 mask 原样传给 backend。引脚不存在返回
 `-MR_EINVAL`，未实现 `event_control` 返回 `-MR_ENOSYS`；其余错误由 backend 决定。
 
-树内 stm32h5 后端只接受 `MR_GPIO_WAIT_EXTI`，其他 mask 返回 `-MR_EINVAL`；如果该 pin 尚未由同一驱动配置为
-`MR_GPIO_MODE_IRQ_*`，则返回 `-MR_EPERM`。其他平台可以定义不同的附加约束。
+某些 backend 要求引脚先配置为 `MR_GPIO_MODE_IRQ_*` 才可启用事件；
+该前置条件与返回错误码由各 backend 明确规定，并非 GPIO 公共层统一校验。
 
 **hardtree 规格**
 
@@ -209,7 +221,8 @@ mr_ht_gpio_output(&spec, MR_GPIO_OTYPE_PP, MR_GPIO_LEVEL_HIGH);
 
 `mr_ht_gpio_spec_t` 携带驱动指针与引脚号，由宏从硬件模板属性单元
 `[phandle, pin]` 生成；配套 `mr_ht_gpio_configure/configuration/input/output/write/read/
-toggle/event_attach/event_enable/event_disable` 与属性数组版本 `MR_HT_GPIO_SPEC_FOREACH`。
+toggle/event_attach/event_enable/event_disable` 与属性数组版本
+`MR_HT_GPIO_SPEC_FOREACH`。
 
 ### 6. 完整示例
 
@@ -283,27 +296,31 @@ void key_example(mr_driver_t *drv) {
 `mr_gpio_write`/`mr_gpio_read` 不校验 `exist_mask`，负数返回值是底层 `ops`
 错误透传（如 `-MR_EIO`）；引脚号大于等于 32 在断言开启时由 `MR_ASSERT`
 拦截。`-MR_EINVAL`（引脚不在 `exist_mask` 中）出现在
-`mr_gpio_configure`/`mr_gpio_configuration`/`mr_gpio_event_attach`，检查 硬件模板里的 `exist_mask` 属性与引脚号。
+`mr_gpio_configure`/`mr_gpio_configuration`/`mr_gpio_event_attach`，检查 硬件模板里的
+`exist_mask` 属性与引脚号。
 
 **Q：写 1 量出来是 0？**
 
-该引脚在 `invert_mask` 中被声明为低有效。`mr_gpio_write`/`mr_gpio_read` 对外使用逻辑电平，框架会自动完成反相换算。
-`mr_gpio_toggle` 直接对 backend 读到的电平执行读-改-写，但无论是否配置 `invert_mask`，最终效果都是把当前逻辑状态翻转一次。
+该引脚在 `invert_mask` 中被声明为低有效。`mr_gpio_write`/`mr_gpio_read`
+对外使用逻辑电平，框架会自动完成反相换算。
+`mr_gpio_toggle` 直接对 backend 读到的电平执行读-改-写，但无论是否配置
+`invert_mask`，最终效果都是把当前逻辑状态翻转一次。
 
 **Q：GPIO 事件 API 返回 `-MR_ENOSYS`？**
 
-平台 `ops` 没有实现请求的事件挂接或启停能力。GPIO 扩展芯片通常没有 EXTI；检查具体后端是否支持该 pin 的事件源。
+平台 `ops` 没有实现请求的事件挂接或启停能力。GPIO 扩展芯片通常没有
+EXTI；检查具体后端是否支持该 pin 的事件源。
 `event_attach`
 只订阅 waiter，仍需在后端支持时调用 `mr_gpio_event_enable` 显式启用。
 
-**Q：stm32h5 的 `mr_gpio_event_enable` 返回 `-MR_EPERM`？**
 
-该引脚还没有用同一个驱动配置为 `MR_GPIO_MODE_IRQ_*`，或事件源当前属于其他驱动实例。先配置触发模式，再挂接
-waiter，最后启用。stm32h5 后端在同一驱动把该 pin 切换到普通模式时会关闭并释放 EXTI；这是 stm32h5 平台行为，不是 GPIO 公共层保证。
+如果事件源当前被占用或引脚尚未配置成目标 backend 支持的中断模式，应先检查引脚模式、
+事件所有权及 waiter 挂接顺序，具体错误码参阅该 backend 的契约。
 
 **Q：输出配置后电平不对？**
 
-`mr_gpio_configure` 只在模式为 `MR_GPIO_MODE_OUTPUT` 时写入 `level` 初始电平； 其他模式忽略 `level`。输入模式下 `otype`/
+`mr_gpio_configure` 只在模式为 `MR_GPIO_MODE_OUTPUT` 时写入 `level` 初始电平；
+其他模式忽略 `level`。输入模式下 `otype`/
 `level` 不参与配置。
 
 **Q：`mr_gpio_toggle` 和连续 write 有什么区别？**
@@ -317,7 +334,8 @@ waiter，最后启用。stm32h5 后端在同一驱动把该 pin 切换到普通�
 
 ### 8. 架构总览
 
-GPIO 驱动是[驱动框架](../driver.md)的第一个派生模块，采用"框架层换算 + ops 下沉"结构：
+GPIO 驱动是[驱动框架](../driver.md)的第一个派生模块，采用"框架层换算 + ops
+下沉"结构：
 
 ```
         +------------------------------------------+
@@ -331,9 +349,9 @@ GPIO 驱动是[驱动框架](../driver.md)的第一个派生模块，采用"框�
         +-------------------+----------------------+
                             | mr_gpio_ops_t（物理操作）
         +-------------------v----------------------+
-        |  平台实现：stm32h5 片上 GPIO / HC165/HC595   |
+        |   硬件 backend：引脚、电平、中断来源       |
         +------------------------------------------+
-             依赖：驱动框架（生命周期/类型检查）、等待队列（EXTI 事件）
+             依赖：驱动框架（生命周期/类型检查）、等待队列（GPIO 事件）
 ```
 
 ### 9. 数据结构
@@ -359,7 +377,8 @@ typedef struct mr_gpio_data {
 
 操作表（`mr_gpio.h:84`）：`pin_configure`、`pin_configuration`、`pin_write`、
 `pin_read`、`port_write`、`port_read` 为必需（框架内 `MR_ASSERT` 强制），
-`event_attach` 与 `event_control` 为可选事件回调；`event_enable`/`event_disable` 公共 API 通过同一个 `event_control`
+`event_attach` 与 `event_control` 为可选事件回调；`event_enable`/`event_disable`
+公共 API 通过同一个 `event_control`
 回调启停来源。所有回调首参为 `const mr_driver_t *drv`，实现侧用
 `MR_DRIVER_DATA`/`MR_DRIVER_PRIV` 取回数据与硬件实例。
 
@@ -370,45 +389,56 @@ hardtree 规格（`mr_gpio.h:619`）：`mr_ht_gpio_spec_t { drv, pin }`，由
 ### 10. 核心流程
 
 **clazz**：GPIO 只定义了 release（`MR_DRIVER_CLAZZES_DEFINE(gpio, MR_NULL,
-MR_NULL, gpio_release)`，`mrX/drivers/gpio/gpio.c:15`），没有 init/deinit—— GPIO 无需 setup 阶段的资源初始化，
+MR_NULL, gpio_release)`，`mrX/drivers/gpio/gpio.c:15`），没有 init/deinit—— GPIO 无需
+setup 阶段的资源初始化，
 `mr_driver_setup` 直接标记成功。
 
 **写路径**：`mr_gpio_write`（`mr_gpio.h:228`）在框架层完成
 `value = (!!value) ^ (!!(invert_mask & (1U << pin)))` 后调用
-`ops->pin_write`，成功返回 `sizeof(value)`。端口写（`mr_gpio.h:298`）对整个 掩码做 `mask ^ invert_mask` 再 `& exist_mask`
+`ops->pin_write`，成功返回 `sizeof(value)`。端口写（`mr_gpio.h:298`）对整个 掩码做
+`mask ^ invert_mask` 再 `& exist_mask`
 ，一步完成换算与过滤。
 
-**配置路径**：`mr_gpio_configure`（`mrX/drivers/gpio/gpio.c:17`）校验引脚 存在性后，若 `config->mode == MR_GPIO_MODE_OUTPUT`
-，先按 `invert_mask` 把 逻辑电平换算成物理电平，再调用 `ops->pin_configure`；不另走 `pin_write`。 调用者传入的 `config`
+**配置路径**：`mr_gpio_configure`（`mrX/drivers/gpio/gpio.c:17`）校验引脚 存在性后，若
+`config->mode == MR_GPIO_MODE_OUTPUT`
+，先按 `invert_mask` 把 逻辑电平换算成物理电平，再调用 `ops->pin_configure`；不另走
+`pin_write`。 调用者传入的 `config`
 不被修改。`mr_gpio_configuration` 读回时对称地把物理 电平还原为逻辑电平。
 
 **翻转路径**：`mr_gpio_toggle`（`mr_gpio.h:518`）直接连续调用
-`ops->pin_read`/`ops->pin_write`，中间值取反但 **不**应用 `invert_mask`—— 翻转的是物理电平；`mr_gpio_port_toggle`（
+`ops->pin_read`/`ops->pin_write`，中间值取反但 **不**应用 `invert_mask`——
+翻转的是物理电平；`mr_gpio_port_toggle`（
 `mr_gpio.h:552`）同理用
 `0xffffffff` 异或端口读值。
 
-**事件路径**：`mr_gpio_event_attach` 只校验 pin 与可选 `event_attach` 能力，然后把 waiter 交给 backend；
-`mr_gpio_event_enable`/`mr_gpio_event_disable` 同样只校验 pin 与 `event_control` 是否存在，再把 `events` 原样传下去。公共层不维护
+**事件路径**：`mr_gpio_event_attach` 只校验 pin 与可选 `event_attach` 能力，然后把
+waiter 交给 backend；
+`mr_gpio_event_enable`/`mr_gpio_event_disable` 同样只校验 pin 与 `event_control`
+是否存在，再把 `events` 原样传下去。公共层不维护
 EXTI 状态，也不规定 payload。
 
-树内 stm32h5 后端维护独立的 pin→IRQ 映射和 waitable：配置 IRQ 模式时记录触发方式，`event_control` 负责真正开关
-EXTI，切回普通模式时释放该映射；ISR 中通过 `mr_waitable_raise` 同步通知等待者，并附带 pin 值。
+`event_control` 由 backend 实现，负责实际事件来源的控制和必要的资源清理。
+若在中断上下文通知 waiter，回调也同步运行于该上下文；事件负载由具体 backend 约定。
 
 ### 11. 并发与中断安全
 
-- 框架层 API（write/read/configure 等）无内部互斥：引脚操作通常要求最轻量 路径，并发访问同一引脚的序列化由应用或底层 `ops`
+- 框架层 API（write/read/configure 等）无内部互斥：引脚操作通常要求最轻量
+  路径，并发访问同一引脚的序列化由应用或底层 `ops`
   保证（平台实现通常用 寄存器原子置位/清除）。
-- `mr_gpio_event_attach` 与等待者回调的关系遵循[等待队列](../../kernel/wait.md)的同步分发语义：回调运行在 backend 调用
-  `mr_waitable_raise` 的上下文。树内 stm32h5 后端从 EXTI ISR raise，因此该平台的回调处于中断上下文；其他 backend
-  不应被文档强行假定为同一上下文。
+- `mr_gpio_event_attach` 与等待者回调的关系遵循[等待队列](../../kernel/wait.md)
+  的同步分发语义：回调运行在 backend 调用
+  raise 的调用上下文，因此是否在中断中运行由 backend 决定。
 - `mr_gpio_toggle` 是"读-改-写"两步操作，非原子；多执行流翻转同一引脚会 交错，需要外部同步。
 
 ### 12. 扩展与派生
 
 - **移位寄存器扩展**：`mrX/drivers/gpio/gpio_hc595.c`（HC595 输出扩展）与
-  `mrX/drivers/gpio/gpio_hc165.c`（HC165 输入扩展）演示了用普通 GPIO 引脚 拼出新的"GPIO 端口"驱动：私有数据中保存一组
-  `mr_ht_gpio_spec_t`（时钟/ 数据/锁存引脚）与影子寄存器，实现同一张 `mr_gpio_ops_t`，应用完全无感。
-- **平台移植**：片上 GPIO backend、EXTI 事件、HardTree GPIO spec 与验收见 [GPIO 驱动移植指南](porting.md)。
+  `mrX/drivers/gpio/gpio_hc165.c`（HC165 输入扩展）演示了用普通 GPIO 引脚
+  拼出新的"GPIO 端口"驱动：私有数据中保存一组
+  `mr_ht_gpio_spec_t`（时钟/ 数据/锁存引脚）与影子寄存器，实现同一张
+  `mr_gpio_ops_t`，应用完全无感。
+- **平台移植**：片上 GPIO backend、EXTI 事件、HardTree GPIO spec
+  与验收见 [GPIO 驱动移植指南](porting.md)。
 - 新扩展驱动只需实现 `mr_gpio_ops_t` 并通过 `MR_HT_GPIO_INSTALL`/
   `mr_gpio_create` 注册，框架层换算逻辑自动生效。
 
@@ -440,6 +470,8 @@ EXTI，切回普通模式时释放该映射；ISR 中通过 `mr_waitable_raise` 
 | `MR_USE_DRIVER_GPIO` | 模块开关，默认 n，依赖 `MR_USE_DRIVER`              |
 | `MR_GPIO_WAIT_EXTI`  | 引脚事件位（`1U << 0`），配合 `mr_waiter_init` 使用 |
 
-**错误码**：公共层明确使用 `-MR_EINVAL` 表示配置/事件路径中的引脚不存在，使用 `-MR_ENOSYS` 表示可选事件能力未实现；其他
-backend 错误码原样透传。注意 `mr_gpio_write`/`mr_gpio_read` 只断言 `pin < 32U`，不会检查 `exist_mask`。错误码定义见
+**错误码**：公共层明确使用 `-MR_EINVAL` 表示配置/事件路径中的引脚不存在，使用
+`-MR_ENOSYS` 表示可选事件能力未实现；其他
+backend 错误码原样透传。注意 `mr_gpio_write`/`mr_gpio_read` 只断言 `pin < 32U`
+，不会检查 `exist_mask`。错误码定义见
 `mrX/include/mrX/libc/mr_errno.h`。

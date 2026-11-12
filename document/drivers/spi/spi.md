@@ -1,6 +1,7 @@
 # SPI 驱动（SPI）
 
-> SPI 公共层提供按片选索引配置、同步传输、可选的单 message stream、Slave 收发和 wait/event。片选资源、配置缓存与实际总线操作由
+> SPI 公共层提供按片选索引配置、同步传输、可选的单 message stream、Slave 收发和
+> wait/event。片选资源、配置缓存与实际总线操作由
 > backend 实现。
 
 | 项目     | 说明                                                                              |
@@ -15,7 +16,8 @@
 
 ### 1. 模型
 
-SPI driver 表示一颗 Controller，不另外创建 `spi_device` 对象。Controller 下的从设备由 `cs`
+SPI driver 表示一颗 Controller，不另外创建 `spi_device` 对象。Controller 下的从设备由
+`cs`
 索引区分：
 
 ```text
@@ -25,7 +27,8 @@ SPI Controller
     `-- cs n + config n
 ```
 
-`cs` 只是 backend 资源表的索引。公共层不解释索引的硬件含义，也不维护 CS 数量。GPIO、硬件 NSS
+`cs` 只是 backend 资源表的索引。公共层不解释索引的硬件含义，也不维护 CS 数量。GPIO、硬件
+NSS
 或其他片选方式均由 backend 映射。
 
 HardTree 中可用 `mr_ht_spi_spec_t` 表示一个逻辑 SPI endpoint：
@@ -37,10 +40,13 @@ typedef struct mr_ht_spi_spec {
 } mr_ht_spi_spec_t;
 ```
 
-spec 属性单元格式为 `[phandle, cs]`。其中 `phandle` 引用 SPI Controller，`cs` 是该 Controller 的
+spec 属性单元格式为 `[phandle, cs]`。其中 `phandle` 引用 SPI Controller，`cs` 是该
+Controller 的
 逻辑片选索引。例如消费 SPI 的设备可声明 `spi = <&spi0 1>`，再通过
-`MR_HT_NODE_SPI_SPEC(node, spi)` 或 `MR_HT_SPI_SPEC(id, spi)` 生成 spec。它与 SPI Controller
-节点中描述物理片选资源的 `cs = <<&gpioa 4> <&gpiob 0>>` 不同，后者只供 backend 建立 CS
+`MR_HT_NODE_SPI_SPEC(node, spi)` 或 `MR_HT_SPI_SPEC(id, spi)` 生成 spec。它与 SPI
+Controller
+节点中描述物理片选资源的 `cs = <<&gpio0 4> <&gpio1 0>>` 不同，后者只供 backend 建立
+CS
 资源表。
 
 ### 2. 配置
@@ -61,7 +67,8 @@ typedef struct mr_spi_config {
 - `bit_order`：`MR_SPI_BIT_ORDER_MSB` 或 `MR_SPI_BIT_ORDER_LSB`。
 - `role`：`MR_SPI_ROLE_MASTER` 或 `MR_SPI_ROLE_SLAVE`。
 
-Master 的 `clock_rate` 是请求输出频率；Slave 的 `clock_rate` 表示允许的最大输入频率。Backend 无法实现指定
+Master 的 `clock_rate` 是请求输出频率；Slave 的 `clock_rate` 表示允许的最大输入频率。Backend
+无法实现指定
 角色时返回 `-MR_ENOSYS`。`clock_rate == 0` 仍表示禁用该 CS。
 
 配置按 CS 索引保存：
@@ -78,7 +85,8 @@ mr_spi_config_t config = {
 mr_err_t ret = mr_spi_configure(spi, 0U, &config);
 ```
 
-`mr_spi_configuration` 读取指定 CS 的当前配置。索引无效时 backend 应返回 `-MR_EINVAL`。
+`mr_spi_configuration` 读取指定 CS 的当前配置。索引无效时 backend 应返回
+`-MR_EINVAL`。
 
 ### 3. Message 与传输
 
@@ -91,7 +99,8 @@ typedef struct mr_spi_msg {
 } mr_spi_msg_t;
 ```
 
-`tx_len` 和 `rx_len` 分别表示 TX/RX buffer 的字节数。一个 frame 在 buffer 中占用的元素宽度由
+`tx_len` 和 `rx_len` 分别表示 TX/RX buffer 的字节数。一个 frame 在 buffer
+中占用的元素宽度由
 `data_bits` 决定：
 
 | data_bits | Buffer 元素   |
@@ -100,8 +109,10 @@ typedef struct mr_spi_msg {
 | 9～16     | `mr_uint16_t` |
 | 17～32    | `mr_uint32_t` |
 
-两个长度都必须是元素宽度的整数倍，否则 backend 返回 `-MR_EINVAL`。Backend 在内部使用长度除以
-buffer 元素宽度得到对应方向的 frame 数。例如 3 个 12-bit frame 使用 `mr_uint16_t[3]` 保存，该方向长度为
+两个长度都必须是元素宽度的整数倍，否则 backend 返回 `-MR_EINVAL`。Backend
+在内部使用长度除以
+buffer 元素宽度得到对应方向的 frame 数。例如 3 个 12-bit frame 使用
+`mr_uint16_t[3]` 保存，该方向长度为
 6，而总线传输 36 个有效 bit。
 
 Buffer 语义：
@@ -122,7 +133,8 @@ mr_spi_msg_t msgs[] = {
 mr_ssize_t ret = mr_spi_transfer(spi, 0U, msgs, 2U);
 ```
 
-一次 `mr_spi_transfer` 只使用一个 CS。Backend 在整个 message 数组期间保持 CS 有效，成功返回完成的
+一次 `mr_spi_transfer` 只使用一个 CS。Backend 在整个 message 数组期间保持 CS
+有效，成功返回完成的
 message 数。`num == 0` 时公共层直接返回 0，不访问 backend 或片选。
 
 ### 4. Stream
@@ -130,7 +142,8 @@ message 数。`num == 0` 时公共层直接返回 0，不访问 backend 或片�
 SPI stream 配合 GPIO reset/enable 的完整顺序、Master DONE 与 TX FULL 的区别见
 [驱动组合与进阶示例](../examples.md)。
 
-启用 `MR_USE_DRIVER_SPI_STREAM` 后，SPI 提供一次只处理一个 `mr_spi_msg_t` 的异步 stream：
+启用 `MR_USE_DRIVER_SPI_STREAM` 后，SPI 提供一次只处理一个 `mr_spi_msg_t` 的异步
+stream：
 
 ```c
 typedef struct mr_spi_stream_config {
@@ -146,7 +159,8 @@ mr_err_t mr_spi_rx_stream_offset(mr_driver_t *spi, mr_size_t *offset);
 mr_err_t mr_spi_tx_stream_offset(mr_driver_t *spi, mr_size_t *offset);
 ```
 
-Stream 不接受 message 数组。`circular == MR_FALSE` 时传输 `max(tx_len, rx_len)` 字节，较短的方向分别补
+Stream 不接受 message 数组。`circular == MR_FALSE` 时传输 `max(tx_len, rx_len)`
+字节，较短的方向分别补
 dummy 或丢弃数据。`circular == MR_TRUE` 时，非空的 TX/RX buffer 分别按照自己的长度独立回绕；例如
 `tx_len == 1`、`rx_len == 1024` 表示循环发送一个 TX 元素，同时连续接收 1024 字节后回绕。
 
@@ -162,20 +176,29 @@ dummy 或丢弃数据。`circular == MR_TRUE` 时，非空的 TX/RX buffer 分�
 | `MR_SPI_WAIT_STREAM_DONE`    | 非循环 SPI 事务结束且 Master 已释放 CS |
 
 `mr_spi_rx_stream_offset` 和 `mr_spi_tx_stream_offset` 分别查询两个方向已经完成的字节数。非循环方向完成后
-等于相应的 `rx_len` 或 `tx_len`；循环模式下 offset 在各自长度范围内回绕。Message 至少有一个非零长度；
-订阅某个方向的 HALF 事件时，该方向 buffer 必须能分成两个包含完整 frame 的等长半区，否则 backend 返回
+等于相应的 `rx_len` 或 `tx_len`；循环模式下 offset 在各自长度范围内回绕。Message
+至少有一个非零长度；
+订阅某个方向的 HALF 事件时，该方向 buffer 必须能分成两个包含完整 frame 的等长半区，否则
+backend 返回
 `-MR_EINVAL`。
 
-同一 Controller 同时只能有一个活动 stream。Stream 活动期间，调用方必须保持 message 及其 TX/RX
-buffer 有效，并且不能调用会访问或重新配置同一 Controller 的其他 SPI 操作。`stop` 成功返回后，backend
-必须保证不再访问这些对象。硬件 backend 可以使用 DMA 或中断实现 stream；不支持时返回 `-MR_ENOSYS`。
+同一 Controller 同时只能有一个活动 stream。Stream 活动期间，调用方必须保持 message
+及其 TX/RX
+buffer 有效，并且不能调用会访问或重新配置同一 Controller 的其他 SPI 操作。`stop`
+成功返回后，backend
+必须保证不再访问这些对象。硬件 backend 可以使用 DMA 或中断实现 stream；不支持时返回
+`-MR_ENOSYS`。
 
-Master 非循环 stream 的 `MR_SPI_WAIT_STREAM_DONE` 表示最后一个 frame 已经移出并且 CS 已释放，不能把
-`MR_SPI_WAIT_TX_STREAM_FULL` 或 TX DMA 完成直接视为事务完成。Master 循环 stream 在运行期间保持 CS
-有效，方向 FULL 事件仅表示对应 buffer 已经回绕，不表示 stream 已停止。Slave 的外部事务边界仍由
+Master 非循环 stream 的 `MR_SPI_WAIT_STREAM_DONE` 表示最后一个 frame 已经移出并且
+CS 已释放，不能把
+`MR_SPI_WAIT_TX_STREAM_FULL` 或 TX DMA 完成直接视为事务完成。Master 循环 stream
+在运行期间保持 CS
+有效，方向 FULL 事件仅表示对应 buffer 已经回绕，不表示 stream 已停止。Slave
+的外部事务边界仍由
 SELECT/DESELECT 事件表示。
 
-TX/RX 长度和进度事件互相独立，不要求两个方向同时跨过 buffer 边界。RX 事件上报前，对应区域必须对 CPU
+TX/RX 长度和进度事件互相独立，不要求两个方向同时跨过 buffer 边界。RX 事件上报前，对应区域必须对
+CPU
 可见；TX 事件上报前，对应区域必须已经不再被 DMA 读取。
 
 ### 5. Slave 与事件
@@ -190,8 +213,10 @@ mr_ssize_t mr_spi_slave_write(mr_driver_t *spi, mr_uint32_t cs,
                               const void *buf, mr_size_t size);
 ```
 
-`size` 是字节数，且必须按 `data_bits` 对应的 buffer 元素宽度对齐。`slave_write` 把后续需要移出的
-frame 放入 backend TX 队列，`slave_read` 从 backend RX 队列取出已收到的 frame；成功时均返回实际处理的
+`size` 是字节数，且必须按 `data_bits` 对应的 buffer 元素宽度对齐。`slave_write`
+把后续需要移出的
+frame 放入 backend TX 队列，`slave_read` 从 backend RX 队列取出已收到的
+frame；成功时均返回实际处理的
 字节数。
 
 可等待事件如下：
@@ -218,10 +243,12 @@ callback 收到的 `data` 指针不能保存。
 
 ### 6. 并发与事务边界
 
-当前公共层不提供总线互斥或跨调用保持 CS 的接口。调用方必须保证同一 Controller 不被并发访问；活动 stream
+当前公共层不提供总线互斥或跨调用保持 CS 的接口。调用方必须保证同一 Controller
+不被并发访问；活动 stream
 独占整个 Controller，而不只是启动时选择的 CS。
 
-Backend 必须在每次 transfer 中重新应用 `config[cs]`，不能假定前一次传输留下的 Controller 配置
+Backend 必须在每次 transfer 中重新应用 `config[cs]`，不能假定前一次传输留下的
+Controller 配置
 仍属于当前 CS。
 
 ### 7. 生命周期与 API
@@ -246,16 +273,20 @@ Backend 必须在每次 transfer 中重新应用 `config[cs]`，不能假定前�
 | `MR_HT_*SPI_SPEC*`            | 从 `[phandle, cs]` 属性生成 SPI spec  |
 
 `mr_ht_spi_stream_stop/is_busy/rx_stream_offset/tx_stream_offset` 和
-`mr_ht_spi_event_attach` 虽然接受 spec，但操作作用于 spec 引用的整个 Controller。活动 stream 独占
-Controller；event waiter 也可能收到其他 CS 的事件，应通过 callback 的 `mr_spi_event_data_t::cs`
+`mr_ht_spi_event_attach` 虽然接受 spec，但操作作用于 spec 引用的整个
+Controller。活动 stream 独占
+Controller；event waiter 也可能收到其他 CS 的事件，应通过 callback 的
+`mr_spi_event_data_t::cs`
 判断来源。
 
 ## 开发者指南
 
 ### 8. Backend 操作表
 
-`configure` 和 `configuration` 是必需 callback，公共 API 会用 `MR_ASSERT` 检查。`transfer`、stream、
-`slave_read`、`slave_write` 和 `event_control` 是可选能力，缺失时相应 API 返回 `-MR_ENOSYS`。
+`configure` 和 `configuration` 是必需 callback，公共 API 会用 `MR_ASSERT` 检查。
+`transfer`、stream、
+`slave_read`、`slave_write` 和 `event_control` 是可选能力，缺失时相应 API 返回
+`-MR_ENOSYS`。
 
 Backend 负责：
 

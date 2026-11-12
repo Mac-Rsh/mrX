@@ -2,7 +2,7 @@
 
 > 本文说明如何实现 SPI Controller backend。公共类型和 API 见 [SPI](spi.md)。
 
-## 1. 目录与分层
+## 1. 移植边界与分层
 
 平台硬件 backend 建议放在：
 
@@ -10,9 +10,10 @@
 mrX/arch/<vendor>/<target>/platform/drivers/spi/
 ```
 
-公共层只定义 Controller 生命周期和调用边界。Backend 拥有 CS 资源表、每个 CS 的配置和底层硬件状态。
+公共层只定义 Controller 生命周期和调用边界。Backend 拥有 CS 资源表、每个 CS
+的配置和底层硬件状态。
 
-## 2. Ops 契约
+## 2. 操作表与 Ops 契约
 
 ```c
 typedef struct mr_spi_ops {
@@ -57,9 +58,11 @@ typedef struct mr_spi_ops {
 | `slave_write`      | `(drv, cs, const void *buf, mr_size_t size)` → 实际字节数                  | 可选   | `-MR_ENOSYS`                                         |
 | `event_control`    | `(drv, cs, mr_uint32_t events, mr_bool_t enable)`                          | 可选   | `-MR_ENOSYS`                                         |
 
-`configure` 与 `configuration` 是基础能力，公共 API 在断言开启时会要求它们非空。`transfer`、
+`configure` 与 `configuration` 是基础能力，公共 API 在断言开启时会要求它们非空。
+`transfer`、
 `slave_read`、`slave_write`、`event_control` 以及整个 stream 成员集都是可选能力：置
-`MR_NULL` 时对应公共 API 返回 `-MR_ENOSYS`。Master 与 Slave 是相互独立的能力，只做 Master 的
+`MR_NULL` 时对应公共 API 返回 `-MR_ENOSYS`。Master 与 Slave 是相互独立的能力，只做
+Master 的
 backend 不必伪造 Slave 通路。
 
 ### configure
@@ -80,9 +83,11 @@ backend 不必伪造 Slave 通路。
 - 传输前重新应用 `config[cs]`。
 - 在第一个 frame 前使能 CS，所有 message 完成后释放 CS。
 - message 之间不释放 CS。
-- `msg.tx_len` 和 `msg.rx_len` 是两个方向各自的字节数；都必须按 `data_bits` 对应的 1、2 或 4 字节
+- `msg.tx_len` 和 `msg.rx_len` 是两个方向各自的字节数；都必须按 `data_bits` 对应的
+  1、2 或 4 字节
   buffer 元素宽度对齐，否则返回 `-MR_EINVAL`。
-- 每个 message 产生 `max(tx_len, rx_len)` 字节对应的总线 frame。TX buffer 为空或先用尽时发送全 1
+- 每个 message 产生 `max(tx_len, rx_len)` 字节对应的总线 frame。TX buffer
+  为空或先用尽时发送全 1
   dummy frame；RX buffer 为空或先用尽时丢弃接收数据。
 - 成功返回完成的 message 数，失败返回负错误码。
 - 任何失败路径都应尽力还原 SCK 空闲电平并释放 CS。
@@ -90,22 +95,29 @@ backend 不必伪造 Slave 通路。
 ### stream
 
 - 一次 `stream_start` 只接受一个 message，不支持 message 数组。
-- `config.circular` 选择一次性或循环传输。Message 至少有一个非零方向；循环模式下 TX/RX buffer 分别
+- `config.circular` 选择一次性或循环传输。Message 至少有一个非零方向；循环模式下
+  TX/RX buffer 分别
   按照自己的长度独立回绕。
-- `start` 返回 0 表示异步操作已经启动。TX/RX 方向分别上报 `*_STREAM_HALF` 和 `*_STREAM_FULL`；任一
-  数据路径出错都上报 `MR_SPI_WAIT_STREAM_ERROR` 并使整个 stream 失败；非循环事务在外设真正结束后额外
+- `start` 返回 0 表示异步操作已经启动。TX/RX 方向分别上报 `*_STREAM_HALF` 和
+  `*_STREAM_FULL`；任一
+  数据路径出错都上报 `MR_SPI_WAIT_STREAM_ERROR` 并使整个 stream
+  失败；非循环事务在外设真正结束后额外
   上报 `MR_SPI_WAIT_STREAM_DONE`。
-- 同一 Controller 同时只允许一个活动 stream。活动期间会访问或重新配置该 Controller 的其他操作应返回
+- 同一 Controller 同时只允许一个活动 stream。活动期间会访问或重新配置该
+  Controller 的其他操作应返回
   `-MR_EBUSY`。
 - `rx_stream_offset` 和 `tx_stream_offset` 分别返回两个方向已经完成的字节数；一次性传输完成时等于对应
   长度，循环传输在各自长度范围内回绕。
 - Master 非循环传输只有在 RX/TX 数据路径完成、最后一个 frame 已移出且 CS 已释放后才能上报
   `MR_SPI_WAIT_STREAM_DONE`。方向 FULL 或 DMA 完成不能替代该事件。
-- Master 循环传输在运行期间保持 CS 有效；方向 FULL 表示对应 buffer 回绕，不表示 stream 已停止。
+- Master 循环传输在运行期间保持 CS 有效；方向 FULL 表示对应 buffer 回绕，不表示
+  stream 已停止。
 - Slave 的 SELECT/DESELECT 仍独立表示外部事务边界。
-- TX/RX HALF/FULL 独立上报，不等待另一个方向跨过边界。上报前应完成对应 RX 区域的 cache 一致性处理，
+- TX/RX HALF/FULL 独立上报，不等待另一个方向跨过边界。上报前应完成对应 RX 区域的
+  cache 一致性处理，
   并保证 DMA 不再访问对应 TX 区域。
-- `stream_stop` 成功返回前必须停止外设请求和 DMA/中断，并保证不再访问 message 或 buffer。停止失败时应保留
+- `stream_stop` 成功返回前必须停止外设请求和 DMA/中断，并保证不再访问 message 或
+  buffer。停止失败时应保留
   资源所有权，使调用方可以重试。
 - Message 及其 TX/RX buffer 必须保持有效，直到 stream 完成或者 `stream_stop` 成功。
 
@@ -116,37 +128,44 @@ backend 不必伪造 Slave 通路。
 - `slave_read` 从接收队列取走 frame，`slave_write` 向发送队列追加 frame。
 - 成功返回实际读取或写入的字节数。
 - 如果硬件只支持一个 Slave NSS，使用 CS 索引 0，并对其他索引返回 `-MR_EINVAL`。
-- 队列暂时无数据或无空间时，backend 可按自身非阻塞约定返回 0 或 `-MR_EAGAIN`，但必须在移植文档中说明。
+- 队列暂时无数据或无空间时，backend 可按自身非阻塞约定返回 0 或 `-MR_EAGAIN`
+  ，但必须在移植文档中说明。
 
 ### event_control 与事件上报
 
 - `event_control(drv, cs, events, enable)` 负责开关指定 CS 对应的中断、DMA 或通知源。
 - backend 填充 `mr_spi_event_data_t`，再使用
-  `mr_spi_event_raise(drv, events, &data)` 上报 `SELECT`、`RX_READY`、`TX_READY`、`DESELECT`、
+  `mr_spi_event_raise(drv, events, &data)` 上报 `SELECT`、`RX_READY`、`TX_READY`、
+  `DESELECT`、
   `ERROR`、方向 `STREAM_HALF/FULL`、整体 `STREAM_ERROR` 和 `STREAM_DONE`。
-- waiter callback 的 `data` 是 `mr_spi_event_data_t *`，其 `cs` 可用于区分共享 Controller
-  下的 endpoint。事件分发是同步的，调用方提供的数据只需在 `mr_spi_event_raise` 返回前保持有效；
+- waiter callback 的 `data` 是 `mr_spi_event_data_t *`，其 `cs` 可用于区分共享
+  Controller
+  下的 endpoint。事件分发是同步的，调用方提供的数据只需在 `mr_spi_event_raise`
+  返回前保持有效；
   callback 不能保存该指针。
 
 ## 3. CS 索引和 HardTree
 
-CS 映射是 backend 契约，不是公共 SPI 对象。GPIO CS backend 可在 HardTree 中声明 spec 数组：
+CS 映射是 backend 契约，不是公共 SPI 对象。GPIO CS backend 可在 HardTree 中声明
+spec 数组：
 
 ```dts
 spi0: spi {
     compatible = "spi-gpio";
-    sck = <&gpioa 5>;
-    mosi = <&gpioa 7>;
-    miso = <&gpioa 6>;
-    cs = <<&gpioa 4> <&gpiob 0>>;
+    sck = <&gpio0 5>;
+    mosi = <&gpio0 7>;
+    miso = <&gpio0 6>;
+    cs = <<&gpio0 4> <&gpio1 0>>;
     status = "okay";
 };
 ```
 
-`cs = <<...> <...>>` 的每个子数组都是 `[phandle, pin]`，可用 `MR_HT_GPIO_SPEC_FOREACH(_id, cs)`
+`cs = <<...> <...>>` 的每个子数组都是 `[phandle, pin]`，可用
+`MR_HT_GPIO_SPEC_FOREACH(_id, cs)`
 生成 `mr_ht_gpio_spec_t` 数组。`cs_index` 直接作为该数组下标。
 
-GPIO SPI backend 按标准 SPI 语义将 CS 视为低电平有效；如果某个片选需要反相，应通过对应 GPIO
+GPIO SPI backend 按标准 SPI 语义将 CS 视为低电平有效；如果某个片选需要反相，应通过对应
+GPIO
 控制器的 `invert_mask` 配置完成，不在 SPI backend 中单独维护极性。
 
 对于硬件 NSS，backend 可将同一索引映射为 NSS 通道；公共 API 无需区分 GPIO 和硬件片选。
@@ -159,8 +178,10 @@ sensor0: sensor {
 };
 ```
 
-`MR_HT_NODE_SPI_SPEC(sensor0, spi)` 将该属性展开为 `mr_ht_spi_spec_t {drv, cs}`。也可使用
-`MR_HT_NODE_SPI_SPEC_FOREACH`、`MR_HT_SPI_SPEC` 和 `MR_HT_SPI_SPEC_FOREACH` 处理节点或驱动
+`MR_HT_NODE_SPI_SPEC(sensor0, spi)` 将该属性展开为 `mr_ht_spi_spec_t {drv, cs}`
+。也可使用
+`MR_HT_NODE_SPI_SPEC_FOREACH`、`MR_HT_SPI_SPEC` 和 `MR_HT_SPI_SPEC_FOREACH`
+处理节点或驱动
 属性。这些 spec 宏描述消费方使用的逻辑 endpoint，不解析 Controller 自身用于建立物理资源表的
 `cs` 属性。
 
@@ -183,16 +204,19 @@ sensor0: sensor {
 
 - SPI mode 0～3；
 - MSB-first 和 LSB-first；
-- 1～32 bit frame（`clock_rate` 非 0 时 `data_bits` 为 0 或大于 32 返回 `-MR_EINVAL`）；
+- 1～32 bit frame（`clock_rate` 非 0 时 `data_bits` 为 0 或大于 32 返回
+  `-MR_EINVAL`）；
 - 全双工、仅发送、仅接收和只产生时钟；
 - 最高 500 kHz 请求频率（超过返回 `-MR_ENOSYS`）。
 
 该 backend 只支持 `MR_SPI_ROLE_MASTER`。GPIO 调用链没有保证 Slave 所需边沿响应延迟，配置
-`MR_SPI_ROLE_SLAVE` 返回 `-MR_ENOSYS`；Slave 应由带 NSS/SCK 中断、FIFO 或 DMA 的硬件 backend 实现。
+`MR_SPI_ROLE_SLAVE` 返回 `-MR_ENOSYS`；Slave 应由带 NSS/SCK 中断、FIFO 或 DMA 的硬件
+backend 实现。
 `slave_read`/`slave_write`/`event_control` 与整个 stream 成员集都未实现，公共层据此返回
 `-MR_ENOSYS`。
 
-请求接收数据（`rx_buf` 非空且 `rx_len` 非 0）但没有配置 `miso` 属性时返回 `-MR_ENOSYS`；
+请求接收数据（`rx_buf` 非空且 `rx_len` 非 0）但没有配置 `miso` 属性时返回
+`-MR_ENOSYS`；
 `tx_len`/`rx_len` 不是 `data_bits` 对应元素宽度的整数倍时返回 `-MR_EINVAL`。
 
 `clock_rate = 0` 用于禁用该 `cs`（后续 transfer 返回 `-MR_ENODEV`），并且此时
@@ -203,13 +227,18 @@ GPIO 调用、软件循环和 `mr_clock_busy_wait` 会引入额外开销，实�
 
 ## 5. 并发、中断和 DMA
 
-Master `transfer` 是同步接口，不提供总线锁、abort 或跨调用 CS 所有权。调用方必须串行化同一 Controller
-的 configure/configuration/transfer。活动 stream 独占整个 Controller；其 start/stop/busy 和方向 offset
-生命周期由 backend 管理。Slave backend 可通过公共 wait/event 接口异步报告 CS 边界、队列状态和错误，但 RX/TX 队列
+Master `transfer` 是同步接口，不提供总线锁、abort 或跨调用 CS 所有权。调用方必须串行化同一
+Controller
+的 configure/configuration/transfer。活动 stream 独占整个 Controller；其
+start/stop/busy 和方向 offset
+生命周期由 backend 管理。Slave backend 可通过公共 wait/event 接口异步报告 CS
+边界、队列状态和错误，但 RX/TX 队列
 的容量、溢出与欠载策略由 backend 决定。
 
-硬件 backend 可在 `transfer` 内部使用 polling、IRQ 或 DMA，但必须在完成整个同步事务后才返回。Stream 可由
-DMA 或中断实现；DMA 完成只表示搬运结束，Master 仍需等待外设的最终发送完成条件后释放 CS 和上报 DONE。
+硬件 backend 可在 `transfer` 内部使用 polling、IRQ 或 DMA，但必须在完成整个同步事务后才返回。Stream
+可由
+DMA 或中断实现；DMA 完成只表示搬运结束，Master 仍需等待外设的最终发送完成条件后释放
+CS 和上报 DONE。
 
 ## 6. GPIO 软件 backend 能力边界（新 port 不要默认继承）
 
@@ -227,7 +256,7 @@ DMA 或中断实现；DMA 完成只表示搬运结束，Master 仍需等待外�
 
 任何一条“`spi_gpio` 支持/不支持”都不能当作通用结论写进硬件 backend 的文档。
 
-## 7. 移植检查清单
+## 7. 移植验收清单
 
 - 每个 CS 的配置能独立保存并在 transfer 时重新应用。
 - Master/Slave 能力与不支持时的 `-MR_ENOSYS` 行为明确。
@@ -244,5 +273,6 @@ DMA 或中断实现；DMA 完成只表示搬运结束，Master 仍需等待外�
 - 失败路径不会将 CS 长期留在有效状态。
 - 无效 CS 返回 `-MR_EINVAL`，未配置或已禁用 CS 返回 `-MR_ENODEV`。
 - HardTree 实例能通过 `MR_HT_SPI_INSTALL` 正确安装。
-- Slave backend 能按 CS 管理 RX/TX frame 队列，并在 callback payload 中提供正确的 CS 索引。
+- Slave backend 能按 CS 管理 RX/TX frame 队列，并在 callback payload 中提供正确的
+  CS 索引。
 

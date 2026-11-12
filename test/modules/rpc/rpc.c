@@ -13,10 +13,10 @@
 #include <mrX/libc/mr_errno.h>
 #include <mrX/libc/mr_string.h>
 
-#define TEST_RPC_OUTPUT_SIZE            (4096U)
-#define TEST_RPC_PACKET_SIZE            (384U)
-#define TEST_RPC_FRAME_SIZE             ((mr_uint32_t)sizeof(mr_rpc_frame_t))
-#define TEST_RPC_CHECKSUM_SIZE          (2U)
+#define TEST_RPC_OUTPUT_SIZE   (4096U)
+#define TEST_RPC_PACKET_SIZE   (384U)
+#define TEST_RPC_FRAME_SIZE    ((mr_uint32_t)sizeof(mr_rpc_frame_t))
+#define TEST_RPC_CHECKSUM_SIZE (2U)
 
 typedef struct test_rpc_io {
     mr_uint8_t output[TEST_RPC_OUTPUT_SIZE];
@@ -140,7 +140,6 @@ static const mr_rpc_session_ops_t test_rpc_dynamic_ops = {
     .release = test_rpc_dynamic_release,
 };
 
-/* Build a dynamic session fixture using only the public core API. */
 static mr_err_t test_rpc_dynamic_submit(mr_rpc_t *rpc,
                                         test_rpc_dynamic_owner_t *owner,
                                         mr_uint16_t method, const void *data,
@@ -212,8 +211,7 @@ static mr_uint16_t test_rpc_fletcher16(const void *data, mr_uint32_t size) {
     return (mr_uint16_t)((sum2 << 8) | sum1);
 }
 
-static mr_ssize_t test_rpc_send(void *priv, const void *buf,
-                                mr_uint32_t size) {
+static mr_ssize_t test_rpc_send(void *priv, const void *buf, mr_uint32_t size) {
     test_rpc_io_t *io = priv;
     mr_uint32_t count;
 
@@ -221,8 +219,8 @@ static mr_ssize_t test_rpc_send(void *priv, const void *buf,
     if ((io->send_error != 0)
         && ((io->error_after == 0U) || (io->size >= io->error_after))) {
         if (io->submit_on_error) {
-            io->submit_result = mr_rpc_submit(io->submit_rpc,
-                                               io->submit_on_error);
+            io->submit_result
+                = mr_rpc_submit(io->submit_rpc, io->submit_on_error);
             io->submit_on_error = MR_NULL;
         }
         return io->send_error;
@@ -315,9 +313,9 @@ static mr_uint32_t test_rpc_packet_build(
     return packet->size;
 }
 
-static mr_bool_t test_rpc_response_read(
-    const test_rpc_io_t *io, mr_rpc_frame_t *response,
-    const mr_uint8_t **payload) {
+static mr_bool_t test_rpc_response_read(const test_rpc_io_t *io,
+                                        mr_rpc_frame_t *response,
+                                        const mr_uint8_t **payload) {
     mr_rpc_frame_t frame;
     mr_uint16_t actual_crc, checksum;
     mr_uint32_t total;
@@ -353,10 +351,11 @@ static mr_bool_t test_rpc_response_read(
     return MR_TRUE;
 }
 
-static mr_err_t test_rpc_exchange(
-    mr_rpc_t *rpc, test_rpc_io_t *io, mr_rpc_msg_type_t type,
-    mr_uint16_t flags, mr_uint32_t session, mr_uint16_t service,
-    mr_uint16_t method, const void *payload, mr_uint32_t payload_size) {
+static mr_err_t test_rpc_exchange(mr_rpc_t *rpc, test_rpc_io_t *io,
+                                  mr_rpc_msg_type_t type, mr_uint16_t flags,
+                                  mr_uint32_t session, mr_uint16_t service,
+                                  mr_uint16_t method, const void *payload,
+                                  mr_uint32_t payload_size) {
     test_rpc_packet_t packet;
     mr_ssize_t ret;
 
@@ -380,9 +379,8 @@ static mr_bool_t test_rpc_result_is(const test_rpc_io_t *io,
     }
     MR_IGNORE(payload);
     return (response.header[0] == 'M') && (response.header[1] == 'R')
-           && (response.version == 1U)
-           && (response.type == MR_RPC_MSG_RESPONSE)
-           && (response.session == session) && (response.value.result == result);
+        && (response.version == 1U) && (response.type == MR_RPC_MSG_RESPONSE)
+        && (response.session == session) && (response.value.result == result);
 }
 
 static mr_uint32_t test_rpc_mix_payload(mr_uint8_t *payload) {
@@ -581,14 +579,12 @@ MR_TEST(rpc, valid_idl_roundtrip) {
     MR_TEST_ASSERT_EQ_INT(mr_rpc_init(&rpc, &test_rpc_ops, &io), 0);
 
     size = test_rpc_mix_payload(payload);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(
-                              &rpc, &io, MR_RPC_MSG_REQUEST,
-                              MR_RPC_FRAME_FLAG_CHECKSUM, 101U, 1U, 0U,
-                              payload, size),
+    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST,
+                                            MR_RPC_FRAME_FLAG_CHECKSUM, 101U,
+                                            1U, 0U, payload, size),
                           0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(
-                              &io, &response, &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.value.result, 7);
     MR_TEST_EXPECT_EQ_UINT(response.session, 101U);
     MR_TEST_EXPECT_EQ_UINT(response.flags, MR_RPC_FRAME_FLAG_CHECKSUM);
@@ -676,10 +672,9 @@ MR_TEST(rpc, stream_resync_and_checksum_errors) {
                           TEST_RPC_FRAME_SIZE);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
     MR_TEST_EXPECT_EQ_UINT(io.size, 0U);
-    MR_TEST_ASSERT_EQ_INT(
-        mr_rpc_input(&rpc, packet.data + TEST_RPC_FRAME_SIZE,
-                     TEST_RPC_CHECKSUM_SIZE),
-        TEST_RPC_CHECKSUM_SIZE);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data + TEST_RPC_FRAME_SIZE,
+                                       TEST_RPC_CHECKSUM_SIZE),
+                          TEST_RPC_CHECKSUM_SIZE);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
     MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 204U, -MR_EINVAL), MR_TRUE);
     MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 0U);
@@ -703,10 +698,9 @@ MR_TEST(rpc, oversized_payload_discard) {
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, TEST_RPC_FRAME_SIZE),
                           TEST_RPC_FRAME_SIZE);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(
-        mr_rpc_input(&rpc, packet.data + TEST_RPC_FRAME_SIZE,
-                     sizeof(payload) - 1U),
-        sizeof(payload) - 1U);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data + TEST_RPC_FRAME_SIZE,
+                                       sizeof(payload) - 1U),
+                          sizeof(payload) - 1U);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
     MR_TEST_EXPECT_EQ_UINT(io.size, 0U);
     MR_TEST_ASSERT_EQ_INT(
@@ -718,8 +712,8 @@ MR_TEST(rpc, oversized_payload_discard) {
     test_rpc_packet_build(&packet, MR_RPC_MSG_REQUEST,
                           MR_RPC_FRAME_FLAG_CHECKSUM, 302U, 1U, 0U, payload,
                           sizeof(payload));
-    MR_TEST_ASSERT_EQ_INT(
-        mr_rpc_input(&rpc, packet.data, packet.size - 1U), packet.size - 1U);
+    MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size - 1U),
+                          packet.size - 1U);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
     MR_TEST_EXPECT_EQ_UINT(io.size, 0U);
     MR_TEST_ASSERT_EQ_INT(
@@ -786,14 +780,13 @@ MR_TEST(rpc, session_hold_reply_drop_and_pool) {
     test_rpc_mode = TEST_RPC_MODE_HOLD;
 
     for (i = 0U; i < MR_CFG_MODULE_RPC_SESSION_NUM; i++) {
-        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(
-                                  &rpc, &io, MR_RPC_MSG_REQUEST, 0U, 500U + i,
-                                  1U, 3U, MR_NULL, 0U),
+        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST,
+                                                0U, 500U + i, 1U, 3U, MR_NULL,
+                                                0U),
                               0);
         MR_TEST_EXPECT_EQ_UINT(io.size, 0U);
     }
-    MR_TEST_ASSERT_EQ_UINT(test_rpc_held_count,
-                           MR_CFG_MODULE_RPC_SESSION_NUM);
+    MR_TEST_ASSERT_EQ_UINT(test_rpc_held_count, MR_CFG_MODULE_RPC_SESSION_NUM);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_session_hold(test_rpc_held[0]), -MR_EPERM);
 
     test_rpc_packet_build(&packet, MR_RPC_MSG_REQUEST, 0U, 599U, 1U, 3U,
@@ -801,11 +794,11 @@ MR_TEST(rpc, session_hold_reply_drop_and_pool) {
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_EXPECT_EQ_UINT(test_rpc_held_count,
-                           MR_CFG_MODULE_RPC_SESSION_NUM);
+    MR_TEST_EXPECT_EQ_UINT(test_rpc_held_count, MR_CFG_MODULE_RPC_SESSION_NUM);
 
     MR_TEST_ASSERT_EQ_INT(mr_rpc_session_reply(test_rpc_held[0], 77), 0);
-    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_reply(test_rpc_held[0], 77), -MR_EPERM);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_session_reply(test_rpc_held[0], 77),
+                          -MR_EPERM);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_flush(&rpc), 0);
     MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 500U, 77), MR_TRUE);
 
@@ -858,9 +851,9 @@ MR_TEST(rpc, mix_idl_error_matrix) {
     valid_size = test_rpc_mix_payload(valid);
 
     for (i = 0U; i < MR_ARRAY_SIZE(truncated); i++) {
-        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(
-                                  &rpc, &io, MR_RPC_MSG_REQUEST, 0U, 600U + i,
-                                  1U, 0U, valid, truncated[i]),
+        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST,
+                                                0U, 600U + i, 1U, 0U, valid,
+                                                truncated[i]),
                               0);
         MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 600U + i, -MR_EINVAL),
                               MR_TRUE);
@@ -908,9 +901,9 @@ MR_TEST(rpc, mix_idl_error_matrix) {
 
     mr_memcpy(payload, valid, valid_size);
     payload[valid_size] = 0U;
-    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(
-                              &rpc, &io, MR_RPC_MSG_REQUEST, 0U, 616U, 1U, 0U,
-                              payload, valid_size + 1U),
+    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST, 0U,
+                                            616U, 1U, 0U, payload,
+                                            valid_size + 1U),
                           0);
     MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 616U, -MR_EINVAL), MR_TRUE);
 
@@ -919,15 +912,15 @@ MR_TEST(rpc, mix_idl_error_matrix) {
                                             620U, 1U, 0U, valid, valid_size),
                           0);
     MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 620U, -MR_EIO), MR_TRUE);
-    for (i = TEST_RPC_MODE_MIX_BAD_TITLE;
-         i <= TEST_RPC_MODE_MIX_BAD_BLOB; i++) {
+    for (i = TEST_RPC_MODE_MIX_BAD_TITLE; i <= TEST_RPC_MODE_MIX_BAD_BLOB;
+         i++) {
         test_rpc_mode = (test_rpc_mode_t)i;
-        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(
-                                  &rpc, &io, MR_RPC_MSG_REQUEST, 0U, 621U + i,
-                                  1U, 0U, valid, valid_size),
+        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST,
+                                                0U, 621U + i, 1U, 0U, valid,
+                                                valid_size),
                               0);
-        MR_TEST_EXPECT_EQ_INT(
-            test_rpc_result_is(&io, 621U + i, -MR_EINVAL), MR_TRUE);
+        MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 621U + i, -MR_EINVAL),
+                              MR_TRUE);
     }
     test_rpc_mode = TEST_RPC_MODE_DIRECT_REPLY;
     MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST, 0U,
@@ -953,9 +946,9 @@ MR_TEST(rpc, nest_idl_error_matrix) {
     valid_size = test_rpc_nest_payload(valid);
 
     for (i = 0U; i < MR_ARRAY_SIZE(truncated); i++) {
-        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(
-                                  &rpc, &io, MR_RPC_MSG_REQUEST, 0U, 700U + i,
-                                  1U, 1U, valid, truncated[i]),
+        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST,
+                                                0U, 700U + i, 1U, 1U, valid,
+                                                truncated[i]),
                               0);
         MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 700U + i, -MR_EINVAL),
                               MR_TRUE);
@@ -968,9 +961,9 @@ MR_TEST(rpc, nest_idl_error_matrix) {
     MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 710U, -MR_EINVAL), MR_TRUE);
     mr_memcpy(payload, valid, valid_size);
     payload[valid_size] = 0U;
-    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(
-                              &rpc, &io, MR_RPC_MSG_REQUEST, 0U, 711U, 1U, 1U,
-                              payload, valid_size + 1U),
+    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST, 0U,
+                                            711U, 1U, 1U, payload,
+                                            valid_size + 1U),
                           0);
     MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 711U, -MR_EINVAL), MR_TRUE);
 
@@ -1003,9 +996,9 @@ MR_TEST(rpc, table_idl_error_matrix) {
     valid_size = test_rpc_table_payload(valid);
 
     for (i = 0U; i < MR_ARRAY_SIZE(truncated); i++) {
-        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(
-                                  &rpc, &io, MR_RPC_MSG_REQUEST, 0U, 800U + i,
-                                  1U, 2U, valid, truncated[i]),
+        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST,
+                                                0U, 800U + i, 1U, 2U, valid,
+                                                truncated[i]),
                               0);
         MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 800U + i, -MR_EINVAL),
                               MR_TRUE);
@@ -1023,9 +1016,9 @@ MR_TEST(rpc, table_idl_error_matrix) {
     MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 811U, -MR_EINVAL), MR_TRUE);
     mr_memcpy(payload, valid, valid_size);
     payload[valid_size] = 0U;
-    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(
-                              &rpc, &io, MR_RPC_MSG_REQUEST, 0U, 812U, 1U, 2U,
-                              payload, valid_size + 1U),
+    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST, 0U,
+                                            812U, 1U, 2U, payload,
+                                            valid_size + 1U),
                           0);
     MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 812U, -MR_EINVAL), MR_TRUE);
 
@@ -1047,14 +1040,15 @@ MR_TEST(rpc, table_idl_error_matrix) {
     MR_TEST_EXPECT_EQ_INT(mr_rpc_del(&rpc), 0);
 }
 
-static mr_uint32_t test_rpc_subscribe_packet_build(
-    test_rpc_packet_t *packet, mr_rpc_msg_type_t type, mr_uint32_t session,
-    mr_uint32_t subscribe) {
+static mr_uint32_t test_rpc_subscribe_packet_build(test_rpc_packet_t *packet,
+                                                   mr_rpc_msg_type_t type,
+                                                   mr_uint32_t session,
+                                                   mr_uint32_t subscribe) {
     mr_rpc_frame_t *frame;
     mr_uint32_t size;
 
-    size = test_rpc_packet_build(packet, type, 0U, session, 1U, 3U, MR_NULL,
-                                 0U);
+    size
+        = test_rpc_packet_build(packet, type, 0U, session, 1U, 3U, MR_NULL, 0U);
     frame = (mr_rpc_frame_t *)packet->data;
     frame->value.subscribe = subscribe;
     frame->hdr_crc16 = 0U;
@@ -1081,9 +1075,8 @@ MR_TEST(rpc, subscribe_poll_and_unsubscribe) {
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.type, MR_RPC_MSG_RESPONSE);
     MR_TEST_EXPECT_EQ_UINT(response.session, 1100U);
     MR_TEST_EXPECT_EQ_INT(response.value.result, 0);
@@ -1092,9 +1085,8 @@ MR_TEST(rpc, subscribe_poll_and_unsubscribe) {
     /* Polling dispatches the subscription and answers with a stream frame */
     test_rpc_output_reset(&io);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_poll(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.type, MR_RPC_MSG_STREAM);
     MR_TEST_EXPECT_EQ_UINT(response.session, 1100U);
     MR_TEST_EXPECT_EQ_INT(response.value.result, 10);
@@ -1103,9 +1095,8 @@ MR_TEST(rpc, subscribe_poll_and_unsubscribe) {
     /* Every poll re-serves the same continuous subscription */
     test_rpc_output_reset(&io);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_poll(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.type, MR_RPC_MSG_STREAM);
     MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 2U);
 
@@ -1116,9 +1107,8 @@ MR_TEST(rpc, subscribe_poll_and_unsubscribe) {
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.type, MR_RPC_MSG_RESPONSE);
     MR_TEST_EXPECT_EQ_INT(response.value.result, -MR_EEXIST);
 
@@ -1128,30 +1118,26 @@ MR_TEST(rpc, subscribe_poll_and_unsubscribe) {
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.value.result, -MR_EINVAL);
 
     /* The original subscription keeps polling */
     test_rpc_output_reset(&io);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_poll(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.type, MR_RPC_MSG_STREAM);
     MR_TEST_EXPECT_EQ_UINT(response.session, 1100U);
 
     /* Cancel the continuous subscription */
     test_rpc_output_reset(&io);
-    test_rpc_subscribe_packet_build(&packet, MR_RPC_MSG_UNSUBSCRIBE, 1100U,
-                                    0U);
+    test_rpc_subscribe_packet_build(&packet, MR_RPC_MSG_UNSUBSCRIBE, 1100U, 0U);
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.value.result, 0);
     test_rpc_output_reset(&io);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_poll(&rpc), 0);
@@ -1159,14 +1145,12 @@ MR_TEST(rpc, subscribe_poll_and_unsubscribe) {
 
     /* Cancelling an unknown subscription id is rejected */
     test_rpc_output_reset(&io);
-    test_rpc_subscribe_packet_build(&packet, MR_RPC_MSG_UNSUBSCRIBE, 1100U,
-                                    0U);
+    test_rpc_subscribe_packet_build(&packet, MR_RPC_MSG_UNSUBSCRIBE, 1100U, 0U);
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.value.result, -MR_ENOENT);
 
     /* Cancellation with a payload is invalid */
@@ -1177,9 +1161,8 @@ MR_TEST(rpc, subscribe_poll_and_unsubscribe) {
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.value.result, -MR_EINVAL);
 
     /* A periodic subscription waits on the timer and never polls early */
@@ -1188,9 +1171,8 @@ MR_TEST(rpc, subscribe_poll_and_unsubscribe) {
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.value.result, 0);
     test_rpc_output_reset(&io);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_poll(&rpc), 0);
@@ -1198,14 +1180,12 @@ MR_TEST(rpc, subscribe_poll_and_unsubscribe) {
     MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 3U);
 
     /* Cancellation recycles the waiting subscription */
-    test_rpc_subscribe_packet_build(&packet, MR_RPC_MSG_UNSUBSCRIBE, 1200U,
-                                    0U);
+    test_rpc_subscribe_packet_build(&packet, MR_RPC_MSG_UNSUBSCRIBE, 1200U, 0U);
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.value.result, 0);
     test_rpc_output_reset(&io);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_poll(&rpc), 0);
@@ -1217,12 +1197,10 @@ MR_TEST(rpc, subscribe_poll_and_unsubscribe) {
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(response.value.result, 0);
-    test_rpc_subscribe_packet_build(&packet, MR_RPC_MSG_UNSUBSCRIBE, 1200U,
-                                    0U);
+    test_rpc_subscribe_packet_build(&packet, MR_RPC_MSG_UNSUBSCRIBE, 1200U, 0U);
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
@@ -1273,9 +1251,9 @@ MR_TEST(rpc, ping_log_and_unknown_types) {
             payload[1] = 'x';
             payload[2] = 'y';
         }
-        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(
-                                  &rpc, &io, MR_RPC_MSG_ONEWAY, 0U, 910U + i,
-                                  1U, 4U, payload, bad_log_sizes[i]),
+        MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_ONEWAY,
+                                                0U, 910U + i, 1U, 4U, payload,
+                                                bad_log_sizes[i]),
                               0);
         MR_TEST_EXPECT_EQ_UINT(io.size, 0U);
     }
@@ -1661,14 +1639,14 @@ MR_TEST(rpc, local_dispatch_with_failed_transport) {
     /* Keep a remote response pending before submitting local requests. */
     io.send_error = -MR_EIO;
     MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST,
-                                            MR_RPC_FRAME_FLAG_CHECKSUM,
-                                            1301U, 1U, 3U, MR_NULL, 0U),
+                                            MR_RPC_FRAME_FLAG_CHECKSUM, 1301U,
+                                            1U, 3U, MR_NULL, 0U),
                           -MR_EIO);
     MR_TEST_ASSERT_NE_PTR(rpc.send.session, MR_NULL);
     calls = io.send_calls;
     for (i = 0U; i < MR_ARRAY_SIZE(owners); i++) {
         mr_rpc_session_init(&owners[i].session, &test_rpc_external_ops,
-                             &owners[i]);
+                            &owners[i]);
         owners[i].session.request.type = MR_RPC_MSG_REQUEST;
         owners[i].session.request.service = 1U;
         owners[i].session.request.method = 3U;
@@ -1729,8 +1707,8 @@ MR_TEST(rpc, local_dispatch_after_partial_send_failure) {
     io.error_after = TEST_RPC_FRAME_SIZE + 5U;
     io.send_error = -MR_EIO;
     test_rpc_packet_build(&packet, MR_RPC_MSG_REQUEST,
-                          MR_RPC_FRAME_FLAG_CHECKSUM, 1302U, 1U, 0U,
-                          payload, size);
+                          MR_RPC_FRAME_FLAG_CHECKSUM, 1302U, 1U, 0U, payload,
+                          size);
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), -MR_EIO);
@@ -1748,9 +1726,8 @@ MR_TEST(rpc, local_dispatch_after_partial_send_failure) {
     /* Continue from the saved cursor; frame parsing validates the checksum. */
     io.send_error = 0;
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
-    MR_TEST_ASSERT_EQ_INT(test_rpc_response_read(&io, &response,
-                                                 &response_payload),
-                          MR_TRUE);
+    MR_TEST_ASSERT_EQ_INT(
+        test_rpc_response_read(&io, &response, &response_payload), MR_TRUE);
     MR_TEST_EXPECT_EQ_UINT(response.session, 1302U);
     MR_TEST_EXPECT_EQ_INT(response.value.result, 7);
     MR_TEST_EXPECT_EQ_UINT(response.payload_size, 14U);
@@ -1863,7 +1840,9 @@ MR_TEST(rpc, external_session_delete) {
 
 MR_TEST(rpc, frame_header_rejections_and_resync) {
     const mr_uint8_t invalid_types[] = {
-        MR_RPC_MSG_RESPONSE, MR_RPC_MSG_STREAM, 0xffU,
+        MR_RPC_MSG_RESPONSE,
+        MR_RPC_MSG_STREAM,
+        0xffU,
     };
     test_rpc_packet_t packet;
     mr_rpc_frame_t *frame;
@@ -1891,8 +1870,7 @@ MR_TEST(rpc, frame_header_rejections_and_resync) {
 
     /* Incoming responses and streams cannot enter server dispatch */
     for (i = 0U; i < MR_ARRAY_SIZE(invalid_types); i++) {
-        test_rpc_packet_build(&packet,
-                              (mr_rpc_msg_type_t)invalid_types[i], 0U,
+        test_rpc_packet_build(&packet, (mr_rpc_msg_type_t)invalid_types[i], 0U,
                               1501U + i, 1U, 3U, MR_NULL, 0U);
         MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                               packet.size);
@@ -1902,8 +1880,8 @@ MR_TEST(rpc, frame_header_rejections_and_resync) {
     }
 
     /* The parser still finds the next valid request */
-    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST,
-                                            0U, 1510U, 1U, 3U, MR_NULL, 0U),
+    MR_TEST_ASSERT_EQ_INT(test_rpc_exchange(&rpc, &io, MR_RPC_MSG_REQUEST, 0U,
+                                            1510U, 1U, 3U, MR_NULL, 0U),
                           0);
     MR_TEST_EXPECT_EQ_INT(test_rpc_result_is(&io, 1510U, 10), MR_TRUE);
     MR_TEST_EXPECT_EQ_UINT(test_rpc_entry_calls, 1U);
@@ -1925,8 +1903,8 @@ MR_TEST(rpc, framed_request_byte_by_byte) {
     /* Header, compact payload and checksum may arrive separately */
     size = test_rpc_mix_payload(payload);
     test_rpc_packet_build(&packet, MR_RPC_MSG_REQUEST,
-                          MR_RPC_FRAME_FLAG_CHECKSUM, 1520U, 1U, 0U,
-                          payload, size);
+                          MR_RPC_FRAME_FLAG_CHECKSUM, 1520U, 1U, 0U, payload,
+                          size);
     for (i = 0U; i < packet.size; i++) {
         MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, &packet.data[i], 1U), 1);
         MR_TEST_ASSERT_EQ_INT(mr_rpc_execute(&rpc), 0);

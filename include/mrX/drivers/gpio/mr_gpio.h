@@ -73,6 +73,11 @@ typedef struct mr_gpio_config {
     mr_uint8_t level: 1;
 } mr_gpio_config_t;
 
+/* GPIO event data type */
+typedef struct mr_gpio_event_data {
+    mr_uint32_t pin;
+} mr_gpio_event_data_t;
+
 /* GPIO data type */
 MR_DRIVER_CLAZZES_EXPORT(gpio);
 typedef struct mr_gpio_data {

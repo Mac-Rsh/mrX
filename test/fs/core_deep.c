@@ -7,14 +7,14 @@
  */
 
 #include <mrX/test/mr_test.h>
-#if defined(MR_USE_TEST) && defined(MR_USE_FS)
+#if defined(MR_USE_TEST) && defined(MR_USE_FS) && defined(MR_USE_FS_RAMFS)
 #include <mrX.h>
 #include <mrX/test/fs/fs_test.h>
 
 /* Overlong leaf length used to probe the missing leaf-length validation */
-#define CORE_LONG_LEAF_LEN             (300)
+#define CORE_LONG_LEAF_LEN (300)
 /* Create/unlink cycles for the heap balance check */
-#define CORE_CHURN_CYCLES              (6)
+#define CORE_CHURN_CYCLES (6)
 
 static void core_expect(volatile mr_uint32_t *__test_status, const char *name,
                         mr_int64_t actual, mr_int64_t expected) {
@@ -37,7 +37,6 @@ static void core_stat_expect(volatile mr_uint32_t *__test_status,
     return;
 }
 
-/* Test: trailing slashes and dot components on lookup and creation paths */
 MR_TEST(fs, core_trailing_slash) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_err_t ret;
@@ -93,7 +92,6 @@ MR_TEST(fs, core_trailing_slash) {
     return;
 }
 
-/* Test: component lengths around the path and inline-name limits */
 MR_TEST(fs, core_name_length_bounds) {
     static const mr_size_t core_name_lens[3] = {31, 32, 33};
     mr_file_t file = MR_FILE_INIT(file);
@@ -120,8 +118,8 @@ MR_TEST(fs, core_name_length_bounds) {
                         mr_fs_close(&file), 0);
         }
         core_stat_expect(__test_status, path, 0, MR_INODE_REG);
-        core_expect(__test_status, "unlink boundary name",
-                    mr_fs_unlink(path), 0);
+        core_expect(__test_status, "unlink boundary name", mr_fs_unlink(path),
+                    0);
     }
 
     /* A 255-character component keeps the path below the limit */
@@ -173,7 +171,6 @@ MR_TEST(fs, core_name_length_bounds) {
     return;
 }
 
-/* Test: creation entry points must reject an overlong leaf component */
 MR_TEST(fs, core_leaf_length_unchecked) {
     mr_file_t file = MR_FILE_INIT(file);
     char path[MR_CFG_FS_PATH_LEN + 64];
@@ -231,7 +228,6 @@ MR_TEST(fs, core_leaf_length_unchecked) {
     return;
 }
 
-/* Test: the directory handle position is a public seek offset */
 MR_TEST(fs, core_dir_lseek) {
     static const char *const core_dir_names[3] = {"da", "db", "dc"};
     mr_file_t file = MR_FILE_INIT(file);
@@ -269,8 +265,8 @@ MR_TEST(fs, core_dir_lseek) {
     ret = mr_fs_readdir(&dir, &dirent);
     core_expect(__test_status, "readdir first", ret, 1);
     if (ret == 1) {
-        core_expect(__test_status, "first name",
-                    mr_strcmp(dirent.name, "da"), 0);
+        core_expect(__test_status, "first name", mr_strcmp(dirent.name, "da"),
+                    0);
         core_expect(__test_status, "first type", dirent.type, MR_INODE_REG);
     }
 
@@ -280,8 +276,8 @@ MR_TEST(fs, core_dir_lseek) {
     ret = mr_fs_readdir(&dir, &dirent);
     core_expect(__test_status, "replay first", ret, 1);
     if (ret == 1) {
-        core_expect(__test_status, "replay name",
-                    mr_strcmp(dirent.name, "da"), 0);
+        core_expect(__test_status, "replay name", mr_strcmp(dirent.name, "da"),
+                    0);
     }
 
     /* Seek forward skips entries */
@@ -290,8 +286,8 @@ MR_TEST(fs, core_dir_lseek) {
     ret = mr_fs_readdir(&dir, &dirent);
     core_expect(__test_status, "readdir skipped", ret, 1);
     if (ret == 1) {
-        core_expect(__test_status, "skipped name",
-                    mr_strcmp(dirent.name, "dc"), 0);
+        core_expect(__test_status, "skipped name", mr_strcmp(dirent.name, "dc"),
+                    0);
     }
 
     /* A position beyond the child count reports end-of-directory */
@@ -325,7 +321,6 @@ _exit:
     return;
 }
 
-/* Test: directory handle survives removal and recreation of its node */
 MR_TEST(fs, core_dir_reuse_and_cwd) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_file_t dir = MR_FILE_INIT(dir);
@@ -408,7 +403,6 @@ _exit:
     return;
 }
 
-/* Test: mount paths are resolved through dot normalization */
 MR_TEST(fs, core_mount_dots) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_err_t ret;
@@ -425,8 +419,8 @@ MR_TEST(fs, core_mount_dots) {
     core_expect(__test_status, "mount via dots",
                 mr_fs_mount(MR_NULL, "/./mnt0/../mnt0", "ramfs", 0, MR_NULL),
                 0);
-    core_expect(__test_status, "repeat mount", mr_fs_mount(MR_NULL, "/mnt0",
-                "ramfs", 0, MR_NULL), -MR_EBUSY);
+    core_expect(__test_status, "repeat mount",
+                mr_fs_mount(MR_NULL, "/mnt0", "ramfs", 0, MR_NULL), -MR_EBUSY);
 
     /* Populate the first mount and stack a second one inside it */
     ret = mr_fs_open(&file, "/mnt0/inside", MR_O_RDWR | MR_O_CREAT);
@@ -436,8 +430,7 @@ MR_TEST(fs, core_mount_dots) {
     }
     core_expect(__test_status, "mkdir inner", mr_fs_mkdir("/mnt0/inner"), 0);
     core_expect(__test_status, "mount inner dots",
-                mr_fs_mount(MR_NULL, "/mnt0/./inner", "ramfs", 0, MR_NULL),
-                0);
+                mr_fs_mount(MR_NULL, "/mnt0/./inner", "ramfs", 0, MR_NULL), 0);
     ret = mr_fs_open(&file, "/mnt0/inner/deep", MR_O_RDWR | MR_O_CREAT);
     core_expect(__test_status, "create deep", ret, 0);
     if (ret == 0) {
@@ -459,7 +452,6 @@ MR_TEST(fs, core_mount_dots) {
     return;
 }
 
-/* Test: a mount chain rejects teardown until its open file is closed */
 MR_TEST(fs, core_mount_chain_teardown) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_stat_t stat;
@@ -500,8 +492,7 @@ MR_TEST(fs, core_mount_chain_teardown) {
     ret = mr_fs_fstat(&file, &stat);
     core_expect(__test_status, "stat file after busy umount", ret, 0);
     if (ret == 0) {
-        core_expect(__test_status, "file size after busy umount", stat.size,
-                    1);
+        core_expect(__test_status, "file size after busy umount", stat.size, 1);
     }
     core_expect(__test_status, "seek file after busy umount",
                 mr_fs_lseek(&file, 0, MR_SEEK_SET), 0);
@@ -513,10 +504,9 @@ MR_TEST(fs, core_mount_chain_teardown) {
     core_expect(__test_status, "close open file", mr_fs_close(&file), 0);
 
     /* Closed mounts tear down bottom-up */
-    core_expect(__test_status, "umount m2 after close",
-                mr_fs_umount("/m1/m2"), 0);
-    core_expect(__test_status, "umount m1 after child",
-                mr_fs_umount("/m1"), 0);
+    core_expect(__test_status, "umount m2 after close", mr_fs_umount("/m1/m2"),
+                0);
+    core_expect(__test_status, "umount m1 after child", mr_fs_umount("/m1"), 0);
 
     /* The covered directory is visible and empty again */
     core_stat_expect(__test_status, "/m1", 0, MR_INODE_DIR);
@@ -524,8 +514,7 @@ MR_TEST(fs, core_mount_chain_teardown) {
 
 _exit:
     if (file.inode) {
-        core_expect(__test_status, "close file cleanup", mr_fs_close(&file),
-                    0);
+        core_expect(__test_status, "close file cleanup", mr_fs_close(&file), 0);
     }
 
     /* Best-effort teardown so a failure never blocks the root unmount */
@@ -535,7 +524,6 @@ _exit:
     return;
 }
 
-/* Test: O_APPEND handles interleave and follow external truncation */
 MR_TEST(fs, core_append_interleave) {
     mr_file_t first = MR_FILE_INIT(first);
     mr_file_t second = MR_FILE_INIT(second);
@@ -557,8 +545,8 @@ MR_TEST(fs, core_append_interleave) {
     if (ret != 0) {
         goto _exit;
     }
-    core_expect(__test_status, "append read rejected", mr_fs_read(&first,
-                buffer, sizeof(buffer)), -MR_EBADF);
+    core_expect(__test_status, "append read rejected",
+                mr_fs_read(&first, buffer, sizeof(buffer)), -MR_EBADF);
     core_expect(__test_status, "append one", mr_fs_write(&first, "1", 1), 1);
     ret = mr_fs_open(&second, "/app", MR_O_WRONLY | MR_O_APPEND);
     core_expect(__test_status, "open second append", ret, 0);
@@ -610,18 +598,17 @@ _exit:
                     0);
     }
     if (second.inode) {
-        core_expect(__test_status, "close second cleanup",
-                    mr_fs_close(&second), 0);
+        core_expect(__test_status, "close second cleanup", mr_fs_close(&second),
+                    0);
     }
     if (reader.inode) {
-        core_expect(__test_status, "close reader cleanup",
-                    mr_fs_close(&reader), 0);
+        core_expect(__test_status, "close reader cleanup", mr_fs_close(&reader),
+                    0);
     }
     core_expect(__test_status, "umount ramfs cleanup", mr_fs_umount("/"), 0);
     return;
 }
 
-/* Test: rename validation edges including cross-file-system destinations */
 MR_TEST(fs, core_rename_edges) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_err_t ret;
@@ -684,7 +671,6 @@ MR_TEST(fs, core_rename_edges) {
     return;
 }
 
-/* Test: the root directory enumerates exactly what was created */
 MR_TEST(fs, core_root_readdir) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_file_t dir = MR_FILE_INIT(dir);
@@ -741,7 +727,6 @@ MR_TEST(fs, core_root_readdir) {
     return;
 }
 
-/* Test: create/unlink churn across both dentry name storage paths */
 MR_TEST(fs, core_churn_heap) {
     mr_heap_info_t before;
     mr_heap_info_t after;
@@ -784,8 +769,7 @@ MR_TEST(fs, core_churn_heap) {
         mr_snprintf(path, sizeof(path), "/c-%d", i);
         core_expect(__test_status, "mkdir churn", mr_fs_mkdir("/c-dir"), 0);
         core_expect(__test_status, "rmdir churn", mr_fs_rmdir("/c-dir"), 0);
-        core_expect(__test_status, "unlink churn short", mr_fs_unlink(path),
-                    0);
+        core_expect(__test_status, "unlink churn short", mr_fs_unlink(path), 0);
     }
 
 _exit:
@@ -802,4 +786,5 @@ _exit:
     return;
 }
 
-#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */
+#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) &&                        \
+          defined(MR_USE_FS_RAMFS) */

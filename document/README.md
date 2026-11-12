@@ -1,10 +1,11 @@
 # mrX 文档入口
 
-> 这是整套文档的起点，也是唯一的目录页：mrX 是什么、每类任务该读哪篇、文档放在哪。
+> 这是整套文档的起点，也是唯一的总目录页：mrX 是什么、每类任务该读哪篇、文档放在哪。
 > 不知道从哪开始就顺着往下看；只想查某个模块，直接跳到第 3 节的索引。
 
 mrX 是一套可以直接嵌进你自己工程的内核与组件集合：应用工程还是你的，业务代码留在你自己的目录里，mrX
-以依赖的形式接进来，提供内核服务、C 库、设备驱动、文件系统、RPC 等能力。tick、中断、输出、断言这些底层动作由 **平台适配层**
+以依赖的形式接进来，提供内核服务、C 库、设备驱动、文件系统、RPC
+等能力。tick、中断、输出、断言这些底层动作由 **平台适配层**
 提供。接入时先生成记录启用功能的 `mr_config.h`，使用硬件树时再生成描述板级硬件的
 `mr_hardgen.h`，最后在应用入口调用一次 `mr_user_init()`，框架就起来了。完整接入流程见
 [框架使用指南](usage.md)。
@@ -32,7 +33,8 @@ mrX 是一套可以直接嵌进你自己工程的内核与组件集合：应用�
 
 ## 2. 文档放在哪
 
-模块文档按源码职责分目录，通常与源码目录保持对应——`kernel/timer.md` 讲的就是 `kernel/timer.c`；Boot、RPC 和 XVM 文档集中在
+模块文档按源码职责分目录，通常与源码目录保持对应——`kernel/timer.md` 讲的就是
+`kernel/timer.c`；Boot、RPC 和 XVM 文档集中在
 `modules/` 下的对应目录：
 
 ```text
@@ -46,30 +48,30 @@ mrX/document/
 ├── fs/               # 文件系统：VFS、RamFS、RootFS
 ├── modules/          # 上层组件：Boot、RPC、XVM、Crypto
 ├── platform/         # 平台移植层：安装已有平台、移植新平台
-├── arch/             # 芯片厂商适配规范：当前包含 ST / STM32H5
-│                     # 芯片运行期语义在源码侧 mrX/arch/<vendor>/<target>/README.md
+├── arch/             # 厂商与芯片专属适配规范（不属于框架通用契约）
 ├── scripts/          # 主机端 Python 工具（kconfig、htc、sections……）（有目录入口）
 └── test/             # 测试框架
 ```
 
 部分目录带一个入口文件，从它进目录比直接点某个模块文件更省事：
-[kernel/README.md](kernel/README.md)（内核服务总览）、[scripts/README.md](scripts/README.md)、
-[platform/platform.md](platform/platform.md)、[ST 芯片适配](arch/st/st.md)、[test/test.md](test/test.md)。
+[kernel/README.md](kernel/README.md)
+（内核服务总览）、[scripts/README.md](scripts/README.md)、
+[platform/platform.md](platform/platform.md)、[test/test.md](test/test.md)。芯片专属文档从 `arch/` 查阅。
 
-`libc/`、`drivers/`、`fs/`、`modules/` 没有独立入口文件，直接看第 3 节索引即可； 其中 `drivers/driver.md`
+`libc/`、`drivers/`、`fs/`、`modules/` 没有独立入口文件，直接看第 3 节索引即可； 其中
+`drivers/driver.md`
 末尾列有本目录全部驱动，可作为驱动的起点。
 
-适配还会用到两类不在第 3 节索引里的文档：
+平台的寄存器映射、单位、中断顺序与能力限制统一由 `arch/` 下的具体平台文档负责；
+框架驱动文档只说明公共接口和移植必须满足的抽象契约。
 
-- 芯片的运行期语义（单位、中断顺序、能力限制）在源码侧
-  `mrX/arch/<vendor>/<target>/README.md`，例如
-  [STM32H5 驱动适配约定](../arch/st/stm32h5/README.md)。它和 `arch/st/st.md` 的分工是：
-  前者说本芯片是什么行为，后者说适配层该怎么写。
-- 每类外设的 backend 契约就是第 3 节索引里那些 `drivers/<driver>/porting.md`，与同目录的
-  驱动主文档成对：`gpio.md` 讲怎么用，`gpio/porting.md` 讲怎么实现。它们和 `st.md` 的分工是：
-  `st.md` 管所有 IP 共有的分层与命名，`porting.md` 只管这一类 IP 的 ops 与验收。
+适配还会用到驱动的 backend 移植指南：
+- 每类外设的 backend 契约就是第 3 节索引里那些 `drivers/<driver>/porting.md`
+  ，与同目录的
+  驱动主文档成对：`gpio.md` 讲怎么用，`gpio/porting.md` 讲通用 backend ops 契约与验收；
+  芯片具体接线、资源分配和能力限制由其 `arch/` 文档管理。
 
-## 3. 完整文档索引
+## 3. 分层文档索引
 
 ### 框架接入与工具
 
@@ -102,17 +104,21 @@ mrX/document/
 
 ### 设备驱动
 
-| 模块            | 文档                                        | 模块     | 文档                                |
-|-----------------|---------------------------------------------|----------|-------------------------------------|
-| 驱动框架 Driver | [driver.md](drivers/driver.md)              | GPIO     | [gpio.md](drivers/gpio/gpio.md)     |
-| UART            | [uart.md](drivers/uart/uart.md)             | I2C      | [i2c.md](drivers/i2c/i2c.md)        |
-| SPI             | [spi.md](drivers/spi/spi.md)                | ADC      | [adc.md](drivers/adc/adc.md)        |
-| DAC             | [dac.md](drivers/dac/dac.md)                | RAM 设备 | [ram.md](drivers/ram/ram.md)        |
-| DMA             | [dma.md](drivers/dma/dma.md)                | TMR      | [tmr.md](drivers/tmr/tmr.md)        |
-| WDT             | [wdt.md](drivers/wdt/wdt.md)                | FLASH    | [flash.md](drivers/flash/flash.md)  |
-| PWM             | [pwm.md](drivers/pwm/pwm.md)                |          |                                     |
+| 模块            | 文档                            | 模块     | 文档                               |
+|-----------------|---------------------------------|----------|------------------------------------|
+| 驱动框架 Driver | [driver.md](drivers/driver.md)  | GPIO     | [gpio.md](drivers/gpio/gpio.md)    |
+| UART            | [uart.md](drivers/uart/uart.md) | I2C      | [i2c.md](drivers/i2c/i2c.md)       |
+| SPI             | [spi.md](drivers/spi/spi.md)    | ADC      | [adc.md](drivers/adc/adc.md)       |
+| DAC             | [dac.md](drivers/dac/dac.md)    | RAM 设备 | [ram.md](drivers/ram/ram.md)       |
+| DMA             | [dma.md](drivers/dma/dma.md)    | TMR      | [tmr.md](drivers/tmr/tmr.md)       |
+| WDT             | [wdt.md](drivers/wdt/wdt.md)    | FLASH    | [flash.md](drivers/flash/flash.md) |
+| PWM             | [pwm.md](drivers/pwm/pwm.md)    | ETH      | [eth.md](drivers/eth/eth.md)       |
+
 平台 backend 开发请阅读对应驱动目录下的 `porting.md`：
-[GPIO](drivers/gpio/porting.md)、[UART](drivers/uart/porting.md)、[I2C](drivers/i2c/porting.md)、[SPI](drivers/spi/porting.md)、[ADC](drivers/adc/porting.md)、[DAC](drivers/dac/porting.md)、[DMA](drivers/dma/porting.md)、[TMR](drivers/tmr/porting.md)、[PWM](drivers/pwm/porting.md)、[WDT](drivers/wdt/porting.md)、[RAM](drivers/ram/porting.md)、[FLASH](drivers/flash/porting.md)。
+[GPIO](drivers/gpio/porting.md)、[UART](drivers/uart/porting.md)、[I2C](drivers/i2c/porting.md)、[SPI](drivers/spi/porting.md)、[ADC](drivers/adc/porting.md)、[DAC](drivers/dac/porting.md)、[DMA](drivers/dma/porting.md)、[TMR](drivers/tmr/porting.md)、[PWM](drivers/pwm/porting.md)、[WDT](drivers/wdt/porting.md)、[RAM](drivers/ram/porting.md)、[FLASH](drivers/flash/porting.md)、[ETH](drivers/eth/porting.md)。
+
+跨外设的触发路由、流式收发及启停顺序见
+[驱动组合与进阶示例](drivers/examples.md)。
 
 每篇 `porting.md` 只讲该类外设的 ops 契约与验收；适配层的分层、资源归属和文件骨架统一由
 [芯片厂商适配](#芯片厂商适配)一节指向的规范文件约束，而具体芯片的运行期语义在源码侧
@@ -135,33 +141,41 @@ mrX/document/
 
 ### 芯片厂商适配
 
-| 厂商 / 系列  | 适配规范（怎么写）     | 运行期语义（是什么行为）                                                             |
-|--------------|------------------------|--------------------------------------------------------------------------------------|
-| ST / STM32H5 | [st.md](arch/st/st.md) | [stm32h5/README.md](../arch/st/stm32h5/README.md)：单位、中断顺序、IO 约定、能力限制 |
+| 入口 | 说明 |
+|------|------|
+| [平台适配规范](arch/st/st.md) | 具体芯片的实现约束在对应 `arch/` 目录管理，不属于框架通用 API |
 
 适配规范在文档目录，芯片的运行期语义在源码目录，跟着适配代码走，避免两边漂移。新增厂商时两处都要补齐：
-`document/arch/<vendor>/` 下写规范，`mrX/arch/<vendor>/<target>/README.md` 下写该芯片的行为。
+`document/arch/<vendor>/` 下写规范，`mrX/arch/<vendor>/<target>/README.md`
+下写该芯片的行为。
 
 ## 4. 阅读方法：每篇模块文档怎么用
 
 模块文档统一按 **用户指南 → 开发者指南**组织：
 
-- **前半部分（用户指南）**回答“怎么用”：模块做什么、依赖什么、怎么配、API 长什么样、完整例子、常见问题。只写应用的话，读到这里就够了。
-- **后半部分（开发者指南）**回答“为什么这样做、怎么扩展”：架构、数据结构、核心流程、并发与中断安全、源码导读。只在排查问题或者要改框架时才需要往下读。
+- **前半部分（用户指南）**回答“怎么用”：模块做什么、依赖什么、怎么配、API
+  长什么样、完整例子、常见问题。只写应用的话，读到这里就够了。
+- **后半部分（开发者指南）**
+  回答“为什么这样做、怎么扩展”：架构、数据结构、核心流程、并发与中断安全、源码导读。只在排查问题或者要改框架时才需要往下读。
 
-驱动目录下的 `porting.md` 是例外，它只面向平台 backend 开发者，直接按移植步骤组织，不重复用户指南，顺序往下读即可。`arch/`
+驱动目录下的 `porting.md` 是例外，它只面向平台 backend
+开发者，直接按移植步骤组织，不重复用户指南，顺序往下读即可。`arch/`
 下的芯片厂商文档同样不套模块骨架。
 
-文档里出现的 `MR_USE_*` 是功能开关，`MR_CFG_*` 是资源参数，都在 Kconfig 里配置；每篇文档开头的表格会告诉你它依赖哪个功能宏和哪个头文件。示例都取自
+文档里出现的 `MR_USE_*` 是功能开关，`MR_CFG_*` 是资源参数，都在 Kconfig
+里配置；每篇文档开头的表格会告诉你它依赖哪个功能宏和哪个头文件。示例都取自
 `mrX/test/` 或能直接按公开 API 编译，看到例子可以直接抄。
 
 ## 5. 卡住了怎么办
 
-- **接入阶段报错**：先看 [Usage 的常见问题排查](usage.md#8-常见问题排查)，它按平台、配置、生成、构建、初始化五个阶段给了排查顺序。
-- **适配阶段卡住**：先看 [Platform 的 FAQ](platform/platform.md#7-常见问题faq)；接口契约以 `platform.md` 为准，
-  分层写法以 [ST 适配规范](arch/st/st.md) 为准。
+- **接入阶段报错**：先看 [Usage 的常见问题排查](usage.md#8-常见问题排查)
+  ，它按平台、配置、生成、构建、初始化五个阶段给了排查顺序。
+- **适配阶段卡住**：先看 [Platform 的 FAQ](platform/platform.md#7-常见问题faq)
+  ；接口契约以 `platform.md` 为准，
+  分层写法以公共 API、porting 契约及各目标平台自身的适配规范为准。
 - **某个模块行为不对**：进对应模块文档的用户指南，先看 FAQ 一节。
-- **命令行工具用不起来**：看 [脚本教程](scripts/README.md)，里面区分了“用户只需执行 `cli.py`”和“库代码不要直接运行”。
+- **命令行工具用不起来**：看 [脚本教程](scripts/README.md)，里面区分了“用户只需执行
+  `cli.py`”和“库代码不要直接运行”。
 - **文档本身有问题**：修改规则见 [文档编写与维护规范](documentation.md)。
 
 ## 6. 文档维护
@@ -169,4 +183,5 @@ mrX/document/
 文档编写规则、模块文档骨架、示例约束和维护要求单独放在
 [文档编写与维护规范](documentation.md)。它是维护者参考，不是 mrX 使用者的入门材料。
 
-新增、删除或重命名文档时，请同步更新本文第 2 节的目录说明和第 3 节的索引，并检查第 1 节“按目标找文档”里的链接是否仍然有效。
+新增、删除或重命名文档时，请同步更新本文第 2 节的目录说明和第 3 节的索引，并检查第
+1 节“按目标找文档”里的链接是否仍然有效。

@@ -13,15 +13,10 @@
  * expand into real mr_log calls in this translation unit
  */
 #ifndef MR_LOG_TAG
-#define MR_LOG_TAG                      "log_deep"
+#define MR_LOG_TAG "log_deep"
 #endif /* !defined(MR_LOG_TAG) */
 #include <mrX/kernel/mr_log.h>
 
-/* Tests */
-
-/* The log output itself is not capturable here, so cases verify the mask
- * state and that no call corrupts the printf path or crashes the kernel
- */
 MR_TEST(log, mask_bits_roundtrip) {
     mr_uint32_t saved = mr_log_mask();
 
@@ -125,8 +120,7 @@ MR_TEST(log, macros_with_args) {
     MR_LOG_ERR("err %d %s", -1, "e");
     MR_LOG_WRN("wrn %u %c", 1U, 'w');
     MR_LOG_INF("inf %x %p", 0xbeef, (void *)&saved);
-    MR_LOG_DBG("dbg %lld %llu", 9223372036854775807LL,
-               18446744073709551615ULL);
+    MR_LOG_DBG("dbg %lld %llu", 9223372036854775807LL, 18446744073709551615ULL);
     MR_LOG_TRC("trc %08d %s", -42, "pad");
 
     MR_TEST_EXPECT_EQ_UINT(mr_log_mask(), 0xffffffffU);
@@ -143,8 +137,8 @@ MR_TEST(log, macros_long_message) {
      */
     MR_LOG_INF("this_is_a_long_log_message_designed_to_exceed_the_sixty_four_"
                "byte_internal_printf_buffer_limit_for_truncation");
-    MR_LOG_DBG("long_with_args %d %s %d %s %d %s %d %s %d %s", 1, "aa", 2,
-               "bb", 3, "cc", 4, "dd", 5, "ee");
+    MR_LOG_DBG("long_with_args %d %s %d %s %d %s %d %s %d %s", 1, "aa", 2, "bb",
+               3, "cc", 4, "dd", 5, "ee");
 
     MR_TEST_EXPECT_EQ_UINT(mr_log_mask(), 0xffffffffU);
     mr_log_mask_set(saved);
@@ -196,7 +190,7 @@ MR_TEST(log, direct_filter_boundary) {
     mr_log(MR_LOG_LEVEL_TRC, "allowed_trc %s", "t");
 
     MR_TEST_EXPECT_EQ_UINT(mr_log_mask(), MR_LOG_MASK(MR_LOG_LEVEL_TRC)
-                                         | MR_LOG_MASK(MR_LOG_LEVEL_DBG));
+                                              | MR_LOG_MASK(MR_LOG_LEVEL_DBG));
     mr_log_mask_set(saved);
     MR_TEST_ASSERT_EQ_UINT(mr_log_mask(), saved);
 }

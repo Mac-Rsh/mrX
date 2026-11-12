@@ -14,12 +14,14 @@ static mr_size_t uart_rx_size;
 static mr_size_t uart_tx_size;
 static mr_bool_t uart_rx_busy;
 static mr_bool_t uart_tx_busy;
-static mr_size_t uart_rx_offset;
-static mr_size_t uart_tx_offset;
 static mr_err_t uart_rx_stream_stop_ret;
 static mr_err_t uart_tx_stream_stop_ret;
+#if defined(MR_USE_DRIVER_UART_STREAM)
+static mr_size_t uart_rx_offset;
+static mr_size_t uart_tx_offset;
 static int uart_rx_stream_stop_count;
 static int uart_tx_stream_stop_count;
+#endif /* defined(MR_USE_DRIVER_UART_STREAM) */
 static mr_uint32_t uart_events;
 static mr_bool_t uart_event_enable_state;
 
@@ -37,8 +39,7 @@ static mr_err_t uart_configuration(const mr_driver_t *drv,
     return 0;
 }
 
-static mr_ssize_t uart_read(const mr_driver_t *drv, void *buf,
-                            mr_size_t size) {
+static mr_ssize_t uart_read(const mr_driver_t *drv, void *buf, mr_size_t size) {
     MR_IGNORE(drv);
     uart_rx_size = size;
     ((mr_uint8_t *)buf)[0] = 0x5aU;
@@ -54,9 +55,9 @@ static mr_ssize_t uart_write(const mr_driver_t *drv, const void *buf,
 }
 
 #if defined(MR_USE_DRIVER_UART_STREAM)
-static mr_err_t uart_rx_stream_start(
-    const mr_driver_t *drv, void *buf, mr_size_t size,
-    const mr_uart_rx_stream_config_t *config) {
+static mr_err_t uart_rx_stream_start(const mr_driver_t *drv, void *buf,
+                                     mr_size_t size,
+                                     const mr_uart_rx_stream_config_t *config) {
     MR_IGNORE(drv);
     MR_IGNORE(buf);
     MR_IGNORE(config);
@@ -89,9 +90,9 @@ static mr_err_t uart_rx_stream_offset(const mr_driver_t *drv,
     return 0;
 }
 
-static mr_err_t uart_tx_stream_start(
-    const mr_driver_t *drv, const void *buf, mr_size_t size,
-    const mr_uart_tx_stream_config_t *config) {
+static mr_err_t uart_tx_stream_start(const mr_driver_t *drv, const void *buf,
+                                     mr_size_t size,
+                                     const mr_uart_tx_stream_config_t *config) {
     MR_IGNORE(drv);
     MR_IGNORE(buf);
     MR_IGNORE(config);
@@ -290,6 +291,23 @@ MR_TEST(uart, stream_stop_errors_on_shutdown_and_delete) {
 }
 #endif /* defined(MR_USE_DRIVER_UART_STREAM) */
 
+MR_TEST(uart, static_reference) {
+    mr_uart_ops_t ops = uart_ops;
+    mr_uart_data_t data = {0};
+    mr_driver_t drv;
+
+    uart_rx_busy = MR_FALSE;
+    uart_tx_busy = MR_FALSE;
+    uart_rx_stream_stop_ret = 0;
+    uart_tx_stream_stop_ret = 0;
+    MR_TEST_ASSERT_EQ_INT(mr_uart_init(&drv, &data, MR_NULL, &ops), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_PTR(mr_uart_get(&drv), &drv);
+    MR_TEST_EXPECT_EQ_INT(mr_uart_del(&drv), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_uart_put(&drv), MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_is_ready(&drv), MR_FALSE);
+}
+
 MR_TEST(uart, event_paths) {
     mr_driver_t *drv;
     mr_uart_ops_t optional_ops = uart_ops;
@@ -306,8 +324,7 @@ MR_TEST(uart, event_paths) {
     MR_TEST_ASSERT_EQ_INT(mr_uart_event_enable(drv, MR_UART_WAIT_RX_READY), 0);
     MR_TEST_ASSERT_EQ_UINT(uart_events, MR_UART_WAIT_RX_READY);
     MR_TEST_ASSERT_EQ_INT(uart_event_enable_state, MR_TRUE);
-    MR_TEST_ASSERT_EQ_INT(mr_uart_event_disable(drv, MR_UART_WAIT_TX_DONE),
-                          0);
+    MR_TEST_ASSERT_EQ_INT(mr_uart_event_disable(drv, MR_UART_WAIT_TX_DONE), 0);
     MR_TEST_ASSERT_EQ_INT(uart_event_enable_state, MR_FALSE);
     MR_TEST_ASSERT_EQ_INT(mr_uart_event_raise(drv, MR_UART_WAIT_RX_IDLE), 0);
     MR_TEST_ASSERT_EQ_INT(event_count, 0);

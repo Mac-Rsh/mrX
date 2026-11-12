@@ -16,16 +16,20 @@
 
 ### 1. 模块概述
 
-ADC 驱动解决的问题是： **用同一套 API 配置通道、启动采样并拿到统一的原始码**，电压换算与多通道调度细节不再分散在应用里。
+ADC 驱动解决的问题是： **用同一套 API 配置通道、启动采样并拿到统一的原始码**
+，电压换算与多通道调度细节不再分散在应用里。
 
 特性：
 
 - 通道配置：单端/差分、7 种参考源、可编程增益（1/6x ~ 128x，17 档）。
-- 序列采样 `mr_adc_seq_t`：指定通道位掩码、分辨率、`oversample` 字段与缓冲区；公共层只约束分辨率 1~32 和 buf/size
+- 序列采样 `mr_adc_seq_t`：指定通道位掩码、分辨率、`oversample` 字段与缓冲区；公共层只约束分辨率
+  1~32 和 buf/size
   一致性，通道顺序、缓冲布局和 `oversample` 含义由 backend 定义。
-- 可选 stream（`MR_USE_DRIVER_ADC_STREAM`）：提供 start/stop/is_busy/offset 四个独立可选回调；`source` 选择软件启动或
+- 可选 stream（`MR_USE_DRIVER_ADC_STREAM`）：提供 start/stop/is_busy/offset
+  四个独立可选回调；`source` 选择软件启动或
   HTS 绑定的外部启动源，`circular` 只控制 buffer 写满后是否回绕。
-- 电压换算：`mr_adc_raw2millivolt`/`raw2microvolt`/`raw2volt`，由调用者显式传入参考电压、增益与分辨率；HardTree
+- 电压换算：`mr_adc_raw2millivolt`/`raw2microvolt`/`raw2volt`
+  ，由调用者显式传入参考电压、增益与分辨率；HardTree
   包装函数从 spec 取这些参数。
 - hardtree 规格宏：在硬件模板中描述"某驱动某通道"，代码用 `mr_ht_adc_spec_t`
   直接配置与采样。
@@ -43,7 +47,8 @@ ADC 驱动解决的问题是： **用同一套 API 配置通道、启动采样�
 #include <mrX/drivers/adc/mr_adc.h>
 ```
 
-通道号固定为 0~31（对应 `mr_adc_data_t` 中 `exist_mask` 的 32 个位）。流 API 仅在 `MR_USE_DRIVER_ADC_STREAM`
+通道号固定为 0~31（对应 `mr_adc_data_t` 中 `exist_mask` 的 32 个位）。流 API 仅在
+`MR_USE_DRIVER_ADC_STREAM`
 生效；关闭它可裁掉流相关代码，但平台 `ops`
 若依赖流回调需同步裁剪。
 
@@ -97,21 +102,27 @@ mr_err_t adc_example(mr_driver_t *drv, mr_int64_t *millivolts) {
 
 **序列采样**：`mr_adc_seq_t` 的 `channels` 是通道位掩码（bit n 对应通道 n），
 `resolution` 为 1~32 位，`buf`/`size` 描述采样缓冲（`buf` 为 `MR_NULL` 时
-`size` 必须为 0，断言保护）。`mr_adc_read` 返回实际读取的字节数或负数错误码；具体采样顺序与缓冲布局由平台 `ops->read` 决定。
+`size` 必须为 0，断言保护）。`mr_adc_read` 返回实际读取的字节数或负数错误码；具体采样顺序与缓冲布局由平台
+`ops->read` 决定。
 
-**stream**：`mr_adc_stream_start(drv, &seq, &stream_cfg)` 会检查 `seq`、1~32 位分辨率、buf/size 一致性以及
-`config != MR_NULL`，之后把请求交给可选 `stream_start`。`stream_stop`、`stream_is_busy`、`stream_offset` 也分别检查自己的
-callback；缺失时返回 `-MR_ENOSYS`。公共层定义 `source` 与 `circular` 的含义，但具体硬件状态机、busy 和 offset 由
+**stream**：`mr_adc_stream_start(drv, &seq, &stream_cfg)` 会检查 `seq`、1~32
+位分辨率、buf/size 一致性以及
+`config != MR_NULL`，之后把请求交给可选 `stream_start`。`stream_stop`、
+`stream_is_busy`、`stream_offset` 也分别检查自己的
+callback；缺失时返回 `-MR_ENOSYS`。公共层定义 `source` 与 `circular`
+的含义，但具体硬件状态机、busy 和 offset 由
 backend 实现。
 
-事件位 `MR_ADC_WAIT_STREAM_HALF` / `FULL` / `ERROR` 由公共头文件定义，但 `event_attach` 只挂接 waitable，
-`event_enable/disable` 只是把 mask 原样交给可选 `event_control`。是否实现由平台决定；树内 stm32h5 平台 backend 实现了全部流回调与
-`event_control`。
+事件位 `MR_ADC_WAIT_STREAM_HALF` / `FULL` / `ERROR` 由公共头文件定义，但
+`event_attach` 只挂接 waitable，
+`event_enable/disable` 只是把 mask 原样交给可选 `event_control`。是否实现事件源及支持哪些事件位由具体 backend 决定；不支持时按公共接口返回错误。
 
-**内部参考电压**：`mr_adc_ref_internal` 返回驱动模型数据中的内部参考电压 （单位 mV，hardtree 安装时缺省
+**内部参考电压**：`mr_adc_ref_internal` 返回驱动模型数据中的内部参考电压 （单位
+mV，hardtree 安装时缺省
 3300），是换算函数第一个参数的常用来源。
 
-**生命周期**：ADC 驱动对象遵循[驱动框架](../driver.md)的生命周期；setup 时框架初始化内部事件对象，shutdown 时销毁。
+**生命周期**：ADC 驱动对象遵循[驱动框架](../driver.md)的生命周期；setup
+时框架初始化内部事件对象，shutdown 时销毁。
 `mr_adc_create` 传入的
 `mr_adc_data_t` 必须用 `mr_malloc` 分配——驱动删除时框架会释放它。
 
@@ -162,7 +173,8 @@ backend 实现。
 MR_INLINE mr_err_t mr_adc_event_attach(mr_driver_t *drv, mr_waiter_t *entry);
 ```
 
-`entry` 先用 `mr_waiter_init` 初始化并设置期望的 `MR_ADC_WAIT_*` 位。此 API 只订阅 waiter， 不会启用来源；挂接事件对象需在
+`entry` 先用 `mr_waiter_init` 初始化并设置期望的 `MR_ADC_WAIT_*` 位。此 API 只订阅
+waiter， 不会启用来源；挂接事件对象需在
 `mr_driver_setup` 成功后进行。
 
 **`mr_adc_event_enable` / `mr_adc_event_disable`**
@@ -172,7 +184,8 @@ MR_INLINE mr_err_t mr_adc_event_enable(mr_driver_t *drv, mr_uint32_t events);
 MR_INLINE mr_err_t mr_adc_event_disable(mr_driver_t *drv, mr_uint32_t events);
 ```
 
-`events` 会原样传给 backend，公共层不校验 mask，也不规定 backend 对未知/不支持事件应返回哪一种错误。未实现 `event_control`
+`events` 会原样传给 backend，公共层不校验 mask，也不规定 backend
+对未知/不支持事件应返回哪一种错误。未实现 `event_control`
 时公共 API 返回 `-MR_ENOSYS`；其他返回值直接透传。
 
 **`mr_adc_stream_config_t`**
@@ -192,10 +205,12 @@ typedef struct mr_adc_stream_config {
 仅在 `MR_USE_DRIVER_ADC_STREAM` 下声明：
 
 - `MR_ADC_STREAM_SOURCE_SOFTWARE`：`stream_start` 通过软件启动采集，ADC 随后自行推进序列；
-- `MR_ADC_STREAM_SOURCE_EXTERNAL`：`stream_start` 只武装 ADC，每个序列由 HTS 绑定的外部信号启动；
+- `MR_ADC_STREAM_SOURCE_EXTERNAL`：`stream_start` 只武装 ADC，每个序列由 HTS
+  绑定的外部信号启动；
 - `circular`：buffer 写满后是否回绕，与转换启动来源相互独立。
 
-外部启动信号的来源、路由和边沿由 HTS/backend 固定，stream 配置不重复描述这些硬件信息。ADC stream 不会配置或启停外部
+外部启动信号的来源、路由和边沿由 HTS/backend 固定，stream 配置不重复描述这些硬件信息。ADC
+stream 不会配置或启停外部
 TMR/PWM；采样周期也由外部生产者决定。
 
 **`mr_adc_read`**
@@ -216,8 +231,10 @@ mr_err_t mr_adc_stream_start(mr_driver_t *drv, mr_adc_seq_t *seq,
 mr_err_t mr_adc_stream_stop(mr_driver_t *drv);
 ```
 
-`stream_start`/`stream_stop`/`stream_is_busy`/`stream_offset` 是彼此独立的可选能力：对应 callback 为空时各自返回
-`-MR_ENOSYS`，否则返回 backend 结果。公共层不额外建立 stream 状态机。HardTree 包装接口只是把调用转发到同一组 API。
+`stream_start`/`stream_stop`/`stream_is_busy`/`stream_offset` 是彼此独立的可选能力：对应
+callback 为空时各自返回
+`-MR_ENOSYS`，否则返回 backend 结果。公共层不额外建立 stream 状态机。HardTree
+包装接口只是把调用转发到同一组 API。
 
 **`mr_adc_raw2millivolt`**
 
@@ -226,7 +243,8 @@ mr_int64_t mr_adc_raw2millivolt(mr_int32_t ref_mv, mr_adc_gain_t gain,
                                 mr_uint8_t resolution, mr_int64_t raw);
 ```
 
-按 `ref_mv * raw * div / (mul << resolution)` 换算（`mul`/`div` 来自增益表）。例：3300 mV、增益 1、12 位、码值 2048 → 1650 mV。
+按 `ref_mv * raw * div / (mul << resolution)` 换算（`mul`/`div` 来自增益表）。例：3300
+mV、增益 1、12 位、码值 2048 → 1650 mV。
 `raw2microvolt` 在此基础上放大 1000 倍，`raw2volt` 返回 `mr_f32_t` 伏值。
 
 **hardtree 规格**
@@ -248,15 +266,17 @@ if (mr_ht_adc_configure(&spec) == 0) {
 ```
 
 `mr_ht_adc_spec_t` 携带驱动指针、通道、分辨率、参考电压与配置，由宏从属性单元
-`[phandle, channel, resolution, ref_voltage, diff, ref, gain]` 生成 （后五项可缺省：分辨率 8、参考电压 0 表示用内部参考、单端、内部参考、增益
-1）；配套 `mr_ht_adc_configure/configuration` 写入/回读通道配置；流版本 `mr_ht_adc_stream_start` 等需
-`MR_USE_DRIVER_ADC_STREAM`；事件来源控制可用 `mr_ht_adc_event_enable/disable(&spec, events)`。
+`[phandle, channel, resolution, ref_voltage, diff, ref, gain]` 生成 （后五项可缺省：分辨率
+8、参考电压 0 表示用内部参考、单端、内部参考、增益
+1）；配套 `mr_ht_adc_configure/configuration` 写入/回读通道配置；流版本
+`mr_ht_adc_stream_start` 等需
+`MR_USE_DRIVER_ADC_STREAM`；事件来源控制可用
+`mr_ht_adc_event_enable/disable(&spec, events)`。
 
 ### 6. 完整示例
 
-ADC + TMR 周期采集、PWM 周期同步采集、DMA/IRQ 数据通路、buffer 半满/全满处理和 STM32H5
-路由前提见[驱动组合与进阶示例](../examples.md)。公共 PWM API 支持周期/比较点 signal，但 STM32H5 当前只实现周期 signal；
-该平台的比较点配置返回 `-MR_ENOSYS`。
+ADC + TMR/PWM 的周期采集、DMA/IRQ 数据通路与缓冲区半满/全满处理见
+[驱动组合与进阶示例](../examples.md)。具体触发路径和信号支持范围由目标平台决定。
 
 示例 1：动态创建 ADC 驱动并完成配置/采样/换算（改编自
 `mrX/test/drivers/adc/adc.c` 的 `read_and_conversion`）：
@@ -318,7 +338,8 @@ void adc_event_example(mr_driver_t *drv) {
 }
 ```
 
-通道存在性、读路径、换算与可选 stream callback 的测试见 `mrX/test/drivers/adc/adc.c`。
+通道存在性、读路径、换算与可选 stream callback 的测试见
+`mrX/test/drivers/adc/adc.c`。
 
 ### 7. 常见问题（FAQ）
 
@@ -329,12 +350,15 @@ void adc_event_example(mr_driver_t *drv) {
 
 **Q：`mr_adc_stream_stop`/`mr_adc_stream_offset` 返回 `-MR_ENOSYS`？**
 
-平台 `ops` 未实现对应回调；四个流回调彼此独立，任一未实现时对应 API 返回 `-MR_ENOSYS`。
+平台 `ops` 未实现对应回调；四个流回调彼此独立，任一未实现时对应 API 返回
+`-MR_ENOSYS`。
 
 **Q：收不到 half/full 事件？**
 
-先区分 attach 与硬件事件源控制：`mr_adc_event_attach` 只挂 waitable；若 backend 实现 `event_control`，才可用 enable/disable
-控制来源。backend 未实现 `event_control` 时（如自定义轮询后端），`mr_adc_event_enable` 会返回 `-MR_ENOSYS`。backend 也必须主动调用
+先区分 attach 与硬件事件源控制：`mr_adc_event_attach` 只挂 waitable；若 backend 实现
+`event_control`，才可用 enable/disable
+控制来源。backend 未实现 `event_control` 时（如自定义轮询后端），
+`mr_adc_event_enable` 会返回 `-MR_ENOSYS`。backend 也必须主动调用
 `mr_adc_event_raise`，waiter 才会收到事件。
 
 **Q：换算结果和万用表对不上？**
@@ -344,7 +368,8 @@ void adc_event_example(mr_driver_t *drv) {
 
 **Q：`buf` 与 `size` 怎么定？**
 
-由平台 `ops->read` 决定布局；常见为每个采样值 `resolution` 对齐后的整数倍 （如 12 位常存 `mr_uint16_t`
+由平台 `ops->read` 决定布局；常见为每个采样值 `resolution` 对齐后的整数倍 （如 12
+位常存 `mr_uint16_t`
 ）。以平台驱动文档/实现为准，框架只做非空一致性断言。
 
 ---
@@ -367,7 +392,6 @@ ADC 驱动与 GPIO 同构，是[驱动框架](../driver.md)的派生模块，额
         +-------------------+----------------------+
                             | mr_adc_ops_t
         +-------------------v----------------------+
-        |  平台实现：如 stm32h5 片上 ADC                |
         +------------------------------------------+
              依赖：驱动框架、等待队列（流事件）
 ```
@@ -393,14 +417,16 @@ typedef struct mr_adc_data {
 
 操作表（`mr_adc.h:109`）：`channel_configure`、`channel_configuration`、
 `read` 必需；`stream_start`/`stream_stop`/`stream_is_busy`/`stream_offset`
-仅在 `MR_USE_DRIVER_ADC_STREAM` 下声明，全部为可选（框架对空回调有缺省返回）。`event_control` 后端回调可选；
+仅在 `MR_USE_DRIVER_ADC_STREAM` 下声明，全部为可选（框架对空回调有缺省返回）。
+`event_control` 后端回调可选；
 `event_attach` 是框架订阅 waitable 的公共函数，并不要求后端回调。具体后端实现哪些事件源由平台决定；ops
 同步运行在调用者上下文，公共层不额外切换上下文。
 
 HardTree 规格（`mr_adc.h:616`）：`mr_ht_adc_spec_t { drv, channel,
 resolution, ref_voltage, config }`，属性单元为
 `[phandle, channel, resolution, ref_voltage, diff, ref, gain]`，
-`ref_voltage` 为 0 时换算函数回退到 `mr_adc_ref_internal`。`mr_ht_adc_seq_init()` 只写入 `channels` 和
+`ref_voltage` 为 0 时换算函数回退到 `mr_adc_ref_internal`。`mr_ht_adc_seq_init()`
+只写入 `channels` 和
 `resolution`；调用前仍需初始化 `oversample`、`buf` 和 `size`。
 
 ### 10. 核心流程
@@ -409,9 +435,12 @@ resolution, ref_voltage, config }`，属性单元为
 adc_init, adc_deinit, adc_release)`，`mrX/drivers/adc/adc.c:17`）。
 `adc_init`（`adc.c:69`）在 setup 阶段调用 `mr_waitable_init` 初始化流事件；
 `adc_deinit` 在 shutdown 阶段先调用已实现的 `stream_stop`，成功后才通过
-`mr_waitable_del` 销毁事件；停止失败时返回错误并保留事件对象，以便重试 shutdown。 删除路径（驱动已标记 `DYING`
-）即使停止失败也会销毁事件，避免 `release` 释放 `data` 时泄漏 waitable。 未启用流功能或没有停止回调时直接销毁事件。公共层不规定
-`stream_stop` 的幂等性或成功后的 buffer/hardware 状态，这些由 backend 定义。`adc_release` 释放动态对象的 `data`。
+`mr_waitable_del` 销毁事件；停止失败时返回错误并保留事件对象，以便重试 shutdown。
+删除路径（驱动已标记 `DYING`
+）即使停止失败也会销毁事件，避免 `release` 释放 `data` 时泄漏 waitable。
+未启用流功能或没有停止回调时直接销毁事件。公共层不规定
+`stream_stop` 的幂等性或成功后的 buffer/hardware 状态，这些由 backend 定义。
+`adc_release` 释放动态对象的 `data`。
 
 **配置路径**：`mr_adc_configure`（`adc.c:19`）校验通道存在性（`channel >= 32`
 或 `exist_mask` 不含该位返回 `-MR_EINVAL`）后透传
@@ -422,16 +451,20 @@ adc_init, adc_deinit, adc_release)`，`mrX/drivers/adc/adc.c:17`）。
 
 **流路径**：`mr_adc_stream_start`（`mr_adc.h:277`）对未实现的 `stream_start`
 返回 `-MR_ENOSYS`，否则透传 `ops->stream_start(drv, seq, config)`；
-`mr_adc_stream_is_busy(drv, &busy)` 成功返回 0，通过 `busy` 输出状态； 未实现时返回 `-MR_ENOSYS`，后端错误原样返回，失败时不能使用
+`mr_adc_stream_is_busy(drv, &busy)` 成功返回 0，通过 `busy` 输出状态； 未实现时返回
+`-MR_ENOSYS`，后端错误原样返回，失败时不能使用
 `busy`；
 `mr_adc_stream_stop`/`mr_adc_stream_offset`
 （`mr_adc.h:334`、`mr_adc.h:360`）对未实现的能力返回 `-MR_ENOSYS`。
 
-**事件路径**：`mr_adc_event_attach` 只订阅 waiter，不打开来源；`mr_adc_event_enable`/`disable` 通过可选
-`event_control` 后端回调切换来源。平台后端可在支持的事件发生时调用 `mr_adc_event_raise`，通过 waitable 通知 waiter；
+**事件路径**：`mr_adc_event_attach` 只订阅 waiter，不打开来源；
+`mr_adc_event_enable`/`disable` 通过可选
+`event_control` 后端回调切换来源。平台后端可在支持的事件发生时调用
+`mr_adc_event_raise`，通过 waitable 通知 waiter；
 公共接口不保证具体平台实现或硬件中断源。
 
-**换算实现**：`mr_adc_raw2millivolt`（`mr_adc.h:505`）用常量表把 17 档增益映射为 `mul`/`div` 分数，在 `mr_int64_t` 域计算
+**换算实现**：`mr_adc_raw2millivolt`（`mr_adc.h:505`）用常量表把 17 档增益映射为
+`mul`/`div` 分数，在 `mr_int64_t` 域计算
 `ref_mv * raw * div / (mul << resolution)`，避免 32 位溢出；`raw2microvolt`
 把 raw 预乘 1000 后复用同一公式，`raw2volt` 走微伏再除以 1e6 得 `mr_f32_t`。
 
@@ -439,9 +472,11 @@ adc_init, adc_deinit, adc_release)`，`mrX/drivers/adc/adc.c:17`）。
 
 - 框架层 API 无内部互斥；`mr_adc_read` 与流启动对同一 ADC 外设的并发由平台
   `ops` 或应用保证。
-- 事件通知遵循[等待队列](../../kernel/wait.md)的回调上下文约定：waiter 回调在后端调用 raise 的上下文执行； 若后端从中断调用
+- 事件通知遵循[等待队列](../../kernel/wait.md)的回调上下文约定：waiter 回调在后端调用
+  raise 的上下文执行； 若后端从中断调用
   raise，回调中禁止阻塞。
-- `mr_adc_data_t.event` 在 setup/shutdown 之间有效；shutdown 后仍挂着的等待者由等待队列的删除语义处理，应用应在 shutdown
+- `mr_adc_data_t.event` 在 setup/shutdown 之间有效；shutdown
+  后仍挂着的等待者由等待队列的删除语义处理，应用应在 shutdown
   前摘除等待者。
 - 换算函数为纯函数（无共享状态），任意上下文可用。
 
@@ -449,7 +484,8 @@ adc_init, adc_deinit, adc_release)`，`mrX/drivers/adc/adc.c:17`）。
 
 - **平台移植**：ADC backend 的操作表实现、stream/IRQ/DMA 与外部启动输入接线、HardTree
   安装与验收见 [ADC 驱动移植指南](porting.md)。
-- **组合用法**：TMR/PWM 外部触发、DMA/IRQ 路径与 stream 生命周期见[驱动组合与进阶示例](../examples.md)。
+- **组合用法**：TMR/PWM 外部触发、DMA/IRQ 路径与 stream
+  生命周期见[驱动组合与进阶示例](../examples.md)。
 
 ### 13. 源码导读
 
@@ -480,6 +516,8 @@ adc_init, adc_deinit, adc_release)`，`mrX/drivers/adc/adc.c:17`）。
 | `MR_USE_DRIVER_ADC_STREAM`                                                         | 流采样开关，默认 y，依赖 ADC           |
 | `MR_ADC_WAIT_STREAM_HALF` / `MR_ADC_WAIT_STREAM_FULL` / `MR_ADC_WAIT_STREAM_ERROR` | 流缓冲半满/全满与错误事件位            |
 
-**错误码**：公共 ADC 层明确返回 `-MR_EINVAL` 表示 configure/configuration 的通道不存在，返回 `-MR_ENOSYS` 表示可选 stream
-callback 或 `event_control` 未实现；其他 backend 错误码原样透传。空指针、分辨率越界、buf/size 不一致等编程错误在断言开启时由
+**错误码**：公共 ADC 层明确返回 `-MR_EINVAL` 表示 configure/configuration
+的通道不存在，返回 `-MR_ENOSYS` 表示可选 stream
+callback 或 `event_control` 未实现；其他 backend 错误码原样透传。空指针、分辨率越界、buf/size
+不一致等编程错误在断言开启时由
 `MR_ASSERT` 拦截。

@@ -16,6 +16,8 @@ static int tmr_start_count;
 static int tmr_stop_count;
 static mr_uint32_t tmr_events;
 static mr_bool_t tmr_event_enable_state;
+static mr_tmr_signal_t tmr_signal;
+static mr_bool_t tmr_signal_enabled;
 
 static mr_err_t tmr_configure(const mr_driver_t *drv,
                               const mr_tmr_config_t *config) {
@@ -58,6 +60,14 @@ static mr_err_t tmr_event_control(const mr_driver_t *drv, mr_uint32_t events,
     MR_IGNORE(drv);
     tmr_events = events;
     tmr_event_enable_state = enable;
+    return 0;
+}
+
+static mr_err_t tmr_signal_control(const mr_driver_t *drv,
+                                   mr_tmr_signal_t signal, mr_bool_t enable) {
+    MR_IGNORE(drv);
+    tmr_signal = signal;
+    tmr_signal_enabled = enable;
     return 0;
 }
 
@@ -150,6 +160,31 @@ MR_TEST(tmr, event_paths) {
                           -MR_ENOSYS);
     drv->ops = (mr_ptr_t)&tmr_ops;
     mr_tmr_del(drv);
+}
+
+MR_TEST(tmr, signal_and_static_reference) {
+    mr_tmr_ops_t ops = tmr_ops;
+    mr_tmr_data_t data = {0};
+    mr_driver_t drv;
+
+    MR_TEST_ASSERT_EQ_INT(mr_tmr_init(&drv, &data, MR_NULL, &ops), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_tmr_signal_enable(&drv, MR_TMR_SIGNAL_PERIOD),
+                          -MR_ENOSYS);
+    MR_TEST_EXPECT_EQ_INT(mr_tmr_signal_disable(&drv, MR_TMR_SIGNAL_PERIOD),
+                          -MR_ENOSYS);
+    ops.signal_control = tmr_signal_control;
+    tmr_signal_enabled = MR_FALSE;
+    tmr_signal = (mr_tmr_signal_t)1;
+    MR_TEST_EXPECT_EQ_INT(mr_tmr_signal_enable(&drv, MR_TMR_SIGNAL_PERIOD), 0);
+    MR_TEST_EXPECT_EQ_UINT(tmr_signal, MR_TMR_SIGNAL_PERIOD);
+    MR_TEST_EXPECT_EQ_INT(tmr_signal_enabled, MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(mr_tmr_signal_disable(&drv, MR_TMR_SIGNAL_PERIOD), 0);
+    MR_TEST_EXPECT_EQ_INT(tmr_signal_enabled, MR_FALSE);
+
+    MR_TEST_ASSERT_EQ_PTR(mr_tmr_get(&drv), &drv);
+    MR_TEST_EXPECT_EQ_INT(mr_tmr_del(&drv), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_tmr_put(&drv), MR_TRUE);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_DRIVER_TMR) */

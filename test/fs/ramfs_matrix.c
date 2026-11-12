@@ -389,11 +389,22 @@ static void ramfs_matrix_run(volatile mr_uint32_t *__test_status,
             break;
         }
         case RAMFS_MATRIX_FIFO_CREATE: {
+#if defined(MR_USE_FS_RAMFS_FIFO)
             ramfs_matrix_expect(__test_status, mr_fs_mkfifo("/fifo"), 0);
-            ramfs_matrix_expect(__test_status, fs_test_stat("/fifo", &stat), 0);
-            ramfs_matrix_expect(__test_status, stat.type, MR_INODE_FIFO);
+            ret = fs_test_stat("/fifo", &stat);
+            ramfs_matrix_expect(__test_status, ret, 0);
+            if (ret == 0) {
+                ramfs_matrix_expect(__test_status, stat.type, MR_INODE_FIFO);
+            }
+#else
+            ramfs_matrix_expect(__test_status, mr_fs_mkfifo("/fifo"),
+                                -MR_ENOSYS);
+            ramfs_matrix_expect(__test_status, fs_test_stat("/fifo", &stat),
+                                -MR_ENOENT);
+#endif /* defined(MR_USE_FS_RAMFS_FIFO) */
             break;
         }
+#if defined(MR_USE_FS_RAMFS_FIFO)
         case RAMFS_MATRIX_FIFO_EMPTY: {
             ramfs_matrix_expect(__test_status, mr_fs_mkfifo("/fifo"), 0);
             ramfs_matrix_expect(__test_status,
@@ -404,14 +415,21 @@ static void ramfs_matrix_run(volatile mr_uint32_t *__test_status,
         }
         case RAMFS_MATRIX_FIFO_ROUNDTRIP: {
             ramfs_matrix_expect(__test_status, mr_fs_mkfifo("/fifo"), 0);
-            ramfs_matrix_expect(__test_status,
-                                mr_fs_open(&file, "/fifo", MR_O_RDWR), 0);
-            ramfs_matrix_expect(__test_status, mr_fs_write(&file, "ok", 2), 2);
-            ramfs_matrix_expect(__test_status, mr_fs_read(&file, buffer, 2), 2);
-            MR_TEST_EXPECT_EQ_INT(mr_memcmp(buffer, "ok", 2), 0);
+            ret = mr_fs_open(&file, "/fifo", MR_O_RDWR);
+            ramfs_matrix_expect(__test_status, ret, 0);
+            if (ret != 0) {
+                break;
+            }
+            ramfs_matrix_expect(__test_status, mr_fs_write(&file, "x", 1), 1);
+            ret = (mr_err_t)mr_fs_read(&file, buffer, 1);
+            ramfs_matrix_expect(__test_status, ret, 1);
+            if (ret == 1) {
+                MR_TEST_EXPECT_EQ_INT(buffer[0], 'x');
+            }
             ramfs_matrix_expect(__test_status, mr_fs_close(&file), 0);
             break;
         }
+#endif /* defined(MR_USE_FS_RAMFS_FIFO) */
         case RAMFS_MATRIX_SYNC_UNSUPPORTED: {
             ramfs_matrix_expect(
                 __test_status,
@@ -477,8 +495,10 @@ RAMFS_MATRIX_CASE(readdir_empty, RAMFS_MATRIX_READDIR_EMPTY)
 RAMFS_MATRIX_CASE(readdir_one, RAMFS_MATRIX_READDIR_ONE)
 RAMFS_MATRIX_CASE(readdir_end, RAMFS_MATRIX_READDIR_END)
 RAMFS_MATRIX_CASE(fifo_create, RAMFS_MATRIX_FIFO_CREATE)
+#if defined(MR_USE_FS_RAMFS_FIFO)
 RAMFS_MATRIX_CASE(fifo_empty, RAMFS_MATRIX_FIFO_EMPTY)
 RAMFS_MATRIX_CASE(fifo_roundtrip, RAMFS_MATRIX_FIFO_ROUNDTRIP)
+#endif /* defined(MR_USE_FS_RAMFS_FIFO) */
 RAMFS_MATRIX_CASE(sync_unsupported, RAMFS_MATRIX_SYNC_UNSUPPORTED)
 
 #undef RAMFS_MATRIX_CASE

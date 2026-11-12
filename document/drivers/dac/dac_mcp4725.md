@@ -1,12 +1,13 @@
 # MCP4725 DAC
 
-复用 [DAC API](dac.md)，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
+复用 [DAC API](dac.md)
+，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
 
-| 项目 | 说明 |
-|---|---|
-| 功能宏 | `MR_USE_DRIVER_DAC`，及对应的 `MR_USE_DRIVER_I2C` |
-| 头文件 | `<mrX/drivers/dac/mr_dac.h>` |
-| 依赖模块 | I2C、Driver；仅 HardTree 有实例时编译 |
+| 项目     | 说明                                              |
+|----------|---------------------------------------------------|
+| 功能宏   | `MR_USE_DRIVER_DAC`，及对应的 `MR_USE_DRIVER_I2C` |
+| 头文件   | `<mrX/drivers/dac/mr_dac.h>`                      |
+| 依赖模块 | I2C、Driver；仅 HardTree 有实例时编译             |
 
 ## 用户指南
 

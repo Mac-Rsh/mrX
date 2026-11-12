@@ -1,6 +1,6 @@
 # STM32H5 驱动适配约定
 
-本目录提供 GPIO、ADC、DAC、GPDMA、UART、基本定时器、片上 FLASH 和 IWDG 适配。
+本目录提供 GPIO、ADC、DAC、GPDMA、UART、ETH、基本定时器、片上 FLASH 和 IWDG 适配。
 分层、资源所有权、HardTree 约定和代码骨架见
 [ST 平台适配规范](../../../document/arch/st/st.md)；本文只记录本芯片
 运行期语义。
@@ -13,7 +13,10 @@ UART stream 需要 DMA。HAL 模块与 HardTree 资源由板级工程配置。
 
 GPIO（`st_stm32h5_gpio`）：`st_gpiox`、`st_clken`、`st_irq_priority`；可选
 `exist_mask` / `invert_mask`。EXTI 线 `n` 仅在存在 `st_irq_handler_n`
-（向量名，如 `EXTI5_IRQHandler`）时生成处理函数。
+（向量名，如 `EXTI5_IRQHandler`）时生成处理函数。同编号的 EXTI 线一次只能由一个
+端口占用，其他端口的同号引脚仍可配置或释放 AF。GPIO 退出中断模式时会解除该线的
+waiter 订阅，再次进入中断模式后需要重新订阅和启用事件。同一引脚在中断模式间切换时
+保留订阅和使能状态。退出或重新配置中断模式时会清除待处理边沿。
 
 DMA（`st_stm32h5_gpdma`）：`st_gpdmax`、`st_clken`、`st_irq_priority`、
 `st_requests`（按下标对应硬件通道的 request/trigger 路由）。每个元素可写成
@@ -80,6 +83,80 @@ WDT（`st_stm32h5_wdt`）：`st_iwdgx`、`st_irqn`、`st_irq_priority`、
 `feed_max` 为超时；`pretimeout` 为提前唤醒提前量，0 表示关闭 EWI。
 IWDG 启动后不可停止，`stop` 为 `MR_NULL`。TIMEOUT 直接复位芯片，
 不提供 TIMEOUT 事件。
+
+ETH（`st_stm32h5_eth`）只允许一个启用实例。公共属性 `mac` 必填，`mtu`
+和 `speed` 见 [ETH 驱动](../../../document/drivers/eth/eth.md)。板级属性如下。
+
+| 属性 | 说明 |
+|------|------|
+| `st_pins` | 按 `<gpio_phandle pin af>` 列出所有 MII/RMII、MDC 和 MDIO 信号。引脚由 STM32H5 GPIO backend 复用为高速 AF。 |
+| `st_phy_addr` | 外部 10/100 Mbit/s Clause 22 PHY 的 MDIO 地址，取值 0 到 31。 |
+| `st_media` | `HAL_ETH_RMII_MODE` 或 `HAL_ETH_MII_MODE`，缺省为 RMII。 |
+| `st_dma_section` | 链接器段名字符串，例如 `".eth_dma"`。板级链接脚本须把该段放在 ETH DMA 可访问且 CPU 不缓存的 SRAM。 |
+| `st_irq_handler` | 启用 Stream 时提供 ETH 向量名，例如 `ETH_IRQHandler`，由后端生成处理函数。 |
+| `st_irqn` / `st_irq_priority` | 可选。缺省为 `ETH_IRQn` 和优先级 `5`。 |
+| `st_dma_region` | 启用 Stream 时提供 `<base size>`，指定应用帧缓冲区所在的 DMA 内存。起始地址和长度都按 32 字节对齐。 |
+
+## ETH 接入与轮询
+
+- 启用 `MR_USE_DRIVER_ETH`、`MR_USE_DRIVER_GPIO` 和 STM32Cube 的
+  `HAL_ETH_MODULE_ENABLED`，设置 `USE_HAL_ETH_REGISTER_CALLBACKS=1`。适配层以
+  STM32CubeH5 FW V1.7.0 的 ETH HAL 接口为依据，拥有 ETH MAC 的时钟、复位和 DMA
+  环。板级工程负责 PHY 供电、复位和参考时钟，调用 setup 前应准备好 PHY。RMII
+  模式应在 HAL 初始化和 MAC 重置期间持续提供 50 MHz 参考时钟。
+- STM32H5 ETH 后端内置 Clause 22 PHY 配置和链路解析，通过 HAL 的 MDIO 读写寄存器；
+  不需要额外加入通用 PHY 源文件。
+- ETH 由 GPIO owner 配置 AF。板级应专用这些引脚。若同一引脚仍占用 EXTI，释放时
+  停机调用会在 MAC 已复位后返回错误，可在该引脚退出中断模式后重试。可用
+  `status = "defer"` 将 setup 延后到板级 PHY 已就绪。
+- 描述符与内部收发缓冲区统一使用 `st_dma_section`，地址须满足板级 DMA 总线、
+  MPU 和安全域要求。开启数据缓存时须将此区域映射为不缓存。描述符数量由 HAL
+  的 `ETH_RX_DESC_CNT` 和 `ETH_TX_DESC_CNT` 决定。
+- 轮询和 Stream 都依赖 HAL 在 RX 补环写 `DMACRDTPR` 前执行 `__DSB()`。
+  板级 HAL 若仍使用 `__DMB()`，接入时需同步 ST 的
+  [RX 补环修复](https://github.com/STMicroelectronics/stm32h5xx-hal-driver/commit/8d26d85)。
+- 自动协商从 Clause 22 的本地通告和对端通告解析 10/100 Mbit/s 及双工。固定
+  10M/100M 使用全双工，对端须设置相同模式。PHY 的并行检测结果没有可通用读取的
+  速率和双工字段。此时 `link()` 仍报告物理链路，收发等待双方完成受支持的
+  协商，或应用改用双方一致的固定速率。
+- 端口启用后允许修改 MTU。修改速率或 MAC 需先配置为 `MR_ETH_SPEED_OFF`。
+  OFF 停止 MAC 和 DMA，不切断外部 PHY 电源。检测到 DMA 总线错误后也可通过
+  OFF 后重新配置来恢复。
+- `link()` 即时读取 PHY，`read()` / `write()` 按 100 ms 间隔更新内部链路
+  模式。RX 轮询复制完整帧，保留 padding 并去掉 FCS。TX 将帧复制到私有暂存区，
+  等待描述符回收最多 20 ms。超时后 DMA 仍可能发送这帧，后端在确认完成或复位前
+  保留暂存区，调用方缓冲区可在调用返回后复用。
+- 这些接口需要普通执行上下文和持续更新的 HAL 时基。应用应串行调用配置、查询、
+  收发和停机。
+
+## ETH Stream
+
+- 开启 `MR_USE_DRIVER_ETH_STREAM`（默认开启）时，每个启用的 STM32H5 ETH 节点
+  必须提供 `st_irq_handler` 和 `st_dma_region`。板级工程应让适配层独占 ETH 向量，
+  避免重复定义。
+- RX 和 TX 共用一组启停状态。挂接普通模式的 Wait 后调用任意一路 `start`，随后可提交两路帧。
+  重复启动返回 `-MR_EBUSY`。两路 `is_busy` 返回相同状态。Stream 启用期间，非空普通读写返回
+  `-MR_EBUSY`。调用任意一路 `stop` 可同时停两路，之后恢复普通收发。
+- 应用拥有 `mr_eth_frame_t` 和帧缓冲区。DMA 直接读写 `frame.buf`，后端仅保留帧和描述符的关联。
+  DMA 访问范围必须落在 `st_dma_region` 内，且由板级映射为 ETH DMA 可访问的不缓存内存。
+  RX 缓冲区仍须按 32 字节对齐，`capacity` 至少为 1536 字节，涵盖 HAL 设置的 DMA 写入长度和 FCS。
+  TX 缓冲区支持字节对齐，DMA 访问范围为 `frame.size`。帧对象独立于 DMA 数据区。
+  RX 最多接管 `ETH_RX_DESC_CNT + 1` 个缓冲区，TX 最多接管 `ETH_TX_DESC_CNT` 帧，队列满返回
+  `-MR_EAGAIN`。TX 完成和停流时均按提交顺序归还帧。
+- Stream 采用一次提交、一次记录、一次通知的所有权模型。RX 提交记录与轮询缓冲池分离；
+  HAL 补环只取尚未交给 DMA 的已提交记录，不会自动循环使用已归还的缓冲区。
+  TX 提交失败立即撤销本次记录，不通知完成，也不接管帧。正常完成和停机取消共用记录移除逻辑。
+  为允许 Wait 回调重新提交，后端在 `raise` 前解除关联并释放锁；`raise` 返回后不再访问该帧，
+  也不保留旧缓冲地址。应用如需继续接收，必须显式重新提交。
+- TX 在把描述符交给 HAL 前执行 `__DSB()`，确保写入不缓存 SRAM 的帧数据已完成。
+  描述符和缓冲区的缓存一致性依赖板级的不缓存映射，驱动无须执行 D-Cache clean 或 invalidate。
+- 链路尚未建立时可先提交 RX 缓冲区。应用在普通执行上下文定期调用 `mr_eth_link()` 推进协商和
+  链路恢复。已运行的链路失效、协商模式变化或 PHY 查询失败时，后端停止 MAC/DMA，
+  以 `-MR_EIO` 归还两路在途帧。Stream 保持启用，可继续提交 RX，等待链路恢复后再发送。
+  PHY 查询失败时，`mr_eth_link()` 返回查询错误。发现 DMA 致命错误时，后端归还两路帧并结束 Stream。
+- 成功或失败完成通过 Wait 归还原帧。RX 的 `size` 排除 FCS，`owner` 保持原值。Wait 回调可提交新帧，
+  配置、启停和链路查询在回调外串行执行。停流先屏蔽 ETH IRQ 并复位 MAC/DMA，再以 `-MR_EPERM`
+  归还两路全部在途帧，包括尚未挂入 RX 环的帧。保留 Wait 到停流返回。
 
 ## 流传输与资源生命周期
 

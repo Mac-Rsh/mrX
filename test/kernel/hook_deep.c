@@ -54,9 +54,6 @@ static void deep_hook_expand(void) {
     }
 }
 
-/* Tests */
-
-/* Test: filling the hook to exact capacity keeps order and count */
 MR_TEST(hook, deep_fill_to_capacity) {
     mr_ptr_t buf[3];
     mr_hook_t hook;
@@ -80,7 +77,6 @@ MR_TEST(hook, deep_fill_to_capacity) {
     MR_TEST_ASSERT_EQ_INT(deep_hook_seq[2], 3);
 }
 
-/* Test: adding past capacity fails without corrupting existing entries */
 MR_TEST(hook, deep_overflow_keeps_state) {
     mr_ptr_t buf[2];
     mr_hook_t hook;
@@ -111,7 +107,6 @@ MR_TEST(hook, deep_overflow_keeps_state) {
     MR_TEST_ASSERT_EQ_INT(hook.next, 2);
 }
 
-/* Test: iterating an empty hook runs the body zero times */
 MR_TEST(hook, deep_each_empty) {
     mr_ptr_t buf[4];
     mr_hook_t hook;
@@ -129,7 +124,6 @@ MR_TEST(hook, deep_each_empty) {
     MR_TEST_ASSERT_EQ_INT(i, 0);
 }
 
-/* Test: iterating a completely full hook covers every entry */
 MR_TEST(hook, deep_each_full_boundary) {
     mr_ptr_t buf[3];
     mr_hook_t hook;
@@ -150,7 +144,6 @@ MR_TEST(hook, deep_each_full_boundary) {
     MR_TEST_EXPECT_EQ_INT(i, 3);
 }
 
-/* Test: the same entry may be registered more than once */
 MR_TEST(hook, deep_duplicate_entries) {
     mr_ptr_t buf[2];
     mr_hook_t hook;
@@ -169,7 +162,6 @@ MR_TEST(hook, deep_duplicate_entries) {
     MR_TEST_ASSERT_EQ_PTR(hook.entry[0], hook.entry[1]);
 }
 
-/* Test: the hook stores and returns arbitrary data pointers verbatim */
 MR_TEST(hook, deep_data_pointers) {
     mr_ptr_t buf[2];
     mr_hook_t hook;
@@ -193,7 +185,6 @@ MR_TEST(hook, deep_data_pointers) {
     MR_TEST_ASSERT_EQ_PTR(hook.entry[1], &b);
 }
 
-/* Test: entries added while iterating are picked up by the same sweep */
 MR_TEST(hook, deep_each_rereads_next) {
     mr_ptr_t buf[4];
     mr_hook_t hook;
@@ -214,7 +205,6 @@ MR_TEST(hook, deep_each_rereads_next) {
     MR_TEST_EXPECT_EQ_INT(hook.next, 2);
 }
 
-/* Test: entries added after a sweep keep the append order */
 MR_TEST(hook, deep_add_after_each_keeps_order) {
     mr_ptr_t buf[4];
     mr_hook_t hook;
@@ -240,7 +230,6 @@ MR_TEST(hook, deep_add_after_each_keeps_order) {
     MR_TEST_ASSERT_EQ_INT(deep_hook_seq_n, 3);
 }
 
-/* Test: a zero size hook cannot store or run anything */
 MR_TEST(hook, deep_zero_size_each) {
     mr_hook_t hook;
     deep_hook_fn_t *entry;
@@ -257,7 +246,6 @@ MR_TEST(hook, deep_zero_size_each) {
     MR_TEST_EXPECT_EQ_INT(i, 0);
 }
 
-/* Test: next grows by exactly one per successful add and never on failure */
 MR_TEST(hook, deep_next_monotonic) {
     mr_ptr_t buf[5];
     mr_hook_t hook;

@@ -16,7 +16,7 @@ int mr_port_output(const char *buf, mr_size_t size) {
 
     /* Write output through the Cortex-M ITM stimulus port */
     for (i = 0U; i < size; i++) {
-        (void)ITM_SendChar((uint32_t)(uint8_t)buf[i]);
+        ITM_SendChar((uint32_t)(uint8_t)buf[i]);
     }
     return (int)size;
 }

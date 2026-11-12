@@ -116,7 +116,6 @@ static mr_uint64_t pca9685_ticks_to_time(mr_uint32_t ticks,
          / PCA9685_COUNTER_TICKS;
 }
 
-/* Stage every channel, then commit all outputs on the same I2C STOP */
 static mr_err_t pca9685_commit(drv_pwm_pca9685_priv_t *priv) {
     mr_uint8_t tx[1U + PCA9685_CHANNEL_COUNT * 4U], *out;
     mr_uint32_t channel, width, on, off;

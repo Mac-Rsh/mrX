@@ -8,10 +8,11 @@
 
 #include <mrX/modules/crypto/sha/mr_sha256.h>
 #if defined(MR_USE_MODULE_CRYPTO_SHA256)
+#include <mrX/kernel/mr_service.h>
 #include <mrX/libc/mr_assert.h>
 #include <mrX/libc/mr_string.h>
 
-/* SHA-256 round constant */
+/* SHA-256 round constants */
 static const mr_uint32_t __sha256_k[64] = {
     0x428a2f98U, 0x71374491U, 0xb5c0fbcfU, 0xe9b5dba5U, 0x3956c25bU,
     0x59f111f1U, 0x923f82a4U, 0xab1c5ed5U, 0xd807aa98U, 0x12835b01U,
@@ -45,15 +46,6 @@ static const mr_uint32_t __sha256_k[64] = {
 #define SHA256_SSIG1(_x)                                                       \
     (SHA256_ROTR((_x), 17U) ^ SHA256_ROTR((_x), 19U) ^ ((_x) >> 10U))
 
-static void sha256_zeroize(void *data, mr_size_t size) {
-    volatile mr_uint8_t *bytes;
-
-    bytes = data;
-    while (size-- != 0U) {
-        *bytes++ = 0U;
-    }
-}
-
 static mr_uint32_t sha256_load_be32(const mr_uint8_t *bytes) {
     return ((mr_uint32_t)bytes[0] << 24U) | ((mr_uint32_t)bytes[1] << 16U)
          | ((mr_uint32_t)bytes[2] << 8U) | (mr_uint32_t)bytes[3];
@@ -73,16 +65,17 @@ static void sha256_transform(mr_sha256_t *sha256,
     mr_uint32_t t1, t2;
     mr_uint32_t i;
 
-    /* Load block */
+    /* Load 16 big-endian schedule words */
     for (i = 0U; i < (MR_SHA256_BLOCK_SIZE / 4U); i++) {
         w[i] = sha256_load_be32(block + (i * 4U));
     }
-    /* Expand message schedule */
+    /* Expand the message schedule */
     for (; i < SHA256_ROUND_NUM; i++) {
         w[i] = SHA256_SSIG1(w[i - 2U]) + w[i - 7U] + SHA256_SSIG0(w[i - 15U])
              + w[i - 16U];
     }
 
+    /* Load the current chaining state */
     a = sha256->state[0];
     b = sha256->state[1];
     c = sha256->state[2];
@@ -92,7 +85,7 @@ static void sha256_transform(mr_sha256_t *sha256,
     g = sha256->state[6];
     h = sha256->state[7];
 
-    /* Compress */
+    /* Mix schedule words and round constants */
     for (i = 0U; i < SHA256_ROUND_NUM; i++) {
         t1 = h + SHA256_BSIG1(e) + SHA256_CH(e, f, g) + __sha256_k[i] + w[i];
         t2 = SHA256_BSIG0(a) + SHA256_MAJ(a, b, c);
@@ -106,7 +99,7 @@ static void sha256_transform(mr_sha256_t *sha256,
         a = t1 + t2;
     }
 
-    /* Add compressed chunk */
+    /* Update the chaining state */
     sha256->state[0] += a;
     sha256->state[1] += b;
     sha256->state[2] += c;
@@ -117,15 +110,15 @@ static void sha256_transform(mr_sha256_t *sha256,
     sha256->state[7] += h;
 
     /* Clear message schedule */
-    sha256_zeroize(w, sizeof(w));
+    mr_memset(w, 0, sizeof(w));
 }
 
 void mr_sha256_init(mr_sha256_t *sha256) {
     /* Check parameter */
     MR_ASSERT(sha256 != MR_NULL);
 
-    /* Init SHA-256 */
-    sha256_zeroize(sha256, sizeof(*sha256));
+    /* Reset context and seed hash state */
+    mr_memset(sha256, 0, sizeof(*sha256));
     sha256->state[0] = 0x6a09e667U;
     sha256->state[1] = 0xbb67ae85U;
     sha256->state[2] = 0x3c6ef372U;
@@ -134,8 +127,6 @@ void mr_sha256_init(mr_sha256_t *sha256) {
     sha256->state[5] = 0x9b05688cU;
     sha256->state[6] = 0x1f83d9abU;
     sha256->state[7] = 0x5be0cd19U;
-    sha256->total_size = 0U;
-    sha256->buffer_size = 0U;
 }
 
 void mr_sha256_update(mr_sha256_t *sha256, const void *data, mr_size_t size) {
@@ -150,9 +141,10 @@ void mr_sha256_update(mr_sha256_t *sha256, const void *data, mr_size_t size) {
         return;
     }
 
-    /* Consume input */
-    bytes = data;
     sha256->total_size += (mr_uint64_t)size;
+    bytes = data;
+
+    /* Fill the pending partial block */
     if (sha256->buffer_size != 0U) {
         take = MR_SHA256_BLOCK_SIZE - sha256->buffer_size;
         if (take > size) {
@@ -167,11 +159,15 @@ void mr_sha256_update(mr_sha256_t *sha256, const void *data, mr_size_t size) {
             sha256->buffer_size = 0U;
         }
     }
+
+    /* Compress full blocks without copying */
     while (size >= MR_SHA256_BLOCK_SIZE) {
         sha256_transform(sha256, bytes);
         bytes += MR_SHA256_BLOCK_SIZE;
         size -= MR_SHA256_BLOCK_SIZE;
     }
+
+    /* Buffer trailing bytes */
     if (size != 0U) {
         mr_memcpy(sha256->buffer, bytes, size);
         sha256->buffer_size = (mr_uint32_t)size;
@@ -187,15 +183,19 @@ void mr_sha256_final(mr_sha256_t *sha256,
     MR_ASSERT(sha256 != MR_NULL);
     MR_ASSERT(digest != MR_NULL);
 
-    /* Pad message */
-    bits = sha256->total_size * 8U;
+    /* Start padding and record the bit length */
     sha256->buffer[sha256->buffer_size++] = 0x80U;
+    bits = sha256->total_size * 8U;
+
+    /* Use an extra block if the length field does not fit */
     if (sha256->buffer_size > (MR_SHA256_BLOCK_SIZE - SHA256_LENGTH_SIZE)) {
         mr_memset(sha256->buffer + sha256->buffer_size, 0,
                   MR_SHA256_BLOCK_SIZE - sha256->buffer_size);
         sha256_transform(sha256, sha256->buffer);
         sha256->buffer_size = 0U;
     }
+
+    /* Pad with zeros and append the big-endian length */
     mr_memset(sha256->buffer + sha256->buffer_size, 0,
               (MR_SHA256_BLOCK_SIZE - SHA256_LENGTH_SIZE)
                   - sha256->buffer_size);
@@ -205,22 +205,22 @@ void mr_sha256_final(mr_sha256_t *sha256,
     }
     sha256_transform(sha256, sha256->buffer);
 
-    /* Output digest */
+    /* Write the big-endian digest */
     for (i = 0U; i < 8U; i++) {
         sha256_store_be32(digest + (i * 4U), sha256->state[i]);
     }
 
     /* Clear working memory */
-    sha256_zeroize(sha256, sizeof(*sha256));
+    mr_memset(sha256, 0, sizeof(*sha256));
 }
 
 void mr_sha256(const void *data, mr_size_t size,
                mr_uint8_t digest[MR_SHA256_DIGEST_SIZE]) {
     mr_sha256_t sha256;
 
+    /* Hash the complete input with a local context */
     mr_sha256_init(&sha256);
     mr_sha256_update(&sha256, data, size);
     mr_sha256_final(&sha256, digest);
 }
-
 #endif /* defined(MR_USE_MODULE_CRYPTO_SHA256) */

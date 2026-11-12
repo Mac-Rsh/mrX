@@ -35,8 +35,8 @@ static mr_ssize_t mock_error_file_read(mr_file_t *file, void *buf,
                                        mr_size_t size);
 static mr_ssize_t mock_error_file_write(mr_file_t *file, const void *buf,
                                         mr_size_t size);
-static mr_err_t mock_error_mount(mr_sblock_t *sb, const char *source,
-                                 int flags, void *data);
+static mr_err_t mock_error_mount(mr_sblock_t *sb, const char *source, int flags,
+                                 void *data);
 
 static const mr_inode_ops_t __mock_error_inode_ops = {
     .create = mock_error_inode_create,
@@ -160,8 +160,8 @@ static mr_ssize_t mock_error_file_write(mr_file_t *file, const void *buf,
     return (mr_ssize_t)size;
 }
 
-static mr_err_t mock_error_mount(mr_sblock_t *sb, const char *source,
-                                 int flags, void *data) {
+static mr_err_t mock_error_mount(mr_sblock_t *sb, const char *source, int flags,
+                                 void *data) {
     mock_error_context_t *context;
 
     MR_IGNORE(source);
@@ -311,15 +311,14 @@ static mr_err_t mknod_fs_inode_mknod(mr_inode_t *dir, const char *name,
                                      mr_inode_type_t type, void *priv,
                                      mr_inode_t **out);
 static void mknod_fs_inode_destroy(mr_inode_t *inode);
-static mr_err_t mknod_fs_mount(mr_sblock_t *sb, const char *source,
-                               int flags, void *data);
+static mr_err_t mknod_fs_mount(mr_sblock_t *sb, const char *source, int flags,
+                               void *data);
 
 static mr_err_t mknod_fs_inode_create_only(mr_inode_t *dir, const char *name,
                                            mr_inode_type_t type,
                                            mr_inode_t **out);
-static mr_err_t mknod_fs_create_only_mount(mr_sblock_t *sb,
-                                           const char *source, int flags,
-                                           void *data);
+static mr_err_t mknod_fs_create_only_mount(mr_sblock_t *sb, const char *source,
+                                           int flags, void *data);
 
 static const mr_inode_ops_t __mknod_fs_root_inode_ops = {
     .create = mknod_fs_inode_create,
@@ -339,8 +338,7 @@ static const mr_file_ops_t __mknod_fs_file_ops;
 static mr_file_system_t __mknod_fs
     = MR_FILE_SYSTEM_INIT("mknodfs", mknod_fs_mount, MR_NULL);
 static mr_file_system_t __mknod_create_only_fs
-    = MR_FILE_SYSTEM_INIT("mknodcreatefs", mknod_fs_create_only_mount,
-                          MR_NULL);
+    = MR_FILE_SYSTEM_INIT("mknodcreatefs", mknod_fs_create_only_mount, MR_NULL);
 
 static void mknod_fs_expect(volatile mr_uint32_t *__test_status,
                             const char *name, mr_int64_t actual,
@@ -448,8 +446,8 @@ static void mknod_fs_inode_destroy(mr_inode_t *inode) {
     }
 }
 
-static mr_err_t mknod_fs_mount(mr_sblock_t *sb, const char *source,
-                               int flags, void *data) {
+static mr_err_t mknod_fs_mount(mr_sblock_t *sb, const char *source, int flags,
+                               void *data) {
     mknod_fs_context_t *context = data;
     mr_inode_t *root;
 
@@ -473,9 +471,8 @@ static mr_err_t mknod_fs_mount(mr_sblock_t *sb, const char *source,
     return 0;
 }
 
-static mr_err_t mknod_fs_create_only_mount(mr_sblock_t *sb,
-                                           const char *source, int flags,
-                                           void *data) {
+static mr_err_t mknod_fs_create_only_mount(mr_sblock_t *sb, const char *source,
+                                           int flags, void *data) {
     mknod_fs_context_t *context = data;
     mr_inode_t *root;
 

@@ -17,15 +17,20 @@
 
 ### 1. 模块概述
 
-驱动框架解决的问题是： **用同一种方式描述、注册、查找和启停一个硬件设备驱动**， 让上层应用不必关心驱动代码放在哪个文件、何时初始化。
+驱动框架解决的问题是： **用同一种方式描述、注册、查找和启停一个硬件设备驱动**，
+让上层应用不必关心驱动代码放在哪个文件、何时初始化。
 
 特性：
 
-- 每个驱动是一个对象（`mr_driver_t`），带类型标签与引用计数，支持静态初始化与 动态创建两种生命周期方式。
-- 通过 `MR_DRIVER_INSTALL` 宏把驱动"安装"到链接段，系统初始化时自动按优先级 依次启动，无需手工调用初始化函数。
+- 每个驱动是一个对象（`mr_driver_t`），带类型标签与引用计数，支持静态初始化与
+  动态创建两种生命周期方式。
+- 通过 `MR_DRIVER_INSTALL` 宏把驱动"安装"到链接段，系统初始化时自动按优先级
+  依次启动，无需手工调用初始化函数。
 - `mr_driver_find` 支持按名称查找任意已安装的驱动，找到即持有引用。
-- 驱动生命周期被明确划分为"注册（init）→ 上电（setup）→ 下电（shutdown）→ 注销（del）"四步，setup/shutdown 可反复循环。
-- 驱动按大类型分类（GPIO/ADC/DAC/RAM/UART/I2C/SPI/DMA/TMR/PWM/WDT/FLASH 等），API 入口会校验类型， 把 A 类驱动指针传给 B 类
+- 驱动生命周期被明确划分为"注册（init）→ 上电（setup）→ 下电（shutdown）→
+  注销（del）"四步，setup/shutdown 可反复循环。
+- 驱动按大类型分类（GPIO/ADC/DAC/RAM/UART/I2C/SPI/DMA/TMR/PWM/WDT/FLASH 等），API
+  入口会校验类型， 把 A 类驱动指针传给 B 类
   API 会被立即拦截。
 
 不适用于：需要复杂总线枚举或热插拔的场景（框架只提供单层驱动模型，无总线/ 设备子树）。
@@ -42,7 +47,8 @@
 #include <mrX/drivers/mr_driver.h>
 ```
 
-具体外设驱动（如 `MR_USE_DRIVER_GPIO`）均 `depends on MR_USE_DRIVER`，因此必须先启用驱动框架，之后具体外设驱动选项才可用。
+具体外设驱动（如 `MR_USE_DRIVER_GPIO`）均 `depends on MR_USE_DRIVER`
+，因此必须先启用驱动框架，之后具体外设驱动选项才可用。
 
 ### 3. 快速上手
 
@@ -73,7 +79,8 @@ MR_DRIVER_INSTALL(my_dev, &my_clazz, MR_DRIVER_TYPE_RAM,
 
 - `MR_DRIVER_INSTALL(name, ...)` 生成驱动对象与注册条目；`name` 即之后
   `mr_driver_find` 使用的名字。
-- 第 3 个参数是驱动大类型，必须非 `MR_DRIVER_TYPE_NONE`；自定义为具体外设 驱动时应使用该外设模块的类型（如
+- 第 3 个参数是驱动大类型，必须非 `MR_DRIVER_TYPE_NONE`；自定义为具体外设
+  驱动时应使用该外设模块的类型（如
   `MR_DRIVER_TYPE_GPIO`）。
 - 最后一个参数是初始化级别，决定启动顺序（见第 4 节）。
 
@@ -97,7 +104,8 @@ if (drv != MR_NULL) {
 - 动态方式：`mr_driver_create` 在堆上创建，`mr_driver_del` 销毁并释放内存。
 - `mr_driver_setup` 执行 clazz 的 `init` 回调（上电）；`mr_driver_shutdown`
   执行 `deinit` 回调（下电）。两者可反复交替调用。
-- `mr_driver_del` 注销驱动：若当前处于 setup 状态会先执行 `deinit`；若有其他 持有者尚未 `put`，实际销毁推迟到最后一个引用归还时。
+- `mr_driver_del` 注销驱动：若当前处于 setup 状态会先执行 `deinit`；若有其他 持有者尚未
+  `put`，实际销毁推迟到最后一个引用归还时。
 
 **运行期行为约定**
 
@@ -117,7 +125,8 @@ if (drv != MR_NULL) {
 `MR_DRIVER_INSTALL` 的最后一个参数决定自动启动顺序，由链接脚本按级别名排序：
 `MR_DRIVER_LEVEL_EARLY`（"1"）→ `MR_DRIVER_LEVEL_PRIO("x")`（"2.x"）→
 `MR_DRIVER_LEVEL_NORMAL`（"3"）→ `MR_DRIVER_LEVEL_LAST`（"4"）。同级别的
-`MR_DRIVER_LEVEL_PRIO` 子级别字符串越小越先。`MR_DRIVER_LEVEL_DEFER`（"9"） 的驱动 **不会**被自动启动，需查找后手动 `setup`。
+`MR_DRIVER_LEVEL_PRIO` 子级别字符串越小越先。`MR_DRIVER_LEVEL_DEFER`（"9"） 的驱动
+**不会**被自动启动，需查找后手动 `setup`。
 
 **回调上下文**：`init`/`deinit` 回调由 `mr_driver_setup`/`mr_driver_shutdown`
 同步调用，因此执行上下文就是调用者当前上下文；系统自动启动阶段则运行在内核初始化流程中。框架本身不额外切换上下文，回调是否允许阻塞由具体调用场景和后端实现决定。
@@ -179,7 +188,8 @@ mr_err_t mr_driver_init(mr_driver_t *drv, const mr_driver_clazz_t *dclazz,
 - `drv`：驱动对象，由调用者分配存储。
 - `dclazz`：驱动 clazz，提供 `init`/`deinit`/`release` 回调，不可为 `MR_NULL`。
 - `type`：驱动大类型，不可为 `MR_DRIVER_TYPE_NONE`。
-- `data` / `priv` / `ops`：驱动数据、私有数据与操作表，语义由具体外设驱动 约定，可为 `MR_NULL`。
+- `data` / `priv` / `ops`：驱动数据、私有数据与操作表，语义由具体外设驱动 约定，可为
+  `MR_NULL`。
 - 返回：成功 `0`，失败负数错误码。
 
 **`mr_driver_create`**
@@ -210,7 +220,8 @@ mr_err_t mr_driver_shutdown(mr_driver_t *drv);
 mr_err_t mr_driver_del(mr_driver_t *drv);
 ```
 
-注销驱动。若驱动仍被其他持有者引用，`deinit` 与 `release` 推迟到引用归零时 执行。成功返回 `0`。
+注销驱动。若驱动仍被其他持有者引用，`deinit` 与 `release` 推迟到引用归零时 执行。成功返回
+`0`。
 
 **`mr_driver_find`**
 
@@ -221,7 +232,8 @@ mr_driver_t *mr_driver_find(const char *name);
 - `name`：安装时的驱动名，不可为 `MR_NULL` 或空串。
 - 返回：成功返回已 `get` 引用的驱动指针（用完需 `mr_driver_put`），未找到返回
   `MR_NULL`。
-- 注意：只能找到经 `MR_DRIVER_INSTALL`（或 `MR_HT_DRIVER_INSTALL`）放入注册段的 驱动；`MR_DRIVER_DEFINE`
+- 注意：只能找到经 `MR_DRIVER_INSTALL`（或 `MR_HT_DRIVER_INSTALL`）放入注册段的 驱动；
+  `MR_DRIVER_DEFINE`
   只定义对象、不生成注册条目，因此查找不到。`MR_DRIVER_INSTALL`
   生成的条目连同对象一起被链接段收集，是"能被找到"的前提。DEFER 级别的内部占位名也不可被找到。
 
@@ -299,30 +311,36 @@ void reference_example(void) {
 
 **Q：`mr_driver_setup` 返回 `-MR_EBUSY`？**
 
-另一个执行流正在对该驱动做 `setup`/`shutdown`。框架用驱动内的锁标志保证同一 驱动的启停互斥，稍后重试即可；不要在 `init`
+另一个执行流正在对该驱动做 `setup`/`shutdown`。框架用驱动内的锁标志保证同一
+驱动的启停互斥，稍后重试即可；不要在 `init`
 回调里再对同一驱动调用
 `setup`/`shutdown`。
 
 **Q：`mr_driver_find` 返回 `MR_NULL`，驱动明明写了？**
 
-排查：驱动是否用 `MR_DRIVER_INSTALL` 安装（`MR_DRIVER_DEFINE` 定义的对象不在 查找段中）；名字拼写是否一致；GNU ld 风格链接脚本是否保留了
+排查：驱动是否用 `MR_DRIVER_INSTALL` 安装（`MR_DRIVER_DEFINE` 定义的对象不在
+查找段中）；名字拼写是否一致；GNU ld 风格链接脚本是否保留了
 `mr_driver.*` 段（MDK 下注册条目带 `used` 属性，armlink 默认保留，见
-[MDK 工程维护](../scripts/mdk/mdk.md) 的"注册段与链接器"一节）；该驱动 是否为 DEFER 级别的内部占位。
+[MDK 工程维护](../scripts/mdk/mdk.md) 的"注册段与链接器"一节）；该驱动 是否为
+DEFER 级别的内部占位。
 
 **Q：setup 失败后驱动处于什么状态？**
 
-保持"未 setup"，`mr_driver_is_ready` 返回 `MR_FALSE`；失败错误码记录在驱动 状态中，可用 `mr_driver_state` 读取。修复硬件问题后可直接再次
+保持"未 setup"，`mr_driver_is_ready` 返回 `MR_FALSE`；失败错误码记录在驱动 状态中，可用
+`mr_driver_state` 读取。修复硬件问题后可直接再次
 `setup`。
 
 **Q：`shutdown` 返回非 0 怎么办？**
 
 `deinit` 失败时 setup 标记保持不变（驱动仍视为已 setup），失败码写入
-`mr_driver_state`，因此 `mr_driver_is_ready` 为假；可再次尝试 `shutdown`。 若硬件实际仍可用，调用一次幂等 `setup` 会把状态清
+`mr_driver_state`，因此 `mr_driver_is_ready` 为假；可再次尝试 `shutdown`。
+若硬件实际仍可用，调用一次幂等 `setup` 会把状态清
 0 并恢复 ready，不会重复 执行 `init`。对象删除时框架仍会再执行一次 `deinit` 兜底。
 
 **Q：静态和动态方式怎么选？**
 
-板上固定外设用 `MR_DRIVER_INSTALL`（注册 + 自动启动）；运行期才确定存在的 设备用 `mr_driver_create` / `mr_driver_del`。
+板上固定外设用 `MR_DRIVER_INSTALL`（注册 + 自动启动）；运行期才确定存在的 设备用
+`mr_driver_create` / `mr_driver_del`。
 
 ---
 
@@ -351,11 +369,15 @@ void reference_example(void) {
 
 关键接线：
 
-- 内核初始化序列在 `MR_INIT_LEVEL_DRIVER`（"1.2"，`mrX/include/mrX/kernel/mr_initcall.h:26`）调用
+- 内核初始化序列在 `MR_INIT_LEVEL_DRIVER`（"1.2"，
+  `mrX/include/mrX/kernel/mr_initcall.h:26`）调用
   `mr_drivers_driver_init`（`mrX/drivers/driver.c:299`，注册于
-  `mrX/drivers/driver.c:319`），遍历链接段 `mr_driver.*` 中 start 到 defer 之间的条目， 逐个 `mr_driver_setup`。
-- 链接脚本以 `KEEP(*(SORT(mr_driver.*)))` 收集注册条目并按级别名排序，这是"初始化级别决定启动顺序"的实现基础。
-- 具体外设驱动通过 `MR_DRIVER_CLAZZES_DEFINE(gpio, ...)` 等宏在 driver clazz 之上叠加自己的
+  `mrX/drivers/driver.c:319`），遍历链接段 `mr_driver.*` 中 start 到 defer 之间的条目，
+  逐个 `mr_driver_setup`。
+- 链接脚本以 `KEEP(*(SORT(mr_driver.*)))`
+  收集注册条目并按级别名排序，这是"初始化级别决定启动顺序"的实现基础。
+- 具体外设驱动通过 `MR_DRIVER_CLAZZES_DEFINE(gpio, ...)` 等宏在 driver clazz
+  之上叠加自己的
   clazz，形成"框架管生命周期、外设管硬件操作"的分工。
 
 ### 9. 数据结构
@@ -393,10 +415,13 @@ typedef struct mr_driver_entry {
 } mr_driver_entry_t;
 ```
 
-`MR_DRIVER_INSTALL`（`mr_driver.h:278`）同时生成驱动对象与该条目，并把条目 放入 `MR_USED const` +
-`MR_SECTION_ALIGN("mr_driver." _level)` 修饰的段； 框架自身在 `mrX/drivers/driver.c:21-23` 安装了三个占位条目
+`MR_DRIVER_INSTALL`（`mr_driver.h:278`）同时生成驱动对象与该条目，并把条目 放入
+`MR_USED const` +
+`MR_SECTION_ALIGN("mr_driver." _level)` 修饰的段； 框架自身在
+`mrX/drivers/driver.c:21-23` 安装了三个占位条目
 start（"0.end"）、defer（"8.end"）、end（"9.end"），用于在段内圈出"自动启动区"：级别字符串排在
-"0.end" 之后、且严格早于 "8.end" 的条目属于自动启动区，"9" 级（`MR_DRIVER_LEVEL_DEFER`）
+"0.end" 之后、且严格早于 "8.end" 的条目属于自动启动区，"9" 级（
+`MR_DRIVER_LEVEL_DEFER`）
 排在 defer 占位之后，因此落在自动启动区之外。
 
 `MR_DRIVER_INSTALL` 展开出的对象名与条目名分别为 `__mr_driver_<name>` 与
@@ -417,13 +442,16 @@ start + 1 遍历到 defer（不含），对每个条目断言 `drv` 非空后调
 4. 调用 `drv->clazz->init(drv)`；返回 0 才置 SETUP 标志。
 5. 未走幂等早退时，以返回值调用 `mr_driver_state_set` 写入状态，最后解锁。
 
-**shutdown（`mrX/drivers/driver.c:181`）**：与 setup 对称——未 setup 直接 成功； clazz 无 `deinit` 直接清除 SETUP；`deinit` 返回
+**shutdown（`mrX/drivers/driver.c:181`）**：与 setup 对称——未 setup 直接 成功；
+clazz 无 `deinit` 直接清除 SETUP；`deinit` 返回
 0 才清除 SETUP 标志， 失败则 SETUP 保持（`MR_DRIVER_IS_SETUP` 仍为真，见测试
-`shutdown_fail_keeps_setup`），状态记录错误码；之后再调用一次 `setup` 会把 state 清 0 并恢复 `mr_driver_is_ready`，不重复
+`shutdown_fail_keeps_setup`），状态记录错误码；之后再调用一次 `setup` 会把 state 清
+0 并恢复 `mr_driver_is_ready`，不重复
 `init`。
 
 **删除（`mrX/drivers/driver.c:77`）**：`mr_driver_del` 先原子置
-`MR_DRIVER_FLAG_DYING`，再走对象删除通道 `mr_object_del`。对象引用计数未归零 时不立即释放；归零时触发 clazz 的 release 通道（
+`MR_DRIVER_FLAG_DYING`，再走对象删除通道 `mr_object_del`。对象引用计数未归零
+时不立即释放；归零时触发 clazz 的 release 通道（
 `mrX/drivers/driver.c:268`）：
 `driver_obj_release` 先对仍处 SETUP 状态的驱动补一次 `deinit`（测试
 `delete_with_extra_reference` 验证了 `deinit` 推迟到引用归零），再调用
@@ -433,41 +461,56 @@ start + 1 遍历到 defer（不含），对每个条目断言 `drv` 非空后调
 注意补调路径使用 `driver_del`（`mrX/drivers/driver.c:253`），它不写 `state`、
 也不清除 SETUP 标志，与 `mr_driver_shutdown` 不同。
 
-**查找（`mrX/drivers/driver.c:222`）**：线性扫描注册段，`mr_strcmp` 命中后 检查条目是否为内部 defer 占位（命中占位返回
+**查找（`mrX/drivers/driver.c:222`）**：线性扫描注册段，`mr_strcmp` 命中后 检查条目是否为内部
+defer 占位（命中占位返回
 `MR_NULL`），否则
-`mr_driver_get` 返回带引用的驱动。段首 start 占位被 `start + 1` 跳过，end 占位在区间外，因此外部名字无法命中它们。
+`mr_driver_get` 返回带引用的驱动。段首 start 占位被 `start + 1` 跳过，end
+占位在区间外，因此外部名字无法命中它们。
 
 ### 11. 并发与中断安全
 
 - 并发控制不使用传统互斥锁，而是 `flags` 上的原子操作：`driver_lock`
-  （`mrX/drivers/driver.c:90`）在 CAS 循环中检查 DYING/LOCK 后尝试置 LOCK；若读到 LOCK 已置位立即返回
-  `-MR_EBUSY`，读到 DYING 立即返回 `-MR_EPERM`，因此该循环只在 CAS 失败重试时才重复；`driver_unlock`
-  （`mrX/drivers/driver.c:113`）用 `fetch_and` 清除。它保证同一驱动的 `setup`/`shutdown` 互斥，但不提供排队或阻塞等待。
+  （`mrX/drivers/driver.c:90`）在 CAS 循环中检查 DYING/LOCK 后尝试置 LOCK；若读到
+  LOCK 已置位立即返回
+  `-MR_EBUSY`，读到 DYING 立即返回 `-MR_EPERM`，因此该循环只在 CAS 失败重试时才重复；
+  `driver_unlock`
+  （`mrX/drivers/driver.c:113`）用 `fetch_and` 清除。它保证同一驱动的 `setup`/
+  `shutdown` 互斥，但不提供排队或阻塞等待。
 - `init`/`deinit` 回调在持有 LOCK 标志期间同步执行：回调内不要再次对同一驱动调用
   `setup`/`shutdown`（会得到 `-MR_EBUSY`），也不要在 `del` 后继续使用该对象。
-- 驱动框架不统一承诺各 API 都可在中断上下文调用。特别是动态创建、最后一次 `put`、删除后的最终释放都可能进入 `deinit`/
+- 驱动框架不统一承诺各 API 都可在中断上下文调用。特别是动态创建、最后一次 `put`
+  、删除后的最终释放都可能进入 `deinit`/
   `release`，动态对象还可能执行 `mr_free`；具体上下文约束应由调用者结合对象生命周期和后端实现判断。
-- 操作类 API 入口通常以 `MR_DRIVER_ASSERT` 校验非空、对象已初始化、clazz 为 driver、已 setup 且 major type 匹配；类型化
-  `*_del` 使用 `MR_DRIVER_ASSERT_TYPE`，不要求已 setup。断言关闭时这些编程错误不再由框架拦截，调用者必须保证指针来源正确。
+- 操作类 API 入口通常以 `MR_DRIVER_ASSERT` 校验非空、对象已初始化、clazz 为
+  driver、已 setup 且 major type 匹配；类型化
+  `*_del` 使用 `MR_DRIVER_ASSERT_TYPE`，不要求已
+  setup。断言关闭时这些编程错误不再由框架拦截，调用者必须保证指针来源正确。
 
 ### 12. 扩展与派生
 
 外设驱动子模块的标准派生方式（以 [GPIO](gpio/gpio.md) 为例）：
 
 1. 在子模块源文件中 `MR_DRIVER_CLAZZES_DEFINE(gpio, gpio_init, gpio_deinit,
-   gpio_release)` 定义自己的静态/动态 clazz。子模块可在 `init`/`deinit` 中维护模型资源，例如 UART、WDT、TMR、I2C 都会初始化/销毁自己的
+   gpio_release)` 定义自己的静态/动态 clazz。子模块可在 `init`/`deinit`
+   中维护模型资源，例如 UART、WDT、TMR、I2C 都会初始化/销毁自己的
    `mr_waitable_t`；动态 clazz 的 `release` 通常负责释放 `data`。
-2. 提供类型化包装（`mr_gpio_init`/`mr_gpio_create` 等 `MR_INLINE` 函数），内部固定传入 `MR_DRIVER_TYPE_GPIO` 与子模块
+2. 提供类型化包装（`mr_gpio_init`/`mr_gpio_create` 等 `MR_INLINE` 函数），内部固定传入
+   `MR_DRIVER_TYPE_GPIO` 与子模块
    clazz，让上层通过类型化入口操作驱动。
-3. 操作表 `ops` 定义该外设的能力集。必需能力通常在包装层以 `MR_ASSERT` 要求非空；真正可选的能力允许置 `MR_NULL`，对应 API
+3. 操作表 `ops` 定义该外设的能力集。必需能力通常在包装层以 `MR_ASSERT`
+   要求非空；真正可选的能力允许置 `MR_NULL`，对应 API
    再返回 `-MR_ENOSYS`。
 
 硬件描述侧通过 hardtree（`mrX/include/mrX/drivers/mr_hardtree.h`）派生：
-`.hts` 硬件模板经 `python ./scripts/cli.py htc` 生成 `mr_hardgen.h` 宏树， 驱动源文件定义 `MR_HT_COMPAT` 后用
-`MR_HT_DRIVER_INSTALL`（`mr_driver.h:681`， 默认级别取节点的 `INIT_LEVEL` 属性，缺省 DEFER）按实例批量安装驱动；
-`mr_driver.h:696` 对 DRIVER 兼容组的所有实例统一导出，免去了跨文件 import/export。具体外设 backend 的 HardTree、ops、IRQ/DMA
+`.hts` 硬件模板经 `python ./scripts/cli.py htc` 生成 `mr_hardgen.h` 宏树，
+驱动源文件定义 `MR_HT_COMPAT` 后用
+`MR_HT_DRIVER_INSTALL`（`mr_driver.h:681`， 默认级别取节点的 `INIT_LEVEL` 属性，缺省
+DEFER）按实例批量安装驱动；
+`mr_driver.h:696` 对 DRIVER 兼容组的所有实例统一导出，免去了跨文件
+import/export。具体外设 backend 的 HardTree、ops、IRQ/DMA
 与平台资源接线不在驱动框架文档展开，请阅读对应驱动目录下的 `porting.md`
-，例如 [GPIO 移植](gpio/porting.md)、[ADC 移植](adc/porting.md) 和 [UART 移植](uart/porting.md)。
+，例如 [GPIO 移植](gpio/porting.md)、[ADC 移植](adc/porting.md)
+和 [UART 移植](uart/porting.md)。
 
 ### 13. 源码导读
 
@@ -505,19 +548,24 @@ start + 1 遍历到 defer（不含），对每个条目断言 `drv` 非空后调
 | `MR_DRIVER_TYPE_RAM/GPIO/UART/I2C/ADC/DAC/DMA/TMR/WDT/FLASH/SPI/PWM` | 大类型（0x0100 起，步进 0x0100）                                           |
 | `MR_DRIVER_TYPE_MASK`                                                | 类型掩码 0xff00，`MR_DRIVER_ASSERT` / `MR_DRIVER_ASSERT_TYPE` 用其比较类别 |
 
-**错误码**：驱动框架核心的生命周期控制主要返回 `-MR_EBUSY`（驱动正被 setup/shutdown）与 `-MR_EPERM`（驱动正在删除）；具体外设包装层还可能返回
-`-MR_EINVAL`、`-MR_ENOSYS` 等错误。错误码定义见 `mrX/include/mrX/libc/mr_errno.h`。空指针、类型不符等编程错误在断言开启时由
+**错误码**：驱动框架核心的生命周期控制主要返回 `-MR_EBUSY`（驱动正被
+setup/shutdown）与 `-MR_EPERM`（驱动正在删除）；具体外设包装层还可能返回
+`-MR_EINVAL`、`-MR_ENOSYS` 等错误。错误码定义见 `mrX/include/mrX/libc/mr_errno.h`
+。空指针、类型不符等编程错误在断言开启时由
 `MR_ASSERT` 拦截，而不是统一转换成返回值。
 
 ---
 
 ## 本目录其它驱动
 
-驱动框架只提供生命周期、引用计数和硬件树实例化。具体外设的配置项、API 与事件语义 在各自的文档中：
+驱动框架只提供生命周期、引用计数和硬件树实例化。具体外设的配置项、API 与事件语义
+在各自的文档中：
 跨外设的启动、事件和停止顺序见[驱动组合与进阶示例](examples.md)。
-I2C/SPI 外扩芯片还需遵守[串行总线外扩驱动共同行为](serial_peripheral.md)中的生命周期、互斥与错误恢复约束。
+I2C/SPI 外扩芯片还需遵守[串行总线外扩驱动共同行为](serial_peripheral.md)
+中的生命周期、互斥与错误恢复约束。
 
-每一类驱动都有两张文档： **主文档**面向应用，讲怎么用； **`porting.md`** 面向平台 backend，
+每一类驱动都有两张文档： **主文档**面向应用，讲怎么用； **`porting.md`** 面向平台
+backend，
 讲怎么实现。
 
 | 驱动           | 用户文档（怎么用）                        | 移植文档（怎么实现）           | 对应外设类型                       |
@@ -545,7 +593,10 @@ I2C/SPI 外扩芯片还需遵守[串行总线外扩驱动共同行为](serial_pe
 | MCP4922 DAC    | [dac_mcp4922.md](dac/dac_mcp4922.md)      | —                              | SPI DAC                            |
 | PCA9685 PWM    | [pwm_pca9685.md](pwm/pwm_pca9685.md)      | —                              | I2C PWM 扩展器                     |
 
-接入 mrX 的完整流程见[框架使用指南](../usage.md)，全部文档的入口见[文档入口](../README.md)。
+接入 mrX 的完整流程见[框架使用指南](../usage.md)
+，全部文档的入口见[文档入口](../README.md)。
 
-新增外设驱动时，先按本文的开发者指南实现 `MR_DRIVER_CLAZZES_DEFINE` 与 ops， 再参考类型最接近的上述文档补齐用户指南；
-`porting.md` 按[文档编写与维护规范](../documentation.md#11-骨架的适用范围)规定的移植文档结构编写。
+新增外设驱动时，先按本文的开发者指南实现 `MR_DRIVER_CLAZZES_DEFINE` 与 ops，
+再参考类型最接近的上述文档补齐用户指南；
+`porting.md` 按[文档编写与维护规范](../documentation.md#11-骨架的适用范围)
+规定的移植文档结构编写。

@@ -16,12 +16,10 @@ static mr_err_t pwm_deinit(const mr_driver_t *drv);
 static void pwm_release(const mr_driver_t *drv);
 MR_DRIVER_CLAZZES_DEFINE(pwm, pwm_init, pwm_deinit, pwm_release);
 
-/* Check whether a resource mask is non-zero and available */
 static mr_bool_t pwm_mask_valid(mr_uint32_t requested, mr_uint32_t available) {
     return (requested != 0U) && ((requested & ~available) == 0U);
 }
 
-/* Check whether a resource index is available */
 static mr_bool_t pwm_index_valid(mr_uint32_t index, mr_uint32_t available) {
     return (index < 32U) && ((available & (1U << index)) != 0U);
 }

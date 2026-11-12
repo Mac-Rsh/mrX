@@ -43,7 +43,6 @@ static void test_work_chain_entry(struct mr_work *work, void *param) {
     }
 }
 
-/* Tests */
 MR_TEST(work, derive_init) {
     mr_workqueue_t queue;
     mr_err_t ret;

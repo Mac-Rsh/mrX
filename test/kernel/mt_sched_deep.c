@@ -18,28 +18,28 @@
 #include <mrX/libc/mr_string.h>
 
 /* Multi-thread test thread count definition */
-#define MT_SCHED_THREADS                 (3)
+#define MT_SCHED_THREADS (3)
 
 /* Multi-thread test per thread iteration count definition */
-#define MT_SCHED_ITERS                   (100)
+#define MT_SCHED_ITERS (100)
 
 /* Multi-thread test total batch work count definition */
-#define MT_WORK_COUNT                    (MT_SCHED_THREADS * MT_SCHED_ITERS)
+#define MT_WORK_COUNT (MT_SCHED_THREADS * MT_SCHED_ITERS)
 
 /* Multi-thread test delayed per thread work count definition */
-#define MT_DELAYED_ITERS                 (40)
+#define MT_DELAYED_ITERS (40)
 
 /* Multi-thread test delayed total work count definition */
-#define MT_DELAYED_COUNT                 (MT_SCHED_THREADS * MT_DELAYED_ITERS)
+#define MT_DELAYED_COUNT (MT_SCHED_THREADS * MT_DELAYED_ITERS)
 
 /* Multi-thread test wait register iteration count definition */
-#define MT_REG_ITERS                     (50)
+#define MT_REG_ITERS (50)
 
 /* Multi-thread test spin safety limit definition */
-#define MT_SCHED_SPIN_LIMIT              (2000000)
+#define MT_SCHED_SPIN_LIMIT (2000000)
 
 /* Multi-thread test idle drain limit definition */
-#define MT_SCHED_IDLE_LIMIT              (100000)
+#define MT_SCHED_IDLE_LIMIT (100000)
 
 /* Multi-thread thread handle type */
 typedef struct mt_sched_thread {
@@ -48,14 +48,12 @@ typedef struct mt_sched_thread {
     int id;
 } mt_sched_thread_t;
 
-/* Helper: yields the cpu periodically to interleave threads */
 static void mt_sched_point(int counter) {
     if ((counter & 0xff) == 0) {
         sched_yield();
     }
 }
 
-/* Helper: joins every started thread and reports join failures */
 static int mt_sched_join(mt_sched_thread_t *threads, int count) {
     int i;
     int ret = 0;
@@ -100,7 +98,6 @@ typedef struct mt_work_arg {
     int count;
 } mt_work_arg_t;
 
-/* Batch entry: records one execution of the tagged work */
 static void mt_work_batch_entry(struct mr_work *work, void *param) {
     mt_work_item_t *item = (mt_work_item_t *)param;
     mt_work_ctx_t *ctx = item->ctx;
@@ -112,7 +109,6 @@ static void mt_work_batch_entry(struct mr_work *work, void *param) {
     mr_atomic_fetch_add(&ctx->executed, 1);
 }
 
-/* Single entry: records one execution of the shared work */
 static void mt_work_single_entry(struct mr_work *work, void *param) {
     mt_work_ctx_t *ctx = (mt_work_ctx_t *)param;
 
@@ -120,7 +116,6 @@ static void mt_work_single_entry(struct mr_work *work, void *param) {
     mr_atomic_fetch_add(&ctx->executed, 1);
 }
 
-/* Executor: drains the queue until the helpers are done and drained */
 static void *mt_work_executor(void *argument) {
     mt_work_arg_t *arg = argument;
     mt_work_ctx_t *ctx = arg->ctx;
@@ -128,7 +123,7 @@ static void *mt_work_executor(void *argument) {
     int spins = 0;
 
     while (spins < MT_SCHED_SPIN_LIMIT) {
-        (void)mr_workqueue_execute(&ctx->queue);
+        mr_workqueue_execute(&ctx->queue);
         mt_sched_point(spins);
         spins++;
         if (mr_atomic_load(&ctx->done) >= (mr_uint32_t)arg->count) {
@@ -148,7 +143,6 @@ static void *mt_work_executor(void *argument) {
     return MR_NULL;
 }
 
-/* Producer: schedules dynamic works with unique tags */
 static void *mt_work_producer(void *argument) {
     mt_work_arg_t *arg = argument;
     mt_work_ctx_t *ctx = arg->ctx;
@@ -157,8 +151,7 @@ static void *mt_work_producer(void *argument) {
 
     for (i = 0; i < arg->count; i++) {
         int tag = base + i;
-        mr_work_t *work = mr_work_create(mt_work_batch_entry,
-                                         &ctx->items[tag]);
+        mr_work_t *work = mr_work_create(mt_work_batch_entry, &ctx->items[tag]);
 
         if (!work) {
             break;
@@ -175,7 +168,6 @@ static void *mt_work_producer(void *argument) {
     return MR_NULL;
 }
 
-/* Producer: schedules pre-bound static works */
 static void *mt_work_statik_producer(void *argument) {
     mt_work_arg_t *arg = argument;
     mt_work_ctx_t *ctx = arg->ctx;
@@ -195,7 +187,6 @@ static void *mt_work_statik_producer(void *argument) {
     return MR_NULL;
 }
 
-/* Producer: schedules pre-bound static works with a delay */
 static void *mt_work_delayed_producer(void *argument) {
     mt_work_arg_t *arg = argument;
     mt_work_ctx_t *ctx = arg->ctx;
@@ -215,7 +206,6 @@ static void *mt_work_delayed_producer(void *argument) {
     return MR_NULL;
 }
 
-/* Contender: hammers the schedule of one shared work */
 static void *mt_work_contender(void *argument) {
     mt_work_arg_t *arg = argument;
     mt_work_ctx_t *ctx = arg->ctx;
@@ -231,14 +221,13 @@ static void *mt_work_contender(void *argument) {
     return MR_NULL;
 }
 
-/* Canceller: cancels every third work while the queue runs */
 static void *mt_work_canceller(void *argument) {
     mt_work_arg_t *arg = argument;
     mt_work_ctx_t *ctx = arg->ctx;
     int i;
 
     for (i = 0; i < arg->count; i += 3) {
-        (void)mr_work_cancel(&ctx->storage[i]);
+        mr_work_cancel(&ctx->storage[i]);
         ctx->cancelled[i] = 1;
         mt_sched_point(i);
     }
@@ -246,7 +235,6 @@ static void *mt_work_canceller(void *argument) {
     return MR_NULL;
 }
 
-/* Test: concurrent producers and one executor keep work conservation */
 MR_TEST(work, mt_producer_executor_conservation) {
     mt_work_arg_t args[MT_SCHED_THREADS + 1];
     mt_sched_thread_t threads[MT_SCHED_THREADS + 1];
@@ -290,15 +278,16 @@ MR_TEST(work, mt_producer_executor_conservation) {
         threads[MT_SCHED_THREADS].started = 1;
     }
     MR_TEST_EXPECT_EQ_INT(mt_sched_join(threads, MT_SCHED_THREADS), 0);
-    MR_TEST_EXPECT_EQ_INT(mt_sched_join(&threads[MT_SCHED_THREADS],
-                                        threads[MT_SCHED_THREADS].started
-                                            ? 1 : 0), 0);
+    MR_TEST_EXPECT_EQ_INT(
+        mt_sched_join(&threads[MT_SCHED_THREADS],
+                      threads[MT_SCHED_THREADS].started ? 1 : 0),
+        0);
 
     /* Final drain on the main thread in case the executor left early */
     while ((spins < 1000)
            && ((int)mr_atomic_load(&ctx.executed)
                < (int)mr_atomic_load(&ctx.scheduled))) {
-        (void)mr_workqueue_execute(&ctx.queue);
+        mr_workqueue_execute(&ctx.queue);
         spins++;
     }
 
@@ -326,7 +315,6 @@ MR_TEST(work, mt_producer_executor_conservation) {
      * not exercised here */
 }
 
-/* Test: cancel racing execute never runs a work twice */
 MR_TEST(work, mt_cancel_vs_execute_race) {
     mt_work_arg_t args[MT_SCHED_THREADS + 1];
     mt_sched_thread_t threads[MT_SCHED_THREADS + 1];
@@ -345,8 +333,7 @@ MR_TEST(work, mt_cancel_vs_execute_race) {
     for (i = 0; i < producers * per_producer; i++) {
         ctx.items[i].ctx = &ctx;
         ctx.items[i].tag = i;
-        ret = mr_work_init(&ctx.storage[i], mt_work_batch_entry,
-                           &ctx.items[i]);
+        ret = mr_work_init(&ctx.storage[i], mt_work_batch_entry, &ctx.items[i]);
         MR_TEST_ASSERT_EQ_INT(ret, 0);
         MR_TEST_ASSERT_EQ_INT(mr_work_bind(&ctx.storage[i], &ctx.queue), 0);
     }
@@ -370,8 +357,8 @@ MR_TEST(work, mt_cancel_vs_execute_race) {
     args[producers].count = producers * per_producer;
     threads[producers].started = 0;
     threads[producers].id = -1;
-    ret = pthread_create(&threads[producers].handle, MR_NULL,
-                         mt_work_canceller, &args[producers]);
+    ret = pthread_create(&threads[producers].handle, MR_NULL, mt_work_canceller,
+                         &args[producers]);
     if (ret == 0) {
         threads[producers].started = 1;
     }
@@ -389,7 +376,7 @@ MR_TEST(work, mt_cancel_vs_execute_race) {
 
     /* Final flush so every uncancelled scheduled work has been run */
     for (i = 0; i < 4; i++) {
-        (void)mr_workqueue_execute(&ctx.queue);
+        mr_workqueue_execute(&ctx.queue);
     }
 
     /* A cancelled work may run zero times(raced before pop) or once
@@ -403,8 +390,8 @@ MR_TEST(work, mt_cancel_vs_execute_race) {
     for (i = 0; i < producers * per_producer; i++) {
         fired_total += ctx.fired[i];
     }
-    MR_TEST_EXPECT_LE_UINT(fired_total, (mr_uint32_t)(producers
-        * per_producer));
+    MR_TEST_EXPECT_LE_UINT(fired_total,
+                           (mr_uint32_t)(producers * per_producer));
     MR_TEST_EXPECT_EQ_UINT(fired_total,
                            (mr_uint32_t)mr_atomic_load(&ctx.executed));
 
@@ -414,7 +401,6 @@ MR_TEST(work, mt_cancel_vs_execute_race) {
     MR_TEST_EXPECT_EQ_INT(mr_workqueue_del(&ctx.queue), 0);
 }
 
-/* Test: delayed works scheduled concurrently all fire exactly once */
 MR_TEST(work, mt_delayed_concurrent_fire) {
     mt_work_arg_t args[MT_SCHED_THREADS + 1];
     mt_sched_thread_t threads[MT_SCHED_THREADS + 1];
@@ -430,8 +416,7 @@ MR_TEST(work, mt_delayed_concurrent_fire) {
     for (i = 0; i < MT_DELAYED_COUNT; i++) {
         ctx.items[i].ctx = &ctx;
         ctx.items[i].tag = i;
-        ret = mr_work_init(&ctx.storage[i], mt_work_batch_entry,
-                           &ctx.items[i]);
+        ret = mr_work_init(&ctx.storage[i], mt_work_batch_entry, &ctx.items[i]);
         MR_TEST_ASSERT_EQ_INT(ret, 0);
         MR_TEST_ASSERT_EQ_INT(mr_work_bind(&ctx.storage[i], &ctx.queue), 0);
     }
@@ -461,9 +446,10 @@ MR_TEST(work, mt_delayed_concurrent_fire) {
         threads[MT_SCHED_THREADS].started = 1;
     }
     MR_TEST_EXPECT_EQ_INT(mt_sched_join(threads, MT_SCHED_THREADS), 0);
-    MR_TEST_EXPECT_EQ_INT(mt_sched_join(&threads[MT_SCHED_THREADS],
-                                        threads[MT_SCHED_THREADS].started
-                                            ? 1 : 0), 0);
+    MR_TEST_EXPECT_EQ_INT(
+        mt_sched_join(&threads[MT_SCHED_THREADS],
+                      threads[MT_SCHED_THREADS].started ? 1 : 0),
+        0);
 
     /* The realtime tick thread advances the clock, the executor drains
      * the queue as the delayed works expire */
@@ -482,7 +468,6 @@ MR_TEST(work, mt_delayed_concurrent_fire) {
     MR_TEST_EXPECT_EQ_INT(mr_workqueue_del(&ctx.queue), 0);
 }
 
-/* Test: contended schedule of one work keeps schedule and execute equal */
 MR_TEST(work, mt_single_work_contended_schedule) {
     mt_work_arg_t args[MT_SCHED_THREADS + 1];
     mt_sched_thread_t threads[MT_SCHED_THREADS + 1];
@@ -524,12 +509,13 @@ MR_TEST(work, mt_single_work_contended_schedule) {
         threads[MT_SCHED_THREADS].started = 1;
     }
     MR_TEST_EXPECT_EQ_INT(mt_sched_join(threads, MT_SCHED_THREADS), 0);
-    MR_TEST_EXPECT_EQ_INT(mt_sched_join(&threads[MT_SCHED_THREADS],
-                                        threads[MT_SCHED_THREADS].started
-                                            ? 1 : 0), 0);
+    MR_TEST_EXPECT_EQ_INT(
+        mt_sched_join(&threads[MT_SCHED_THREADS],
+                      threads[MT_SCHED_THREADS].started ? 1 : 0),
+        0);
 
     for (i = 0; i < 4; i++) {
-        (void)mr_workqueue_execute(&ctx.queue);
+        mr_workqueue_execute(&ctx.queue);
     }
 
     /* Every successful schedule must produce exactly one execution */
@@ -562,9 +548,8 @@ typedef struct mt_wait_arg {
     int id;
 } mt_wait_arg_t;
 
-/* Callback: counts the fires of one waiter */
-static void mt_wait_cb(mr_waiter_t *waiter, void *param,
-                       mr_wait_event_t event, const void *data) {
+static void mt_wait_cb(mr_waiter_t *waiter, void *param, mr_wait_event_t event,
+                       const void *data) {
     mt_wait_arg_t *arg = (mt_wait_arg_t *)param;
 
     MR_IGNORE(waiter);
@@ -573,7 +558,6 @@ static void mt_wait_cb(mr_waiter_t *waiter, void *param,
     mr_atomic_fetch_add(&arg->ctx->fires[arg->id], 1);
 }
 
-/* Waiter thread: registers its waiter then waits for one raise */
 static void *mt_wait_register_thread(void *argument) {
     mt_wait_arg_t *arg = argument;
     mt_wait_ctx_t *ctx = arg->ctx;
@@ -596,7 +580,6 @@ static void *mt_wait_register_thread(void *argument) {
     return MR_NULL;
 }
 
-/* Test: waiters registered from many threads each fire exactly once */
 MR_TEST(wait, mt_registered_waiters_single_raise) {
     mt_wait_arg_t args[MT_SCHED_THREADS];
     mt_sched_thread_t threads[MT_SCHED_THREADS];
@@ -667,9 +650,8 @@ typedef struct mt_reg_arg {
     int id;
 } mt_reg_arg_outer_t;
 
-/* Callback: counts the fires of one register-loop waiter */
-static void mt_reg_cb(mr_waiter_t *waiter, void *param,
-                      mr_wait_event_t event, const void *data) {
+static void mt_reg_cb(mr_waiter_t *waiter, void *param, mr_wait_event_t event,
+                      const void *data) {
     struct mt_reg_item *arg = (struct mt_reg_item *)param;
 
     MR_IGNORE(waiter);
@@ -678,22 +660,19 @@ static void mt_reg_cb(mr_waiter_t *waiter, void *param,
     mr_atomic_fetch_add(&arg->ctx->fires[arg->id], 1);
 }
 
-/* Raiser: raises until the register loop signals stop */
 static void *mt_reg_raiser(void *argument) {
     mt_reg_arg_outer_t *arg = argument;
     mt_reg_ctx_t *ctx = arg->ctx;
     int i = 0;
 
-    while ((i < MT_SCHED_SPIN_LIMIT)
-           && (mr_atomic_load(&ctx->stop) == 0)) {
-        (void)mr_waitable_raise(&ctx->able, MR_WAIT_IN, MR_NULL);
+    while ((i < MT_SCHED_SPIN_LIMIT) && (mr_atomic_load(&ctx->stop) == 0)) {
+        mr_waitable_raise(&ctx->able, MR_WAIT_IN, MR_NULL);
         mt_sched_point(i);
         i++;
     }
     return MR_NULL;
 }
 
-/* Registerer: registers waiters one by one while raises are in flight */
 static void *mt_reg_registerer(void *argument) {
     mt_reg_arg_outer_t *arg = argument;
     mt_reg_ctx_t *ctx = arg->ctx;
@@ -702,14 +681,15 @@ static void *mt_reg_registerer(void *argument) {
 
     for (i = 0; i < MT_REG_ITERS; i++) {
         if (mr_waiter_init(&ctx->waiters[i], mt_reg_cb, &ctx->args[i],
-                           MR_WAIT_IN) != 0) {
+                           MR_WAIT_IN)
+            != 0) {
             ctx->reg_fail = 1;
             break;
         }
         ctx->inited[i] = 1;
         if (mr_waiter_wait(&ctx->waiters[i], &ctx->able) != 0) {
             ctx->reg_fail = 1;
-            (void)mr_waiter_cancel(&ctx->waiters[i]);
+            mr_waiter_cancel(&ctx->waiters[i]);
             break;
         }
 
@@ -723,13 +703,12 @@ static void *mt_reg_registerer(void *argument) {
         if (mr_atomic_load(&ctx->fires[i]) > 0) {
             ctx->fired_seen[i] = 1;
         }
-        (void)mr_waiter_cancel(&ctx->waiters[i]);
+        mr_waiter_cancel(&ctx->waiters[i]);
     }
     mr_atomic_store(&ctx->stop, 1);
     return MR_NULL;
 }
 
-/* Test: a waiter registered during a raise still fires on a later raise */
 MR_TEST(wait, mt_register_during_raise) {
     mt_reg_arg_outer_t rarg;
     mt_reg_arg_outer_t larg;
@@ -759,8 +738,7 @@ MR_TEST(wait, mt_register_during_raise) {
     }
     threads[1].started = 0;
     threads[1].id = 1;
-    ret = pthread_create(&threads[1].handle, MR_NULL, mt_reg_registerer,
-                         &rarg);
+    ret = pthread_create(&threads[1].handle, MR_NULL, mt_reg_registerer, &rarg);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     if (ret == 0) {
         threads[1].started = 1;
@@ -795,9 +773,8 @@ typedef struct mt_race_ctx {
     mr_atomic_t stop;
 } mt_race_ctx_t;
 
-/* Callback: counts the fires of the raced waiter */
-static void mt_race_cb(mr_waiter_t *waiter, void *param,
-                       mr_wait_event_t event, const void *data) {
+static void mt_race_cb(mr_waiter_t *waiter, void *param, mr_wait_event_t event,
+                       const void *data) {
     mt_race_ctx_t *ctx = (mt_race_ctx_t *)param;
 
     MR_IGNORE(waiter);
@@ -806,33 +783,30 @@ static void mt_race_cb(mr_waiter_t *waiter, void *param,
     mr_atomic_fetch_add(&ctx->fires, 1);
 }
 
-/* Event set thread: repeatedly moves the waiter off the waitable */
 static void *mt_race_event_set(void *argument) {
     mt_race_ctx_t *ctx = argument;
     int i;
 
     for (i = 0; i < 200; i++) {
-        (void)mr_waiter_event_set(&ctx->racer, MR_WAIT_IN);
+        mr_waiter_event_set(&ctx->racer, MR_WAIT_IN);
         mt_sched_point(i);
     }
     mr_atomic_fetch_add(&ctx->done, 1);
     return MR_NULL;
 }
 
-/* Rewait thread: repeatedly puts the waiter back on the waitable */
 static void *mt_race_rewait(void *argument) {
     mt_race_ctx_t *ctx = argument;
     int i;
 
     for (i = 0; i < 200; i++) {
-        (void)mr_waiter_wait(&ctx->racer, &ctx->able);
+        mr_waiter_wait(&ctx->racer, &ctx->able);
         mt_sched_point(i);
     }
     mr_atomic_fetch_add(&ctx->done, 1);
     return MR_NULL;
 }
 
-/* Raiser: raises until the mutating threads are done */
 static void *mt_race_raiser(void *argument) {
     mt_race_ctx_t *ctx = argument;
     int i = 0;
@@ -840,14 +814,13 @@ static void *mt_race_raiser(void *argument) {
     while ((i < MT_SCHED_SPIN_LIMIT)
            && ((mr_atomic_load(&ctx->stop) == 0)
                && (mr_atomic_load(&ctx->done) < 2))) {
-        (void)mr_waitable_raise(&ctx->able, MR_WAIT_IN, MR_NULL);
+        mr_waitable_raise(&ctx->able, MR_WAIT_IN, MR_NULL);
         mt_sched_point(i);
         i++;
     }
     return MR_NULL;
 }
 
-/* Test: event set and cancel racing raise never corrupt the waiter */
 MR_TEST(wait, mt_event_set_cancel_vs_raise) {
     mt_sched_thread_t threads[3];
     mt_race_ctx_t ctx;
@@ -864,8 +837,7 @@ MR_TEST(wait, mt_event_set_cancel_vs_raise) {
 
     threads[0].started = 0;
     threads[0].id = 0;
-    ret = pthread_create(&threads[0].handle, MR_NULL, mt_race_event_set,
-                         &ctx);
+    ret = pthread_create(&threads[0].handle, MR_NULL, mt_race_event_set, &ctx);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     if (ret == 0) {
         threads[0].started = 1;
@@ -917,7 +889,6 @@ typedef struct mt_cross_ctx {
     int fires2;
 } mt_cross_ctx_t;
 
-/* Callbacks: each counter is only touched by its own raiser thread */
 static void mt_cross_cb1(mr_waiter_t *waiter, void *param,
                          mr_wait_event_t event, const void *data) {
     mt_cross_ctx_t *ctx = (mt_cross_ctx_t *)param;
@@ -944,20 +915,17 @@ typedef struct mt_cross_arg {
     int count;
 } mt_cross_arg_t;
 
-/* Raiser: raises one waitable a fixed number of times */
 static void *mt_cross_raiser(void *argument) {
     mt_cross_arg_t *arg = argument;
     int i;
 
     for (i = 0; i < arg->count; i++) {
-        (void)mr_waitable_raise(arg->able, MR_WAIT_IN, MR_NULL);
+        mr_waitable_raise(arg->able, MR_WAIT_IN, MR_NULL);
         mt_sched_point(i);
     }
     return MR_NULL;
 }
 
-/* Test: concurrent raises on two waitables fire each waiter exactly
- * once per raise */
 MR_TEST(wait, mt_two_waitables_cross_raise) {
     mt_cross_arg_t args[2];
     mt_sched_thread_t threads[2];
@@ -1027,7 +995,6 @@ typedef struct mt_irq_ctx {
 /* Active context pointer(set once per case before the threads start) */
 static mt_irq_ctx_t *mt_irq_active = MR_NULL;
 
-/* Irq controller no-op operations */
 static void mt_irq_op_priority_set(mr_uint32_t irq, mr_uint8_t priority,
                                    void *priv) {
     MR_IGNORE(irq);
@@ -1061,6 +1028,7 @@ static void mt_irq_op_mask(mr_uint32_t irq, void *priv) {
     MR_IGNORE(priv);
 }
 
+/* Irq controller no-op operations */
 static const mr_irq_ops_t mt_irq_ops = {
     .priority_set = mt_irq_op_priority_set,
     .type_set = mt_irq_op_type_set,
@@ -1070,7 +1038,6 @@ static const mr_irq_ops_t mt_irq_ops = {
     .mask = mt_irq_op_mask,
 };
 
-/* Top handler: counts and defers */
 static mr_irq_return_t mt_irq_top_deferred(mr_uint32_t irq, void *owner) {
     mt_irq_ctx_t *ctx = mt_irq_active;
 
@@ -1080,7 +1047,6 @@ static mr_irq_return_t mt_irq_top_deferred(mr_uint32_t irq, void *owner) {
     return MR_IRQ_DEFERRED;
 }
 
-/* Top handler that returns none so the shared chain keeps walking */
 static mr_irq_return_t mt_irq_top_none(mr_uint32_t irq, void *owner) {
     mt_irq_ctx_t *ctx = mt_irq_active;
 
@@ -1090,7 +1056,6 @@ static mr_irq_return_t mt_irq_top_none(mr_uint32_t irq, void *owner) {
     return MR_IRQ_NONE;
 }
 
-/* Defer entry: counts one deferred fire */
 static mr_irq_return_t mt_irq_defer_entry1(mr_uint32_t irq, void *owner) {
     mt_irq_ctx_t *ctx = mt_irq_active;
 
@@ -1113,14 +1078,13 @@ static void *mt_irq_handler(void *argument) {
     int i;
 
     for (i = 0; i < arg->count; i++) {
-        (void)mr_irq_handle(arg->line);
+        mr_irq_handle(arg->line);
         mt_sched_point(i);
     }
     mr_atomic_fetch_add(&arg->ctx->handles_done, 1);
     return MR_NULL;
 }
 
-/* Executor: drains the global defer queue until the handlers are done */
 static void *mt_irq_executor(void *argument) {
     mt_irq_arg_t *arg = argument;
     int idle = 0;
@@ -1140,7 +1104,6 @@ static void *mt_irq_executor(void *argument) {
     return MR_NULL;
 }
 
-/* Test: concurrent handles and defer executes coalesce edges safely */
 MR_TEST(irq, mt_defer_edge_coalesce_concurrent) {
     mt_irq_arg_t args[MT_SCHED_THREADS + 1];
     mt_sched_thread_t threads[MT_SCHED_THREADS + 1];
@@ -1184,9 +1147,10 @@ MR_TEST(irq, mt_defer_edge_coalesce_concurrent) {
         threads[MT_SCHED_THREADS].started = 1;
     }
     MR_TEST_EXPECT_EQ_INT(mt_sched_join(threads, MT_SCHED_THREADS), 0);
-    MR_TEST_EXPECT_EQ_INT(mt_sched_join(&threads[MT_SCHED_THREADS],
-                                        threads[MT_SCHED_THREADS].started
-                                            ? 1 : 0), 0);
+    MR_TEST_EXPECT_EQ_INT(
+        mt_sched_join(&threads[MT_SCHED_THREADS],
+                      threads[MT_SCHED_THREADS].started ? 1 : 0),
+        0);
 
     /* Flush anything still queued in the defer workqueue */
     for (i = 0; i < 200; i++) {
@@ -1221,7 +1185,6 @@ MR_TEST(irq, mt_defer_edge_coalesce_concurrent) {
      * action->defer(use after free) */
 }
 
-/* Top handler of the second shared action: counts and defers */
 static mr_irq_return_t mt_irq_top_deferred2(mr_uint32_t irq, void *owner) {
     mt_irq_ctx_t *ctx = mt_irq_active;
 
@@ -1231,7 +1194,6 @@ static mr_irq_return_t mt_irq_top_deferred2(mr_uint32_t irq, void *owner) {
     return MR_IRQ_DEFERRED;
 }
 
-/* Defer entry of the first action(never reached, it returns none) */
 static mr_irq_return_t mt_irq_defer_entry_none(mr_uint32_t irq, void *owner) {
     mt_irq_ctx_t *ctx = mt_irq_active;
 
@@ -1241,7 +1203,6 @@ static mr_irq_return_t mt_irq_defer_entry_none(mr_uint32_t irq, void *owner) {
     return MR_IRQ_HANDLED;
 }
 
-/* Test: two deferred actions on one shared line under concurrent handles */
 MR_TEST(irq, mt_shared_line_deferred_actions) {
     mt_irq_arg_t args[MT_SCHED_THREADS + 1];
     mt_sched_thread_t threads[MT_SCHED_THREADS + 1];
@@ -1289,9 +1250,10 @@ MR_TEST(irq, mt_shared_line_deferred_actions) {
         threads[MT_SCHED_THREADS].started = 1;
     }
     MR_TEST_EXPECT_EQ_INT(mt_sched_join(threads, MT_SCHED_THREADS), 0);
-    MR_TEST_EXPECT_EQ_INT(mt_sched_join(&threads[MT_SCHED_THREADS],
-                                        threads[MT_SCHED_THREADS].started
-                                            ? 1 : 0), 0);
+    MR_TEST_EXPECT_EQ_INT(
+        mt_sched_join(&threads[MT_SCHED_THREADS],
+                      threads[MT_SCHED_THREADS].started ? 1 : 0),
+        0);
 
     for (i = 0; i < 200; i++) {
         mr_irq_defer_execute();
@@ -1317,7 +1279,6 @@ MR_TEST(irq, mt_shared_line_deferred_actions) {
 
 #endif /* defined(MR_USE_IRQ_DEFER) */
 #endif /* defined(MR_USE_IRQ) */
-
 
 #endif /* defined(MR_USE_TEST_PTHREAD) */
 #endif /* defined(MR_USE_TEST) */

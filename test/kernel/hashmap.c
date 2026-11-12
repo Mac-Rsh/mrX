@@ -25,8 +25,6 @@ static void hashmap_init_local(mr_hashmap_t *map, mr_list_t *buckets) {
     mr_hashmap_init(map, buckets, TEST_HASHMAP_BUCKET_NUM);
 }
 
-/* Tests */
-
 MR_TEST(hashmap, init) {
     mr_hashmap_t map;
     mr_list_t buckets[3];

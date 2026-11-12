@@ -41,6 +41,7 @@ typedef int mr_err_t;
 #define MR_EINVAL                       EINVAL
 #define MR_ENOSYS                       ENOSYS
 #define MR_ETIMEDOUT                    ETIMEDOUT
+#define MR_ECANCELED                    ECANCELED
 #define MR_EBADF                        EBADF
 #define MR_ENOTDIR                      ENOTDIR
 #define MR_EISDIR                       EISDIR
@@ -65,6 +66,7 @@ typedef int mr_err_t;
 #define MR_EINVAL                       (22)
 #define MR_ENOSYS                       (40)
 #define MR_ETIMEDOUT                    (116)
+#define MR_ECANCELED                    (125)
 #define MR_EBADF                        (9)
 #define MR_ENOTDIR                      (20)
 #define MR_EISDIR                       (21)

@@ -44,7 +44,6 @@ static void test_timer_stop_entry(mr_timer_t *timer, void *param) {
     mr_timer_stop(timer);
 }
 
-/* Tests */
 MR_TEST(timer, derive_init) {
     static mr_timer_t timer = MR_TIMER_DERIVE_INIT(
         &timer, &test_timer_clazz, test_timer_entry, MR_NULL, 1);

@@ -16,7 +16,6 @@ typedef struct {
     char b;
 } test_container_t;
 
-/* Tests */
 MR_TEST(service, container_of) {
     test_container_t *out;
     test_container_t obj;

@@ -15,6 +15,8 @@ static int adc_read_count;
 static int adc_stream_start_count;
 static int adc_stream_stop_count;
 static mr_uint32_t adc_last_channel;
+static mr_uint32_t adc_events;
+static mr_bool_t adc_events_enabled;
 static mr_adc_config_t adc_last_config;
 static mr_adc_seq_t adc_last_seq;
 #if defined(MR_USE_DRIVER_ADC_STREAM)
@@ -112,6 +114,14 @@ static mr_err_t adc_stream_get_offset(const mr_driver_t *drv,
 }
 #endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
+static mr_err_t adc_event_control(const mr_driver_t *drv, mr_uint32_t events,
+                                  mr_bool_t enable) {
+    MR_IGNORE(drv);
+    adc_events = events;
+    adc_events_enabled = enable;
+    return 0;
+}
+
 static const mr_adc_ops_t adc_ops = {
     .channel_configure = adc_channel_configure,
     .channel_configuration = adc_channel_configuration,
@@ -122,6 +132,7 @@ static const mr_adc_ops_t adc_ops = {
     .stream_is_busy = adc_stream_is_busy,
     .stream_offset = adc_stream_get_offset,
 #endif
+    .event_control = adc_event_control,
 };
 
 static mr_driver_t *adc_create(mr_uint32_t exist_mask) {
@@ -135,6 +146,7 @@ static mr_driver_t *adc_create(mr_uint32_t exist_mask) {
     return mr_adc_create(data, MR_NULL, (mr_adc_ops_t *)&adc_ops);
 }
 
+#if defined(MR_USE_DRIVER_ADC_STREAM)
 static void adc_waiter_entry(mr_waiter_t *waiter, void *param,
                              mr_wait_event_t event, const void *data) {
     int *count = (int *)param;
@@ -144,6 +156,7 @@ static void adc_waiter_entry(mr_waiter_t *waiter, void *param,
     MR_IGNORE(data);
     (*count)++;
 }
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
 MR_TEST(adc, lifecycle_and_reference) {
     mr_driver_t *drv;
@@ -328,6 +341,65 @@ MR_TEST(adc, event_paths) {
 }
 
 #endif
+
+MR_TEST(adc, hardtree_specification) {
+    mr_ht_adc_spec_t spec = {
+        .channel = 3U,
+        .resolution = 8U,
+        .config = {.gain = MR_ADC_GAIN_1},
+    };
+    mr_uint8_t value = 0;
+    mr_adc_seq_t seq = {.size = sizeof(value), .buf = &value};
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+    const mr_adc_stream_config_t config = {0};
+    mr_size_t offset = 0U;
+    mr_bool_t busy = MR_FALSE;
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
+
+    adc_test_reset();
+    spec.drv = adc_create(1U << 3);
+    MR_TEST_ASSERT_NE_PTR(spec.drv, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(spec.drv), 0);
+
+    MR_TEST_EXPECT_EQ_INT(mr_ht_adc_configure(&spec), 0);
+    MR_TEST_EXPECT_EQ_UINT(adc_last_channel, 3U);
+    MR_TEST_EXPECT_EQ_UINT(adc_last_config.gain, MR_ADC_GAIN_1);
+    mr_ht_adc_seq_init(&spec, &seq);
+    MR_TEST_EXPECT_EQ_UINT(seq.channels, 1U << 3);
+    MR_TEST_EXPECT_EQ_UINT(seq.resolution, 8U);
+    MR_TEST_EXPECT_EQ_PTR(seq.buf, &value);
+    adc_read_ret = sizeof(value);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_adc_read(&spec, &seq), sizeof(value));
+    MR_TEST_EXPECT_EQ_UINT(adc_last_seq.channels, 1U << 3);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_adc_raw2millivolt(&spec, 128), 600);
+    spec.ref_voltage = 2000;
+    MR_TEST_EXPECT_EQ_INT(mr_ht_adc_raw2microvolt(&spec, 128), 1000000);
+    MR_TEST_EXPECT_EQ_FLOAT(mr_ht_adc_raw2volt(&spec, 128), 1.0f);
+
+    MR_TEST_EXPECT_EQ_INT(
+        mr_ht_adc_event_enable(&spec, MR_ADC_WAIT_STREAM_HALF), 0);
+    MR_TEST_EXPECT_EQ_UINT(adc_events, MR_ADC_WAIT_STREAM_HALF);
+    MR_TEST_EXPECT_EQ_INT(adc_events_enabled, MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(
+        mr_ht_adc_event_disable(&spec, MR_ADC_WAIT_STREAM_FULL), 0);
+    MR_TEST_EXPECT_EQ_UINT(adc_events, MR_ADC_WAIT_STREAM_FULL);
+    MR_TEST_EXPECT_EQ_INT(adc_events_enabled, MR_FALSE);
+
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+    MR_TEST_EXPECT_EQ_INT(mr_ht_adc_stream_start(&spec, &seq, &config), 0);
+    MR_TEST_EXPECT_EQ_INT(adc_stream_start_count, 1);
+    adc_busy = MR_TRUE;
+    adc_offset = 1U;
+    MR_TEST_EXPECT_EQ_INT(mr_ht_adc_stream_is_busy(&spec, &busy), 0);
+    MR_TEST_EXPECT_EQ_INT(busy, MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_adc_stream_offset(&spec, &offset), 0);
+    MR_TEST_EXPECT_EQ_UINT(offset, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_adc_stream_stop(&spec), 0);
+    MR_TEST_EXPECT_EQ_INT(adc_stream_stop_count, 1);
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
+
+    MR_TEST_EXPECT_EQ_INT(mr_adc_del(spec.drv), 0);
+}
 
 MR_TEST(adc, init_static_and_reference) {
     mr_driver_t drv;

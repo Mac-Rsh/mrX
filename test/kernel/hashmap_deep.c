@@ -22,17 +22,14 @@ typedef struct test_deep_item {
     int value;
 } test_deep_item_t;
 
-/* Replicated hash function of the hashmap implementation */
 static mr_uint32_t test_deep_hash(mr_uint32_t key) {
     return key * 2654435761U;
 }
 
-/* Bucket index of a key for a given bucket number */
 static mr_uint32_t test_deep_bucket(mr_uint32_t key, mr_uint32_t bucket_num) {
     return test_deep_hash(key) % bucket_num;
 }
 
-/* Find the first key greater than start hashing to the same bucket */
 static mr_uint32_t test_deep_next_collision(mr_uint32_t start,
                                             mr_uint32_t bucket_num) {
     mr_uint32_t key;
@@ -46,7 +43,6 @@ static mr_uint32_t test_deep_next_collision(mr_uint32_t start,
     return start;
 }
 
-/* Count every node reachable through the iteration macro */
 static int test_deep_count(mr_hashmap_t *map) {
     mr_hashnode_t *node;
     mr_uint32_t bi;
@@ -59,9 +55,6 @@ static int test_deep_count(mr_hashmap_t *map) {
     return count;
 }
 
-/* Tests */
-
-/* Test: every node is linked into the bucket its key hashes to */
 MR_TEST(hashmap, bucket_index_matches_hash) {
     mr_list_t buckets[8];
     mr_hashmap_t map;
@@ -78,13 +71,13 @@ MR_TEST(hashmap, bucket_index_matches_hash) {
     }
 
     MR_HASHMAP_FOR_EACH(node, bi, &map) {
-        MR_TEST_ASSERT_EQ_UINT(test_deep_bucket(mr_hashnode_key(node),
-                                                MR_ARRAY_SIZE(buckets)), bi);
+        MR_TEST_ASSERT_EQ_UINT(
+            test_deep_bucket(mr_hashnode_key(node), MR_ARRAY_SIZE(buckets)),
+            bi);
     }
     MR_TEST_ASSERT_EQ_INT(test_deep_count(&map), 20);
 }
 
-/* Test: two distinct keys colliding in one bucket coexist and are found */
 MR_TEST(hashmap, collision_pair_coexist) {
     mr_list_t buckets[5];
     mr_hashmap_t map;
@@ -110,7 +103,6 @@ MR_TEST(hashmap, collision_pair_coexist) {
     MR_TEST_ASSERT_EQ_INT(test_deep_count(&map), 2);
 }
 
-/* Test: nodes appended to a colliding bucket keep insertion order */
 MR_TEST(hashmap, collision_chain_order_tail_append) {
     mr_list_t buckets[5];
     mr_hashmap_t map;
@@ -139,7 +131,6 @@ MR_TEST(hashmap, collision_chain_order_tail_append) {
     MR_TEST_ASSERT_EQ_PTR(node->list.next, &buckets[bucket]);
 }
 
-/* Test: deleting the middle of a three node collision chain keeps ends */
 MR_TEST(hashmap, collision_chain_del_middle) {
     mr_list_t buckets[5];
     mr_hashmap_t map;
@@ -170,7 +161,6 @@ MR_TEST(hashmap, collision_chain_del_middle) {
     MR_TEST_ASSERT_EQ_INT(mr_hashmap_is_empty(&map), MR_FALSE);
 }
 
-/* Test: a failed duplicate add leaves the map unchanged */
 MR_TEST(hashmap, duplicate_add_failure_no_side_effect) {
     mr_list_t buckets[TEST_DEEP_BUCKET_NUM];
     mr_hashmap_t map;
@@ -189,7 +179,6 @@ MR_TEST(hashmap, duplicate_add_failure_no_side_effect) {
     MR_TEST_ASSERT_EQ_INT(mr_hashmap_is_empty(&map), MR_FALSE);
 }
 
-/* Test: deleting an already deleted node reports no entry */
 MR_TEST(hashmap, del_twice_second_enoent) {
     mr_list_t buckets[TEST_DEEP_BUCKET_NUM];
     mr_hashmap_t map;
@@ -205,7 +194,6 @@ MR_TEST(hashmap, del_twice_second_enoent) {
     MR_TEST_ASSERT_EQ_INT(test_deep_count(&map), 0);
 }
 
-/* Test: a node removed from one map can join another map */
 MR_TEST(hashmap, move_node_between_maps) {
     mr_list_t buckets1[TEST_DEEP_BUCKET_NUM];
     mr_list_t buckets2[TEST_DEEP_BUCKET_NUM];
@@ -226,7 +214,6 @@ MR_TEST(hashmap, move_node_between_maps) {
     MR_TEST_ASSERT_EQ_INT(test_deep_count(&map2), 1);
 }
 
-/* Test: extreme uint32 keys are found with no sign or overflow trouble */
 MR_TEST(hashmap, key_extremes) {
     mr_list_t buckets[8];
     mr_hashmap_t map;
@@ -246,8 +233,9 @@ MR_TEST(hashmap, key_extremes) {
         items[i].value = (int)i;
         mr_hashnode_init(&items[i].node, keys[i], &items[i].value);
         MR_TEST_EXPECT_EQ_INT(mr_hashmap_add(&map, &items[i].node), 0);
-        MR_TEST_EXPECT_LT_UINT(test_deep_bucket(keys[i], MR_ARRAY_SIZE(buckets)),
-                               MR_ARRAY_SIZE(buckets));
+        MR_TEST_EXPECT_LT_UINT(
+            test_deep_bucket(keys[i], MR_ARRAY_SIZE(buckets)),
+            MR_ARRAY_SIZE(buckets));
     }
     for (i = 0; i < 5; i++) {
         node = mr_hashmap_find(&map, keys[i]);
@@ -257,7 +245,6 @@ MR_TEST(hashmap, key_extremes) {
     MR_TEST_ASSERT_EQ_INT(test_deep_count(&map), 5);
 }
 
-/* Test: a node may change its key while detached and rejoin */
 MR_TEST(hashmap, readd_after_del_with_new_key) {
     mr_list_t buckets[TEST_DEEP_BUCKET_NUM];
     mr_hashmap_t map;
@@ -275,7 +262,6 @@ MR_TEST(hashmap, readd_after_del_with_new_key) {
     MR_TEST_ASSERT_EQ_INT(test_deep_count(&map), 1);
 }
 
-/* Test: a zero initialized node is rejected as already added */
 MR_TEST(hashmap, add_zeroed_node) {
     mr_list_t buckets[TEST_DEEP_BUCKET_NUM];
     mr_hashmap_t map;
@@ -290,7 +276,6 @@ MR_TEST(hashmap, add_zeroed_node) {
     MR_TEST_ASSERT_EQ_INT(mr_hashmap_is_empty(&map), MR_TRUE);
 }
 
-/* Test: lookup only inspects the bucket of the replicated hash */
 MR_TEST(hashmap, find_only_searches_hash_bucket) {
     mr_list_t buckets[TEST_DEEP_BUCKET_NUM];
     mr_hashmap_t map;
@@ -315,7 +300,6 @@ MR_TEST(hashmap, find_only_searches_hash_bucket) {
     MR_TEST_ASSERT_EQ_PTR(mr_hashmap_find(&map, 1), &item.node);
 }
 
-/* Test: a single bucket map chains every key */
 MR_TEST(hashmap, single_bucket_map) {
     mr_list_t buckets[1];
     mr_hashmap_t map;
@@ -345,7 +329,6 @@ MR_TEST(hashmap, single_bucket_map) {
     MR_TEST_ASSERT_EQ_INT(mr_hashmap_is_empty(&map), MR_FALSE);
 }
 
-/* Test: iteration macros run zero times on an empty map */
 MR_TEST(hashmap, foreach_empty_map) {
     mr_list_t buckets[3];
     mr_hashmap_t map;
@@ -369,7 +352,6 @@ MR_TEST(hashmap, foreach_empty_map) {
     MR_TEST_ASSERT_EQ_INT(mr_hashmap_is_empty(&map), MR_TRUE);
 }
 
-/* Test: safe iteration can delete every node including chain tails */
 MR_TEST(hashmap, foreach_safe_delete_all) {
     mr_list_t buckets[TEST_DEEP_BUCKET_NUM];
     mr_hashmap_t map;
@@ -402,7 +384,6 @@ MR_TEST(hashmap, foreach_safe_delete_all) {
     MR_TEST_ASSERT_EQ_INT(count, 0);
 }
 
-/* Test: normal iteration walks buckets strictly in index order */
 MR_TEST(hashmap, foreach_bucket_order) {
     mr_list_t buckets[TEST_DEEP_BUCKET_NUM];
     mr_hashmap_t map;
@@ -422,8 +403,8 @@ MR_TEST(hashmap, foreach_bucket_order) {
 
     prev_bucket = 0;
     MR_HASHMAP_FOR_EACH(node, bi, &map) {
-        this_bucket = test_deep_bucket(mr_hashnode_key(node),
-                                       TEST_DEEP_BUCKET_NUM);
+        this_bucket
+            = test_deep_bucket(mr_hashnode_key(node), TEST_DEEP_BUCKET_NUM);
         MR_TEST_ASSERT_EQ_UINT(this_bucket, bi);
         MR_TEST_EXPECT_GE_UINT(this_bucket, prev_bucket);
         prev_bucket = this_bucket;
@@ -431,7 +412,6 @@ MR_TEST(hashmap, foreach_bucket_order) {
     MR_TEST_ASSERT_EQ_INT(test_deep_count(&map), 12);
 }
 
-/* Test: a failed add does not stop a later add of the same node */
 MR_TEST(hashmap, readd_after_eexist) {
     mr_list_t buckets[TEST_DEEP_BUCKET_NUM];
     mr_hashmap_t map;
@@ -450,7 +430,6 @@ MR_TEST(hashmap, readd_after_eexist) {
     MR_TEST_ASSERT_EQ_INT(test_deep_count(&map), 1);
 }
 
-/* Test: a larger map holds many keys with no cross talk */
 MR_TEST(hashmap, many_keys_stress) {
     mr_list_t buckets[8];
     mr_hashmap_t map;

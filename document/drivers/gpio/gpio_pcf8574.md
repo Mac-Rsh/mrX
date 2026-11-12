@@ -1,12 +1,13 @@
 # PCF8574 / PCF8574A GPIO
 
-复用 [GPIO API](gpio.md)，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
+复用 [GPIO API](gpio.md)
+，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
 
-| 项目 | 说明 |
-|---|---|
-| 功能宏 | `MR_USE_DRIVER_GPIO`，及对应的 `MR_USE_DRIVER_I2C` |
-| 头文件 | `<mrX/drivers/gpio/mr_gpio.h>` |
-| 依赖模块 | I2C、Driver；仅 HardTree 有实例时编译 |
+| 项目     | 说明                                               |
+|----------|----------------------------------------------------|
+| 功能宏   | `MR_USE_DRIVER_GPIO`，及对应的 `MR_USE_DRIVER_I2C` |
+| 头文件   | `<mrX/drivers/gpio/mr_gpio.h>`                     |
+| 依赖模块 | I2C、Driver；仅 HardTree 有实例时编译              |
 
 ## 用户指南
 

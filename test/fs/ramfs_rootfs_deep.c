@@ -7,21 +7,24 @@
  */
 
 #include <mrX/test/mr_test.h>
-#if defined(MR_USE_TEST) && defined(MR_USE_FS)
+#if defined(MR_USE_TEST) && defined(MR_USE_FS)                                 \
+    && (defined(MR_USE_FS_RAMFS) || defined(MR_USE_FS_ROOTFS))
 #include <mrX.h>
 #include <mrX/test/fs/fs_test.h>
 
-/* Default RamFS FIFO capacity in bytes */
-#define DEEP_FIFO_CAP                 (32)
-/* Sparse write offset exercising a large zero-filled hole */
-#define DEEP_HOLE_OFFSET              (100000)
+#if defined(MR_USE_FS_RAMFS_FIFO) && (MR_CFG_FS_RAMFS_FIFO_SIZE == 32)
+/* RamFS FIFO fixture capacity in bytes */
+#define DEEP_FIFO_CAP (32)
 /* Create/destroy cycles for the FIFO reclaim test */
-#define DEEP_FIFO_CYCLES              (8)
+#define DEEP_FIFO_CYCLES (8)
 
 /* FIFO test patterns */
 static const char deep_fifo_data24[] = "0123456789abcdefghijklmn";
 static const char deep_fifo_data16[] = "QRSTUVWXYZabcdef";
 static const char deep_fifo_data32[] = "abcdefghijklmnopqrstuvwxyz012345";
+
+#endif /* defined(MR_USE_FS_RAMFS_FIFO) && (MR_CFG_FS_RAMFS_FIFO_SIZE == 32)   \
+        */
 
 static void deep_expect(volatile mr_uint32_t *__test_status, const char *name,
                         mr_int64_t actual, mr_int64_t expected) {
@@ -30,6 +33,7 @@ static void deep_expect(volatile mr_uint32_t *__test_status, const char *name,
     MR_TEST_EXPECT_EQ_INT(actual, expected);
 }
 
+#if defined(MR_USE_FS_RAMFS)
 static void deep_mem_expect(volatile mr_uint32_t *__test_status,
                             const char *name, const void *actual,
                             const void *expected, mr_size_t size) {
@@ -40,6 +44,9 @@ static void deep_mem_expect(volatile mr_uint32_t *__test_status,
     MR_TEST_EXPECT_EQ_INT(cmp, 0);
 }
 
+#endif /* defined(MR_USE_FS_RAMFS) */
+
+#if defined(MR_USE_FS_ROOTFS)
 static void deep_stat_expect(volatile mr_uint32_t *__test_status,
                              const char *path, mr_err_t expected,
                              mr_inode_type_t type) {
@@ -54,7 +61,9 @@ static void deep_stat_expect(volatile mr_uint32_t *__test_status,
     return;
 }
 
-/* Test: a FIFO accepts an exact-capacity transfer and reuses the ring */
+#endif /* defined(MR_USE_FS_ROOTFS) */
+
+#if defined(MR_USE_FS_RAMFS_FIFO) && (MR_CFG_FS_RAMFS_FIFO_SIZE == 32)
 MR_TEST(fs, ramfs_deep_fifo_exact_capacity) {
     static const char fill_a[] = "0123456789abcdefghijklmnopqrstuv";
     static const char fill_b[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345";
@@ -83,8 +92,8 @@ MR_TEST(fs, ramfs_deep_fifo_exact_capacity) {
     io_ret = mr_fs_read(&file, buffer, sizeof(buffer));
     deep_expect(__test_status, "exact capacity read", io_ret, DEEP_FIFO_CAP);
     if (io_ret == DEEP_FIFO_CAP) {
-        deep_mem_expect(__test_status, "exact capacity content", buffer,
-                        fill_a, DEEP_FIFO_CAP);
+        deep_mem_expect(__test_status, "exact capacity content", buffer, fill_a,
+                        DEEP_FIFO_CAP);
     }
     deep_expect(__test_status, "read empty after drain",
                 mr_fs_read(&file, buffer, sizeof(buffer)), 0);
@@ -93,8 +102,7 @@ MR_TEST(fs, ramfs_deep_fifo_exact_capacity) {
     io_ret = mr_fs_write(&file, fill_b, DEEP_FIFO_CAP);
     deep_expect(__test_status, "wrapped exact write", io_ret, DEEP_FIFO_CAP);
     io_ret = mr_fs_read(&file, buffer, DEEP_FIFO_CAP / 2);
-    deep_expect(__test_status, "wrapped first half", io_ret,
-                DEEP_FIFO_CAP / 2);
+    deep_expect(__test_status, "wrapped first half", io_ret, DEEP_FIFO_CAP / 2);
     if (io_ret == DEEP_FIFO_CAP / 2) {
         deep_mem_expect(__test_status, "wrapped first half content", buffer,
                         fill_b, DEEP_FIFO_CAP / 2);
@@ -126,7 +134,6 @@ _exit:
     return;
 }
 
-/* Test: FIFO writes and reads split exactly at the ring boundary */
 MR_TEST(fs, ramfs_deep_fifo_wrap_edge) {
     mr_file_t file = MR_FILE_INIT(file);
     char expected[DEEP_FIFO_CAP];
@@ -148,10 +155,10 @@ MR_TEST(fs, ramfs_deep_fifo_wrap_edge) {
     if (ret != 0) {
         goto _exit;
     }
-    deep_expect(__test_status, "fill to boundary",
-                mr_fs_write(&file, deep_fifo_data24,
-                            sizeof(deep_fifo_data24) - 1),
-                sizeof(deep_fifo_data24) - 1);
+    deep_expect(
+        __test_status, "fill to boundary",
+        mr_fs_write(&file, deep_fifo_data24, sizeof(deep_fifo_data24) - 1),
+        sizeof(deep_fifo_data24) - 1);
     io_ret = mr_fs_read(&file, buffer, sizeof(buffer));
     deep_expect(__test_status, "drain to boundary", io_ret,
                 sizeof(deep_fifo_data24) - 1);
@@ -161,10 +168,10 @@ MR_TEST(fs, ramfs_deep_fifo_wrap_edge) {
     }
 
     /* An empty FIFO with the cursor at 24 still accepts a full write */
-    deep_expect(__test_status, "split write",
-                mr_fs_write(&file, deep_fifo_data16,
-                            sizeof(deep_fifo_data16) - 1),
-                sizeof(deep_fifo_data16) - 1);
+    deep_expect(
+        __test_status, "split write",
+        mr_fs_write(&file, deep_fifo_data16, sizeof(deep_fifo_data16) - 1),
+        sizeof(deep_fifo_data16) - 1);
     io_ret = mr_fs_read(&file, buffer, sizeof(buffer));
     deep_expect(__test_status, "split read", io_ret,
                 sizeof(deep_fifo_data16) - 1);
@@ -205,7 +212,6 @@ _exit:
     return;
 }
 
-/* Test: two readers drain one FIFO without losing or duplicating data */
 MR_TEST(fs, ramfs_deep_fifo_two_readers) {
     mr_file_t writer = MR_FILE_INIT(writer);
     mr_file_t reader1 = MR_FILE_INIT(reader1);
@@ -281,8 +287,8 @@ MR_TEST(fs, ramfs_deep_fifo_two_readers) {
     deep_expect(__test_status, "close writer", mr_fs_close(&writer), 0);
 _exit:
     if (writer.inode) {
-        deep_expect(__test_status, "close writer cleanup",
-                    mr_fs_close(&writer), 0);
+        deep_expect(__test_status, "close writer cleanup", mr_fs_close(&writer),
+                    0);
     }
     if (reader1.inode) {
         deep_expect(__test_status, "close reader1 cleanup",
@@ -297,7 +303,6 @@ _exit:
     return;
 }
 
-/* Test: two writers serialize into one FIFO and data survives a reopen */
 MR_TEST(fs, ramfs_deep_fifo_two_writers) {
     mr_file_t writer1 = MR_FILE_INIT(writer1);
     mr_file_t writer2 = MR_FILE_INIT(writer2);
@@ -336,8 +341,7 @@ MR_TEST(fs, ramfs_deep_fifo_two_writers) {
                 3);
     deep_expect(__test_status, "writer2 two", mr_fs_write(&writer2, "45", 2),
                 2);
-    deep_expect(__test_status, "writer1 one", mr_fs_write(&writer1, "6", 1),
-                1);
+    deep_expect(__test_status, "writer1 one", mr_fs_write(&writer1, "6", 1), 1);
     io_ret = mr_fs_read(&reader, buffer, sizeof(buffer));
     deep_expect(__test_status, "drain interleave", io_ret, 6);
     if ((io_ret == 6) && (mr_memcmp(buffer, "123456", 6) != 0)) {
@@ -373,15 +377,14 @@ _exit:
                     mr_fs_close(&writer2), 0);
     }
     if (reader.inode) {
-        deep_expect(__test_status, "close reader cleanup",
-                    mr_fs_close(&reader), 0);
+        deep_expect(__test_status, "close reader cleanup", mr_fs_close(&reader),
+                    0);
     }
     deep_expect(__test_status, "unlink fifo", mr_fs_unlink("/df-wr"), 0);
     deep_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
 }
 
-/* Test: FIFO open flag edges, seeking and status reporting */
 MR_TEST(fs, ramfs_deep_fifo_flags_stat) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_stat_t stat;
@@ -430,8 +433,7 @@ MR_TEST(fs, ramfs_deep_fifo_flags_stat) {
     ret = mr_fs_fstat(&file, &stat);
     deep_expect(__test_status, "fstat fifo", ret, 0);
     if (ret == 0) {
-        deep_expect(__test_status, "fifo stat type", stat.type,
-                    MR_INODE_FIFO);
+        deep_expect(__test_status, "fifo stat type", stat.type, MR_INODE_FIFO);
         deep_expect(__test_status, "fifo stat size", stat.size, 0);
     }
 
@@ -466,21 +468,18 @@ MR_TEST(fs, ramfs_deep_fifo_flags_stat) {
         if ((io_ret == 1) && (buffer[0] != 'W')) {
             MR_TEST_EXPECT_EQ_INT(buffer[0], 'W');
         }
-        deep_expect(__test_status, "close final reader", mr_fs_close(&file),
-                    0);
+        deep_expect(__test_status, "close final reader", mr_fs_close(&file), 0);
     }
 
 _exit:
     if (file.inode) {
-        deep_expect(__test_status, "close fifo cleanup", mr_fs_close(&file),
-                    0);
+        deep_expect(__test_status, "close fifo cleanup", mr_fs_close(&file), 0);
     }
     deep_expect(__test_status, "unlink fifo", mr_fs_unlink("/df-fl"), 0);
     deep_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
 }
 
-/* Test: repeated FIFO creation and removal releases every allocation */
 MR_TEST(fs, ramfs_deep_fifo_reclaim_cycles) {
     mr_heap_info_t heap_before;
     mr_heap_info_t heap_after;
@@ -532,12 +531,12 @@ MR_TEST(fs, ramfs_deep_fifo_reclaim_cycles) {
 
 _exit:
     if (writer.inode) {
-        deep_expect(__test_status, "close writer cleanup",
-                    mr_fs_close(&writer), 0);
+        deep_expect(__test_status, "close writer cleanup", mr_fs_close(&writer),
+                    0);
     }
     if (reader.inode) {
-        deep_expect(__test_status, "close reader cleanup",
-                    mr_fs_close(&reader), 0);
+        deep_expect(__test_status, "close reader cleanup", mr_fs_close(&reader),
+                    0);
     }
     deep_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     heap_after = mr_heap_information(MR_TRUE);
@@ -548,7 +547,13 @@ _exit:
     return;
 }
 
-/* Test: a sparse write creates a large zero-filled hole with exact edges */
+#endif /* defined(MR_USE_FS_RAMFS_FIFO) && (MR_CFG_FS_RAMFS_FIFO_SIZE == 32)   \
+        */
+
+#if defined(MR_USE_FS_RAMFS)
+/* Sparse write offset exercising a large zero-filled hole */
+#define DEEP_HOLE_OFFSET (100000)
+
 MR_TEST(fs, ramfs_deep_regular_large_hole) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_uint8_t zeros[64];
@@ -575,8 +580,9 @@ MR_TEST(fs, ramfs_deep_regular_large_hole) {
     if (ret != 0) {
         goto _exit;
     }
-    deep_expect(__test_status, "seek hole", mr_fs_lseek(&file, DEEP_HOLE_OFFSET,
-                MR_SEEK_SET), DEEP_HOLE_OFFSET);
+    deep_expect(__test_status, "seek hole",
+                mr_fs_lseek(&file, DEEP_HOLE_OFFSET, MR_SEEK_SET),
+                DEEP_HOLE_OFFSET);
     deep_expect(__test_status, "write tail", mr_fs_write(&file, "TAIL", 4), 4);
     ret = mr_fs_fstat(&file, &stat);
     deep_expect(__test_status, "stat hole file", ret, 0);
@@ -609,17 +615,16 @@ MR_TEST(fs, ramfs_deep_regular_large_hole) {
     }
 
     /* Reads at and beyond end of file return zero without moving data */
-    deep_expect(__test_status, "read at eof", mr_fs_read(&file, buffer,
-                sizeof(buffer)), 0);
+    deep_expect(__test_status, "read at eof",
+                mr_fs_read(&file, buffer, sizeof(buffer)), 0);
     deep_expect(__test_status, "seek past eof",
                 mr_fs_lseek(&file, DEEP_HOLE_OFFSET + 14, MR_SEEK_SET),
                 DEEP_HOLE_OFFSET + 14);
-    deep_expect(__test_status, "read past eof", mr_fs_read(&file, buffer,
-                sizeof(buffer)), 0);
+    deep_expect(__test_status, "read past eof",
+                mr_fs_read(&file, buffer, sizeof(buffer)), 0);
 
     /* Writing past the hole extends the file across the gap */
-    deep_expect(__test_status, "write past eof", mr_fs_write(&file, "X", 1),
-                1);
+    deep_expect(__test_status, "write past eof", mr_fs_write(&file, "X", 1), 1);
     ret = mr_fs_fstat(&file, &stat);
     deep_expect(__test_status, "stat extended", ret, 0);
     if (ret == 0) {
@@ -643,15 +648,13 @@ MR_TEST(fs, ramfs_deep_regular_large_hole) {
     deep_expect(__test_status, "close hole file", mr_fs_close(&file), 0);
 _exit:
     if (file.inode) {
-        deep_expect(__test_status, "close hole cleanup", mr_fs_close(&file),
-                    0);
+        deep_expect(__test_status, "close hole cleanup", mr_fs_close(&file), 0);
     }
     deep_expect(__test_status, "unlink hole file", mr_fs_unlink("/df-hole"), 0);
     deep_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
 }
 
-/* Test: writes and truncates at the address-space limits stay contained */
 MR_TEST(fs, ramfs_deep_regular_write_bounds) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_stat_t stat;
@@ -676,8 +679,8 @@ MR_TEST(fs, ramfs_deep_regular_write_bounds) {
                 mr_fs_write(&file, "0123456789", 10), 10);
 
     /* A write crossing the signed position limit is rejected */
-    deep_expect(__test_status, "seek max", mr_fs_lseek(&file, MR_INT64_MAX,
-                MR_SEEK_SET), MR_INT64_MAX);
+    deep_expect(__test_status, "seek max",
+                mr_fs_lseek(&file, MR_INT64_MAX, MR_SEEK_SET), MR_INT64_MAX);
     deep_expect(__test_status, "write at max", mr_fs_write(&file, "A", 1),
                 -MR_ERANGE);
 
@@ -694,8 +697,8 @@ MR_TEST(fs, ramfs_deep_regular_write_bounds) {
     if (ret == 0) {
         deep_expect(__test_status, "size kept", stat.size, 10);
     }
-    deep_expect(__test_status, "position kept", mr_fs_lseek(&file, 0,
-                MR_SEEK_CUR), MR_INT64_MAX - 1);
+    deep_expect(__test_status, "position kept",
+                mr_fs_lseek(&file, 0, MR_SEEK_CUR), MR_INT64_MAX - 1);
 
     /* Truncating to the allocation limit fails without touching the file */
     deep_expect(__test_status, "truncate max",
@@ -745,7 +748,6 @@ _exit:
     return;
 }
 
-/* Test: two handles on one regular file keep independent view of changes */
 MR_TEST(fs, ramfs_deep_regular_two_handles) {
     mr_file_t first = MR_FILE_INIT(first);
     mr_file_t second = MR_FILE_INIT(second);
@@ -783,12 +785,11 @@ MR_TEST(fs, ramfs_deep_regular_two_handles) {
     if ((io_ret == 3) && (mr_memcmp(buffer, "abc", 3) != 0)) {
         MR_TEST_EXPECT_EQ_INT(mr_memcmp(buffer, "abc", 3), 0);
     }
-    deep_expect(__test_status, "first position kept", mr_fs_lseek(&first, 0,
-                MR_SEEK_CUR), 6);
+    deep_expect(__test_status, "first position kept",
+                mr_fs_lseek(&first, 0, MR_SEEK_CUR), 6);
 
     /* New bytes written by the first are visible to the second */
-    deep_expect(__test_status, "first extend", mr_fs_write(&first, "XY", 2),
-                2);
+    deep_expect(__test_status, "first extend", mr_fs_write(&first, "XY", 2), 2);
     io_ret = mr_fs_read(&second, buffer, sizeof(buffer));
     deep_expect(__test_status, "second sees growth", io_ret, 5);
     if ((io_ret == 5) && (mr_memcmp(buffer, "defXY", 5) != 0)) {
@@ -796,12 +797,11 @@ MR_TEST(fs, ramfs_deep_regular_two_handles) {
     }
 
     /* An external shrink strands the first handle at end of file */
-    deep_expect(__test_status, "second shrink", mr_fs_ftruncate(&second, 2),
-                0);
-    deep_expect(__test_status, "read stranded", mr_fs_read(&first, buffer,
-                sizeof(buffer)), 0);
-    deep_expect(__test_status, "seek shrunk head", mr_fs_lseek(&first, 0,
-                MR_SEEK_SET), 0);
+    deep_expect(__test_status, "second shrink", mr_fs_ftruncate(&second, 2), 0);
+    deep_expect(__test_status, "read stranded",
+                mr_fs_read(&first, buffer, sizeof(buffer)), 0);
+    deep_expect(__test_status, "seek shrunk head",
+                mr_fs_lseek(&first, 0, MR_SEEK_SET), 0);
     io_ret = mr_fs_read(&first, buffer, sizeof(buffer));
     deep_expect(__test_status, "read shrunk", io_ret, 2);
     if ((io_ret == 2) && (mr_memcmp(buffer, "ab", 2) != 0)) {
@@ -809,8 +809,8 @@ MR_TEST(fs, ramfs_deep_regular_two_handles) {
     }
 
     /* A hole write after the shrink zero-fills only the new gap */
-    deep_expect(__test_status, "seek hole two", mr_fs_lseek(&first, 10,
-                MR_SEEK_SET), 10);
+    deep_expect(__test_status, "seek hole two",
+                mr_fs_lseek(&first, 10, MR_SEEK_SET), 10);
     deep_expect(__test_status, "write hole two", mr_fs_write(&first, "Q", 1),
                 1);
     ret = mr_fs_fstat(&second, &stat);
@@ -818,8 +818,8 @@ MR_TEST(fs, ramfs_deep_regular_two_handles) {
     if (ret == 0) {
         deep_expect(__test_status, "hole two size", stat.size, 11);
     }
-    deep_expect(__test_status, "seek second head", mr_fs_lseek(&second, 0,
-                MR_SEEK_SET), 0);
+    deep_expect(__test_status, "seek second head",
+                mr_fs_lseek(&second, 0, MR_SEEK_SET), 0);
     io_ret = mr_fs_read(&second, buffer, sizeof(buffer));
     deep_expect(__test_status, "read hole two", io_ret, 11);
     if (io_ret == 11) {
@@ -837,15 +837,14 @@ _exit:
                     0);
     }
     if (second.inode) {
-        deep_expect(__test_status, "close second cleanup",
-                    mr_fs_close(&second), 0);
+        deep_expect(__test_status, "close second cleanup", mr_fs_close(&second),
+                    0);
     }
     deep_expect(__test_status, "unlink two file", mr_fs_unlink("/df-two"), 0);
     deep_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
 }
 
-/* Test: O_APPEND on a read-write handle restores position on empty writes */
 MR_TEST(fs, ramfs_deep_regular_append_edges) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_file_t reader = MR_FILE_INIT(reader);
@@ -870,8 +869,8 @@ MR_TEST(fs, ramfs_deep_regular_append_edges) {
                 2);
     deep_expect(__test_status, "append position after write",
                 mr_fs_lseek(&file, 0, MR_SEEK_CUR), 2);
-    deep_expect(__test_status, "seek before append read", mr_fs_lseek(&file, 0,
-                MR_SEEK_SET), 0);
+    deep_expect(__test_status, "seek before append read",
+                mr_fs_lseek(&file, 0, MR_SEEK_SET), 0);
     io_ret = mr_fs_read(&file, buffer, sizeof(buffer));
     deep_expect(__test_status, "append handle read", io_ret, 2);
     if ((io_ret == 2) && (mr_memcmp(buffer, "12", 2) != 0)) {
@@ -879,18 +878,18 @@ MR_TEST(fs, ramfs_deep_regular_append_edges) {
     }
 
     /* A zero-length append write keeps the current position untouched */
-    deep_expect(__test_status, "seek append head", mr_fs_lseek(&file, 0,
-                MR_SEEK_SET), 0);
+    deep_expect(__test_status, "seek append head",
+                mr_fs_lseek(&file, 0, MR_SEEK_SET), 0);
     deep_expect(__test_status, "append write zero", mr_fs_write(&file, "x", 0),
                 0);
-    deep_expect(__test_status, "append position restored", mr_fs_lseek(&file,
-                0, MR_SEEK_CUR), 0);
+    deep_expect(__test_status, "append position restored",
+                mr_fs_lseek(&file, 0, MR_SEEK_CUR), 0);
 
     /* A non-empty append write still selects end of file */
     deep_expect(__test_status, "append write two", mr_fs_write(&file, "3", 1),
                 1);
-    deep_expect(__test_status, "append position end", mr_fs_lseek(&file, 0,
-                MR_SEEK_CUR), 3);
+    deep_expect(__test_status, "append position end",
+                mr_fs_lseek(&file, 0, MR_SEEK_CUR), 3);
 
     /* O_TRUNC combined with O_APPEND empties the file before appending */
     deep_expect(__test_status, "close append handle", mr_fs_close(&file), 0);
@@ -901,8 +900,8 @@ MR_TEST(fs, ramfs_deep_regular_append_edges) {
     }
     deep_expect(__test_status, "append after trunc", mr_fs_write(&file, "T", 1),
                 1);
-    deep_expect(__test_status, "append trunc position", mr_fs_lseek(&file, 0,
-                MR_SEEK_CUR), 1);
+    deep_expect(__test_status, "append trunc position",
+                mr_fs_lseek(&file, 0, MR_SEEK_CUR), 1);
     deep_expect(__test_status, "close append trunc", mr_fs_close(&file), 0);
 
     /* The truncated file holds only the appended byte */
@@ -920,19 +919,20 @@ MR_TEST(fs, ramfs_deep_regular_append_edges) {
 
 _exit:
     if (file.inode) {
-        deep_expect(__test_status, "close file cleanup", mr_fs_close(&file),
-                    0);
+        deep_expect(__test_status, "close file cleanup", mr_fs_close(&file), 0);
     }
     if (reader.inode) {
-        deep_expect(__test_status, "close reader cleanup",
-                    mr_fs_close(&reader), 0);
+        deep_expect(__test_status, "close reader cleanup", mr_fs_close(&reader),
+                    0);
     }
     deep_expect(__test_status, "unlink app file", mr_fs_unlink("/df-app"), 0);
     deep_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
 }
 
-/* Test: the RootFS root rejects a second mount and supports nested mounts */
+#endif /* defined(MR_USE_FS_RAMFS) */
+
+#if defined(MR_USE_FS_ROOTFS)
 MR_TEST(fs, rootfs_deep_mount_twice) {
     mr_err_t ret;
 
@@ -944,15 +944,15 @@ MR_TEST(fs, rootfs_deep_mount_twice) {
     }
 
     /* Mounting another super block over the root is refused */
-    deep_expect(__test_status, "repeat root mount", mr_fs_mount_root(MR_NULL,
-                "rootfs", 0, MR_NULL), -MR_EBUSY);
+    deep_expect(__test_status, "repeat root mount",
+                mr_fs_mount_root(MR_NULL, "rootfs", 0, MR_NULL), -MR_EBUSY);
 
     /* The same rule applies to a nested RootFS mount point */
     deep_expect(__test_status, "mkdir mount dir", mr_fs_mkdir("/rf-m"), 0);
-    deep_expect(__test_status, "mount nested rootfs", mr_fs_mount(MR_NULL,
-                "/rf-m", "rootfs", 0, MR_NULL), 0);
-    deep_expect(__test_status, "repeat nested mount", mr_fs_mount(MR_NULL,
-                "/rf-m", "rootfs", 0, MR_NULL), -MR_EBUSY);
+    deep_expect(__test_status, "mount nested rootfs",
+                mr_fs_mount(MR_NULL, "/rf-m", "rootfs", 0, MR_NULL), 0);
+    deep_expect(__test_status, "repeat nested mount",
+                mr_fs_mount(MR_NULL, "/rf-m", "rootfs", 0, MR_NULL), -MR_EBUSY);
     deep_expect(__test_status, "mkdir nested child", mr_fs_mkdir("/rf-m/child"),
                 0);
     deep_stat_expect(__test_status, "/rf-m/child", 0, MR_INODE_DIR);
@@ -967,7 +967,6 @@ MR_TEST(fs, rootfs_deep_mount_twice) {
     return;
 }
 
-/* Test: device-style mknod on RootFS creates inert namespace nodes */
 MR_TEST(fs, rootfs_deep_fifo_mknod) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_stat_t stat;
@@ -987,8 +986,7 @@ MR_TEST(fs, rootfs_deep_fifo_mknod) {
     ret = fs_test_stat("/rf-dev/pipe", &stat);
     deep_expect(__test_status, "stat fifo node", ret, 0);
     if (ret == 0) {
-        deep_expect(__test_status, "fifo node type", stat.type,
-                    MR_INODE_FIFO);
+        deep_expect(__test_status, "fifo node type", stat.type, MR_INODE_FIFO);
         deep_expect(__test_status, "fifo node size", stat.size, 0);
     }
 
@@ -996,30 +994,29 @@ MR_TEST(fs, rootfs_deep_fifo_mknod) {
     ret = mr_fs_open(&file, "/rf-dev/pipe", MR_O_RDWR);
     deep_expect(__test_status, "open fifo node", ret, 0);
     if (ret == 0) {
-        deep_expect(__test_status, "read fifo node", mr_fs_read(&file, buffer,
-                    sizeof(buffer)), -MR_ENOSYS);
-        deep_expect(__test_status, "write fifo node", mr_fs_write(&file, buffer,
-                    sizeof(buffer)), -MR_ENOSYS);
-        deep_expect(__test_status, "seek fifo node", mr_fs_lseek(&file, 4,
-                    MR_SEEK_SET), 4);
+        deep_expect(__test_status, "read fifo node",
+                    mr_fs_read(&file, buffer, sizeof(buffer)), -MR_ENOSYS);
+        deep_expect(__test_status, "write fifo node",
+                    mr_fs_write(&file, buffer, sizeof(buffer)), -MR_ENOSYS);
+        deep_expect(__test_status, "seek fifo node",
+                    mr_fs_lseek(&file, 4, MR_SEEK_SET), 4);
         deep_expect(__test_status, "truncate fifo node",
                     mr_fs_ftruncate(&file, 0), -MR_EINVAL);
         deep_expect(__test_status, "sync fifo node", mr_fs_fsync(&file),
                     -MR_ENOSYS);
-        deep_expect(__test_status, "ioctl fifo node", mr_fs_ioctl(&file, 1,
-                    MR_NULL), -MR_ENOSYS);
+        deep_expect(__test_status, "ioctl fifo node",
+                    mr_fs_ioctl(&file, 1, MR_NULL), -MR_ENOSYS);
         deep_expect(__test_status, "close fifo node", mr_fs_close(&file), 0);
     }
 
     /* The node removes like any other namespace entry */
-    deep_expect(__test_status, "unlink fifo node",
-                mr_fs_unlink("/rf-dev/pipe"), 0);
+    deep_expect(__test_status, "unlink fifo node", mr_fs_unlink("/rf-dev/pipe"),
+                0);
     deep_expect(__test_status, "rmdir device dir", mr_fs_rmdir("/rf-dev"), 0);
     deep_expect(__test_status, "umount rootfs", mr_fs_umount("/"), 0);
     return;
 }
 
-/* Test: RootFS nodes use generic positioning and an exact directory view */
 MR_TEST(fs, rootfs_deep_node_ops) {
     mr_heap_info_t heap_before;
     mr_heap_info_t heap_after;
@@ -1069,19 +1066,19 @@ MR_TEST(fs, rootfs_deep_node_ops) {
     }
 
     /* A mknod node keeps its private pointer and reports generic status */
-    deep_expect(__test_status, "mknod reg node", mr_fs_mknod("/rf-node/data",
-                MR_INODE_REG, &metadata), 0);
+    deep_expect(__test_status, "mknod reg node",
+                mr_fs_mknod("/rf-node/data", MR_INODE_REG, &metadata), 0);
     ret = mr_fs_open(&file, "/rf-node/data", MR_O_RDWR);
     deep_expect(__test_status, "open reg node", ret, 0);
     if (ret == 0) {
         deep_expect(__test_status, "reg node private",
                     file.inode->priv == &metadata, MR_TRUE);
-        deep_expect(__test_status, "seek reg node end", mr_fs_lseek(&file, 0,
-                    MR_SEEK_END), 0);
-        deep_expect(__test_status, "seek reg node set", mr_fs_lseek(&file, 7,
-                    MR_SEEK_SET), 7);
-        deep_expect(__test_status, "seek reg node cur", mr_fs_lseek(&file, 0,
-                    MR_SEEK_CUR), 7);
+        deep_expect(__test_status, "seek reg node end",
+                    mr_fs_lseek(&file, 0, MR_SEEK_END), 0);
+        deep_expect(__test_status, "seek reg node set",
+                    mr_fs_lseek(&file, 7, MR_SEEK_SET), 7);
+        deep_expect(__test_status, "seek reg node cur",
+                    mr_fs_lseek(&file, 0, MR_SEEK_CUR), 7);
         ret = mr_fs_fstat(&file, &stat);
         deep_expect(__test_status, "stat reg node", ret, 0);
         if (ret == 0) {
@@ -1103,7 +1100,6 @@ MR_TEST(fs, rootfs_deep_node_ops) {
     return;
 }
 
-/* Test: the RootFS root can be unmounted and mounted again in place */
 MR_TEST(fs, rootfs_deep_umount_lifecycle) {
     mr_err_t ret;
 
@@ -1135,4 +1131,6 @@ MR_TEST(fs, rootfs_deep_umount_lifecycle) {
     return;
 }
 
-#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */
+#endif /* defined(MR_USE_FS_ROOTFS) */
+#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS)                           \
+          && (defined(MR_USE_FS_RAMFS) || defined(MR_USE_FS_ROOTFS)) */

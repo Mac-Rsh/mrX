@@ -10,6 +10,7 @@
 #if defined(MR_USE_TEST)
 #if defined(MR_USE_DRIVER)
 #include <mrX/drivers/mr_driver.h>
+#include <mrX/libc/mr_malloc.h>
 #include <mrX/libc/mr_string.h>
 
 /* Mock state */
@@ -69,7 +70,15 @@ static const mr_driver_clazz_t test_driver_deinit_fail_clazz
     = MR_DRIVER_CLAZZ_INIT("test_driver_deinit_fail", test_driver_init,
                            test_driver_deinit_fail, MR_NULL);
 
-/* Tests */
+MR_DRIVER_CLAZZES_DEFINE(test_driver_pair, test_driver_init, test_driver_deinit,
+                         test_driver_release);
+MR_DRIVER_CLAZZES_IMPORT(test_driver_pair);
+
+MR_DRIVER_DEFINE(test_driver_uninstalled,
+                 MR_DRIVER_CLAZZES_STATIK(test_driver_pair), MR_DRIVER_TYPE_RAM,
+                 MR_NULL, MR_NULL, MR_NULL);
+MR_DRIVER_IMPORT(test_driver_uninstalled);
+
 MR_TEST(driver, del_without_setup) {
     mr_driver_t *drv = MR_NULL;
     mr_err_t ret;
@@ -582,6 +591,156 @@ MR_TEST(driver, find_internal_and_unknown) {
     drv = mr_driver_find("driver_not_exist");
     MR_TEST_EXPECT_EQ_PTR(drv, MR_NULL);
 }
+
+MR_TEST(driver, clazz_pair_and_symbol_lookup) {
+    const mr_driver_clazzes_t *clazzes;
+    mr_driver_t *defined, *dynamic;
+
+    test_driver_reset();
+    clazzes = MR_DRIVER_CLAZZES_FIND(test_driver_pair);
+    defined = MR_DRIVER_FIND(test_driver_uninstalled);
+    MR_TEST_EXPECT_EQ_PTR(MR_DRIVER_CLAZZES_STATIK(test_driver_pair),
+                          &clazzes->statik);
+    MR_TEST_EXPECT_EQ_PTR(MR_DRIVER_CLAZZES_DYNAMIC(test_driver_pair),
+                          &clazzes->dynamic);
+    MR_TEST_EXPECT_EQ_INT(mr_strcmp(clazzes->statik.name, "test_driver_pair"),
+                          0);
+    MR_TEST_EXPECT_EQ_PTR(mr_driver_find("test_driver_uninstalled"), MR_NULL);
+    MR_DRIVER_ASSERT_TYPE(defined, MR_DRIVER_TYPE_RAM);
+
+    MR_TEST_EXPECT_EQ_INT(mr_driver_setup(defined), 0);
+    MR_DRIVER_ASSERT(defined, MR_DRIVER_TYPE_RAM);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_shutdown(defined), 0);
+    MR_TEST_EXPECT_EQ_INT(test_driver_init_count, 1);
+    MR_TEST_EXPECT_EQ_INT(test_driver_deinit_count, 1);
+    MR_TEST_EXPECT_EQ_INT(test_driver_release_count, 0);
+
+    dynamic = mr_driver_create(&clazzes->dynamic, MR_DRIVER_TYPE_RAM, MR_NULL,
+                               MR_NULL, MR_NULL);
+    MR_TEST_ASSERT_NE_PTR(dynamic, MR_NULL);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_setup(dynamic), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_del(dynamic), 0);
+    MR_TEST_EXPECT_EQ_INT(test_driver_init_count, 2);
+    MR_TEST_EXPECT_EQ_INT(test_driver_deinit_count, 2);
+    MR_TEST_EXPECT_EQ_INT(test_driver_release_count, 1);
+}
+
+MR_TEST(driver, static_final_put_and_readiness) {
+    mr_driver_t drv;
+
+    test_driver_reset();
+    MR_TEST_ASSERT_EQ_INT(mr_object_init(&drv.parent, MR_NULL), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_is_ready(&drv), MR_FALSE);
+    mr_object_del(&drv.parent);
+
+    MR_TEST_ASSERT_EQ_INT(
+        mr_driver_init(&drv, MR_DRIVER_CLAZZES_STATIK(test_driver_pair),
+                       MR_DRIVER_TYPE_RAM, MR_NULL, MR_NULL, MR_NULL),
+        0);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_setup(&drv), 0);
+    mr_driver_state_set(&drv, -MR_EIO);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_is_ready(&drv), MR_FALSE);
+    mr_driver_state_set(&drv, 0);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_is_ready(&drv), MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_put(&drv), MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(test_driver_deinit_count, 1);
+    MR_TEST_EXPECT_EQ_INT(test_driver_release_count, 0);
+    MR_TEST_EXPECT_EQ_PTR(mr_driver_get(&drv), MR_NULL);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_is_ready(&drv), MR_FALSE);
+}
+
+#if defined(MR_USE_MALLOC)
+typedef struct test_driver_allocation {
+    struct test_driver_allocation *next;
+} test_driver_allocation_t;
+
+MR_TEST(driver, create_when_heap_exhausted) {
+    test_driver_allocation_t *blocks, *block;
+    mr_driver_t *drv;
+
+    blocks = MR_NULL;
+    while ((block = mr_malloc(sizeof(mr_driver_t))) != MR_NULL) {
+        block->next = blocks;
+        blocks = block;
+    }
+    drv = mr_driver_create(&test_driver_clazz, MR_DRIVER_TYPE_RAM, MR_NULL,
+                           MR_NULL, MR_NULL);
+    MR_TEST_EXPECT_EQ_PTR(drv, MR_NULL);
+    if (drv) {
+        mr_driver_del(drv);
+    }
+    while (blocks) {
+        block = blocks;
+        blocks = block->next;
+        mr_free(block);
+    }
+}
+#endif /* defined(MR_USE_MALLOC) */
+
+#define MR_HT_COMPAT test_driver_core
+#if MR_HT_HAS_DRIVER()
+MR_HT_DRIVER_FOREACH(MR_HT_DRIVER_INSTALL,
+                     MR_DRIVER_CLAZZES_STATIK(test_driver_pair),
+                     MR_DRIVER_TYPE_RAM, MR_NULL, MR_NULL, MR_NULL);
+
+#define TEST_DRIVER_CELL(_elem, _node, _prop)                                  \
+    MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 1)
+
+static const mr_uint32_t __test_driver_cells[] = {
+    MR_HT_DRIVER_PROP_ELEM_FOREACH(0, test_values, TEST_DRIVER_CELL),
+};
+
+MR_TEST(driver, hardtree_properties_and_registration) {
+    mr_driver_t *automatic, *deferred, *found;
+
+    automatic = MR_HT_DRIVER_FIND(MR_HT_LABEL(driver_test_auto));
+    deferred = MR_HT_DRIVER_FIND(MR_HT_DRIVER(1));
+    MR_TEST_EXPECT_EQ_INT(MR_HT_HAS_DRIVER(), MR_TRUE);
+    MR_TEST_EXPECT_EQ_UINT(MR_HT_DRIVER_NUM(), 2U);
+    MR_TEST_EXPECT_EQ_INT(
+        mr_strcmp(MR_STR(MR_HT_DRIVER_NAME(0)), "driver_test_auto_12"), 0);
+    MR_TEST_EXPECT_EQ_INT(
+        mr_strcmp(MR_HT_DRIVER_PATH(0), "/driver-test/driver-test-auto@12"), 0);
+    MR_TEST_EXPECT_EQ_INT(MR_HT_DRIVER_HAS_PARENT(0), MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(
+        mr_strcmp(MR_HT_NODE_PATH(MR_HT_DRIVER_PARENT(0)), "/driver-test"), 0);
+    MR_TEST_EXPECT_EQ_INT(MR_HT_DRIVER_HAS_ADDR(0), MR_TRUE);
+    MR_TEST_EXPECT_EQ_UINT(MR_HT_DRIVER_ADDR(0), 0x12U);
+    MR_TEST_EXPECT_EQ_INT(MR_HT_DRIVER_HAS_ADDR(1), MR_FALSE);
+    MR_TEST_EXPECT_EQ_INT(MR_HT_DRIVER_HAS_PROP(0, test_values), MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(MR_HT_DRIVER_HAS_PROP(1, test_values), MR_FALSE);
+    MR_TEST_EXPECT_EQ_UINT(MR_HT_DRIVER_PROP_OR(1, test_values, 21U), 21U);
+    MR_TEST_EXPECT_EQ_UINT(MR_HT_DRIVER_PROP(0, test_value), 7U);
+    MR_TEST_EXPECT_EQ_UINT(MR_HT_DRIVER_PROP_OR(0, test_value, 21U), 7U);
+    MR_TEST_EXPECT_EQ_UINT(MR_HT_DRIVER_PROP_ELEM(0, test_values, 0, 0), 3U);
+    MR_TEST_EXPECT_EQ_INT(MR_HT_DRIVER_HAS_PROP_ELEM(0, test_values, 1, 1),
+                          MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(MR_HT_DRIVER_HAS_PROP_ELEM(0, test_values, 1, 2),
+                          MR_FALSE);
+    MR_TEST_EXPECT_EQ_UINT(MR_HT_DRIVER_PROP_ELEM_OR(0, test_values, 1, 1, 21U),
+                           13U);
+    MR_TEST_EXPECT_EQ_UINT(MR_HT_DRIVER_PROP_ELEM_OR(0, test_values, 1, 2, 21U),
+                           21U);
+    MR_TEST_EXPECT_EQ_UINT(MR_ARRAY_SIZE(__test_driver_cells), 2U);
+    MR_TEST_EXPECT_EQ_UINT(__test_driver_cells[0], 5U);
+    MR_TEST_EXPECT_EQ_UINT(__test_driver_cells[1], 13U);
+
+    found = mr_driver_find(MR_STR(MR_HT_DRIVER_NAME(0)));
+    MR_TEST_EXPECT_EQ_PTR(found, automatic);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_is_ready(automatic), MR_TRUE);
+    if (found) {
+        MR_TEST_EXPECT_EQ_INT(mr_driver_put(found), MR_FALSE);
+    }
+    found = mr_driver_find(MR_STR(MR_HT_DRIVER_NAME(1)));
+    MR_TEST_EXPECT_EQ_PTR(found, deferred);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_is_ready(deferred), MR_FALSE);
+    if (found) {
+        MR_TEST_EXPECT_EQ_INT(mr_driver_put(found), MR_FALSE);
+    }
+    MR_TEST_EXPECT_EQ_PTR(mr_driver_find("driver_test_disabled"), MR_NULL);
+}
+#endif /* MR_HT_HAS_DRIVER() */
+#undef MR_HT_COMPAT
 
 #endif /* defined(MR_USE_DRIVER) */
 #endif /* defined(MR_USE_TEST) */

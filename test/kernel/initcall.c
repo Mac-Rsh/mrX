@@ -16,15 +16,11 @@ static volatile int initcall_user_ran;
 static volatile int initcall_kernel_before_user;
 static volatile int initcall_low_before_high;
 
-/* Helpers */
-
-/* Kernel level init call(runs ahead of the user levels) */
 static void initcall_test_kernel(void) {
     initcall_kernel_ran = 1;
 }
 MR_INIT_EXPORT(initcall_test_kernel, MR_INIT_LEVEL_IRQ);
 
-/* User level init call(first user level) */
 static void initcall_test_user_low(void) {
     initcall_user_ran = 1;
     if (initcall_kernel_ran == 1) {
@@ -33,7 +29,6 @@ static void initcall_test_user_low(void) {
 }
 MR_INIT_EXPORT(initcall_test_user_low, MR_INIT_LEVEL_USER("0"));
 
-/* User level init call(second user level) */
 static void initcall_test_user_high(void) {
     if (initcall_user_ran == 1) {
         initcall_low_before_high = 1;
@@ -41,31 +36,24 @@ static void initcall_test_user_high(void) {
 }
 MR_INIT_EXPORT(initcall_test_user_high, MR_INIT_LEVEL_USER("1"));
 
-/* Tests */
-
-/* Test: init calls exported at the kernel level are executed */
 MR_TEST(initcall, kernel_level_ran) {
     MR_TEST_ASSERT_EQ_INT(initcall_kernel_ran, 1);
 }
 
-/* Test: init calls exported at the user levels are executed */
 MR_TEST(initcall, user_level_ran) {
     MR_TEST_ASSERT_EQ_INT(initcall_user_ran, 1);
 }
 
-/* Test: init calls run in ascending level order */
 MR_TEST(initcall, level_order) {
     MR_TEST_ASSERT_EQ_INT(initcall_kernel_before_user, 1);
     MR_TEST_ASSERT_EQ_INT(initcall_low_before_high, 1);
 }
 
-/* Test: repeated kernel init is a safe no-op */
 MR_TEST(initcall, kernel_init_idempotent) {
     mr_kernel_init();
     MR_TEST_ASSERT_EQ_INT(initcall_kernel_ran, 1);
 }
 
-/* Test: repeated user init does not re-run init calls */
 MR_TEST(initcall, user_init_idempotent) {
     mr_user_init();
     MR_TEST_ASSERT_EQ_INT(initcall_user_ran, 1);

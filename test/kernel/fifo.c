@@ -19,8 +19,6 @@ typedef struct {
 
 static test_elem_t big_buf[1024];
 
-/* Tests */
-
 MR_TEST(fifo, init) {
     mr_uint8_t buf[128];
     mr_uint32_t cap;
@@ -377,7 +375,6 @@ MR_TEST(fifo, wrap) {
     MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
 }
 
-/* Test: bulk read and peek preserve order across the backing-buffer boundary */
 MR_TEST(fifo, bulk_read_peek_wrap) {
     mr_uint8_t buf[4 * sizeof(test_elem_t)];
     test_elem_t first[] = {{.id = 1}, {.id = 2}, {.id = 3}};
@@ -414,7 +411,6 @@ MR_TEST(fifo, bulk_read_peek_wrap) {
     MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
 }
 
-/* Test: claim offsets span both contiguous portions of a wrapped fifo */
 MR_TEST(fifo, claim_finish_wrap) {
     mr_uint8_t buf[4 * sizeof(test_elem_t)];
     test_elem_t initial[] = {{.id = 1}, {.id = 2}, {.id = 3}};

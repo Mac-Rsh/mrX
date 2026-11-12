@@ -27,7 +27,9 @@
 
 ## 相关文档
 
-- 内存分配 [Malloc](../libc/malloc.md)、字符串与格式化 [Sprintf](../libc/sprintf.md) 属于 C
+- 内存分配 [Malloc](../libc/malloc.md)
+  、字符串与格式化 [Sprintf](../libc/sprintf.md) 属于 C
   库层，见 [文档总索引](../README.md) 的 C 库一节。
 - 框架接入流程（Kconfig、HTC、注册段、启动）见 [框架使用指南](../usage.md)。
-- 平台相关的 tick、中断开关和输出接口实现见 [平台移植层](../platform/platform.md)。
+- 平台相关的
+  tick、中断开关和输出接口实现见 [平台移植层](../platform/platform.md)。

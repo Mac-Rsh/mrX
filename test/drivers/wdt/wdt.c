@@ -102,6 +102,7 @@ MR_TEST(wdt, configuration_and_state_transitions) {
         .pretimeout = 900U,
     };
     mr_wdt_config_t saved = {0};
+    mr_bool_t busy = MR_FALSE;
 
     wdt_busy = MR_FALSE;
     wdt_start_count = 0;
@@ -113,8 +114,12 @@ MR_TEST(wdt, configuration_and_state_transitions) {
     MR_TEST_ASSERT_EQ_INT(mr_wdt_configure(drv, &config), 0);
     MR_TEST_ASSERT_EQ_INT(mr_wdt_configuration(drv, &saved), 0);
     MR_TEST_ASSERT_EQ_UINT(saved.feed_max, 1000U);
+    MR_TEST_EXPECT_EQ_INT(mr_wdt_is_busy(drv, &busy), 0);
+    MR_TEST_EXPECT_EQ_INT(busy, MR_FALSE);
     MR_TEST_ASSERT_EQ_INT(mr_wdt_feed(drv), -MR_EINVAL);
     MR_TEST_ASSERT_EQ_INT(mr_wdt_start(drv), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_wdt_is_busy(drv, &busy), 0);
+    MR_TEST_EXPECT_EQ_INT(busy, MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(mr_wdt_start(drv), -MR_EBUSY);
     MR_TEST_ASSERT_EQ_INT(mr_wdt_configure(drv, &config), -MR_EBUSY);
     MR_TEST_ASSERT_EQ_INT(mr_wdt_feed(drv), 0);
@@ -123,6 +128,19 @@ MR_TEST(wdt, configuration_and_state_transitions) {
     MR_TEST_ASSERT_EQ_INT(mr_wdt_stop(drv), 0);
     MR_TEST_ASSERT_EQ_INT(wdt_stop_count, 1);
     mr_wdt_del(drv);
+}
+
+MR_TEST(wdt, static_reference) {
+    mr_wdt_ops_t ops = wdt_ops;
+    mr_wdt_data_t data = {0};
+    mr_driver_t drv;
+
+    MR_TEST_ASSERT_EQ_INT(mr_wdt_init(&drv, &data, MR_NULL, &ops), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_PTR(mr_wdt_get(&drv), &drv);
+    MR_TEST_EXPECT_EQ_INT(mr_wdt_del(&drv), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_wdt_put(&drv), MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(mr_driver_is_ready(&drv), MR_FALSE);
 }
 
 MR_TEST(wdt, optional_stop_and_event_paths) {
@@ -144,8 +162,7 @@ MR_TEST(wdt, optional_stop_and_event_paths) {
                           -MR_ENOSYS);
     drv->ops = (mr_ptr_t)&wdt_ops;
     MR_TEST_ASSERT_EQ_INT(mr_waiter_init(&waiter, wdt_waiter_entry,
-                                         &event_count,
-                                         MR_WDT_WAIT_PRETIMEOUT),
+                                         &event_count, MR_WDT_WAIT_PRETIMEOUT),
                           0);
     MR_TEST_ASSERT_EQ_INT(mr_wdt_event_attach(drv, &waiter), 0);
     MR_TEST_ASSERT_EQ_INT(mr_wdt_event_enable(drv, MR_WDT_WAIT_PRETIMEOUT), 0);

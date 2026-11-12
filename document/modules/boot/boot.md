@@ -71,7 +71,8 @@ Boot 不直接调用 mrX Flash 或 Crypto API。平台只需要按启用的功�
 - `jump`：平台相关的 firmware 跳转。
 - `sn_read/sn_write`：可选设备序列号读写。
 
-`read` 是初始化阶段的基础能力，因为 `mr_boot_init()` 会立即加载持久化 State。 启用 AUTH 后，加载 State 时也会使用 `auth`
+`read` 是初始化阶段的基础能力，因为 `mr_boot_init()` 会立即加载持久化 State。 启用
+AUTH 后，加载 State 时也会使用 `auth`
 。其余能力按实际 API 路径使用，不要求平台 为了不用的功能提供空实现。
 
 ### 3. 存储布局
@@ -157,7 +158,8 @@ SHA256(manifest 从首字节到 signature 字段之前的全部字节)
 因此签名覆盖 `product_id`、两个 version、`image_size`、`key_id` 和
 `image_hash`，但不包含 `signature` 自身。
 
-启用 SHA-256 后，启动验证会从存储重新读取 image 并计算 hash。受控升级结束时也会在写入 manifest、切换 active slot 之前重新读取刚编程的
+启用 SHA-256 后，启动验证会从存储重新读取 image 并计算 hash。受控升级结束时也会在写入
+manifest、切换 active slot 之前重新读取刚编程的
 image，因此即使底层 `program()` 返回 完整长度但实际 Flash 数据损坏，也不会提交该固件。
 
 ### 5. 快速上手
@@ -253,7 +255,8 @@ static mr_err_t boot_main(void) {
 }
 ```
 
-成功的 `jump()` 应当不返回。若 `jump()` 返回，Boot 将其视为该 firmware 没有成功运行， 并继续执行 fallback 策略。
+成功的 `jump()` 应当不返回。若 `jump()` 返回，Boot 将其视为该 firmware 没有成功运行，
+并继续执行 fallback 策略。
 
 ### 6. 受控更新
 
@@ -325,7 +328,8 @@ mr_err_t update_image(mr_boot_t *boot, mr_boot_manifest_t *manifest,
 6. image 完整验证通过后才 program manifest。
 7. 再写两份 State，完成提交。
 
-manifest 是 slot 内最后提交的内容；随后才提交 State。这个顺序意味着 image 写一半时突然 复位，不会把该半成品当成一个已经提交的新
+manifest 是 slot 内最后提交的内容；随后才提交 State。这个顺序意味着 image 写一半时突然
+复位，不会把该半成品当成一个已经提交的新
 firmware。
 
 若更新中途不再继续，可调用：
@@ -369,12 +373,16 @@ Recovery
 Rescue
 ```
 
-如果 fallback 成功切到另一 APP，Boot 会先持久化新的 `active_slot`，再执行 `jump()`。
+如果 fallback 成功切到另一 APP，Boot 会先持久化新的 `active_slot`，再执行
+`jump()`。
 
-WATCHDOG 是激进策略：它表示“上一次 active APP 已经不可接受”，因此当前 active 会在尝试 另一 APP 前立即持久化为 invalid。
+WATCHDOG 是激进策略：它表示“上一次 active APP 已经不可接受”，因此当前 active 会在尝试
+另一 APP 前立即持久化为 invalid。
 
-UPDATE source 用于“外部可信写者已经把新固件放到 inactive slot”的场景。若 staged manifest 明确返回 `-MR_EINVAL` 或
-`-MR_EPERM`，该 slot 会被持久化为 invalid；存储 I/O 或 crypto backend 临时故障不会被永久解释成“镜像坏”。
+UPDATE source 用于“外部可信写者已经把新固件放到 inactive slot”的场景。若 staged
+manifest 明确返回 `-MR_EINVAL` 或
+`-MR_EPERM`，该 slot 会被持久化为 invalid；存储 I/O 或 crypto backend
+临时故障不会被永久解释成“镜像坏”。
 
 ### 8. Recovery 与 Rescue
 
@@ -386,7 +394,8 @@ Recovery 是可选的独立 firmware slot，使用与 APP 相同的 manifest + i
 - Recovery 不受 APP `security_version` 下限限制。
 - 启动 Recovery 不改写 A/B active/invalid State。
 - Recovery 的 `jump()` 若返回，Boot 进入 Rescue。
-- Recovery 镜像仍会检查 product 与 size；未命中 FAST cache 时，按已启用功能继续做 ECDSA 和 SHA-256 校验。
+- Recovery 镜像仍会检查 product 与 size；未命中 FAST cache 时，按已启用功能继续做
+  ECDSA 和 SHA-256 校验。
 
 Rescue 不对应任何 firmware。进入 Rescue 后：
 
@@ -394,7 +403,8 @@ Rescue 不对应任何 firmware。进入 Rescue 后：
 boot->launch.slot == MR_BOOT_SLOT_MAX
 ```
 
-并且 `mr_boot_start()` 返回 0。上层可以在这个状态进入串口刷机、本地 USB DFU、维修命令行 或其他最小恢复服务。
+并且 `mr_boot_start()` 返回 0。上层可以在这个状态进入串口刷机、本地 USB DFU、维修命令行
+或其他最小恢复服务。
 
 ### 9. State、invalid 与双副本
 
@@ -412,10 +422,12 @@ boot->launch.slot == MR_BOOT_SLOT_MAX
 - 两份都合法时选择较新的 sequence。
 - sequence 相同则选择后读取的副本。
 - 只有一份合法时使用合法副本。
-- 没有合法 State 且没有底层读取错误时，从 `active_slot = A`、其余为 0 的默认 State 开始。
+- 没有合法 State 且没有底层读取错误时，从 `active_slot = A`、其余为 0 的默认 State
+  开始。
 - 有真实存储错误且没有任何合法副本时，初始化失败，不把 I/O 错误伪装成“空 State”。
 
-保存 State 时先写 A，再写 B；`sequence` 每次提交递增。掉电时至少保留一份可恢复副本是这一 布局的主要目的。
+保存 State 时先写 A，再写 B；`sequence` 每次提交递增。掉电时至少保留一份可恢复副本是这一
+布局的主要目的。
 
 ### 10. 防回滚
 
@@ -425,14 +437,17 @@ APP manifest 的：
 security_version
 ```
 
-不得低于 Boot 当前的安全下限，否则 update/select 返回 `-MR_EPERM`。Recovery 不执行这条 APP 安全版本限制。
+不得低于 Boot 当前的安全下限，否则 update/select 返回 `-MR_EPERM`。Recovery 不执行这条
+APP 安全版本限制。
 
 硬件 rollback counter 是可选能力：
 
-- `rollback_read` 和 `rollback_update` **必须成对存在**；缺任意一个时，Boot 使用持久化 State 中的 `security_version`
+- `rollback_read` 和 `rollback_update` **必须成对存在**；缺任意一个时，Boot 使用持久化
+  State 中的 `security_version`
   作为软件安全下限。
 - 两个 callback 都存在时，初始化会读取硬件 counter，并把它作为运行时安全版本。
-- AUTH 开启且加载到经过认证的 State 时，如果 State 的 `security_version` 高于硬件 counter，Boot 会调用 `rollback_update`
+- AUTH 开启且加载到经过认证的 State 时，如果 State 的 `security_version` 高于硬件
+  counter，Boot 会调用 `rollback_update`
   把硬件 counter 提升到该值。
 - AUTH 关闭时，持久化 State 不被当成可信来源来抬高硬件 counter。
 
@@ -446,7 +461,8 @@ security_version
 `MR_USE_MODULE_BOOT_AUTH` 只认证 **可变 State**。认证范围是
 `mr_boot_state_t` 从首字节到 `auth` 字段之前的所有字节。
 
-`ops->auth()` 负责实际算法和 secret 管理。Boot Core 不持有 HMAC key，也不要求 backend 必须是软件 HMAC；安全芯片、TrustZone
+`ops->auth()` 负责实际算法和 secret 管理。Boot Core 不持有 HMAC key，也不要求
+backend 必须是软件 HMAC；安全芯片、TrustZone
 服务或 OTP 派生都可以作为实现。
 
 AUTH 不替代 image SHA-256 或 manifest 签名。
@@ -459,10 +475,12 @@ AUTH 不替代 image SHA-256 或 manifest 签名。
 SHA256(完整 mr_boot_manifest_t，包括 signature)
 ```
 
-启动时，如果当前存储中的完整 manifest digest 与缓存一致，Boot 直接信任之前的完整验证结果， 跳过 ECDSA 和 firmware image 全量
+启动时，如果当前存储中的完整 manifest digest 与缓存一致，Boot 直接信任之前的完整验证结果，
+跳过 ECDSA 和 firmware image 全量
 hash，从而减少大镜像启动延迟。
 
-因此 FAST 的安全性依赖 **State 本身可信**。如果攻击者可以任意修改 State，应启用 AUTH 或使用 硬件写保护/安全区保护
+因此 FAST 的安全性依赖 **State 本身可信**。如果攻击者可以任意修改 State，应启用
+AUTH 或使用 硬件写保护/安全区保护
 State；否则攻击者可能伪造缓存状态，使 FAST 的信任前提失效。
 
 ### 12. SN 接口
@@ -498,7 +516,8 @@ mr_boot_t *mr_boot_create(const mr_boot_config_t *config,
 mr_err_t mr_boot_del(mr_boot_t *boot);
 ```
 
-`config` 在初始化时复制到对象内部；`ops` 与 `priv` 只保存指针，调用方必须保证它们在 Boot 最终 release 前持续有效。
+`config` 在初始化时复制到对象内部；`ops` 与 `priv` 只保存指针，调用方必须保证它们在
+Boot 最终 release 前持续有效。
 
 #### 13.2 更新
 
@@ -532,7 +551,8 @@ mr_err_t mr_boot_select(mr_boot_t *boot, mr_boot_slot_t slot);
 mr_err_t mr_boot_start(mr_boot_t *boot);
 ```
 
-`mr_boot_select()` 失败时会先清除旧 launch，避免上一次成功选择留下的地址被误用。update 进行期间 select/start 返回
+`mr_boot_select()` 失败时会先清除旧 launch，避免上一次成功选择留下的地址被误用。update
+进行期间 select/start 返回
 `-MR_EBUSY`。
 
 #### 13.4 SN
@@ -567,7 +587,8 @@ mr_ssize_t mr_boot_sn_write(mr_boot_t *boot, const void *data,
 
 **为什么 manifest 放在 slot 最前面，而不是最后？**
 
-启动时只需先读固定大小 manifest 即可获得 image size、hash、签名和版本。受控更新时虽然 manifest 位于最前，但只有 image
+启动时只需先读固定大小 manifest 即可获得 image size、hash、签名和版本。受控更新时虽然
+manifest 位于最前，但只有 image
 完整验证后才会 program，因此半写入 image 不会提前形成 一个已提交的新版本。
 
 **为什么 update end 还要把 image 从 Flash 再读一遍？**
@@ -577,16 +598,19 @@ mr_ssize_t mr_boot_sn_write(mr_boot_t *boot, const void *data,
 
 **为什么 Recovery 可以低于 APP security_version？**
 
-当前实现把 Recovery 视为独立恢复域，不受 APP 防回滚下限约束。相应地，Recovery 区域和其 签名密钥必须按平台威胁模型进行保护，不能把它当作普通第三个
+当前实现把 Recovery 视为独立恢复域，不受 APP 防回滚下限约束。相应地，Recovery 区域和其
+签名密钥必须按平台威胁模型进行保护，不能把它当作普通第三个
 APP slot。
 
 **为什么 Rescue 不直接调用一个 rescue firmware？**
 
-Rescue 的定义就是“留在 Boot 环境”。这样平台可以在所有可启动镜像都失败时仍保留最小 本地恢复能力，而不再依赖另一份 firmware。
+Rescue 的定义就是“留在 Boot 环境”。这样平台可以在所有可启动镜像都失败时仍保留最小
+本地恢复能力，而不再依赖另一份 firmware。
 
 **FAST 开启后还安全吗？**
 
-FAST 不是降低验证标准，而是信任“此前已经完整验证过且 manifest 未变化”这一事实。这个 事实存放在 State 中，所以必须保证 State
+FAST 不是降低验证标准，而是信任“此前已经完整验证过且 manifest 未变化”这一事实。这个
+事实存放在 State 中，所以必须保证 State
 可信；需要防篡改时应同时启用 AUTH 或使用等价硬件保护。
 
 ---
@@ -617,7 +641,8 @@ Boot Core 可以分成五层职责：
 - **State**：双副本选择、sequence、invalid、active、安全版本、AUTH。
 - **Backend**：所有硬件相关能力统一收敛到 `mr_boot_ops_t`。
 
-Core 不知道实际 CPU 如何设置 MSP/VTOR，也不知道 Flash 擦写粒度；这些约束由 backend 实现和 `config` 布局负责。
+Core 不知道实际 CPU 如何设置 MSP/VTOR，也不知道 Flash 擦写粒度；这些约束由 backend
+实现和 `config` 布局负责。
 
 ### 17. 核心数据结构
 
@@ -639,7 +664,8 @@ priv
 
 #### `mr_boot_state_t`
 
-State 是 Boot 唯一主动持久化的可变控制记录。APP slot 内只有 manifest 与 image，不存在 额外的 Trial/Pending/Confirm
+State 是 Boot 唯一主动持久化的可变控制记录。APP slot 内只有 manifest 与 image，不存在
+额外的 Trial/Pending/Confirm
 metadata。
 
 `sequence` 使用半空间比较处理 32-bit 回绕：
@@ -666,7 +692,8 @@ select(other)
 Recovery -> Rescue
 ```
 
-如果 active 只是验证失败而没有执行过 jump，Boot 不会先把它标 invalid；但如果 fallback 的 other 成功启动，它会成为新的
+如果 active 只是验证失败而没有执行过 jump，Boot 不会先把它标 invalid；但如果
+fallback 的 other 成功启动，它会成为新的
 active。
 
 #### WATCHDOG
@@ -699,11 +726,13 @@ select(old active) -> jump
 fallback / Recovery / Rescue
 ```
 
-只有确定表示“镜像本身不可接受”的错误才持久化 invalid，避免把暂时性的存储或密码后端故障 变成永久判废。
+只有确定表示“镜像本身不可接受”的错误才持久化 invalid，避免把暂时性的存储或密码后端故障
+变成永久判废。
 
 #### ROLLBACK
 
-ROLLBACK 先验证另一 APP，成功后把旧 active 标 invalid、把另一 APP 设为 active，再执行 jump。若 jump 返回，新 APP 也会进入
+ROLLBACK 先验证另一 APP，成功后把旧 active 标 invalid、把另一 APP 设为 active，再执行
+jump。若 jump 返回，新 APP 也会进入
 fallback 失败处理。
 
 ### 19. 更新事务与掉电边界
@@ -729,10 +758,12 @@ save State B
 关键性质：
 
 - manifest 在 image 完整验证前不存在，因此 image 半写不会被当作有效新版本。
-- State 在 manifest 之后提交，因此 manifest 写入但 State 尚未提交时，旧 active 仍是启动基线。
+- State 在 manifest 之后提交，因此 manifest 写入但 State 尚未提交时，旧 active
+  仍是启动基线。
 - State A 成功而 State B 失败时，下次 init 仍可从 A 恢复。
 - State B 是冗余副本，不是第二阶段确认位。
-- `boot_state_save()` 在 A 成功后会更新 RAM State，因此若随后 B 写失败，调用返回错误但当前 RAM 中已经是新
+- `boot_state_save()` 在 A 成功后会更新 RAM State，因此若随后 B 写失败，调用返回错误但当前
+  RAM 中已经是新
   State；重启后仍由持久化副本决定最终状态。
 
 最后一点属于当前事务实现的重要边界，修改 State 提交流程时应保持测试覆盖。
@@ -763,7 +794,8 @@ accept
 
 编译开关关闭时，对应步骤被裁掉。
 
-受控 update 的 manifest 签名在 erase 前验证；image hash 则在数据全部写完后验证，并额外从 存储重算一次。
+受控 update 的 manifest 签名在 erase 前验证；image hash 则在数据全部写完后验证，并额外从
+存储重算一次。
 
 ### 21. FAST 缓存
 
@@ -773,10 +805,12 @@ FAST cache 位于 State：
 mr_uint8_t manifest_digest[MR_BOOT_SLOT_MAX][MR_BOOT_SHA256_SIZE];
 ```
 
-受控 A/B update 成功后，只更新新 active APP 对应的 digest。Recovery 没有公开的受控 update 流程，因此通常不会得到由 Boot 写入的
+受控 A/B update 成功后，只更新新 active APP 对应的 digest。Recovery 没有公开的受控
+update 流程，因此通常不会得到由 Boot 写入的
 Recovery cache。
 
-FAST 比较的是完整 manifest，包括 signature。只要任一 manifest 字节变化，就回退到完整 ECDSA + image hash 验证。
+FAST 比较的是完整 manifest，包括 signature。只要任一 manifest 字节变化，就回退到完整
+ECDSA + image hash 验证。
 
 ### 22. 并发与中断安全
 
@@ -787,7 +821,8 @@ Boot Core 内部没有锁，也不设计为多个线程同时驱动同一个 `mr
 - 对同一个对象的 init/update/select/start/SN 操作应由上层串行化。
 - update session 进行期间 select/start 会返回 `-MR_EBUSY`。
 - ops callback 在调用 Boot API 的同一执行上下文中同步执行。
-- 不应在中断中直接执行大容量 hash、erase 或 program，除非平台明确保证这些 callback 可在中断上下文安全工作。
+- 不应在中断中直接执行大容量 hash、erase 或 program，除非平台明确保证这些 callback
+  可在中断上下文安全工作。
 - `ops` 与 `priv` 生命周期必须覆盖 Boot 对象最终 release。
 - 如果对象可能被其他组件持有，使用 `mr_boot_get()/mr_boot_put()` 管理引用。
 
@@ -807,7 +842,8 @@ Boot Core
   +-- jump adapter     -> architecture-specific image entry
 ```
 
-`source()` 应只把可信来源映射为 `MR_BOOT_SOURCE_UPDATE`、ROLLBACK 或 RESCUE。若普通 APP 可以任意伪造这些来源，就会改变启动状态机的安全边界。
+`source()` 应只把可信来源映射为 `MR_BOOT_SOURCE_UPDATE`、ROLLBACK 或 RESCUE。若普通
+APP 可以任意伪造这些来源，就会改变启动状态机的安全边界。
 
 实现 `jump()` 时，Boot 传入的是：
 

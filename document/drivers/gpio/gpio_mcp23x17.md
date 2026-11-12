@@ -1,12 +1,13 @@
 # MCP23017 / MCP23S17 GPIO
 
-复用 [GPIO API](gpio.md)，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
+复用 [GPIO API](gpio.md)
+，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
 
-| 项目 | 说明 |
-|---|---|
-| 功能宏 | `MR_USE_DRIVER_GPIO`，及对应的 `MR_USE_DRIVER_I2C` / `MR_USE_DRIVER_SPI` |
-| 头文件 | `<mrX/drivers/gpio/mr_gpio.h>` |
-| 依赖模块 | I2C / SPI、Driver；仅 HardTree 有实例时编译 |
+| 项目     | 说明                                                                     |
+|----------|--------------------------------------------------------------------------|
+| 功能宏   | `MR_USE_DRIVER_GPIO`，及对应的 `MR_USE_DRIVER_I2C` / `MR_USE_DRIVER_SPI` |
+| 头文件   | `<mrX/drivers/gpio/mr_gpio.h>`                                           |
+| 依赖模块 | I2C / SPI、Driver；仅 HardTree 有实例时编译                              |
 
 ## 用户指南
 
@@ -49,7 +50,10 @@ mr_gpio_write(drv, 8U, MR_GPIO_LEVEL_HIGH);
 ### 实现说明
 
 源码：`drivers/gpio/gpio_mcp23x17.c`。
-首次寄存器操作设置 IOCON 为 BANK=0、HAEN=1、SEQOP=0，关闭两组 GPINTEN 和 IPOL；必须在芯片复位后的 BANK=0 状态接管。MCP23S17 复位后 HAEN=0，因此第一次 IOCON SPI 写固定使用硬件地址 0；该写成功后，后续事务才使用 HardTree `addr` 指定的 A2:A0 地址。
+首次寄存器操作设置 IOCON 为 BANK=0、HAEN=1、SEQOP=0，关闭两组 GPINTEN 和
+IPOL；必须在芯片复位后的 BANK=0 状态接管。MCP23S17 复位后 HAEN=0，因此第一次 IOCON
+SPI 写固定使用硬件地址 0；该写成功后，后续事务才使用 HardTree `addr` 指定的 A2:A0
+地址。
 RESET 必须保持释放；驱动不控制它。
 每次读写一个端口寄存器，不依赖跨端口自动递增。
 一次端口写由多个事务构成，不提供 16 位原子更新或同时采样。

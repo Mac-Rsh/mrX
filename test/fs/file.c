@@ -19,6 +19,7 @@ static void fs_file_expect(volatile mr_uint32_t *__test_status,
     MR_TEST_EXPECT_EQ_INT(actual, expected);
 }
 
+#if defined(MR_USE_FS_RAMFS)
 static void fs_file_data_expect(volatile mr_uint32_t *__test_status,
                                 const char *name, const char *expected,
                                 mr_size_t size) {
@@ -212,10 +213,9 @@ MR_TEST(fs, file) {
                        mr_fs_rename("/file", "/file-path-renamed"), 0);
         fs_file_expect(__test_status, "stat after path rename",
                        mr_fs_fstat(&other_file, &stat), 0);
-        fs_file_expect(__test_status, "rename open file again",
-                       mr_fs_rename("/file-path-renamed",
-                                    "/file-handle-renamed"),
-                       0);
+        fs_file_expect(
+            __test_status, "rename open file again",
+            mr_fs_rename("/file-path-renamed", "/file-handle-renamed"), 0);
         fs_file_expect(__test_status, "old path absent",
                        fs_test_stat("/file-path-renamed", &stat), -MR_ENOENT);
         fs_file_expect(__test_status, "new path present",
@@ -298,6 +298,8 @@ _exit:
 }
 
 /* Test: file handle helper interfaces without a mounted file-system */
+#endif /* defined(MR_USE_FS_RAMFS) */
+
 MR_TEST(fs, file_helpers) {
     mr_file_t file;
     mr_inode_t inode;
@@ -305,8 +307,8 @@ MR_TEST(fs, file_helpers) {
 
     /* A fresh handle reports closed and reopenable */
     mr_file_init(&file);
-    fs_file_expect(__test_status, "fresh file closed",
-                   mr_file_is_open(&file), MR_FALSE);
+    fs_file_expect(__test_status, "fresh file closed", mr_file_is_open(&file),
+                   MR_FALSE);
     fs_file_expect(__test_status, "close fresh file", mr_fs_close(&file),
                    -MR_EBADF);
 
@@ -329,8 +331,8 @@ MR_TEST(fs, file_helpers) {
 
     /* Reinit clears the binding and the position */
     mr_file_init(&file);
-    fs_file_expect(__test_status, "reinit file closed",
-                   mr_file_is_open(&file), MR_FALSE);
+    fs_file_expect(__test_status, "reinit file closed", mr_file_is_open(&file),
+                   MR_FALSE);
     fs_file_expect(__test_status, "reinit position", file.pos, 0);
     return;
 }

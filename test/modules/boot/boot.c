@@ -14,19 +14,17 @@
 #include <setjmp.h>
 #include <stddef.h>
 
-#define TEST_BOOT_PRODUCT_ID           (0x58585858U)
-#define TEST_BOOT_SLOT_SIZE            (512U)
-#define TEST_BOOT_STATE_SIZE           (256U)
-#define TEST_BOOT_SLOT_A               (0U)
-#define TEST_BOOT_SLOT_B               (TEST_BOOT_SLOT_SIZE)
-#define TEST_BOOT_RECOVERY             (TEST_BOOT_SLOT_SIZE * 2U)
-#define TEST_BOOT_STATE_A              (TEST_BOOT_SLOT_SIZE * 3U)
-#define TEST_BOOT_STATE_B                                                     \
-    (TEST_BOOT_STATE_A + TEST_BOOT_STATE_SIZE)
-#define TEST_BOOT_STORAGE_SIZE                                                \
-    (TEST_BOOT_STATE_B + TEST_BOOT_STATE_SIZE)
-#define TEST_BOOT_SN_SIZE              (8U)
-#define TEST_BOOT_SIGNATURE            (0xA5U)
+#define TEST_BOOT_PRODUCT_ID   (0x58585858U)
+#define TEST_BOOT_SLOT_SIZE    (512U)
+#define TEST_BOOT_STATE_SIZE   (256U)
+#define TEST_BOOT_SLOT_A       (0U)
+#define TEST_BOOT_SLOT_B       (TEST_BOOT_SLOT_SIZE)
+#define TEST_BOOT_RECOVERY     (TEST_BOOT_SLOT_SIZE * 2U)
+#define TEST_BOOT_STATE_A      (TEST_BOOT_SLOT_SIZE * 3U)
+#define TEST_BOOT_STATE_B      (TEST_BOOT_STATE_A + TEST_BOOT_STATE_SIZE)
+#define TEST_BOOT_STORAGE_SIZE (TEST_BOOT_STATE_B + TEST_BOOT_STATE_SIZE)
+#define TEST_BOOT_SN_SIZE      (8U)
+#define TEST_BOOT_SIGNATURE    (0xA5U)
 
 typedef struct test_boot_store {
     mr_uint8_t image[TEST_BOOT_STORAGE_SIZE];
@@ -91,7 +89,7 @@ static mr_bool_t test_boot_contains(mr_uint64_t offset, mr_uint64_t size) {
 }
 
 static mr_int64_t test_boot_read(mr_boot_t *boot, mr_uint64_t offset,
-                                  void *data, mr_uint64_t size) {
+                                 void *data, mr_uint64_t size) {
     test_boot_store_t *store = boot->priv;
 
     /* Inject read failures */
@@ -104,8 +102,7 @@ static mr_int64_t test_boot_read(mr_boot_t *boot, mr_uint64_t offset,
     if (!test_boot_contains(offset, size)) {
         return -MR_EINVAL;
     }
-    if ((store->read_short >= 0)
-        && ((mr_uint64_t)store->read_short < size)) {
+    if ((store->read_short >= 0) && ((mr_uint64_t)store->read_short < size)) {
         size = (mr_uint64_t)store->read_short;
     }
     mr_memcpy(data, &store->image[(mr_size_t)offset], (mr_size_t)size);
@@ -113,7 +110,7 @@ static mr_int64_t test_boot_read(mr_boot_t *boot, mr_uint64_t offset,
 }
 
 static mr_int64_t test_boot_program(mr_boot_t *boot, mr_uint64_t offset,
-                                     const void *data, mr_uint64_t size) {
+                                    const void *data, mr_uint64_t size) {
     test_boot_store_t *store = boot->priv;
 
     /* Inject program failures */
@@ -143,7 +140,7 @@ static mr_int64_t test_boot_program(mr_boot_t *boot, mr_uint64_t offset,
 }
 
 static mr_err_t test_boot_erase(mr_boot_t *boot, mr_uint64_t offset,
-                                 mr_uint64_t size) {
+                                mr_uint64_t size) {
     test_boot_store_t *store = boot->priv;
 
     /* Inject erase failures before touching storage */
@@ -163,7 +160,7 @@ static mr_err_t test_boot_erase(mr_boot_t *boot, mr_uint64_t offset,
 }
 
 static mr_ssize_t test_boot_sn_read(mr_boot_t *boot, void *data,
-                                     mr_size_t size) {
+                                    mr_size_t size) {
     test_boot_store_t *store = boot->priv;
     mr_size_t count;
 
@@ -180,7 +177,7 @@ static mr_ssize_t test_boot_sn_read(mr_boot_t *boot, void *data,
 }
 
 static mr_ssize_t test_boot_sn_write(mr_boot_t *boot, const void *data,
-                                      mr_size_t size) {
+                                     mr_size_t size) {
     test_boot_store_t *store = boot->priv;
 
     /* Replace the stored serial number */
@@ -201,8 +198,7 @@ static mr_boot_source_t test_boot_source(mr_boot_t *boot) {
     return store->source;
 }
 
-static mr_err_t test_boot_rollback_read(mr_boot_t *boot,
-                                         mr_uint32_t *version) {
+static mr_err_t test_boot_rollback_read(mr_boot_t *boot, mr_uint32_t *version) {
     test_boot_store_t *store = boot->priv;
 
     if (store->rollback_read_error != 0) {
@@ -213,7 +209,7 @@ static mr_err_t test_boot_rollback_read(mr_boot_t *boot,
 }
 
 static mr_err_t test_boot_rollback_update(mr_boot_t *boot,
-                                           mr_uint32_t version) {
+                                          mr_uint32_t version) {
     test_boot_store_t *store = boot->priv;
 
     store->rollback_updates++;
@@ -242,7 +238,7 @@ static mr_err_t test_boot_jump(mr_boot_t *boot, mr_uint64_t offset) {
 }
 
 static void test_boot_digest(const void *data, mr_size_t size,
-                              mr_uint8_t digest[MR_BOOT_SHA256_SIZE]) {
+                             mr_uint8_t digest[MR_BOOT_SHA256_SIZE]) {
     const mr_uint8_t *bytes = data;
     mr_uint8_t acc;
     mr_size_t i;
@@ -258,7 +254,7 @@ static void test_boot_digest(const void *data, mr_size_t size,
 }
 
 static void test_boot_auth_tag(const void *data, mr_size_t size,
-                                mr_uint8_t tag[MR_BOOT_SHA256_SIZE]) {
+                               mr_uint8_t tag[MR_BOOT_SHA256_SIZE]) {
     const mr_uint8_t *bytes = data;
     mr_size_t i;
 
@@ -284,7 +280,7 @@ static mr_err_t test_boot_hash_begin(mr_boot_t *boot) {
 }
 
 static mr_err_t test_boot_hash_update(mr_boot_t *boot, const void *data,
-                                       mr_size_t size) {
+                                      mr_size_t size) {
     test_boot_store_t *store = boot->priv;
     const mr_uint8_t *bytes = data;
     mr_size_t i;
@@ -301,7 +297,7 @@ static mr_err_t test_boot_hash_update(mr_boot_t *boot, const void *data,
 }
 
 static mr_err_t test_boot_hash_end(mr_boot_t *boot,
-                                    mr_uint8_t digest[MR_BOOT_SHA256_SIZE]) {
+                                   mr_uint8_t digest[MR_BOOT_SHA256_SIZE]) {
     test_boot_store_t *store = boot->priv;
 
     if (store->hash_error != 0) {
@@ -319,18 +315,18 @@ static mr_err_t test_boot_hash_end(mr_boot_t *boot,
 static void test_boot_sign_manifest(mr_boot_manifest_t *manifest) {
     mr_uint8_t digest[MR_BOOT_SHA256_SIZE];
 
-    test_boot_digest(manifest,
-                      sizeof(*manifest) - sizeof(manifest->signature), digest);
+    test_boot_digest(manifest, sizeof(*manifest) - sizeof(manifest->signature),
+                     digest);
     manifest->signature[0] = TEST_BOOT_SIGNATURE;
     manifest->signature[1] = digest[0];
     manifest->signature[2] = digest[1];
     manifest->signature[3] = digest[2];
 }
 
-static mr_err_t test_boot_verify(
-    mr_boot_t *boot, mr_uint8_t key_id,
-    const mr_uint8_t digest[MR_BOOT_SHA256_SIZE],
-    const mr_uint8_t signature[MR_BOOT_ECDSA_P256_SIZE]) {
+static mr_err_t
+    test_boot_verify(mr_boot_t *boot, mr_uint8_t key_id,
+                     const mr_uint8_t digest[MR_BOOT_SHA256_SIZE],
+                     const mr_uint8_t signature[MR_BOOT_ECDSA_P256_SIZE]) {
     test_boot_store_t *store = boot->priv;
 
     store->verify_calls++;
@@ -348,8 +344,8 @@ static mr_err_t test_boot_verify(
 
 #if defined(MR_USE_MODULE_BOOT_AUTH)
 static mr_err_t test_boot_auth(mr_boot_t *boot, const void *data,
-                                mr_size_t size,
-                                mr_uint8_t auth[MR_BOOT_SHA256_SIZE]) {
+                               mr_size_t size,
+                               mr_uint8_t auth[MR_BOOT_SHA256_SIZE]) {
     test_boot_store_t *store = boot->priv;
 
     if (store->auth_error != 0) {
@@ -400,16 +396,15 @@ static void test_boot_config_set(mr_boot_config_t *config) {
 #endif /* defined(MR_USE_MODULE_BOOT_RECOVERY) */
 }
 
-static mr_err_t test_boot_open_config(mr_boot_t *boot,
-                                       test_boot_store_t *store,
-                                       const mr_boot_ops_t *ops,
-                                       const mr_boot_config_t *config) {
+static mr_err_t test_boot_open_config(mr_boot_t *boot, test_boot_store_t *store,
+                                      const mr_boot_ops_t *ops,
+                                      const mr_boot_config_t *config) {
     mr_memset(boot, 0, sizeof(*boot));
     return mr_boot_init(boot, config, ops, store);
 }
 
 static mr_err_t test_boot_open(mr_boot_t *boot, test_boot_store_t *store,
-                                const mr_boot_ops_t *ops) {
+                               const mr_boot_ops_t *ops) {
     mr_boot_config_t config;
 
     test_boot_config_set(&config);
@@ -437,9 +432,8 @@ static mr_err_t test_boot_boot(mr_boot_t *boot) {
 }
 
 static void test_boot_manifest_set(mr_boot_manifest_t *manifest,
-                                    mr_uint32_t product_id,
-                                    mr_uint32_t security,
-                                    mr_uint64_t image_size) {
+                                   mr_uint32_t product_id, mr_uint32_t security,
+                                   mr_uint64_t image_size) {
     mr_memset(manifest, 0, sizeof(*manifest));
     manifest->product_id = product_id;
     manifest->firmware_version = 3U;
@@ -449,7 +443,7 @@ static void test_boot_manifest_set(mr_boot_manifest_t *manifest,
 }
 
 static void test_boot_seal(mr_boot_manifest_t *manifest, const void *image,
-                            mr_size_t size) {
+                           mr_size_t size) {
     manifest->image_size = size;
 #if defined(MR_USE_MODULE_BOOT_SHA256)
     test_boot_digest(image, size, manifest->image_hash);
@@ -462,9 +456,9 @@ static void test_boot_seal(mr_boot_manifest_t *manifest, const void *image,
 }
 
 static void test_boot_plant_state(test_boot_store_t *store, mr_size_t offset,
-                                   mr_uint32_t sequence, mr_uint32_t security,
-                                   mr_uint8_t active, mr_uint8_t invalid_a,
-                                   mr_uint8_t invalid_b) {
+                                  mr_uint32_t sequence, mr_uint32_t security,
+                                  mr_uint8_t active, mr_uint8_t invalid_a,
+                                  mr_uint8_t invalid_b) {
     mr_boot_state_t state;
 
     mr_memset(&state, 0, sizeof(state));
@@ -474,15 +468,14 @@ static void test_boot_plant_state(test_boot_store_t *store, mr_size_t offset,
     state.invalid[MR_BOOT_SLOT_A] = invalid_a;
     state.invalid[MR_BOOT_SLOT_B] = invalid_b;
 #if defined(MR_USE_MODULE_BOOT_AUTH)
-    test_boot_auth_tag(&state, sizeof(state) - sizeof(state.auth),
-                        state.auth);
+    test_boot_auth_tag(&state, sizeof(state) - sizeof(state.auth), state.auth);
 #endif /* defined(MR_USE_MODULE_BOOT_AUTH) */
     mr_memcpy(&store->image[offset], &state, sizeof(state));
 }
 
 static void test_boot_plant_image(test_boot_store_t *store, mr_size_t offset,
-                                   mr_uint32_t product_id, mr_uint32_t security,
-                                   mr_uint64_t image_size) {
+                                  mr_uint32_t product_id, mr_uint32_t security,
+                                  mr_uint64_t image_size) {
     mr_boot_manifest_t manifest;
     mr_size_t count;
 
@@ -502,15 +495,15 @@ static void test_boot_plant_image(test_boot_store_t *store, mr_size_t offset,
 }
 
 static void test_boot_load_state(const test_boot_store_t *store,
-                                  mr_size_t offset, mr_boot_state_t *state) {
+                                 mr_size_t offset, mr_boot_state_t *state) {
     mr_memcpy(state, &store->image[offset], sizeof(*state));
 }
 
 static void test_boot_expect_state(volatile mr_uint32_t *__test_status,
-                                    const mr_boot_state_t *state,
-                                    mr_uint32_t sequence, mr_uint32_t security,
-                                    mr_uint8_t active, mr_uint8_t invalid_a,
-                                    mr_uint8_t invalid_b) {
+                                   const mr_boot_state_t *state,
+                                   mr_uint32_t sequence, mr_uint32_t security,
+                                   mr_uint8_t active, mr_uint8_t invalid_a,
+                                   mr_uint8_t invalid_b) {
     MR_TEST_EXPECT_EQ_UINT(state->sequence, sequence);
     MR_TEST_EXPECT_EQ_UINT(state->security_version, security);
     MR_TEST_EXPECT_EQ_UINT(state->active_slot, active);
@@ -519,8 +512,8 @@ static void test_boot_expect_state(volatile mr_uint32_t *__test_status,
 }
 
 static void test_boot_expect_image(volatile mr_uint32_t *__test_status,
-                                    const test_boot_store_t *store,
-                                    mr_size_t offset, mr_uint32_t security) {
+                                   const test_boot_store_t *store,
+                                   mr_size_t offset, mr_uint32_t security) {
     mr_boot_manifest_t manifest;
 
     mr_memcpy(&manifest, &store->image[offset], sizeof(manifest));
@@ -529,19 +522,18 @@ static void test_boot_expect_image(volatile mr_uint32_t *__test_status,
     MR_TEST_EXPECT_EQ_UINT(manifest.security_version, security);
     MR_TEST_EXPECT_EQ_UINT(manifest.image_size, sizeof(test_boot_payload));
     MR_TEST_EXPECT_EQ_UINT(manifest.key_id, 1U);
-    MR_TEST_EXPECT_EQ_INT(
-        mr_memcmp(&store->image[offset + sizeof(manifest)], test_boot_payload,
-                  sizeof(test_boot_payload)),
-        0);
+    MR_TEST_EXPECT_EQ_INT(mr_memcmp(&store->image[offset + sizeof(manifest)],
+                                    test_boot_payload,
+                                    sizeof(test_boot_payload)),
+                          0);
 }
 
 static void test_boot_expect_blank(volatile mr_uint32_t *__test_status,
-                                    const test_boot_store_t *store,
-                                    mr_size_t offset) {
+                                   const test_boot_store_t *store,
+                                   mr_size_t offset) {
     MR_TEST_EXPECT_EQ_UINT(store->image[offset], 0xFFU);
 }
 
-/* Tests */
 MR_TEST(boot, config_range) {
     test_boot_store_t store;
     mr_boot_ops_t ops;
@@ -645,7 +637,7 @@ MR_TEST(boot, lifecycle) {
     MR_TEST_EXPECT_EQ_INT(boot.launch.slot, MR_BOOT_SLOT_MAX);
     MR_TEST_EXPECT_EQ_INT(boot.update.active, MR_FALSE);
     test_boot_expect_state(__test_status, &boot.state, 0U, 0U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     MR_TEST_EXPECT_EQ_UINT(store.erase_calls, 0U);
     MR_TEST_EXPECT_EQ_UINT(store.program_calls, 0U);
     MR_TEST_EXPECT_EQ_INT(mr_boot_del(&boot), 0);
@@ -686,84 +678,84 @@ MR_TEST(boot, state_selects_copy) {
     /* Newer copy wins, including across the sequence wrap */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 9U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_state(&store, TEST_BOOT_STATE_B, 4U, 2U,
-                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 9U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     mr_boot_del(&boot);
 
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 2U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_state(&store, TEST_BOOT_STATE_B, 5U, 4U,
-                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 1U);
+                          (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 1U);
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 5U, 4U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 1U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 1U);
     mr_boot_del(&boot);
 
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 1U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_state(&store, TEST_BOOT_STATE_B, 0xFFFFFFF0U, 8U,
-                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 1U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     mr_boot_del(&boot);
 
     /* A tie keeps the later copy */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 7U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_state(&store, TEST_BOOT_STATE_B, 7U, 4U,
-                           (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 7U, 4U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
     mr_boot_del(&boot);
 
     /* One usable copy is enough, and a bad slot name is not usable */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 3U, 6U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 3U, 6U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     mr_boot_del(&boot);
 
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_B, 3U, 6U,
-                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 3U, 6U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     mr_boot_del(&boot);
 
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 3U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_RECOVERY, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_RECOVERY, 0U, 0U);
     test_boot_plant_state(&store, TEST_BOOT_STATE_B, 4U, 2U,
-                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 4U, 2U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     mr_boot_del(&boot);
 
     test_boot_store_reset(&store);
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 0U, 0U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     mr_boot_del(&boot);
 
     /* A hard read error is returned only when no copy is usable */
@@ -781,26 +773,26 @@ MR_TEST(boot, state_selects_copy) {
 
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_B, 8U, 3U,
-                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     store.read_fault = MR_TRUE;
     store.read_fault_offset = TEST_BOOT_STATE_A;
     store.read_fault_error = -MR_EIO;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 8U, 3U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     mr_boot_del(&boot);
 
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 8U, 3U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     store.read_fault = MR_TRUE;
     store.read_fault_offset = TEST_BOOT_STATE_B;
     store.read_fault_error = -MR_EIO;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 8U, 3U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     mr_boot_del(&boot);
 }
 
@@ -814,7 +806,7 @@ MR_TEST(boot, rollback_counter) {
     test_boot_store_reset(&store);
     test_boot_ops_init(&ops);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 2U, 9U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     store.rollback = 3U;
     ops.rollback_read = test_boot_rollback_read;
     ret = test_boot_open(&boot, &store, &ops);
@@ -825,7 +817,7 @@ MR_TEST(boot, rollback_counter) {
 
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 2U, 9U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     store.rollback = 3U;
     ops.rollback_read = test_boot_rollback_read;
     ops.rollback_update = test_boot_rollback_update;
@@ -846,7 +838,7 @@ MR_TEST(boot, rollback_counter) {
     /* A newer hardware counter replaces a lower authenticated version */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 2U, 3U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     store.rollback = 8U;
     ops.rollback_read = test_boot_rollback_read;
     ops.rollback_update = test_boot_rollback_update;
@@ -868,7 +860,7 @@ MR_TEST(boot, rollback_counter) {
 #if defined(MR_USE_MODULE_BOOT_AUTH)
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 2U, 9U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     store.rollback = 3U;
     store.rollback_update_error = -MR_EIO;
     ret = test_boot_open(&boot, &store, &ops);
@@ -899,7 +891,7 @@ MR_TEST(boot, update_commits) {
 
     /* Active A, so the first image lands in B */
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 1U,
-                            sizeof(test_boot_payload));
+                           sizeof(test_boot_payload));
     test_boot_seal(&manifest, test_boot_payload, sizeof(test_boot_payload));
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
@@ -909,7 +901,7 @@ MR_TEST(boot, update_commits) {
     ret = mr_boot_update_write(&boot, test_boot_payload, 3U);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     ret = mr_boot_update_write(&boot, &test_boot_payload[3],
-                                sizeof(test_boot_payload) - 3U);
+                               sizeof(test_boot_payload) - 3U);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_UINT(boot.update.written, sizeof(test_boot_payload));
     ret = mr_boot_update_end(&boot);
@@ -918,30 +910,30 @@ MR_TEST(boot, update_commits) {
     test_boot_expect_image(__test_status, &store, TEST_BOOT_SLOT_B, 1U);
     test_boot_expect_blank(__test_status, &store, TEST_BOOT_SLOT_A);
     test_boot_expect_state(__test_status, &boot.state, 1U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
 
     /* The next image lands back in A and both state copies match */
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 2U,
-                            sizeof(test_boot_payload));
+                           sizeof(test_boot_payload));
     test_boot_seal(&manifest, test_boot_payload, sizeof(test_boot_payload));
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_INT(boot.update.slot, MR_BOOT_SLOT_A);
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     ret = mr_boot_update_end(&boot);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_image(__test_status, &store, TEST_BOOT_SLOT_A, 2U);
     test_boot_expect_image(__test_status, &store, TEST_BOOT_SLOT_B, 1U);
     test_boot_expect_state(__test_status, &boot.state, 2U, 2U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_load_state(&store, TEST_BOOT_STATE_A, &state_a);
     test_boot_load_state(&store, TEST_BOOT_STATE_B, &state_b);
     test_boot_expect_state(__test_status, &state_a, 2U, 2U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_expect_state(__test_status, &state_b, 2U, 2U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     MR_TEST_EXPECT_EQ_INT(mr_boot_update_end(&boot), -MR_EINVAL);
     mr_boot_del(&boot);
 }
@@ -956,7 +948,7 @@ MR_TEST(boot, update_rejects) {
     test_boot_store_reset(&store);
     test_boot_ops_init(&ops);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 1U, 5U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 
@@ -967,7 +959,7 @@ MR_TEST(boot, update_rejects) {
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 4U, 1U);
     MR_TEST_EXPECT_EQ_INT(mr_boot_update_begin(&boot, &manifest), -MR_EPERM);
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 5U,
-                            TEST_BOOT_SLOT_SIZE);
+                           TEST_BOOT_SLOT_SIZE);
     MR_TEST_EXPECT_EQ_INT(mr_boot_update_begin(&boot, &manifest), -MR_ERANGE);
     MR_TEST_EXPECT_EQ_INT(boot.update.active, MR_FALSE);
 
@@ -1016,7 +1008,7 @@ MR_TEST(boot, update_failures) {
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 1U,
-                            sizeof(test_boot_payload));
+                           sizeof(test_boot_payload));
     test_boot_seal(&manifest, test_boot_payload, sizeof(test_boot_payload));
 
     /* Writes outside an active update are rejected */
@@ -1028,17 +1020,16 @@ MR_TEST(boot, update_failures) {
     MR_TEST_EXPECT_EQ_INT(mr_boot_update_write(&boot, test_boot_payload, 0U),
                           0);
     MR_TEST_EXPECT_EQ_UINT(boot.update.written, 0U);
-    MR_TEST_EXPECT_EQ_INT(
-        mr_boot_update_write(&boot, test_boot_payload,
-                              sizeof(test_boot_payload) + 1U),
-        -MR_ERANGE);
+    MR_TEST_EXPECT_EQ_INT(mr_boot_update_write(&boot, test_boot_payload,
+                                               sizeof(test_boot_payload) + 1U),
+                          -MR_ERANGE);
     MR_TEST_EXPECT_EQ_INT(boot.update.active, MR_TRUE);
     MR_TEST_EXPECT_EQ_UINT(boot.update.written, 0U);
 
     /* A short program drops the update */
     store.program_short = 1;
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     MR_TEST_EXPECT_EQ_INT(ret, -MR_EIO);
     MR_TEST_EXPECT_EQ_INT(boot.update.active, MR_FALSE);
     store.program_short = -1;
@@ -1058,8 +1049,7 @@ MR_TEST(boot, update_failures) {
     MR_TEST_EXPECT_EQ_INT(boot.update.active, MR_TRUE);
     mr_boot_update_abort(&boot);
     MR_TEST_EXPECT_EQ_INT(boot.update.active, MR_FALSE);
-    MR_TEST_EXPECT_EQ_INT(mr_boot_update_write(&boot, &chunk, 1U),
-                          -MR_EINVAL);
+    MR_TEST_EXPECT_EQ_INT(mr_boot_update_write(&boot, &chunk, 1U), -MR_EINVAL);
     MR_TEST_EXPECT_EQ_UINT(boot.state.sequence, 0U);
     mr_boot_del(&boot);
 
@@ -1070,7 +1060,7 @@ MR_TEST(boot, update_failures) {
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     store.program_fault = MR_TRUE;
     store.program_fault_offset = TEST_BOOT_SLOT_B;
@@ -1079,7 +1069,7 @@ MR_TEST(boot, update_failures) {
     MR_TEST_EXPECT_EQ_INT(ret, -MR_EIO);
     MR_TEST_EXPECT_EQ_INT(boot.update.active, MR_FALSE);
     test_boot_expect_state(__test_status, &boot.state, 0U, 0U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_expect_blank(__test_status, &store, TEST_BOOT_STATE_A);
     mr_boot_del(&boot);
 
@@ -1090,7 +1080,7 @@ MR_TEST(boot, update_failures) {
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     store.erase_calls = 0U;
     store.erase_fail_at = 2U;
@@ -1098,17 +1088,17 @@ MR_TEST(boot, update_failures) {
     MR_TEST_EXPECT_EQ_INT(ret, -MR_EIO);
     MR_TEST_EXPECT_EQ_INT(boot.update.active, MR_FALSE);
     test_boot_expect_state(__test_status, &boot.state, 1U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     test_boot_load_state(&store, TEST_BOOT_STATE_A, &saved);
     test_boot_expect_state(__test_status, &saved, 1U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     test_boot_expect_blank(__test_status, &store, TEST_BOOT_STATE_B);
     mr_boot_del(&boot);
 
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 1U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     mr_boot_del(&boot);
 }
 
@@ -1122,11 +1112,11 @@ MR_TEST(boot, select_slot) {
     test_boot_store_reset(&store);
     test_boot_ops_init(&ops);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 1U, 2U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 2U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     test_boot_plant_image(&store, TEST_BOOT_SLOT_B, TEST_BOOT_PRODUCT_ID, 2U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 
@@ -1138,8 +1128,7 @@ MR_TEST(boot, select_slot) {
     ret = mr_boot_select(&boot, MR_BOOT_SLOT_B);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_INT(boot.launch.slot, MR_BOOT_SLOT_B);
-    MR_TEST_EXPECT_EQ_INT(mr_boot_select(&boot, MR_BOOT_SLOT_MAX),
-                          -MR_EINVAL);
+    MR_TEST_EXPECT_EQ_INT(mr_boot_select(&boot, MR_BOOT_SLOT_MAX), -MR_EINVAL);
     MR_TEST_EXPECT_EQ_INT(boot.launch.slot, MR_BOOT_SLOT_MAX);
 #if defined(MR_USE_MODULE_BOOT_RECOVERY)
     MR_TEST_EXPECT_EQ_INT(mr_boot_select(&boot, MR_BOOT_SLOT_RECOVERY),
@@ -1153,12 +1142,11 @@ MR_TEST(boot, select_slot) {
     /* Manifest fields are checked before an image is launched */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 1U, 2U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 1U, 0U);
-    test_boot_plant_image(&store, TEST_BOOT_SLOT_A,
-                           TEST_BOOT_PRODUCT_ID + 1U, 2U,
-                           sizeof(test_boot_payload));
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 1U, 0U);
+    test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID + 1U,
+                          2U, sizeof(test_boot_payload));
     test_boot_plant_image(&store, TEST_BOOT_SLOT_B, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_INT(mr_boot_select(&boot, MR_BOOT_SLOT_A), -MR_EPERM);
@@ -1167,25 +1155,24 @@ MR_TEST(boot, select_slot) {
 
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 1U, 2U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
-    test_boot_plant_image(&store, TEST_BOOT_SLOT_A,
-                           TEST_BOOT_PRODUCT_ID + 1U, 2U,
-                           sizeof(test_boot_payload));
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+    test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID + 1U,
+                          2U, sizeof(test_boot_payload));
     test_boot_plant_image(&store, TEST_BOOT_SLOT_B, TEST_BOOT_PRODUCT_ID, 2U,
-                           0U);
+                          0U);
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_INT(mr_boot_select(&boot, MR_BOOT_SLOT_A), -MR_EINVAL);
     MR_TEST_EXPECT_EQ_INT(mr_boot_select(&boot, MR_BOOT_SLOT_B), -MR_EINVAL);
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 2U,
-                            TEST_BOOT_SLOT_SIZE);
+                           TEST_BOOT_SLOT_SIZE);
     mr_memcpy(&store.image[TEST_BOOT_SLOT_A], &manifest, sizeof(manifest));
     MR_TEST_EXPECT_EQ_INT(mr_boot_select(&boot, MR_BOOT_SLOT_A), -MR_EINVAL);
     mr_boot_del(&boot);
 
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 1U, 0U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_INT(mr_boot_select(&boot, MR_BOOT_SLOT_A), -MR_EINVAL);
@@ -1199,7 +1186,7 @@ MR_TEST(boot, select_slot) {
     /* A failed select still clears the previous launch */
     test_boot_store_reset(&store);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 0U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_boot_select(&boot, MR_BOOT_SLOT_A);
@@ -1226,11 +1213,11 @@ MR_TEST(boot, start_sources) {
     test_boot_store_reset(&store);
     test_boot_ops_init(&ops);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     test_boot_plant_image(&store, TEST_BOOT_SLOT_B, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 
@@ -1242,8 +1229,8 @@ MR_TEST(boot, start_sources) {
         ret = test_boot_boot(&boot);
         MR_TEST_EXPECT_EQ_INT(ret, 0);
         MR_TEST_EXPECT_EQ_UINT(store.jump_calls, jumps + 1U);
-        MR_TEST_EXPECT_EQ_UINT(
-            store.jump_offset, TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
+        MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                               TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
         MR_TEST_EXPECT_EQ_UINT(boot.state.sequence, 4U);
         source = (mr_boot_source_t)(source + 1);
     }
@@ -1271,51 +1258,51 @@ MR_TEST(boot, start_sources) {
     /* Rollback commits the other slot before jumping */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     test_boot_plant_image(&store, TEST_BOOT_SLOT_B, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     store.source = MR_BOOT_SOURCE_ROLLBACK;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
     test_boot_expect_state(__test_status, &boot.state, 5U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
     test_boot_load_state(&store, TEST_BOOT_STATE_A, &saved);
     test_boot_expect_state(__test_status, &saved, 5U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
     mr_boot_del(&boot);
 
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     test_boot_plant_image(&store, TEST_BOOT_SLOT_B, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     store.source = MR_BOOT_SOURCE_ROLLBACK;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
     test_boot_expect_state(__test_status, &boot.state, 5U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 1U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 1U);
     mr_boot_del(&boot);
 
     /* Rollback does not save when the other slot cannot boot */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 1U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 1U);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     test_boot_plant_image(&store, TEST_BOOT_SLOT_B, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     store.source = MR_BOOT_SOURCE_ROLLBACK;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
@@ -1331,9 +1318,9 @@ MR_TEST(boot, start_sources) {
     test_boot_store_reset(&store);
     test_boot_ops_init(&ops);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_B, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     store.source = MR_BOOT_SOURCE_ROLLBACK;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
@@ -1408,14 +1395,13 @@ MR_TEST(boot, serial_number) {
     mr_boot_del(&boot);
 }
 
-static void test_boot_plant_apps(test_boot_store_t *store,
-                                  mr_uint8_t active) {
+static void test_boot_plant_apps(test_boot_store_t *store, mr_uint8_t active) {
     test_boot_plant_state(store, TEST_BOOT_STATE_A, 4U, 1U, active, 0U, 0U);
     test_boot_plant_state(store, TEST_BOOT_STATE_B, 4U, 1U, active, 0U, 0U);
     test_boot_plant_image(store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     test_boot_plant_image(store, TEST_BOOT_SLOT_B, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
 }
 
 MR_TEST(boot, boot_fallback) {
@@ -1431,28 +1417,28 @@ MR_TEST(boot, boot_fallback) {
     /* Active image missing: power-on activates the other APP before boot */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_B, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     store.source = MR_BOOT_SOURCE_POWER_ON;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
     test_boot_expect_state(__test_status, &boot.state, 5U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     mr_boot_del(&boot);
 
     /* Both APPs missing: recovery, or rescue when recovery is absent */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     store.source = MR_BOOT_SOURCE_RESTART;
 #if defined(MR_USE_MODULE_BOOT_RECOVERY)
-    test_boot_plant_image(&store, TEST_BOOT_RECOVERY, TEST_BOOT_PRODUCT_ID,
-                           0U, sizeof(test_boot_payload));
+    test_boot_plant_image(&store, TEST_BOOT_RECOVERY, TEST_BOOT_PRODUCT_ID, 0U,
+                          sizeof(test_boot_payload));
 #endif /* defined(MR_USE_MODULE_BOOT_RECOVERY) */
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
@@ -1475,7 +1461,7 @@ MR_TEST(boot, boot_fallback) {
     /* Recovery image rejected: rescue, still without an A/B write */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     store.source = MR_BOOT_SOURCE_POWER_ON;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
@@ -1494,25 +1480,25 @@ MR_TEST(boot, boot_fallback) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
     test_boot_expect_state(__test_status, &boot.state, 6U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
     mr_boot_del(&boot);
 
     /* Watchdog still retires the active APP when the other APP is missing */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     store.source = MR_BOOT_SOURCE_WATCHDOG;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 5U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 1U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 1U, 0U);
     MR_TEST_EXPECT_EQ_INT(boot.launch.slot, MR_BOOT_SLOT_MAX);
     mr_boot_del(&boot);
 
@@ -1524,27 +1510,27 @@ MR_TEST(boot, boot_fallback) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
     test_boot_expect_state(__test_status, &boot.state, 5U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     mr_boot_del(&boot);
 
     /* A bad staged image is retired before the old APP continues */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     store.source = MR_BOOT_SOURCE_UPDATE;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
     test_boot_expect_state(__test_status, &boot.state, 5U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 1U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 1U);
     mr_boot_del(&boot);
 
     /* The first APP jump to return is retired; the other APP runs */
@@ -1557,18 +1543,18 @@ MR_TEST(boot, boot_fallback) {
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_UINT(store.jump_calls, 2U);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
     test_boot_expect_state(__test_status, &boot.state, 6U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 1U, 0U);
     mr_boot_del(&boot);
 
     /* Every APP and recovery jump returning ends in rescue */
     test_boot_store_reset(&store);
     test_boot_plant_apps(&store, (mr_uint8_t)MR_BOOT_SLOT_A);
 #if defined(MR_USE_MODULE_BOOT_RECOVERY)
-    test_boot_plant_image(&store, TEST_BOOT_RECOVERY, TEST_BOOT_PRODUCT_ID,
-                           0U, sizeof(test_boot_payload));
+    test_boot_plant_image(&store, TEST_BOOT_RECOVERY, TEST_BOOT_PRODUCT_ID, 0U,
+                          sizeof(test_boot_payload));
 #endif /* defined(MR_USE_MODULE_BOOT_RECOVERY) */
     store.source = MR_BOOT_SOURCE_POWER_ON;
     store.jump_fail_left = 4U;
@@ -1597,9 +1583,9 @@ MR_TEST(boot, recovery_slot) {
     /* Recovery ignores the APP security floor and does not save state */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 9U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
-    test_boot_plant_image(&store, TEST_BOOT_RECOVERY, TEST_BOOT_PRODUCT_ID,
-                           1U, sizeof(test_boot_payload));
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+    test_boot_plant_image(&store, TEST_BOOT_RECOVERY, TEST_BOOT_PRODUCT_ID, 1U,
+                          sizeof(test_boot_payload));
     store.source = MR_BOOT_SOURCE_RECOVERY;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
@@ -1620,9 +1606,9 @@ MR_TEST(boot, recovery_slot) {
     /* A bad recovery manifest becomes rescue */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID + 1U, 1U,
-                            sizeof(test_boot_payload));
+                           sizeof(test_boot_payload));
     mr_memcpy(&store.image[TEST_BOOT_RECOVERY], &manifest, sizeof(manifest));
     store.source = MR_BOOT_SOURCE_RECOVERY;
     ret = test_boot_open(&boot, &store, &ops);
@@ -1637,9 +1623,9 @@ MR_TEST(boot, recovery_slot) {
     /* A recovery jump that returns also becomes rescue */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
-    test_boot_plant_image(&store, TEST_BOOT_RECOVERY, TEST_BOOT_PRODUCT_ID,
-                           1U, sizeof(test_boot_payload));
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+    test_boot_plant_image(&store, TEST_BOOT_RECOVERY, TEST_BOOT_PRODUCT_ID, 1U,
+                          sizeof(test_boot_payload));
     store.source = MR_BOOT_SOURCE_RECOVERY;
     store.jump_fail_left = 1U;
     ret = test_boot_open(&boot, &store, &ops);
@@ -1670,14 +1656,14 @@ MR_TEST(boot, image_integrity) {
 
     /* A wrong image hash is rejected before the slot becomes active */
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 1U,
-                            sizeof(test_boot_payload));
+                           sizeof(test_boot_payload));
 #if defined(MR_USE_MODULE_BOOT_ECDSA_P256)
     test_boot_sign_manifest(&manifest);
 #endif /* defined(MR_USE_MODULE_BOOT_ECDSA_P256) */
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     ret = mr_boot_update_end(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, -MR_EINVAL);
@@ -1687,19 +1673,19 @@ MR_TEST(boot, image_integrity) {
     /* program() can report a full write while changing a stored byte */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 2U, 0U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 0U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 1U,
-                            sizeof(test_boot_payload));
+                           sizeof(test_boot_payload));
     test_boot_seal(&manifest, test_boot_payload, sizeof(test_boot_payload));
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     store.corrupt_program = MR_TRUE;
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     store.corrupt_program = MR_FALSE;
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     ret = mr_boot_update_end(&boot);
@@ -1712,9 +1698,8 @@ MR_TEST(boot, image_integrity) {
     /* A planted image with a bad hash does not select */
     test_boot_store_reset(&store);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
-    store.image[TEST_BOOT_SLOT_A
-                + offsetof(mr_boot_manifest_t, image_hash)]
+                          sizeof(test_boot_payload));
+    store.image[TEST_BOOT_SLOT_A + offsetof(mr_boot_manifest_t, image_hash)]
         ^= 0x01U;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
@@ -1738,9 +1723,9 @@ MR_TEST(boot, manifest_signature) {
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 1U,
-                            sizeof(test_boot_payload));
+                           sizeof(test_boot_payload));
     test_boot_digest(test_boot_payload, sizeof(test_boot_payload),
-                      manifest.image_hash);
+                     manifest.image_hash);
     store.verify_calls = 0U;
     store.erase_calls = 0U;
     ret = mr_boot_update_begin(&boot, &manifest);
@@ -1752,9 +1737,8 @@ MR_TEST(boot, manifest_signature) {
 
     test_boot_store_reset(&store);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
-    store.image[TEST_BOOT_SLOT_A
-                + offsetof(mr_boot_manifest_t, signature)]
+                          sizeof(test_boot_payload));
+    store.image[TEST_BOOT_SLOT_A + offsetof(mr_boot_manifest_t, signature)]
         = 0U;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
@@ -1775,30 +1759,30 @@ MR_TEST(boot, state_auth) {
     /* A tampered copy is ignored; the intact copy remains */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 3U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_state(&store, TEST_BOOT_STATE_B, 8U, 2U,
-                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     store.image[TEST_BOOT_STATE_B] ^= 0x01U;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 3U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     mr_boot_del(&boot);
 
     /* Both copies tampered looks like empty storage */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 3U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     store.image[TEST_BOOT_STATE_A] ^= 0x01U;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 0U, 0U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     mr_boot_del(&boot);
 
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 3U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     store.auth_error = -MR_EIO;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_EXPECT_EQ_INT(ret, -MR_EIO);
@@ -1821,20 +1805,19 @@ MR_TEST(boot, fast_cache) {
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 1U,
-                            sizeof(test_boot_payload));
+                           sizeof(test_boot_payload));
     test_boot_seal(&manifest, test_boot_payload, sizeof(test_boot_payload));
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     ret = mr_boot_update_end(&boot);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_digest(&manifest, sizeof(manifest), digest);
-    MR_TEST_EXPECT_EQ_INT(
-        mr_memcmp(boot.state.manifest_digest[MR_BOOT_SLOT_B], digest,
-                  sizeof(digest)),
-        0);
+    MR_TEST_EXPECT_EQ_INT(mr_memcmp(boot.state.manifest_digest[MR_BOOT_SLOT_B],
+                                    digest, sizeof(digest)),
+                          0);
     mr_boot_del(&boot);
 
     /* An unchanged manifest skips the image hash and the signature */
@@ -1885,14 +1868,14 @@ MR_TEST(boot, power_loss) {
     /* Half an image, then a reset, still boots the old APP */
     test_boot_store_reset(&store);
     test_boot_plant_state(&store, TEST_BOOT_STATE_A, 4U, 1U,
-                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                          (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     test_boot_plant_image(&store, TEST_BOOT_SLOT_A, TEST_BOOT_PRODUCT_ID, 1U,
-                           sizeof(test_boot_payload));
+                          sizeof(test_boot_payload));
     store.source = MR_BOOT_SOURCE_POWER_ON;
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 2U,
-                            sizeof(test_boot_payload));
+                           sizeof(test_boot_payload));
     test_boot_seal(&manifest, test_boot_payload, sizeof(test_boot_payload));
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
@@ -1903,8 +1886,8 @@ MR_TEST(boot, power_loss) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
     MR_TEST_EXPECT_EQ_UINT(boot.state.sequence, 4U);
     mr_boot_del(&boot);
 
@@ -1914,12 +1897,12 @@ MR_TEST(boot, power_loss) {
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_manifest_set(&manifest, TEST_BOOT_PRODUCT_ID, 1U,
-                            sizeof(test_boot_payload));
+                           sizeof(test_boot_payload));
     test_boot_seal(&manifest, test_boot_payload, sizeof(test_boot_payload));
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     ret = mr_boot_update_end(&boot);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
@@ -1929,8 +1912,8 @@ MR_TEST(boot, power_loss) {
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_UINT(boot.state.active_slot, MR_BOOT_SLOT_B);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
     mr_boot_del(&boot);
 
     /* Manifest is stored, then power fails before state A is touched */
@@ -1941,12 +1924,12 @@ MR_TEST(boot, power_loss) {
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     if (setjmp(store.reset_env) == 0) {
         store.reset_offset = TEST_BOOT_SLOT_B;
         store.reset_armed = MR_TRUE;
-        (void)mr_boot_update_end(&boot);
+        mr_boot_update_end(&boot);
         store.reset_armed = MR_FALSE;
     }
     mr_boot_del(&boot);
@@ -1956,8 +1939,8 @@ MR_TEST(boot, power_loss) {
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_UINT(boot.state.active_slot, MR_BOOT_SLOT_A);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
     mr_boot_del(&boot);
 
     /* state A erase fails: the new manifest is not committed */
@@ -1968,7 +1951,7 @@ MR_TEST(boot, power_loss) {
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     store.erase_calls = 0U;
     store.erase_fail_at = 1U;
@@ -1978,7 +1961,7 @@ MR_TEST(boot, power_loss) {
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 4U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     mr_boot_del(&boot);
 
     /* state A program fails after its erase: the older copy still boots */
@@ -1989,7 +1972,7 @@ MR_TEST(boot, power_loss) {
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     store.program_fault = MR_TRUE;
     store.program_fault_offset = TEST_BOOT_STATE_A;
@@ -2001,12 +1984,12 @@ MR_TEST(boot, power_loss) {
     ret = test_boot_open(&boot, &store, &ops);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_expect_state(__test_status, &boot.state, 4U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_A, 0U, 0U);
     store.source = MR_BOOT_SOURCE_POWER_ON;
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_A + sizeof(mr_boot_manifest_t));
     mr_boot_del(&boot);
 
     /* state B program fails: the first copy is enough after the next init */
@@ -2017,7 +2000,7 @@ MR_TEST(boot, power_loss) {
     ret = mr_boot_update_begin(&boot, &manifest);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ret = mr_boot_update_write(&boot, test_boot_payload,
-                                sizeof(test_boot_payload));
+                               sizeof(test_boot_payload));
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     store.program_fault = MR_TRUE;
     store.program_fault_offset = TEST_BOOT_STATE_B;
@@ -2031,12 +2014,12 @@ MR_TEST(boot, power_loss) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     test_boot_load_state(&store, TEST_BOOT_STATE_A, &saved);
     test_boot_expect_state(__test_status, &saved, 5U, 1U,
-                            (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
+                           (mr_uint8_t)MR_BOOT_SLOT_B, 0U, 0U);
     ret = test_boot_boot(&boot);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     MR_TEST_EXPECT_EQ_UINT(boot.state.active_slot, MR_BOOT_SLOT_B);
-    MR_TEST_EXPECT_EQ_UINT(
-        store.jump_offset, TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
+    MR_TEST_EXPECT_EQ_UINT(store.jump_offset,
+                           TEST_BOOT_SLOT_B + sizeof(mr_boot_manifest_t));
     mr_boot_del(&boot);
 }
 #endif /* defined(MR_USE_MODULE_BOOT) */

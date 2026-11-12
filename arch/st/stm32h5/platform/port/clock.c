@@ -57,7 +57,6 @@ void mr_stm32h5_platform_clock_init(mr_uint32_t per_second) {
     mr_port_irq_enable(mask);
 }
 
-/* Keep CubeMX's SysTick_Handler and HAL delays on their original time base */
 void HAL_IncTick(void) {
     mr_uint64_t scaled;
     mr_tick_t ticks;
@@ -68,7 +67,7 @@ void HAL_IncTick(void) {
     }
 #if defined(MR_USE_CLOCK_HIRES)
     /* Extend CYCCNT on every HAL tick, even without application reads */
-    (void)mr_port_clock_hires_tick();
+    mr_port_clock_hires_tick();
 #endif /* defined(MR_USE_CLOCK_HIRES) */
     scaled = __clock_fraction + (mr_uint64_t)__clock_rate * uwTickFreq;
     ticks = (mr_tick_t)(scaled / 1000U);

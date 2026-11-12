@@ -10,7 +10,6 @@
 #if defined(MR_USE_TEST)
 #include <mrX/kernel/mr_spinlock.h>
 
-/* Tests */
 MR_TEST(spinlock, static_init) {
     static mr_spinlock_t lock = MR_SPINLOCK_INIT();
 

@@ -12,6 +12,7 @@
 #include <mrX/fs/mr_fs_struct.h>
 #include <mrX/test/fs/fs_test.h>
 
+#if defined(MR_USE_FS_RAMFS)
 /* Failing filesystem mount state */
 static mr_size_t __fs_mount_fail_calls;
 
@@ -200,8 +201,8 @@ MR_TEST(fs, mount) {
                     -MR_ENOTDIR);
     fs_mount_expect(__test_status, "chroot regular", mr_fs_chroot("/jail/file"),
                     -MR_ENOTDIR);
-    fs_mount_expect(__test_status, "chdir jail work",
-                    mr_fs_chdir("/jail/work"), 0);
+    fs_mount_expect(__test_status, "chdir jail work", mr_fs_chdir("/jail/work"),
+                    0);
     fs_mount_cwd_expect(__test_status, "/jail/work");
     fs_mount_expect(__test_status, "chdir outside", mr_fs_chdir("/outside"), 0);
 
@@ -288,7 +289,6 @@ MR_TEST(fs, mount) {
     fs_mount_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
 }
-/* ==== from umount_open.c ==== */
 static void umount_open_expect(volatile mr_uint32_t *__test_status,
                                const char *name, mr_int64_t actual,
                                mr_int64_t expected) {
@@ -394,10 +394,12 @@ _exit:
     return;
 }
 /* ==== from sb.c ==== */
+#endif /* defined(MR_USE_FS_RAMFS) */
+
 static mr_size_t __sb_unmount_calls;
 
-static mr_err_t sb_mount_fail(mr_sblock_t *sb, const char *source,
-                              int flags, void *data) {
+static mr_err_t sb_mount_fail(mr_sblock_t *sb, const char *source, int flags,
+                              void *data) {
     MR_IGNORE(sb);
     MR_IGNORE(source);
     MR_IGNORE(flags);
@@ -446,8 +448,6 @@ static void sb_expect(volatile mr_uint32_t *__test_status, const char *name,
     MR_TEST_EXPECT_EQ_INT(actual, expected);
 }
 
-/* Test: super-block creation rejects invalid roots and cleans up exactly once
- */
 MR_TEST(fs, sblock_lifecycle) {
     mr_sblock_t *sb;
     mr_err_t ret;
@@ -480,12 +480,11 @@ MR_TEST(fs, sblock_lifecycle) {
     }
     sb_expect(__test_status, "enter detached super-block",
               mr_sblock_op_enter(sb), -MR_ENOENT);
-    sb_expect(__test_status, "delete detached super-block",
-              mr_sblock_del(sb), 0);
+    sb_expect(__test_status, "delete detached super-block", mr_sblock_del(sb),
+              0);
     sb_expect(__test_status, "detached super-block unmount count",
               (mr_int64_t)__sb_unmount_calls, 1);
 }
-/* ==== from sblock_ops.c ==== */
 static mr_err_t sblock_ops_mount(mr_sblock_t *sb, const char *source, int flags,
                                  void *data) {
     MR_IGNORE(source);
@@ -507,7 +506,6 @@ static void sblock_ops_expect(volatile mr_uint32_t *__test_status,
     MR_TEST_EXPECT_EQ_INT(actual, expected);
 }
 
-/* Test: attach, find, open lifetime and detach of a super-block */
 MR_TEST(fs, sblock_attach_lifecycle) {
     mr_sblock_t *sb;
     mr_sblock_t *found;
@@ -520,9 +518,9 @@ MR_TEST(fs, sblock_attach_lifecycle) {
 
     /* Create a super-block and an unrelated dentry pair */
     sb = MR_NULL;
-    sblock_ops_expect(__test_status, "create super-block",
-                      mr_sblock_create(&__sblock_ops_fs, MR_NULL, 0, MR_NULL,
-                                       &sb), 0);
+    sblock_ops_expect(
+        __test_status, "create super-block",
+        mr_sblock_create(&__sblock_ops_fs, MR_NULL, 0, MR_NULL, &sb), 0);
     sblock_ops_expect(__test_status, "super-block created", sb != MR_NULL,
                       MR_TRUE);
     if (!sb) {
@@ -579,8 +577,8 @@ MR_TEST(fs, sblock_attach_lifecycle) {
     sblock_ops_expect(__test_status, "attach", mr_sblock_attach(sb, d, d), 0);
 
     /* A second attach is rejected while mounted */
-    sblock_ops_expect(__test_status, "attach twice",
-                      mr_sblock_attach(sb, d, d), -MR_EBUSY);
+    sblock_ops_expect(__test_status, "attach twice", mr_sblock_attach(sb, d, d),
+                      -MR_EBUSY);
 
     /* The mounted super-block is found by its mount and root dentries */
     found = mr_sblock_find_by_dentry(d);
@@ -603,8 +601,8 @@ MR_TEST(fs, sblock_attach_lifecycle) {
     mr_sblock_file_release(sb);
 
     /* Detach transfers the dentry references to the caller */
-    sblock_ops_expect(__test_status, "detach", mr_sblock_detach(sb, &mnt, &root),
-                      0);
+    sblock_ops_expect(__test_status, "detach",
+                      mr_sblock_detach(sb, &mnt, &root), 0);
     sblock_ops_expect(__test_status, "detached mnt", mnt == d, MR_TRUE);
     sblock_ops_expect(__test_status, "detached root", root == d, MR_TRUE);
     if (mnt) {
@@ -630,7 +628,6 @@ MR_TEST(fs, sblock_attach_lifecycle) {
     return;
 }
 
-/* Test: nested mounts, leaf lookup and subtree offline */
 MR_TEST(fs, sblock_subtree_offline) {
     mr_sblock_t *parent;
     mr_sblock_t *child;
@@ -643,12 +640,12 @@ MR_TEST(fs, sblock_subtree_offline) {
 
     parent = MR_NULL;
     child = MR_NULL;
-    sblock_ops_expect(__test_status, "create parent",
-                      mr_sblock_create(&__sblock_ops_fs, MR_NULL, 0, MR_NULL,
-                                       &parent), 0);
-    sblock_ops_expect(__test_status, "create child",
-                      mr_sblock_create(&__sblock_ops_fs, MR_NULL, 0, MR_NULL,
-                                       &child), 0);
+    sblock_ops_expect(
+        __test_status, "create parent",
+        mr_sblock_create(&__sblock_ops_fs, MR_NULL, 0, MR_NULL, &parent), 0);
+    sblock_ops_expect(
+        __test_status, "create child",
+        mr_sblock_create(&__sblock_ops_fs, MR_NULL, 0, MR_NULL, &child), 0);
     sblock_ops_expect(__test_status, "super-blocks created",
                       (parent != MR_NULL) && (child != MR_NULL), MR_TRUE);
     if ((!parent) || (!child)) {
@@ -761,7 +758,6 @@ MR_TEST(fs, sblock_subtree_offline) {
     sblock_ops_expect(__test_status, "del parent sb", mr_sblock_del(parent), 0);
     return;
 }
-/* ==== from registry.c ==== */
 /* Mock FS that returns a non-directory root from mount */
 static mr_err_t registry_badroot_mount(mr_sblock_t *sb, const char *source,
                                        int flags, void *data);
@@ -769,8 +765,8 @@ static mr_err_t registry_good_mount(mr_sblock_t *sb, const char *source,
                                     int flags, void *data);
 static void registry_good_unmount(mr_sblock_t *sb);
 
-static mr_file_system_t __registry_badroot_fs = MR_FILE_SYSTEM_INIT(
-    "badrootfs", registry_badroot_mount, MR_NULL);
+static mr_file_system_t __registry_badroot_fs
+    = MR_FILE_SYSTEM_INIT("badrootfs", registry_badroot_mount, MR_NULL);
 static mr_file_system_t __registry_good_fs = MR_FILE_SYSTEM_INIT(
     "registryfs", registry_good_mount, registry_good_unmount);
 
@@ -876,6 +872,7 @@ MR_TEST(fs, registry) {
     return;
 }
 /* ==== from media_detach.c ==== */
+#if defined(MR_USE_FS_RAMFS)
 static void media_detach_expect(volatile mr_uint32_t *__test_status,
                                 const char *name, mr_int64_t actual,
                                 mr_int64_t expected) {
@@ -896,11 +893,9 @@ MR_TEST(fs, media_detach) {
     if (ret != 0) {
         return;
     }
-    media_detach_expect(__test_status, "mkdir media", mr_fs_mkdir("/media"),
-                        0);
+    media_detach_expect(__test_status, "mkdir media", mr_fs_mkdir("/media"), 0);
     media_detach_expect(__test_status, "mount media",
-                        mr_fs_mount(MR_NULL, "/media", "ramfs", 0, MR_NULL),
-                        0);
+                        mr_fs_mount(MR_NULL, "/media", "ramfs", 0, MR_NULL), 0);
 
     /* Keep a handle alive while the child mount disappears */
     ret = mr_fs_open(&file, "/media/live", MR_O_RDWR | MR_O_CREAT);
@@ -935,4 +930,5 @@ _exit:
     media_detach_expect(__test_status, "umount root", mr_fs_umount("/"), 0);
 }
 
+#endif /* defined(MR_USE_FS_RAMFS) */
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */

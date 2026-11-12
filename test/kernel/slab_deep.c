@@ -10,7 +10,6 @@
 #if defined(MR_USE_TEST)
 #include <mrX/kernel/mr_slab.h>
 
-/* Tests */
 MR_TEST(slab, full_word_boundary) {
     mr_atomic_t map[1];
     mr_uint8_t buf[64 * 8];

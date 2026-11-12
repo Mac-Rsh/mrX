@@ -11,7 +11,6 @@
 #if defined(MR_USE_PRINTF)
 #include <mrX/kernel/mr_printf.h>
 
-/* Helpers */
 static int vprintf_wrapper(const char *fmt, ...) {
     mr_va_list args;
     int ret;
@@ -22,7 +21,6 @@ static int vprintf_wrapper(const char *fmt, ...) {
     return ret;
 }
 
-/* Tests */
 MR_TEST(printf, null_fmt) {
     MR_TEST_ASSERT_EQ_INT(mr_printf(MR_NULL), -MR_EINVAL);
 }

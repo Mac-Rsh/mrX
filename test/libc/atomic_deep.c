@@ -11,7 +11,6 @@
 #if defined(MR_USE_ATOMIC)
 #include <mrX/libc/mr_atomic.h>
 
-/* Test: store and load the extreme signed bit patterns                     */
 MR_TEST(atomic, min_max_store_load) {
     mr_atomic_t v;
 
@@ -24,7 +23,6 @@ MR_TEST(atomic, min_max_store_load) {
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), 0);
 }
 
-/* Test: init macro accepts negative and extreme values                     */
 MR_TEST(atomic, init_macro_values) {
     mr_atomic_t a = MR_ATOMIC_INIT(-1);
     mr_atomic_t b = MR_ATOMIC_INIT(0);
@@ -35,7 +33,6 @@ MR_TEST(atomic, init_macro_values) {
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&c), MR_INT64_MAX);
 }
 
-/* Test: exchange across the extreme values returns the old value           */
 MR_TEST(atomic, exchange_extremes) {
     mr_atomic_t v, old;
 
@@ -49,7 +46,6 @@ MR_TEST(atomic, exchange_extremes) {
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), 0);
 }
 
-/* Test: compare-exchange success keeps the expected variable untouched     */
 MR_TEST(atomic, cas_success_keeps_expect) {
     mr_atomic_t v, expect;
 
@@ -61,14 +57,12 @@ MR_TEST(atomic, cas_success_keeps_expect) {
     MR_TEST_EXPECT_EQ_INT(expect, 5);
 }
 
-/* Test: compare-exchange failure writes nothing but refreshes expected     */
 MR_TEST(atomic, cas_failure_refreshes_expect) {
     mr_atomic_t v, expect;
 
     mr_atomic_init(&v, 7);
     expect = 8;
-    MR_TEST_EXPECT_EQ_INT(mr_atomic_compare_exchange(&v, &expect, 9),
-                          MR_FALSE);
+    MR_TEST_EXPECT_EQ_INT(mr_atomic_compare_exchange(&v, &expect, 9), MR_FALSE);
     /* The atomic must keep its value on failure */
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), 7);
     /* The expected value must be refreshed with the current value */
@@ -79,24 +73,21 @@ MR_TEST(atomic, cas_failure_refreshes_expect) {
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), 9);
 }
 
-/* Test: compare-exchange across the extreme bit patterns                   */
 MR_TEST(atomic, cas_extreme_patterns) {
     mr_atomic_t v, expect;
 
     mr_atomic_init(&v, MR_INT64_MIN);
     expect = MR_INT64_MIN;
     /* Only the desired value is stored, no arithmetic happens */
-    MR_TEST_EXPECT_EQ_INT(mr_atomic_compare_exchange(&v, &expect,
-                                                     MR_INT64_MAX), MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(mr_atomic_compare_exchange(&v, &expect, MR_INT64_MAX),
+                          MR_TRUE);
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), MR_INT64_MAX);
 
     expect = 0;
-    MR_TEST_EXPECT_EQ_INT(mr_atomic_compare_exchange(&v, &expect, 1),
-                          MR_FALSE);
+    MR_TEST_EXPECT_EQ_INT(mr_atomic_compare_exchange(&v, &expect, 1), MR_FALSE);
     MR_TEST_EXPECT_EQ_INT(expect, MR_INT64_MAX);
 }
 
-/* Test: a chain of compare-exchange updates                                */
 MR_TEST(atomic, cas_chain) {
     mr_atomic_t v, expect;
     int i;
@@ -110,7 +101,6 @@ MR_TEST(atomic, cas_chain) {
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), 8);
 }
 
-/* Test: fetch-add with zero and the extreme values                         */
 MR_TEST(atomic, fetch_add_zero_and_extremes) {
     mr_atomic_t v;
 
@@ -123,7 +113,6 @@ MR_TEST(atomic, fetch_add_zero_and_extremes) {
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), MR_INT64_MAX);
 }
 
-/* Test: negative add and sub are equivalent                                */
 MR_TEST(atomic, add_sub_negative_equivalence) {
     mr_atomic_t v;
 
@@ -140,7 +129,6 @@ MR_TEST(atomic, add_sub_negative_equivalence) {
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), 50);
 }
 
-/* Test: two's complement wrap on sub and add at the extremes               */
 MR_TEST(atomic, fetch_wrap_extremes) {
     mr_atomic_t v;
 
@@ -153,7 +141,6 @@ MR_TEST(atomic, fetch_wrap_extremes) {
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), MR_INT64_MAX);
 }
 
-/* Test: bitwise operations with all zero and all one operands              */
 MR_TEST(atomic, bitwise_extremes) {
     mr_atomic_t v;
 
@@ -178,14 +165,12 @@ MR_TEST(atomic, bitwise_extremes) {
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), 0x5A5A5A5A5A5A5A5ALL);
 }
 
-/* Test: single bit operations on the sign bit and the lowest bit           */
 MR_TEST(atomic, bitwise_sign_and_low_bit) {
     mr_atomic_t v;
 
     /* Set the sign bit on a zero value */
     mr_atomic_init(&v, 0);
-    MR_TEST_EXPECT_EQ_INT(mr_atomic_fetch_or(&v, (mr_atomic_t)MR_INT64_MIN),
-                          0);
+    MR_TEST_EXPECT_EQ_INT(mr_atomic_fetch_or(&v, (mr_atomic_t)MR_INT64_MIN), 0);
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), MR_INT64_MIN);
 
     /* AND keeps only the sign bit */
@@ -205,7 +190,6 @@ MR_TEST(atomic, bitwise_sign_and_low_bit) {
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), 0);
 }
 
-/* Test: 32 bit boundary values are preserved in the 64 bit atomic          */
 MR_TEST(atomic, bit32_boundary_values) {
     mr_atomic_t v;
 
@@ -224,7 +208,6 @@ MR_TEST(atomic, bit32_boundary_values) {
     MR_TEST_EXPECT_EQ_INT(mr_atomic_load(&v), -2147483647LL - 2);
 }
 
-/* Test: store and load round trip over a value sequence                    */
 MR_TEST(atomic, load_store_sequence) {
     mr_atomic_t v;
     int i;

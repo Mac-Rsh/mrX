@@ -18,8 +18,6 @@
 #define TEST_XVM_DATA_SIZE (512U)
 #define TEST_XVM_ENTRY     (0x100U)
 
-/* Helpers */
-
 static void test_xvm_image_word(mr_uint8_t *image, mr_uint32_t index,
                                 mr_uint32_t value) {
     mr_memcpy(image + (index * sizeof(value)), &value, sizeof(value));
@@ -80,8 +78,6 @@ MR_TEST(xvm, invalid_lifecycle_and_isa_registry) {
     ret = mr_xvm_isa_del(&isa);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-
-/* Tests */
 
 MR_TEST(xvm, lifecycle_and_registers) {
     mr_uint8_t data[TEST_XVM_DATA_SIZE];
@@ -149,7 +145,7 @@ MR_TEST(xvm, execute_arithmetic_and_syscall) {
     *event.syscall.ret = 42;
     ret = mr_xvm_resume(&xvm);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
-    (void)mr_xvm_execute(&xvm, &event, 0);
+    mr_xvm_execute(&xvm, &event, 0);
     ret = mr_xvm_reg_load(&xvm, 10, &value);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_UINT(value, 42);
@@ -218,8 +214,6 @@ MR_TEST(xvm, exception_pause_resume_and_interrupt) {
     ret = mr_xvm_del(&xvm);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
-
-/* Instruction encoders */
 
 static mr_uint32_t test_xvm_r(mr_uint32_t funct7, mr_uint32_t rs2,
                               mr_uint32_t rs1, mr_uint32_t funct3,

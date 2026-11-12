@@ -33,6 +33,8 @@ obj/
 *.elf
 *.hex
 *.bin
+# lwIP ships binary packet samples as test inputs.
+!/3party/lwip/lwip/test/fuzz/inputs/**/*.bin
 *.map
 *.lst
 

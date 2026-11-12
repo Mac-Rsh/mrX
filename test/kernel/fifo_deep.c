@@ -16,9 +16,6 @@ typedef struct {
     int id;
 } test_deep_elem_t;
 
-/* Tests */
-
-/* Test: a fifo with room for exactly one element at every boundary */
 MR_TEST(fifo, capacity_one_edge) {
     mr_uint8_t buf[sizeof(test_deep_elem_t)];
     mr_fifo_t fifo;
@@ -64,7 +61,6 @@ MR_TEST(fifo, capacity_one_edge) {
     MR_TEST_ASSERT_EQ_UINT(mr_fifo_read_claim(&fifo, 0, (void **)&p, 1), 0);
 }
 
-/* Test: byte sized elements with the elemsz == 1 fast path across wraps */
 MR_TEST(fifo, elemsz_one_byte_wrap) {
     mr_uint8_t buf[8];
     mr_uint8_t out[8];
@@ -109,7 +105,6 @@ MR_TEST(fifo, elemsz_one_byte_wrap) {
     MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
 }
 
-/* Test: every operation on a zeroed fifo must be a safe no-op */
 MR_TEST(fifo, uninitialized_operations) {
     mr_fifo_t fifo = {0};
     test_deep_elem_t e = {.id = 1};
@@ -148,7 +143,6 @@ MR_TEST(fifo, uninitialized_operations) {
     MR_TEST_ASSERT_EQ_UINT(mr_fifo_len(&fifo), 0);
 }
 
-/* Test: re-initialization resets state and a failed re-init is a no-op */
 MR_TEST(fifo, reinit_and_failed_reinit) {
     mr_uint8_t buf1[16];
     mr_uint8_t buf2[16];
@@ -182,7 +176,6 @@ MR_TEST(fifo, reinit_and_failed_reinit) {
     MR_TEST_ASSERT_EQ_INT(out.id, 2);
 }
 
-/* Test: size truncation must never write into unused trailing bytes */
 MR_TEST(fifo, elemsz_truncation_sentinel) {
     mr_uint8_t buf[10];
     mr_fifo_t fifo;
@@ -217,7 +210,6 @@ MR_TEST(fifo, elemsz_truncation_sentinel) {
     MR_TEST_EXPECT_EQ_UINT(buf[9], 0x55);
 }
 
-/* Test: a multi element write that splits exactly at the buffer end */
 MR_TEST(fifo, write_split_wrap_elemsz) {
     mr_uint8_t buf[3 * sizeof(test_deep_elem_t)];
     mr_fifo_t fifo;
@@ -245,7 +237,6 @@ MR_TEST(fifo, write_split_wrap_elemsz) {
     MR_TEST_ASSERT_EQ_INT(out[2].id, 4);
 }
 
-/* Test: overwrite with more elements than capacity keeps the newest tail */
 MR_TEST(fifo, overwrite_last_elements) {
     mr_uint8_t buf[4 * sizeof(test_deep_elem_t)];
     mr_fifo_t fifo;
@@ -290,7 +281,6 @@ MR_TEST(fifo, overwrite_last_elements) {
     MR_TEST_ASSERT_EQ_INT(out[3].id, 24);
 }
 
-/* Test: overwrite with zero elements must never change the fifo */
 MR_TEST(fifo, overwrite_zero_and_empty) {
     mr_uint8_t buf[4 * sizeof(test_deep_elem_t)];
     mr_fifo_t fifo;
@@ -322,7 +312,6 @@ MR_TEST(fifo, overwrite_zero_and_empty) {
     MR_TEST_ASSERT_EQ_INT(mr_fifo_is_full(&fifo), MR_TRUE);
 }
 
-/* Test: chained split claims across a wrap with offset boundaries */
 MR_TEST(fifo, claim_offset_boundaries) {
     mr_uint8_t buf[4 * sizeof(test_deep_elem_t)];
     mr_fifo_t fifo;
@@ -378,7 +367,6 @@ MR_TEST(fifo, claim_offset_boundaries) {
     MR_TEST_ASSERT_EQ_INT(out[3].id, 9);
 }
 
-/* Test: finish helpers clamp numbers beyond the available space */
 MR_TEST(fifo, claim_finish_clamping) {
     mr_uint8_t buf[4 * sizeof(test_deep_elem_t)];
     mr_fifo_t fifo;
@@ -415,7 +403,6 @@ MR_TEST(fifo, claim_finish_clamping) {
     MR_TEST_ASSERT_EQ_UINT(mr_fifo_len(&fifo), 4);
 }
 
-/* Test: overwrite claims at an offset spanning the wrap then finish */
 MR_TEST(fifo, overwrite_claim_wrap_protocol) {
     mr_uint8_t buf[4 * sizeof(test_deep_elem_t)];
     mr_fifo_t fifo;
@@ -457,7 +444,6 @@ MR_TEST(fifo, overwrite_claim_wrap_protocol) {
                            0);
 }
 
-/* Test: overwrite finish on a drained fifo must not advance the read side */
 MR_TEST(fifo, overwrite_finish_after_drain) {
     mr_uint8_t buf[4 * sizeof(test_deep_elem_t)];
     mr_fifo_t fifo;
@@ -485,7 +471,6 @@ MR_TEST(fifo, overwrite_finish_after_drain) {
     MR_TEST_ASSERT_EQ_INT(out[1].id, 4);
 }
 
-/* Test: peek clamps to the length and never consumes elements */
 MR_TEST(fifo, peek_partial_no_advance) {
     mr_uint8_t buf[4 * sizeof(test_deep_elem_t)];
     mr_fifo_t fifo;
@@ -521,7 +506,6 @@ MR_TEST(fifo, peek_partial_no_advance) {
     MR_TEST_ASSERT_EQ_INT(mr_fifo_is_empty(&fifo), MR_TRUE);
 }
 
-/* Test: skip clamps on partial drain and stays consistent after wrapping */
 MR_TEST(fifo, skip_clamp_partial) {
     mr_uint8_t buf[4 * sizeof(test_deep_elem_t)];
     mr_fifo_t fifo;
@@ -551,7 +535,6 @@ MR_TEST(fifo, skip_clamp_partial) {
 }
 
 #if defined(MR_USE_MALLOC)
-/* Test: operations after free stay safe and the finish path is symmetric */
 MR_TEST(fifo, ops_after_free) {
     mr_fifo_t fifo = {0};
     test_deep_elem_t e = {.id = 1};
@@ -593,7 +576,6 @@ MR_TEST(fifo, ops_after_free) {
 #endif /* defined(MR_USE_MALLOC) */
 
 #if defined(MR_USE_MALLOC)
-/* Test: allocation rejects zero, overflowing and oversized requests */
 MR_TEST(fifo, alloc_edge_numbers) {
     mr_fifo_t fifo = {0};
     test_deep_elem_t e = {.id = 1};
@@ -630,7 +612,6 @@ MR_TEST(fifo, alloc_edge_numbers) {
 }
 #endif /* defined(MR_USE_MALLOC) */
 
-/* Test: cursors stay stable over many push and pop wrap cycles */
 MR_TEST(fifo, long_run_cursor_stability) {
     mr_uint8_t buf[4 * sizeof(test_deep_elem_t)];
     mr_fifo_t fifo;

@@ -10,23 +10,17 @@
 #if defined(MR_USE_DRIVER_ADC)
 #include <mrX/drivers/adc/mr_adc.h>
 #include <mrX/drivers/gpio/mr_gpio.h>
-#if defined(MR_USE_DRIVER_ADC_STREAM)
-/* Enable ADC stream operations when configured */
-#define ADC_USE_STREAM
-#if defined(MR_USE_DRIVER_DMA)
-/* Enable DMA as an ADC stream data path when available */
-#define ADC_USE_DMA
+#if defined(MR_USE_DRIVER_ADC_STREAM) && defined(MR_USE_DRIVER_DMA)
 #include <mrX/drivers/dma/mr_dma.h>
-#endif /* defined(MR_USE_DRIVER_DMA) */
-#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) && defined(MR_USE_DRIVER_DMA) */
 #include "stm32h5xx_hal_adc.h"
 #include "stm32h5xx_hal_adc_ex.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT st_stm32h5_adc
+#define MR_HT_COMPAT                    st_stm32h5_adc
 #if MR_HT_HAS_DRIVER()
 
-/* ADC operations */
+/* Driver ADC operations */
 static mr_err_t adc_channel_configure(const mr_driver_t *drv,
                                       mr_uint32_t channel,
                                       const mr_adc_config_t *config);
@@ -34,84 +28,98 @@ static mr_err_t adc_channel_configuration(const mr_driver_t *drv,
                                           mr_uint32_t channel,
                                           mr_adc_config_t *config);
 static mr_ssize_t adc_read(const mr_driver_t *drv, mr_adc_seq_t *seq);
-#if defined(ADC_USE_STREAM)
+#if defined(MR_USE_DRIVER_ADC_STREAM)
 static mr_err_t adc_stream_start(const mr_driver_t *drv, mr_adc_seq_t *seq,
                                  const mr_adc_stream_config_t *config);
 static mr_err_t adc_stream_stop(const mr_driver_t *drv);
 static mr_err_t adc_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy);
 static mr_err_t adc_stream_offset(const mr_driver_t *drv, mr_size_t *offset);
-#endif /* defined(ADC_USE_STREAM) */
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 static mr_err_t adc_event_control(const mr_driver_t *drv, mr_uint32_t events,
                                   mr_bool_t enable);
 MR_UNUSED static const mr_adc_ops_t __adc_ops = {
     .channel_configure = adc_channel_configure,
     .channel_configuration = adc_channel_configuration,
     .read = adc_read,
-#if defined(ADC_USE_STREAM)
+#if defined(MR_USE_DRIVER_ADC_STREAM)
     .stream_start = adc_stream_start,
     .stream_stop = adc_stream_stop,
     .stream_is_busy = adc_stream_is_busy,
     .stream_offset = adc_stream_offset,
-#endif /* defined(ADC_USE_STREAM) */
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
     .event_control = adc_event_control,
 };
 
-/* ADC channel */
+/* ADC channel type */
 typedef struct adc_channel {
     uint32_t channel;
     mr_ht_gpio_spec_t gpio;
-    mr_adc_config_t config;
 } adc_channel_t;
 
-#if defined(ADC_USE_STREAM)
-/* ADC stream */
-typedef struct adc_stream {
-#if defined(ADC_USE_DMA)
-    mr_ht_dma_spec_t dma;
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+#if defined(MR_USE_DRIVER_DMA)
+/* ADC DMA phase definition */
+typedef enum adc_dma_phase {
+    ADC_DMA_IDLE,
+    ADC_DMA_WAITER_READY,
+    ADC_DMA_EVENTS_ENABLED,
+    ADC_DMA_STARTED,
+} adc_dma_phase_t;
+
+/* ADC DMA stream type */
+typedef struct adc_stream_dma {
+    mr_ht_dma_spec_t spec;
     mr_dma_transfer_t xfer;
     mr_waiter_t waiter;
-#endif /* defined(ADC_USE_DMA) */
-    mr_driver_t *drv;
-    mr_uint16_t *buf;
-    mr_size_t size;
-    mr_size_t offset;
+    adc_dma_phase_t phase;
+} adc_stream_dma_t;
+#endif /* defined(MR_USE_DRIVER_DMA) */
+
+/* ADC stream type */
+typedef struct adc_stream {
     uint32_t trigger;
     uint32_t trigger_edge;
     IRQn_Type irqn;
     mr_uint32_t irq_priority;
-    mr_atomic_t active;
-    mr_atomic_t complete;
-    mr_bool_t irq_valid;
-    mr_bool_t trigger_valid;
-    mr_bool_t use_dma;
-    mr_bool_t dma_started;
-    mr_bool_t waiter_inited;
-    mr_bool_t half_enabled;
-    mr_bool_t circular;
+#if defined(MR_USE_DRIVER_DMA)
+    adc_stream_dma_t *dma;
+#endif /* defined(MR_USE_DRIVER_DMA) */
+    mr_driver_t *drv;
+    mr_uint16_t *buf;
+    mr_size_t size;
+    volatile mr_uint32_t offset;
+    mr_atomic_t event_state;
+    mr_uint8_t irq_valid: 1;
+    mr_uint8_t trigger_valid: 1;
+    mr_uint8_t use_dma: 1;
+    mr_uint8_t adc_started: 1;
+    mr_uint8_t half_enabled: 1;
+    mr_uint8_t circular: 1;
 } adc_stream_t;
-#endif /* defined(ADC_USE_STREAM) */
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
-/* ADC private data */
+/* ADC private data type */
 typedef struct adc_priv {
     ADC_HandleTypeDef *handle;
     void (*clk_enable)(void);
-    adc_channel_t *channels;
+    const adc_channel_t *channels;
     mr_uint32_t channels_num;
-    mr_uint32_t event_mask;
     mr_uint8_t ref;
-#if defined(ADC_USE_STREAM)
-    adc_stream_t stream;
-#endif /* defined(ADC_USE_STREAM) */
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+    adc_stream_t *stream;
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 } adc_priv_t;
 
-/* Conversion timeout */
-#define ADC_POLL_TIMEOUT_MS (100U)
-/* Supported events */
+/* Device definition */
+#define ADC_POLL_TIMEOUT_MS             (100U)
+#define ADC_CHANNEL_BITS                (32U)
+
+/* ADC event mask definition */
 #define ADC_EVENT_MASK                                                         \
     (MR_ADC_WAIT_STREAM_HALF | MR_ADC_WAIT_STREAM_FULL                         \
      | MR_ADC_WAIT_STREAM_ERROR)
 
-/* Sample-time translation */
+/* The sequence oversample field selects a HAL sampling time */
 static const uint32_t __adc_sample_time[] = {
     ADC_SAMPLETIME_2CYCLES_5,   ADC_SAMPLETIME_6CYCLES_5,
     ADC_SAMPLETIME_12CYCLES_5,  ADC_SAMPLETIME_24CYCLES_5,
@@ -119,14 +127,17 @@ static const uint32_t __adc_sample_time[] = {
     ADC_SAMPLETIME_247CYCLES_5, ADC_SAMPLETIME_640CYCLES_5,
 };
 
-#if defined(ADC_USE_STREAM)
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+/* ADC stream state definition */
+#define ADC_STREAM_COMPLETE             (1U << 3)
+
 /* Stream rank translation */
 static const uint32_t __adc_regular_rank[] = {
     ADC_REGULAR_RANK_1, ADC_REGULAR_RANK_2, ADC_REGULAR_RANK_3,
     ADC_REGULAR_RANK_4, ADC_REGULAR_RANK_5, ADC_REGULAR_RANK_6,
     ADC_REGULAR_RANK_7, ADC_REGULAR_RANK_8,
 };
-#endif /* defined(ADC_USE_STREAM) */
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
 static mr_err_t adc_resolution(mr_uint8_t resolution,
                                uint32_t *hal_resolution) {
@@ -156,7 +167,6 @@ static mr_err_t adc_resolution(mr_uint8_t resolution,
 }
 
 static mr_err_t adc_init_mode(adc_priv_t *priv, uint32_t resolution,
-                              uint32_t scan_conv_mode,
                               FunctionalState continuous_conv,
                               FunctionalState dma_requests,
                               uint32_t conversions, uint32_t trigger,
@@ -164,18 +174,19 @@ static mr_err_t adc_init_mode(adc_priv_t *priv, uint32_t resolution,
     ADC_HandleTypeDef *handle;
     mr_err_t ret;
 
-    handle = priv->handle;
     /* Check parameter */
+    handle = priv->handle;
     if ((handle == MR_NULL) || (priv->clk_enable == MR_NULL)) {
         return -MR_EINVAL;
     }
-    priv->clk_enable();
 
     /* Configure conversion mode */
+    priv->clk_enable();
     handle->Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
     handle->Init.Resolution = resolution;
     handle->Init.DataAlign = ADC_DATAALIGN_RIGHT;
-    handle->Init.ScanConvMode = scan_conv_mode;
+    handle->Init.ScanConvMode
+        = (conversions > 1U) ? ADC_SCAN_ENABLE : ADC_SCAN_DISABLE;
     handle->Init.EOCSelection = ADC_EOC_SINGLE_CONV;
     handle->Init.LowPowerAutoWait = DISABLE;
     handle->Init.ContinuousConvMode = continuous_conv;
@@ -199,58 +210,50 @@ static mr_err_t adc_init_mode(adc_priv_t *priv, uint32_t resolution,
 }
 
 static mr_err_t adc_init(adc_priv_t *priv, uint32_t resolution) {
-    return adc_init_mode(priv, resolution, ADC_SCAN_DISABLE, DISABLE, DISABLE,
-                         1U, ADC_SOFTWARE_START, ADC_EXTERNALTRIGCONVEDGE_NONE);
+    return adc_init_mode(priv, resolution, DISABLE, DISABLE, 1U,
+                         ADC_SOFTWARE_START, ADC_EXTERNALTRIGCONVEDGE_NONE);
 }
 
-#if defined(ADC_USE_STREAM)
+#if defined(MR_USE_DRIVER_ADC_STREAM)
 static mr_err_t adc_init_stream(adc_priv_t *priv, uint32_t resolution,
                                 mr_uint32_t conversions,
                                 const mr_adc_stream_config_t *config,
                                 mr_bool_t use_dma) {
     mr_bool_t software;
 
+    /* Select continuous or externally triggered conversions */
     software = (config->source == MR_ADC_STREAM_SOURCE_SOFTWARE);
-
-    return adc_init_mode(
-        priv, resolution,
-        (conversions > 1U) ? ADC_SCAN_ENABLE : ADC_SCAN_DISABLE,
-        software ? ENABLE : DISABLE, use_dma ? ENABLE : DISABLE, conversions,
-        software ? ADC_SOFTWARE_START : priv->stream.trigger,
-        software ? ADC_EXTERNALTRIGCONVEDGE_NONE : priv->stream.trigger_edge);
+    return adc_init_mode(priv, resolution, software ? ENABLE : DISABLE,
+                         use_dma ? ENABLE : DISABLE, conversions,
+                         software ? ADC_SOFTWARE_START : priv->stream->trigger,
+                         software ? ADC_EXTERNALTRIGCONVEDGE_NONE
+                                  : priv->stream->trigger_edge);
 }
-#endif /* defined(ADC_USE_STREAM) */
-
-static mr_err_t adc_gpio_configure(adc_channel_t *channel) {
-    mr_gpio_config_t cfg;
-
-    cfg = (mr_gpio_config_t){0};
-
-    /* Check GPIO */
-    if (channel->gpio.drv == MR_NULL) {
-        return -MR_EINVAL;
-    }
-
-    /* Configure GPIO */
-    cfg.mode = MR_GPIO_MODE_ANALOG;
-    cfg.pull = MR_GPIO_PULL_NONE;
-    return mr_ht_gpio_configure(&channel->gpio, &cfg);
-}
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
 static mr_err_t adc_configure_hw_channel(adc_priv_t *priv,
                                          const adc_channel_t *channel,
                                          mr_uint32_t sample_time,
                                          uint32_t rank) {
-    ADC_ChannelConfTypeDef config;
+    ADC_ChannelConfTypeDef config = {0};
+    mr_gpio_config_t gpio_config = {0};
+    mr_err_t ret;
 
-    config = (ADC_ChannelConfTypeDef){0};
-
-    /* Check sample time */
-    if (sample_time >= MR_ARRAY_SIZE(__adc_sample_time)) {
+    /* Check parameter */
+    if ((channel->gpio.drv == MR_NULL)
+        || (sample_time >= MR_ARRAY_SIZE(__adc_sample_time))) {
         return -MR_EINVAL;
     }
 
-    /* Configure channel */
+    /* Route the input through the GPIO owner's analog configuration */
+    gpio_config.mode = MR_GPIO_MODE_ANALOG;
+    gpio_config.pull = MR_GPIO_PULL_NONE;
+    ret = mr_gpio_configure(channel->gpio.drv, channel->gpio.pin, &gpio_config);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Configure the regular channel */
     config.Channel = channel->channel;
     config.Rank = rank;
     config.SamplingTime = __adc_sample_time[sample_time];
@@ -266,19 +269,17 @@ static mr_err_t adc_channel_configure(const mr_driver_t *drv,
                                       mr_uint32_t channel,
                                       const mr_adc_config_t *config) {
     adc_priv_t *priv = MR_DRIVER_PRIV(drv);
-    adc_channel_t *adc_channel;
     mr_err_t ret;
-#if defined(ADC_USE_STREAM)
+#if defined(MR_USE_DRIVER_ADC_STREAM)
     mr_bool_t busy;
-#endif /* defined(ADC_USE_STREAM) */
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
     /* Check parameter */
     if (channel >= priv->channels_num) {
         return -MR_EINVAL;
     }
-    adc_channel = &priv->channels[channel];
 
-#if defined(ADC_USE_STREAM)
+#if defined(MR_USE_DRIVER_ADC_STREAM)
     /* Check stream state */
     ret = adc_stream_is_busy(drv, &busy);
     if (ret != 0) {
@@ -287,7 +288,7 @@ static mr_err_t adc_channel_configure(const mr_driver_t *drv,
     if (busy) {
         return -MR_EBUSY;
     }
-#endif /* defined(ADC_USE_STREAM) */
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
     /* Check configuration */
     if ((config->diff != MR_ADC_DIFF_SINGLE) || (config->ref != priv->ref)
@@ -300,20 +301,9 @@ static mr_err_t adc_channel_configure(const mr_driver_t *drv,
     if (ret != 0) {
         return ret;
     }
-    ret = adc_gpio_configure(adc_channel);
-    if (ret != 0) {
-        return ret;
-    }
-
-    /* Configure channel */
-    ret = adc_configure_hw_channel(priv, adc_channel,
-                                   MR_ARRAY_SIZE(__adc_sample_time) - 1U,
-                                   ADC_REGULAR_RANK_1);
-    if (ret != 0) {
-        return ret;
-    }
-    adc_channel->config = *config;
-    return 0;
+    return adc_configure_hw_channel(priv, &priv->channels[channel],
+                                    MR_ARRAY_SIZE(__adc_sample_time) - 1U,
+                                    ADC_REGULAR_RANK_1);
 }
 
 static mr_err_t adc_channel_configuration(const mr_driver_t *drv,
@@ -326,20 +316,19 @@ static mr_err_t adc_channel_configuration(const mr_driver_t *drv,
         return -MR_EINVAL;
     }
 
-    /* Get configuration */
-    *config = priv->channels[channel].config;
+    /* All channels use the same fixed input configuration */
+    config->diff = MR_ADC_DIFF_SINGLE;
+    config->ref = priv->ref;
+    config->gain = MR_ADC_GAIN_1;
     return 0;
 }
 
-static mr_err_t adc_convert(adc_priv_t *priv, adc_channel_t *channel,
+static mr_err_t adc_convert(adc_priv_t *priv, const adc_channel_t *channel,
                             mr_uint32_t sample_time, mr_uint16_t *value) {
+    mr_uint16_t sample;
     mr_err_t ret;
 
     /* Configure channel */
-    ret = adc_gpio_configure(channel);
-    if (ret != 0) {
-        return ret;
-    }
     ret = adc_configure_hw_channel(priv, channel, sample_time,
                                    ADC_REGULAR_RANK_1);
     if (ret != 0) {
@@ -354,28 +343,32 @@ static mr_err_t adc_convert(adc_priv_t *priv, adc_channel_t *channel,
     ret = mr_stm32h5_hal_status(
         HAL_ADC_PollForConversion(priv->handle, ADC_POLL_TIMEOUT_MS));
     if (ret != 0) {
-        (void)HAL_ADC_Stop(priv->handle);
+        HAL_ADC_Stop(priv->handle);
         return ret;
     }
 
-    /* Read conversion result */
-    *value = (mr_uint16_t)HAL_ADC_GetValue(priv->handle);
-    return mr_stm32h5_hal_status(HAL_ADC_Stop(priv->handle));
+    /* Commit the sample only after the conversion has been stopped */
+    sample = (mr_uint16_t)HAL_ADC_GetValue(priv->handle);
+    ret = mr_stm32h5_hal_status(HAL_ADC_Stop(priv->handle));
+    if (ret != 0) {
+        return ret;
+    }
+    *value = sample;
+    return 0;
 }
 
 static mr_ssize_t adc_read(const mr_driver_t *drv, mr_adc_seq_t *seq) {
     adc_priv_t *priv = MR_DRIVER_PRIV(drv);
-    mr_uint32_t channel, resolution;
+    uint32_t resolution;
+    mr_uint32_t channel;
     mr_uint16_t *buf;
     mr_size_t count;
     mr_err_t ret;
-#if defined(ADC_USE_STREAM)
+#if defined(MR_USE_DRIVER_ADC_STREAM)
     mr_bool_t busy;
-#endif /* defined(ADC_USE_STREAM) */
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
-    count = 0U;
-
-#if defined(ADC_USE_STREAM)
+#if defined(MR_USE_DRIVER_ADC_STREAM)
     /* Check stream state */
     ret = adc_stream_is_busy(drv, &busy);
     if (ret != 0) {
@@ -384,7 +377,7 @@ static mr_ssize_t adc_read(const mr_driver_t *drv, mr_adc_seq_t *seq) {
     if (busy) {
         return -MR_EBUSY;
     }
-#endif /* defined(ADC_USE_STREAM) */
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
     /* Check sequence */
     ret = adc_resolution(seq->resolution, &resolution);
@@ -399,27 +392,30 @@ static mr_ssize_t adc_read(const mr_driver_t *drv, mr_adc_seq_t *seq) {
     if ((seq->channels == 0U) || (seq->size < sizeof(mr_uint16_t))) {
         return 0;
     }
+    if (((mr_uintptr_t)seq->buf % sizeof(mr_uint16_t)) != 0U) {
+        return -MR_EINVAL;
+    }
 
+    /* Init ADC for the requested resolution */
     ret = adc_init(priv, resolution);
     if (ret != 0) {
         return ret;
     }
 
-    /* Read channels */
-    buf = (mr_uint16_t *)seq->buf;
+    /* Read channels in bit order, including a partial final frame.
+     * Return completed bytes if a later conversion fails */
+    buf = seq->buf;
+    count = 0U;
     while ((seq->size - count) >= sizeof(mr_uint16_t)) {
-        for (channel = 0U; channel < 32U; channel++) {
-            adc_channel_t *adc_channel;
-
+        for (channel = 0U; channel < ADC_CHANNEL_BITS; channel++) {
             if ((seq->channels & (1UL << channel)) == 0U) {
                 continue;
             }
             if (channel >= priv->channels_num) {
                 return (count != 0U) ? (mr_ssize_t)count : -MR_EINVAL;
             }
-            adc_channel = &priv->channels[channel];
-
-            ret = adc_convert(priv, adc_channel, seq->oversample, buf);
+            ret = adc_convert(priv, &priv->channels[channel], seq->oversample,
+                              buf);
             if (ret != 0) {
                 return (count != 0U) ? (mr_ssize_t)count : ret;
             }
@@ -433,81 +429,134 @@ static mr_ssize_t adc_read(const mr_driver_t *drv, mr_adc_seq_t *seq) {
     return (mr_ssize_t)count;
 }
 
-#if defined(ADC_USE_STREAM)
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+static void adc_stream_notify(adc_stream_t *stream, mr_wait_event_t events) {
+    if (events == 0U) {
+        return;
+    }
+
+    /* Forward only the events enabled by the caller */
+    events &= (mr_wait_event_t)mr_atomic_load(&stream->event_state);
+    if (events != 0U) {
+        mr_adc_event_raise(stream->drv, events);
+    }
+}
+
 static void adc_stream_halt(adc_priv_t *priv) {
-    /* Halt conversion */
+    /* Disarm external triggers before requesting a nonblocking stop in IRQ */
     CLEAR_BIT(priv->handle->Instance->CFGR, ADC_CFGR_EXTEN);
     if (LL_ADC_REG_IsConversionOngoing(priv->handle->Instance)) {
         LL_ADC_REG_StopConversion(priv->handle->Instance);
     }
+    mr_atomic_fetch_or(&priv->stream->event_state, ADC_STREAM_COMPLETE);
 }
 
-#if defined(ADC_USE_DMA)
+#if defined(MR_USE_DRIVER_DMA)
 static void adc_dma_event(mr_waiter_t *waiter, void *param,
                           mr_wait_event_t event, const void *data) {
     mr_wait_event_t adc_event;
+    adc_stream_t *stream;
     adc_priv_t *priv;
 
     priv = (adc_priv_t *)param;
-
-    adc_event = 0U;
+    stream = priv->stream;
 
     MR_IGNORE(waiter);
     MR_IGNORE(data);
 
-    /* Handle DMA events */
-    if ((mr_atomic_load(&priv->stream.active) == 0)
-        || (priv->stream.drv == MR_NULL)) {
+    /* Check stream state */
+    if ((stream->drv == MR_NULL)
+        || ((mr_atomic_load(&stream->event_state) & ADC_STREAM_COMPLETE)
+            != 0U)) {
         return;
     }
-    if (event & MR_DMA_WAIT_ERROR) {
-        /* Stop ADC */
+
+    /* Translate DMA events and stop requests on error or one-shot completion */
+    adc_event = 0U;
+    if ((event & MR_DMA_WAIT_ERROR) != 0U) {
         adc_stream_halt(priv);
-        mr_atomic_store(&priv->stream.complete, 1);
-        if (priv->event_mask & MR_ADC_WAIT_STREAM_ERROR) {
-            (void)mr_adc_event_raise(priv->stream.drv,
-                                     MR_ADC_WAIT_STREAM_ERROR);
+        adc_event = MR_ADC_WAIT_STREAM_ERROR;
+    } else {
+        if (((event & MR_DMA_WAIT_HALF) != 0U) && stream->half_enabled) {
+            adc_event |= MR_ADC_WAIT_STREAM_HALF;
         }
-        return;
-    }
-    if ((event & MR_DMA_WAIT_HALF) && priv->stream.half_enabled
-        && (priv->event_mask & MR_ADC_WAIT_STREAM_HALF)) {
-        adc_event |= MR_ADC_WAIT_STREAM_HALF;
-    }
-    if (event & MR_DMA_WAIT_DONE) {
-        if (priv->event_mask & MR_ADC_WAIT_STREAM_FULL) {
+        if ((event & MR_DMA_WAIT_DONE) != 0U) {
+            if (!stream->circular) {
+                adc_stream_halt(priv);
+            }
             adc_event |= MR_ADC_WAIT_STREAM_FULL;
         }
-        if (!priv->stream.circular) {
-            /* Mark stream complete */
-            adc_stream_halt(priv);
-            mr_atomic_store(&priv->stream.complete, 1);
-        }
     }
-    if (adc_event != 0U) {
-        (void)mr_adc_event_raise(priv->stream.drv, adc_event);
-    }
+    adc_stream_notify(stream, adc_event);
 }
-#endif /* defined(ADC_USE_DMA) */
 
-static void adc_stream_release(adc_priv_t *priv) {
-#if defined(ADC_USE_DMA)
-    if (priv->stream.waiter_inited) {
-        (void)mr_waiter_del(&priv->stream.waiter);
-        priv->stream.waiter_inited = MR_FALSE;
-    }
-#endif /* defined(ADC_USE_DMA) */
-    /* Release stream */
-    priv->stream.drv = MR_NULL;
+static mr_wait_event_t adc_stream_dma_events(const adc_stream_t *stream) {
+    return MR_DMA_WAIT_DONE | MR_DMA_WAIT_ERROR
+         | (stream->half_enabled ? MR_DMA_WAIT_HALF : 0U);
 }
+
+static mr_err_t adc_stream_start_dma(adc_priv_t *priv) {
+    static const mr_dma_config_t config = {
+        .src_width = MR_DMA_WIDTH_16,
+        .dst_width = MR_DMA_WIDTH_16,
+        .src_adj = MR_DMA_ADJ_CONST,
+        .dst_adj = MR_DMA_ADJ_INC,
+        .src_burst = MR_DMA_BURST_1,
+        .dst_burst = MR_DMA_BURST_1,
+        .direction = MR_DMA_DIR_P2M,
+    };
+    mr_wait_event_t events;
+    adc_stream_dma_t *dma;
+    adc_stream_t *stream;
+    mr_err_t ret;
+
+    /* Configure DMA while ADC requests are masked */
+    stream = priv->stream;
+    dma = stream->dma;
+    ret = mr_dma_configure(dma->spec.drv, dma->spec.channel, &config);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Subscribe before starting DMA so completion and errors can halt ADC */
+    events = adc_stream_dma_events(stream);
+    ret = mr_waiter_init(&dma->waiter, adc_dma_event, priv, events);
+    if (ret != 0) {
+        return ret;
+    }
+    dma->phase = ADC_DMA_WAITER_READY;
+    ret = mr_dma_event_attach(dma->spec.drv, dma->spec.channel, &dma->waiter);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = mr_dma_event_enable(dma->spec.drv, dma->spec.channel, events);
+    if (ret != 0) {
+        return ret;
+    }
+    dma->phase = ADC_DMA_EVENTS_ENABLED;
+
+    /* Start the transfer before unmasking ADC requests */
+    dma->xfer.next = stream->circular ? &dma->xfer : MR_NULL;
+    dma->xfer.src = (void *)&priv->handle->Instance->DR;
+    dma->xfer.dst = stream->buf;
+    dma->xfer.count = stream->size;
+    ret = mr_dma_start(dma->spec.drv, dma->spec.channel, &dma->xfer);
+    if (ret != 0) {
+        return ret;
+    }
+    dma->phase = ADC_DMA_STARTED;
+    SET_BIT(priv->handle->Instance->CFGR, ADC_CFGR_DMAEN);
+    return 0;
+}
+#endif /* defined(MR_USE_DRIVER_DMA) */
 
 static mr_err_t adc_seq_ranks(const adc_priv_t *priv, mr_uint32_t channels,
                               mr_uint8_t *index, mr_uint32_t *count) {
     mr_uint32_t channel, selected;
 
+    /* Map selected channels to consecutive regular ranks */
     selected = 0U;
-
-    for (channel = 0U; channel < 32U; channel++) {
+    for (channel = 0U; channel < ADC_CHANNEL_BITS; channel++) {
         if ((channels & (1UL << channel)) == 0U) {
             continue;
         }
@@ -521,214 +570,164 @@ static mr_err_t adc_seq_ranks(const adc_priv_t *priv, mr_uint32_t channels,
     if (selected == 0U) {
         return -MR_EINVAL;
     }
-    /* Get channel ranks */
     *count = selected;
     return 0;
 }
 
-static mr_err_t adc_stream_stop_impl(const mr_driver_t *drv) {
+static mr_err_t adc_stream_stop(const mr_driver_t *drv) {
     adc_priv_t *priv = MR_DRIVER_PRIV(drv);
-    mr_err_t first_error, ret;
-
-    first_error = 0;
-    if (mr_atomic_load(&priv->stream.active) != 0) {
-#if defined(ADC_USE_DMA)
-        if (priv->stream.use_dma && priv->stream.dma_started) {
-            /* Stop DMA */
-            if (priv->stream.dma.drv == MR_NULL) {
-                first_error = -MR_ENODEV;
-            } else {
-                ret = mr_dma_stop(priv->stream.dma.drv,
-                                  priv->stream.dma.channel);
-                if ((ret != 0) && (first_error == 0)) {
-                    first_error = ret;
-                }
-            }
-        }
-#endif /* defined(ADC_USE_DMA) */
-
-        /* Stop ADC */
-        ret = mr_stm32h5_hal_status(priv->stream.use_dma
-                                        ? HAL_ADC_Stop(priv->handle)
-                                        : HAL_ADC_Stop_IT(priv->handle));
-        if ((ret != 0) && (first_error == 0)) {
-            first_error = ret;
-        }
-
-        /* Check cleanup result */
-        if (first_error != 0) {
-            return first_error;
-        }
-        mr_atomic_store(&priv->stream.active, 0);
-        priv->stream.dma_started = MR_FALSE;
-        CLEAR_BIT(priv->handle->Instance->CFGR, ADC_CFGR_DMAEN);
-    }
-    adc_stream_release(priv);
-    return first_error;
-}
-
-static mr_err_t adc_stream_is_busy_impl(const mr_driver_t *drv,
-                                        mr_bool_t *busy) {
-    adc_priv_t *priv = MR_DRIVER_PRIV(drv);
+    adc_stream_t *stream;
+#if defined(MR_USE_DRIVER_DMA)
+    adc_stream_dma_t *dma;
+#endif /* defined(MR_USE_DRIVER_DMA) */
+    mr_err_t ret;
 
     /* Check stream state */
-    if (mr_atomic_load(&priv->stream.active) == 0) {
-        *busy = MR_FALSE;
+    stream = priv->stream;
+    if ((stream == MR_NULL) || (stream->drv == MR_NULL)) {
         return 0;
     }
-    if (mr_atomic_load(&priv->stream.complete) != 0) {
-        *busy = MR_FALSE;
-        return adc_stream_stop(drv);
-    }
 
-#if defined(ADC_USE_DMA)
-    if (priv->stream.use_dma) {
-        mr_err_t ret;
-
-        if (priv->stream.dma.drv == MR_NULL) {
-            return -MR_ENODEV;
-        }
-        ret = mr_dma_is_busy(priv->stream.dma.drv, priv->stream.dma.channel,
-                             busy);
+    /* Stop conversions before releasing the destination buffer */
+    if (stream->adc_started) {
+        ret = mr_stm32h5_hal_status(stream->use_dma
+                                        ? HAL_ADC_Stop(priv->handle)
+                                        : HAL_ADC_Stop_IT(priv->handle));
         if (ret != 0) {
             return ret;
         }
-        if (!*busy) {
-            mr_atomic_store(&priv->stream.complete, 1);
-            return adc_stream_stop(drv);
+        stream->adc_started = 0U;
+    }
+
+#if defined(MR_USE_DRIVER_DMA)
+    /* Keep the waiter until DMA stops and its event sources are masked */
+    dma = stream->dma;
+    if (dma != MR_NULL) {
+        if (dma->phase == ADC_DMA_STARTED) {
+            ret = mr_dma_stop(dma->spec.drv, dma->spec.channel);
+            if (ret != 0) {
+                return ret;
+            }
+            dma->phase = ADC_DMA_EVENTS_ENABLED;
         }
+        if (dma->phase == ADC_DMA_EVENTS_ENABLED) {
+            ret = mr_dma_event_disable(dma->spec.drv, dma->spec.channel,
+                                       adc_stream_dma_events(stream));
+            if (ret != 0) {
+                return ret;
+            }
+            dma->phase = ADC_DMA_WAITER_READY;
+        }
+        if (dma->phase == ADC_DMA_WAITER_READY) {
+            mr_waiter_del(&dma->waiter);
+            dma->phase = ADC_DMA_IDLE;
+        }
+    }
+#endif /* defined(MR_USE_DRIVER_DMA) */
+
+    /* Release stream ownership only after cleanup succeeds */
+    CLEAR_BIT(priv->handle->Instance->CFGR, ADC_CFGR_DMAEN);
+    stream->drv = MR_NULL;
+    return 0;
+}
+
+static mr_err_t adc_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
+    adc_priv_t *priv = MR_DRIVER_PRIV(drv);
+    adc_stream_t *stream;
+#if defined(MR_USE_DRIVER_DMA)
+    mr_bool_t dma_busy;
+#endif /* defined(MR_USE_DRIVER_DMA) */
+    mr_err_t ret;
+
+    /* Check stream state */
+    stream = priv->stream;
+    if ((stream == MR_NULL) || (stream->drv == MR_NULL)) {
+        *busy = MR_FALSE;
         return 0;
     }
-#endif /* defined(ADC_USE_DMA) */
+    if ((mr_atomic_load(&stream->event_state) & ADC_STREAM_COMPLETE) != 0U) {
+        ret = adc_stream_stop(drv);
+        if (ret == 0) {
+            *busy = MR_FALSE;
+        }
+        return ret;
+    }
+
+#if defined(MR_USE_DRIVER_DMA)
+    /* Check DMA completion if the ADC has not reported it yet */
+    if (stream->use_dma) {
+        ret = mr_dma_is_busy(stream->dma->spec.drv, stream->dma->spec.channel,
+                             &dma_busy);
+        if (ret != 0) {
+            return ret;
+        }
+        if (!dma_busy) {
+            mr_atomic_fetch_or(&stream->event_state, ADC_STREAM_COMPLETE);
+            ret = adc_stream_stop(drv);
+            if (ret != 0) {
+                return ret;
+            }
+        }
+        *busy = dma_busy;
+        return 0;
+    }
+#endif /* defined(MR_USE_DRIVER_DMA) */
 
     *busy = MR_TRUE;
     return 0;
 }
 
-static mr_err_t adc_stream_offset_impl(const mr_driver_t *drv,
-                                       mr_size_t *offset) {
+static mr_err_t adc_stream_offset(const mr_driver_t *drv, mr_size_t *offset) {
     adc_priv_t *priv = MR_DRIVER_PRIV(drv);
+    adc_stream_t *stream;
 
-    /* Get stream offset */
-#if defined(ADC_USE_DMA)
-    if (priv->stream.use_dma) {
-        if (priv->stream.dma.drv == MR_NULL) {
-            return -MR_ENODEV;
-        }
-        return mr_dma_offset(priv->stream.dma.drv, priv->stream.dma.channel,
+    /* DMA owns the write position when it fills the buffer */
+    stream = priv->stream;
+    if (stream == MR_NULL) {
+        *offset = 0U;
+        return 0;
+    }
+#if defined(MR_USE_DRIVER_DMA)
+    if (stream->use_dma) {
+        return mr_dma_offset(stream->dma->spec.drv, stream->dma->spec.channel,
                              offset);
     }
-#endif /* defined(ADC_USE_DMA) */
+#endif /* defined(MR_USE_DRIVER_DMA) */
 
-    *offset = priv->stream.offset;
+    *offset = stream->offset;
     return 0;
 }
 
-static void adc_irq(adc_priv_t *priv) {
-    mr_wait_event_t event;
-
-    event = 0U;
-
-    /* Check stream state */
-    if ((priv == MR_NULL) || (mr_atomic_load(&priv->stream.active) == 0)
-        || priv->stream.use_dma) {
-        return;
-    }
-
-    /* Check overrun */
-    if ((__HAL_ADC_GET_FLAG(priv->handle, ADC_FLAG_OVR) != 0U)
-        && (__HAL_ADC_GET_IT_SOURCE(priv->handle, ADC_IT_OVR) != 0U)) {
-        __HAL_ADC_CLEAR_FLAG(priv->handle, ADC_FLAG_OVR);
-        __HAL_ADC_DISABLE_IT(priv->handle,
-                             ADC_IT_EOC | ADC_IT_EOS | ADC_IT_OVR);
-        adc_stream_halt(priv);
-        mr_atomic_store(&priv->stream.complete, 1);
-        if (priv->event_mask & MR_ADC_WAIT_STREAM_ERROR) {
-            (void)mr_adc_event_raise(priv->stream.drv,
-                                     MR_ADC_WAIT_STREAM_ERROR);
-        }
-        return;
-    }
-
-    /* Read conversion result */
-    if ((__HAL_ADC_GET_FLAG(priv->handle, ADC_FLAG_EOC) == 0U)
-        || (__HAL_ADC_GET_IT_SOURCE(priv->handle, ADC_IT_EOC) == 0U)) {
-        return;
-    }
-
-    priv->stream.buf[priv->stream.offset / sizeof(mr_uint16_t)]
-        = (mr_uint16_t)HAL_ADC_GetValue(priv->handle);
-    priv->stream.offset += sizeof(mr_uint16_t);
-    if (__HAL_ADC_GET_FLAG(priv->handle, ADC_FLAG_EOS) != 0U) {
-        __HAL_ADC_CLEAR_FLAG(priv->handle, ADC_FLAG_EOS);
-    }
-
-    if (priv->stream.half_enabled
-        && (priv->stream.offset == (priv->stream.size / 2U))
-        && (priv->event_mask & MR_ADC_WAIT_STREAM_HALF)) {
-        event |= MR_ADC_WAIT_STREAM_HALF;
-    }
-    if (priv->stream.offset == priv->stream.size) {
-        /* Raise full event */
-        if (priv->event_mask & MR_ADC_WAIT_STREAM_FULL) {
-            event |= MR_ADC_WAIT_STREAM_FULL;
-        }
-        if (priv->stream.circular) {
-            /* Raise event before resetting offset */
-            if (event != 0U) {
-                (void)mr_adc_event_raise(priv->stream.drv, event);
-            }
-            priv->stream.offset = 0U;
-            return;
-        }
-
-        __HAL_ADC_DISABLE_IT(priv->handle,
-                             ADC_IT_EOC | ADC_IT_EOS | ADC_IT_OVR);
-        adc_stream_halt(priv);
-        mr_atomic_store(&priv->stream.complete, 1);
-    }
-    if (event != 0U) {
-        (void)mr_adc_event_raise(priv->stream.drv, event);
-    }
-}
-
-static mr_err_t adc_stream_start_impl(const mr_driver_t *drv, mr_adc_seq_t *seq,
-                                      const mr_adc_stream_config_t *config) {
-    adc_priv_t *priv = MR_DRIVER_PRIV(drv);
-#if defined(ADC_USE_DMA)
-    mr_dma_config_t dma_config;
-    mr_wait_event_t dma_events;
-#endif /* defined(ADC_USE_DMA) */
+static mr_err_t adc_stream_start(const mr_driver_t *drv, mr_adc_seq_t *seq,
+                                 const mr_adc_stream_config_t *config) {
     mr_uint8_t ranks[MR_ARRAY_SIZE(__adc_regular_rank)];
-    mr_uint32_t channels_num, resolution, rank;
+    adc_priv_t *priv = MR_DRIVER_PRIV(drv);
+    mr_uint32_t channels_num, rank;
     mr_bool_t busy, use_dma;
     mr_size_t sample_count;
+    adc_stream_t *stream;
+    uint32_t resolution;
     mr_err_t ret;
 
+    /* Check stream resources */
+    stream = priv->stream;
+    if (stream == MR_NULL) {
+        return -MR_ENODEV;
+    }
+#if defined(MR_USE_DRIVER_DMA)
+    use_dma = (stream->dma != MR_NULL) && (stream->dma->spec.drv != MR_NULL);
+#else
     use_dma = MR_FALSE;
-#if defined(ADC_USE_DMA)
-    dma_config = (mr_dma_config_t){
-        .src_width = MR_DMA_WIDTH_16,
-        .dst_width = MR_DMA_WIDTH_16,
-        .src_adj = MR_DMA_ADJ_CONST,
-        .dst_adj = MR_DMA_ADJ_INC,
-        .src_burst = MR_DMA_BURST_1,
-        .dst_burst = MR_DMA_BURST_1,
-        .direction = MR_DMA_DIR_P2M,
-    };
-#endif /* defined(ADC_USE_DMA) */
-#if defined(ADC_USE_DMA)
-    use_dma = (priv->stream.dma.drv != MR_NULL);
-#endif /* defined(ADC_USE_DMA) */
-
-    /* Check stream parameters */
-    if (!use_dma && !priv->stream.irq_valid) {
+#endif /* defined(MR_USE_DRIVER_DMA) */
+    if (!use_dma && !stream->irq_valid) {
         return -MR_ENODEV;
     }
     if ((config->source == MR_ADC_STREAM_SOURCE_EXTERNAL)
-        && !priv->stream.trigger_valid) {
+        && !stream->trigger_valid) {
         return -MR_ENODEV;
     }
+
+    /* Check sequence and require a buffer of whole frames */
     if ((seq->buf == MR_NULL) || (seq->size == 0U)
         || ((seq->size % sizeof(mr_uint16_t)) != 0U)
         || (((mr_uintptr_t)seq->buf % sizeof(mr_uint16_t)) != 0U)) {
@@ -759,233 +758,244 @@ static mr_err_t adc_stream_start_impl(const mr_driver_t *drv, mr_adc_seq_t *seq,
     if (busy) {
         return -MR_EBUSY;
     }
-    if (mr_atomic_load(&priv->stream.active) != 0) {
-        ret = adc_stream_stop(drv);
-        if (ret != 0) {
-            return ret;
-        }
-    }
 
-    /* Configure channels */
+    /* Configure the ADC and its channel ranks */
     ret = adc_init_stream(priv, resolution, channels_num, config, use_dma);
     if (ret != 0) {
         return ret;
     }
     for (rank = 0U; rank < channels_num; rank++) {
-        adc_channel_t *adc_channel;
-
-        adc_channel = &priv->channels[ranks[rank]];
-
-        ret = adc_gpio_configure(adc_channel);
-        if (ret != 0) {
-            return ret;
-        }
-        ret = adc_configure_hw_channel(priv, adc_channel, seq->oversample,
+        ret = adc_configure_hw_channel(priv, &priv->channels[ranks[rank]],
+                                       seq->oversample,
                                        __adc_regular_rank[rank]);
         if (ret != 0) {
             return ret;
         }
     }
 
-    /* Save stream state */
-    priv->stream.drv = (mr_driver_t *)drv;
-    priv->stream.buf = seq->buf;
-    priv->stream.size = seq->size;
-    priv->stream.offset = 0U;
-    priv->stream.use_dma = use_dma;
-    priv->stream.dma_started = MR_FALSE;
-    priv->stream.waiter_inited = MR_FALSE;
-    priv->stream.circular = (config->circular != MR_FALSE);
-    priv->stream.half_enabled
-        = ((sample_count >= (channels_num * 2U))
-           && ((sample_count % (channels_num * 2U)) == 0U));
-    mr_atomic_store(&priv->stream.complete, 0);
+    /* Publish the buffer and frame boundaries before enabling interrupts */
+    stream->buf = seq->buf;
+    stream->size = seq->size;
+    stream->use_dma = use_dma;
+    stream->circular = (config->circular != MR_FALSE);
+    /* Report half completion only at a whole-frame boundary */
+    stream->half_enabled = ((sample_count % (channels_num * 2U)) == 0U);
+    stream->offset = 0U;
+    mr_atomic_fetch_and(&stream->event_state,
+                        ~(mr_atomic_t)ADC_STREAM_COMPLETE);
+    stream->drv = (mr_driver_t *)drv;
 
-#if defined(ADC_USE_DMA)
+    /* Prepare the data path before arming the ADC */
+    CLEAR_BIT(priv->handle->Instance->CFGR, ADC_CFGR_DMAEN);
+#if defined(MR_USE_DRIVER_DMA)
     if (use_dma) {
-        /* Configure DMA */
-        CLEAR_BIT(priv->handle->Instance->CFGR, ADC_CFGR_DMAEN);
-        ret = mr_dma_configure(priv->stream.dma.drv, priv->stream.dma.channel,
-                               &dma_config);
+        ret = adc_stream_start_dma(priv);
         if (ret != 0) {
-            adc_stream_release(priv);
-            return ret;
+            goto _stop;
         }
-
-        dma_events = MR_DMA_WAIT_DONE | MR_DMA_WAIT_ERROR;
-        if (priv->stream.half_enabled) {
-            dma_events |= MR_DMA_WAIT_HALF;
-        }
-        ret = mr_waiter_init(&priv->stream.waiter, adc_dma_event, priv,
-                             dma_events);
-        if (ret != 0) {
-            adc_stream_release(priv);
-            return ret;
-        }
-        priv->stream.waiter_inited = MR_TRUE;
-        ret = mr_dma_event_attach(priv->stream.dma.drv,
-                                  priv->stream.dma.channel,
-                                  &priv->stream.waiter);
-        if (ret != 0) {
-            adc_stream_release(priv);
-            return ret;
-        }
-        ret = mr_dma_event_enable(priv->stream.dma.drv,
-                                  priv->stream.dma.channel, dma_events);
-        if (ret != 0) {
-            (void)adc_stream_stop(drv);
-            return ret;
-        }
-
-        priv->stream.xfer.next
-            = config->circular ? &priv->stream.xfer : MR_NULL;
-        priv->stream.xfer.src = (void *)&priv->handle->Instance->DR;
-        priv->stream.xfer.dst = seq->buf;
-        priv->stream.xfer.count = seq->size;
-        ret = mr_dma_start(priv->stream.dma.drv, priv->stream.dma.channel,
-                           &priv->stream.xfer);
-        if (ret != 0) {
-            (void)adc_stream_stop(drv);
-            return ret;
-        }
-        priv->stream.dma_started = MR_TRUE;
-        SET_BIT(priv->handle->Instance->CFGR, ADC_CFGR_DMAEN);
-    } else
-#endif /* defined(ADC_USE_DMA) */
-    {
-        CLEAR_BIT(priv->handle->Instance->CFGR, ADC_CFGR_DMAEN);
-        HAL_NVIC_SetPriority(priv->stream.irqn, priv->stream.irq_priority, 0U);
-        HAL_NVIC_EnableIRQ(priv->stream.irqn);
+    }
+#endif /* defined(MR_USE_DRIVER_DMA) */
+    if (!use_dma) {
+        HAL_NVIC_SetPriority(stream->irqn, stream->irq_priority, 0U);
+        HAL_NVIC_EnableIRQ(stream->irqn);
     }
 
-    /* Start stream */
-    mr_atomic_store(&priv->stream.active, 1);
-
-    /* Start ADC */
+    /* Stop must also handle an ADC start that only partly succeeded */
+    stream->adc_started = 1U;
     ret = mr_stm32h5_hal_status(use_dma ? HAL_ADC_Start(priv->handle)
                                         : HAL_ADC_Start_IT(priv->handle));
-    if (ret != 0) {
-        (void)adc_stream_stop(drv);
-        return ret;
+    if (ret == 0) {
+        return 0;
     }
-    return 0;
-}
-#endif /* defined(ADC_USE_STREAM) */
 
-#if defined(ADC_USE_STREAM)
-static mr_err_t adc_stream_start(const mr_driver_t *drv, mr_adc_seq_t *seq,
-                                 const mr_adc_stream_config_t *config) {
-    return adc_stream_start_impl(drv, seq, config);
+_stop:
+    /* Preserve the start error and leave failed cleanup available for retry */
+    adc_stream_stop(drv);
+    return ret;
 }
-
-static mr_err_t adc_stream_stop(const mr_driver_t *drv) {
-    return adc_stream_stop_impl(drv);
-}
-
-static mr_err_t adc_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
-    return adc_stream_is_busy_impl(drv, busy);
-}
-
-static mr_err_t adc_stream_offset(const mr_driver_t *drv, mr_size_t *offset) {
-    return adc_stream_offset_impl(drv, offset);
-}
-#endif /* defined(ADC_USE_STREAM) */
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
 static mr_err_t adc_event_control(const mr_driver_t *drv, mr_uint32_t events,
                                   mr_bool_t enable) {
-    adc_priv_t *priv = MR_DRIVER_PRIV(drv);
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+    const adc_priv_t *priv = MR_DRIVER_PRIV(drv);
+    adc_stream_t *stream;
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
     /* Check parameter */
     if ((events == 0U) || ((events & ~ADC_EVENT_MASK) != 0U)) {
         return -MR_EINVAL;
     }
-#if defined(ADC_USE_STREAM)
-    if (!enable && (mr_atomic_load(&priv->stream.active) != 0)) {
-        if ((events & MR_ADC_WAIT_STREAM_ERROR) != 0U) {
-            return -MR_EBUSY;
-        }
-        if (((events & MR_ADC_WAIT_STREAM_FULL) != 0U)
-            && !priv->stream.circular) {
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+    /* Keep required notifications enabled during an active stream */
+    stream = priv->stream;
+    if (stream == MR_NULL) {
+        return 0;
+    }
+    if (!enable && (stream->drv != MR_NULL)) {
+        if (((events & MR_ADC_WAIT_STREAM_ERROR) != 0U)
+            || (((events & MR_ADC_WAIT_STREAM_FULL) != 0U)
+                && !stream->circular)) {
             return -MR_EBUSY;
         }
     }
-#endif /* defined(ADC_USE_STREAM) */
-    /* Update event mask */
+    /* Change notifications independently of the IRQs that fill the buffer */
     if (enable) {
-        priv->event_mask |= events;
+        mr_atomic_fetch_or(&stream->event_state, (mr_atomic_t)events);
     } else {
-        priv->event_mask &= ~events;
+        mr_atomic_fetch_and(&stream->event_state, ~(mr_atomic_t)events);
     }
+#else
+    MR_IGNORE(drv);
+    MR_IGNORE(enable);
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
     return 0;
 }
 
-/* ADC channel mapping */
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+MR_UNUSED static void adc_irq(adc_priv_t *priv) {
+    ADC_HandleTypeDef *handle;
+    mr_wait_event_t event;
+    adc_stream_t *stream;
+    mr_uint32_t offset;
+
+    /* Check stream state */
+    stream = priv->stream;
+    if ((stream == MR_NULL) || (stream->drv == MR_NULL) || stream->use_dma) {
+        return;
+    }
+
+    /* An overrun invalidates the current frame */
+    handle = priv->handle;
+    if ((__HAL_ADC_GET_FLAG(handle, ADC_FLAG_OVR) != 0U)
+        && (__HAL_ADC_GET_IT_SOURCE(handle, ADC_IT_OVR) != 0U)) {
+        __HAL_ADC_CLEAR_FLAG(handle, ADC_FLAG_OVR);
+        __HAL_ADC_DISABLE_IT(handle, ADC_IT_EOC | ADC_IT_EOS | ADC_IT_OVR);
+        adc_stream_halt(priv);
+        event = MR_ADC_WAIT_STREAM_ERROR;
+    } else {
+        if ((__HAL_ADC_GET_FLAG(handle, ADC_FLAG_EOC) == 0U)
+            || (__HAL_ADC_GET_IT_SOURCE(handle, ADC_IT_EOC) == 0U)) {
+            return;
+        }
+
+        /* Reading the data register acknowledges EOC */
+        offset = stream->offset;
+        stream->buf[offset / sizeof(mr_uint16_t)]
+            = (mr_uint16_t)HAL_ADC_GetValue(handle);
+        offset += sizeof(mr_uint16_t);
+        stream->offset = offset;
+        if (__HAL_ADC_GET_FLAG(handle, ADC_FLAG_EOS) != 0U) {
+            __HAL_ADC_CLEAR_FLAG(handle, ADC_FLAG_EOS);
+        }
+
+        /* Stop a one-shot stream before notifying its subscribers */
+        event = 0U;
+        if (stream->half_enabled && (offset == (stream->size / 2U))) {
+            event = MR_ADC_WAIT_STREAM_HALF;
+        }
+        if (offset == stream->size) {
+            event = MR_ADC_WAIT_STREAM_FULL;
+            if (!stream->circular) {
+                __HAL_ADC_DISABLE_IT(handle,
+                                     ADC_IT_EOC | ADC_IT_EOS | ADC_IT_OVR);
+                adc_stream_halt(priv);
+            }
+        }
+    }
+
+    /* Notify subscribers while the completed byte count is still visible */
+    adc_stream_notify(stream, event);
+    if ((event == MR_ADC_WAIT_STREAM_FULL) && stream->circular) {
+        stream->offset = 0U;
+    }
+}
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
+
+/* Instance install */
+#define ST_HT_ADC_INSTALL(_id, _ops)                                           \
+    static void MR_CAT(__adc_clk_enable_, _id)(void) {                         \
+        MR_HT_DRIVER_PROP(_id, st_clken)();                                    \
+    }                                                                          \
+    static ADC_HandleTypeDef MR_CAT(__adc_handle_, _id) = {                    \
+        .Instance = MR_HT_DRIVER_PROP(_id, st_adcx),                           \
+    };                                                                         \
+    static const adc_channel_t MR_CAT(__adc_channel_, _id)[]                   \
+        = {MR_HT_DRIVER_PROP_ELEM_FOREACH(_id, st_channels,                    \
+                                          __ST_HT_ADC_CHANNEL_IMPL)};          \
+    __ST_HT_ADC_STREAM_INSTALL(_id)                                            \
+    static adc_priv_t MR_CAT(__adc_priv_, _id)                                 \
+        = {.handle = &MR_CAT(__adc_handle_, _id),                              \
+           .clk_enable = MR_CAT(__adc_clk_enable_, _id),                       \
+           .channels = MR_CAT(__adc_channel_, _id),                            \
+           .channels_num = MR_ARRAY_SIZE(MR_CAT(__adc_channel_, _id)),         \
+           .ref = MR_HT_DRIVER_PROP(_id, st_ref),                              \
+           __ST_HT_ADC_STREAM(_id)};                                           \
+    __ST_HT_ADC_IRQ(_id)                                                       \
+    MR_HT_ADC_INSTALL(_id, &MR_CAT(__adc_priv_, _id), _ops)
 #define __ST_HT_ADC_CHANNEL_IMPL(_elem, _node, _prop)                          \
     {                                                                          \
         .channel = MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 0),               \
-        .gpio                                                                  \
-        = {.drv                                                                \
-           = MR_HT_DRIVER_FIND(MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 1)),  \
-           .pin = (mr_uint8_t)MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 2)},   \
-        .config = {.diff = MR_ADC_DIFF_SINGLE,                                 \
-           .ref = MR_HT_NODE_PROP(_node, st_ref),                              \
-           .gain = MR_ADC_GAIN_1},                                             \
-}
-#if defined(ADC_USE_STREAM)
-#if defined(ADC_USE_DMA)
-/* ADC DMA mapping */
+        .gpio = {                                                              \
+            .drv =                                                             \
+                MR_HT_DRIVER_FIND(                                             \
+                    MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 1)),             \
+            .pin = (mr_uint8_t)MR_HT_NODE_PROP_ELEM(_node, _prop, _elem, 2),   \
+        },                                                                     \
+    }
+#if defined(MR_USE_DRIVER_ADC_STREAM)
+#if defined(MR_USE_DRIVER_DMA)
+#define __ST_HT_ADC_HAS_DMA(_id) MR_HT_DRIVER_HAS_PROP(_id, st_dma)
+#define __ST_HT_ADC_DMA_INSTALL(_id)                                           \
+    MR_MACRO_IF(__ST_HT_ADC_HAS_DMA(_id),                                      \
+                (static adc_stream_dma_t MR_CAT(__adc_dma_, _id) = {           \
+                    .spec = MR_HT_DMA_SPEC(_id, st_dma),                       \
+                };),                                                           \
+                ())
 #define __ST_HT_ADC_DMA(_id)                                                   \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_dma),                            \
-                (.dma = MR_HT_DMA_SPEC(_id, st_dma)), (.dma = {0})),
+    MR_MACRO_IF(__ST_HT_ADC_HAS_DMA(_id), (.dma = &MR_CAT(__adc_dma_, _id), ), \
+                ())
 #else
+#define __ST_HT_ADC_HAS_DMA(_id)        0
+#define __ST_HT_ADC_DMA_INSTALL(_id)
 #define __ST_HT_ADC_DMA(_id)
-#endif /* defined(ADC_USE_DMA) */
-/* ADC IRQ handler */
+#endif /* defined(MR_USE_DRIVER_DMA) */
+#define __ST_HT_ADC_HAS_IRQ(_id)                                               \
+    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_irqn),                           \
+                (MR_HT_DRIVER_HAS_PROP(_id, st_irq_handler)), (0))
+#define __ST_HT_ADC_HAS_STREAM(_id)                                            \
+    MR_MACRO_IF(__ST_HT_ADC_HAS_DMA(_id), (1), (__ST_HT_ADC_HAS_IRQ(_id)))
 #define __ST_HT_ADC_IRQ(_id)                                                   \
     MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_irq_handler),                    \
                 (void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {           \
                     adc_irq(&MR_CAT(__adc_priv_, _id));                        \
                 }),                                                            \
                 ())
-/* ADC stream mapping */
+#define __ST_HT_ADC_STREAM_INSTALL(_id)                                        \
+    __ST_HT_ADC_DMA_INSTALL(_id)                                               \
+    MR_MACRO_IF(__ST_HT_ADC_HAS_STREAM(_id),                                   \
+                (static adc_stream_t MR_CAT(__adc_stream_, _id) = {            \
+                    .trigger = MR_HT_DRIVER_PROP_OR(_id, st_trigger, 0U),      \
+                    .trigger_edge =                                            \
+                        MR_HT_DRIVER_PROP_OR(_id, st_trigger_edge,             \
+                                             ADC_EXTERNALTRIGCONVEDGE_RISING), \
+                    .irqn = MR_HT_DRIVER_PROP_OR(_id, st_irqn, (IRQn_Type)0),  \
+                    .irq_priority =                                            \
+                        MR_HT_DRIVER_PROP_OR(_id, st_irq_priority, 0U),        \
+                    __ST_HT_ADC_DMA(_id)                                       \
+                    .event_state = MR_ATOMIC_INIT(0),                          \
+                    .irq_valid = __ST_HT_ADC_HAS_IRQ(_id),                     \
+                    .trigger_valid = MR_HT_DRIVER_HAS_PROP(_id, st_trigger),   \
+                };),                                                           \
+                ())
 #define __ST_HT_ADC_STREAM(_id)                                                \
-    .stream                                                                    \
-        = {__ST_HT_ADC_DMA(_id)                                                \
-               MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_trigger),             \
-                           (.trigger = MR_HT_DRIVER_PROP(_id, st_trigger)),    \
-                           (.trigger = 0)),                                    \
-           .trigger_edge = MR_HT_DRIVER_PROP_OR(                               \
-               _id, st_trigger_edge, ADC_EXTERNALTRIGCONVEDGE_RISING),         \
-           .irqn = MR_HT_DRIVER_PROP_OR(_id, st_irqn, (IRQn_Type)0),           \
-           .irq_priority = MR_HT_DRIVER_PROP_OR(_id, st_irq_priority, 0U),     \
-           .active = MR_ATOMIC_INIT(0),                                        \
-           .complete = MR_ATOMIC_INIT(0),                                      \
-           .irq_valid = (MR_HT_DRIVER_HAS_PROP(_id, st_irqn)                   \
-                         && MR_HT_DRIVER_HAS_PROP(_id, st_irq_handler)),       \
-           .trigger_valid = MR_HT_DRIVER_HAS_PROP(_id, st_trigger)},
+    MR_MACRO_IF(__ST_HT_ADC_HAS_STREAM(_id),                                   \
+                (.stream = &MR_CAT(__adc_stream_, _id), ), ())
 #else
 #define __ST_HT_ADC_IRQ(_id)
+#define __ST_HT_ADC_STREAM_INSTALL(_id)
 #define __ST_HT_ADC_STREAM(_id)
-#endif /* defined(ADC_USE_STREAM) */
-/* ADC instance install */
-#define ST_HT_ADC_INSTALL(_id, _ops)                                           \
-    static void MR_CAT(__adc_clk_enable_, _id)(void) {                         \
-        MR_HT_DRIVER_PROP(_id, st_clken)();                                    \
-    }                                                                          \
-    static ADC_HandleTypeDef MR_CAT(__adc_handle_, _id)                        \
-        = {.Instance = MR_HT_DRIVER_PROP(_id, st_adcx)};                       \
-    static adc_channel_t MR_CAT(__adc_channel_, _id)[]                         \
-        = {MR_HT_DRIVER_PROP_ELEM_FOREACH(_id, st_channels,                    \
-                                          __ST_HT_ADC_CHANNEL_IMPL)};          \
-    static adc_priv_t MR_CAT(__adc_priv_, _id)                                 \
-        = {.handle = &MR_CAT(__adc_handle_, _id),                              \
-           .clk_enable = MR_CAT(__adc_clk_enable_, _id),                       \
-           .ref = MR_HT_DRIVER_PROP(_id, st_ref),                              \
-           .channels = MR_CAT(__adc_channel_, _id),                            \
-           .channels_num = MR_ARRAY_SIZE(MR_CAT(__adc_channel_, _id)),         \
-           __ST_HT_ADC_STREAM(_id)};                                           \
-    __ST_HT_ADC_IRQ(_id)                                                       \
-    MR_HT_ADC_INSTALL(_id, &MR_CAT(__adc_priv_, _id), _ops)
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 MR_HT_DRIVER_FOREACH(ST_HT_ADC_INSTALL, &__adc_ops);
 #endif /* MR_HT_HAS_DRIVER() */
 #endif /* defined(MR_USE_DRIVER_ADC) */

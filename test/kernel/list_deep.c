@@ -27,9 +27,6 @@ typedef struct test_link_last {
     mr_list_t link;
 } test_link_last_t;
 
-/* Tests */
-
-/* Test: every link pointer after two adds is exactly where it belongs */
 MR_TEST(list, links_integrity_add) {
     mr_list_t head;
     test_deep_node_t n1;
@@ -50,7 +47,6 @@ MR_TEST(list, links_integrity_add) {
     MR_TEST_ASSERT_EQ_PTR(n2.link.prev, &n1.link);
 }
 
-/* Test: inserting into an empty list wires all four directions correctly */
 MR_TEST(list, links_integrity_insert) {
     mr_list_t head;
     test_deep_node_t n1;
@@ -75,7 +71,6 @@ MR_TEST(list, links_integrity_insert) {
     MR_TEST_ASSERT_EQ_PTR(n1.link.prev, &n2.link);
 }
 
-/* Test: backward traversal via prev yields the reverse order */
 MR_TEST(list, backward_traverse) {
     mr_list_t head;
     test_deep_node_t nodes[3];
@@ -102,7 +97,6 @@ MR_TEST(list, backward_traverse) {
     MR_TEST_ASSERT_EQ_INT(ids[2], 1);
 }
 
-/* Test: deleting a middle node relinks the neighbors on both sides */
 MR_TEST(list, del_middle_relinks) {
     mr_list_t head;
     test_deep_node_t nodes[3];
@@ -133,7 +127,6 @@ MR_TEST(list, del_middle_relinks) {
     MR_TEST_ASSERT_EQ_INT(idx, 2);
 }
 
-/* Test: deleting an unlinked or already deleted node is a safe no-op */
 MR_TEST(list, del_idempotent_self_linked) {
     mr_list_t head;
     test_deep_node_t n1;
@@ -161,7 +154,6 @@ MR_TEST(list, del_idempotent_self_linked) {
     MR_TEST_ASSERT_EQ_PTR(n1.link.prev, &n1.link);
 }
 
-/* Test: moving entries within the same list reorders them to the tail */
 MR_TEST(list, move_within_same_list) {
     mr_list_t head;
     test_deep_node_t nodes[3];
@@ -206,7 +198,6 @@ MR_TEST(list, move_within_same_list) {
     MR_TEST_ASSERT_EQ_INT(idx, 3);
 }
 
-/* Test: moving the only entry within its own list keeps the list intact */
 MR_TEST(list, move_single_element_same_list) {
     mr_list_t head;
     test_deep_node_t n1;
@@ -223,7 +214,6 @@ MR_TEST(list, move_single_element_same_list) {
     MR_TEST_ASSERT_EQ_PTR(n1.link.prev, &head);
 }
 
-/* Test: replacing the head and the tail relinks the head correctly */
 MR_TEST(list, replace_head_and_tail) {
     mr_list_t head;
     test_deep_node_t nodes[3];
@@ -273,7 +263,6 @@ MR_TEST(list, replace_head_and_tail) {
     MR_TEST_ASSERT_EQ_PTR(pos->next, &head);
 }
 
-/* Test: safe iteration on an empty list and deleting every entry */
 MR_TEST(list, safe_foreach_empty_and_delete_all) {
     mr_list_t head;
     test_deep_node_t nodes[3];
@@ -302,7 +291,6 @@ MR_TEST(list, safe_foreach_empty_and_delete_all) {
     MR_TEST_ASSERT_EQ_PTR(nodes[2].link.prev, &nodes[2].link);
 }
 
-/* Test: MR_LIST_ENTRY works regardless of the member position */
 MR_TEST(list, entry_macro_member_positions) {
     test_link_first_t first;
     test_link_last_t last;
@@ -319,14 +307,6 @@ MR_TEST(list, entry_macro_member_positions) {
     MR_TEST_ASSERT_EQ_INT(el->id, 2);
 }
 
-/* Test: the list array init macro self links arrays of any size
- *
- * Potential bug: MR_LIST_ARRAY_INIT feeds MR_ARRAY_SIZE (a sizeof
- * expression) into MR_LISTIFY, which token-pastes the count and therefore
- * requires a literal number. The macro cannot compile as documented, so
- * this case uses the underlying MR_LISTS_INIT with literal counts instead
- * and the macro defect is recorded here without being fixed.
- */
 MR_TEST(list, array_init_macro_sizes) {
     mr_list_t one[1] = MR_LISTS_INIT(one, 1);
     mr_list_t many[3] = MR_LISTS_INIT(many, 3);
@@ -343,7 +323,6 @@ MR_TEST(list, array_init_macro_sizes) {
     }
 }
 
-/* Test: add and insert accept any list node as the anchor */
 MR_TEST(list, node_as_anchor) {
     mr_list_t head;
     test_deep_node_t nodes[4];
@@ -367,7 +346,8 @@ MR_TEST(list, node_as_anchor) {
     idx = 0;
     MR_LIST_FOR_EACH(pos, &head) {
         n = MR_LIST_ENTRY(pos, test_deep_node_t, link);
-        MR_TEST_ASSERT_EQ_INT(n->id, idx == 0 ? 3 : (idx == 1 ? 1 : (idx == 2 ? 2 : 4)));
+        MR_TEST_ASSERT_EQ_INT(
+            n->id, idx == 0 ? 3 : (idx == 1 ? 1 : (idx == 2 ? 2 : 4)));
         idx++;
     }
     MR_TEST_ASSERT_EQ_INT(idx, 4);
@@ -379,7 +359,6 @@ MR_TEST(list, node_as_anchor) {
     MR_TEST_ASSERT_EQ_PTR(nodes[3].link.next, &head);
 }
 
-/* Test: moving entries between lists and back preserves both structures */
 MR_TEST(list, move_between_lists_roundtrip) {
     mr_list_t head1;
     mr_list_t head2;

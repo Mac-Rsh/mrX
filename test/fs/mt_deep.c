@@ -6,59 +6,46 @@
  * @date 2026-08-30        MacRsh        Multi-thread deep test version
  */
 
-/* Concurrency race probe switch
- *
- * The cases in this file exercise real races in the fs core and are
- * disabled by default because they crash the whole test binary:
- *
- * - fs.mt_unlink_rename_churn repeatedly aborts in dentry.c:706
- *   (MR_DENTRY_IS_ADDED, a dentry is re-linked while still linked) and
- *   has also produced segmentation faults (stale dentry use)
- * - fs.mt_append_integrity and fs.mt_stripe_write lose concurrent file
- *   extensions in ramfs_regular_write (final size below expectation)
- * - fs.mt_dentry_pressure_walk sees -MR_EEXIST on per-thread unique
- *   names from the O_CREAT|O_EXCL check-then-create window
- * - the remaining cases produce intermittent EXPECT failures
- *
- * Define MR_USE_FS_RACE_PROBE (for example with -DMR_USE_FS_RACE_PROBE)
- * to build and run them.
- */
+/* Enable MR_USE_FS_RACE_PROBE to run these concurrency probes separately.
+ * Concurrent unlink and rename can abort the test process. */
 #if defined(MR_USE_FS_RACE_PROBE)
 
 #include <mrX/test/mr_test.h>
-#if defined(MR_USE_TEST) && defined(MR_USE_FS) && defined(MR_USE_TEST_PTHREAD)
+#if defined(MR_USE_TEST) && defined(MR_USE_FS) && defined(MR_USE_FS_RAMFS)     \
+    && defined(MR_USE_TEST_PTHREAD)
 #include <mrX.h>
 #include <pthread.h>
+#include <sched.h>
 #include <mrX/libc/mr_atomic.h>
 #include <mrX/libc/mr_string.h>
 #include <mrX/test/fs/fs_test.h>
 
 /* Multi-thread fs test thread count definition */
-#define MT_FS_THREADS                       (4)
+#define MT_FS_THREADS (4)
 
 /* Multi-thread fs test iteration count definition */
-#define MT_FS_ITERS                         (100)
+#define MT_FS_ITERS (100)
 
 /* Multi-thread fs test append block size definition */
-#define MT_FS_BLOCK                         (16)
+#define MT_FS_BLOCK (16)
 
 /* Multi-thread fs test write stripe size definition */
-#define MT_FS_STRIPE                        (64)
+#define MT_FS_STRIPE (64)
 
 /* Multi-thread fs test spin safety limit definition */
-#define MT_FS_SPIN                          (1000000)
+#define MT_FS_SPIN (1000000)
 
 /* Multi-thread fs test exclusive create round count definition */
-#define MT_FS_EXCL_ROUNDS                   (50)
+#define MT_FS_EXCL_ROUNDS (50)
 
 /* Multi-thread fs test fifo byte count definition */
-#define MT_FIFO_BYTES                       (200)
+#define MT_FIFO_BYTES (200)
 
 /* Multi-thread fs test walker iteration count definition */
-#define MT_FS_WALK_ITERS                    (50)
+#define MT_FS_WALK_ITERS (50)
 
 /* Multi-thread fs test long name prefix definition */
-#define MT_FS_LONG_NAME                     "/dirt/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+#define MT_FS_LONG_NAME "/dirt/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 /* Multi-thread fs thread handle type */
 typedef struct mt_fs_worker {
@@ -69,13 +56,13 @@ typedef struct mt_fs_worker {
     void *ctx;
 } mt_fs_worker_t;
 
-/* Helper: expects a return value to be zero or one of two error codes */
 static void mt_fs_expect_ret(volatile mr_uint32_t *__test_status, int ret,
                              int ok1, int ok2) {
-    MR_TEST_EXPECT_EQ_INT((ret == 0) || (ret == ok1) || (ret == ok2), MR_TRUE);
+    if ((ret != ok1) && (ret != ok2)) {
+        MR_TEST_EXPECT_EQ_INT(ret, 0);
+    }
 }
 
-/* Helper: spawns every worker thread and returns the started count */
 static int mt_fs_spawn(mt_fs_worker_t *workers, int count,
                        void *(*entry)(void *),
                        volatile mr_uint32_t *__test_status, void *ctx) {
@@ -97,7 +84,6 @@ static int mt_fs_spawn(mt_fs_worker_t *workers, int count,
     return created;
 }
 
-/* Helper: joins every started worker and reports join failures */
 static void mt_fs_join(mt_fs_worker_t *workers, int created,
                        volatile mr_uint32_t *__test_status) {
     int i;
@@ -105,6 +91,33 @@ static void mt_fs_join(mt_fs_worker_t *workers, int created,
     for (i = 0; i < created; i++) {
         MR_TEST_EXPECT_EQ_INT(pthread_join(workers[i].handle, MR_NULL), 0);
     }
+}
+
+static mr_err_t mt_fs_create_file(const char *path) {
+    mr_file_t file = MR_FILE_INIT(file);
+    mr_err_t ret;
+
+    ret = mr_fs_open(&file, path, MR_O_WRONLY | MR_O_CREAT | MR_O_EXCL);
+    if (ret != 0) {
+        return ret;
+    }
+    return mr_fs_close(&file);
+}
+
+static mr_ssize_t mt_fs_write_retry(mr_file_t *file, const void *buf,
+                                    mr_size_t size) {
+    mr_ssize_t ret;
+    int tries = 0;
+
+    /* RAMFS returns busy while another operation holds the node lock */
+    do {
+        ret = mr_fs_write(file, buf, size);
+        if (ret != -MR_EBUSY) {
+            break;
+        }
+        sched_yield();
+    } while (++tries < MT_FS_SPIN);
+    return ret;
 }
 
 #if defined(MR_USE_FS_RAMFS_FIFO)
@@ -126,18 +139,6 @@ typedef struct mt_excl_ctx {
     mr_atomic_t created;
 } mt_excl_ctx_t;
 
-/* Append case worker argument type */
-typedef struct mt_append_arg {
-    const char *path;
-    int id;
-} mt_append_arg_t;
-
-/* Stripe case worker argument type */
-typedef struct mt_stripe_arg {
-    const char *path;
-    int id;
-} mt_stripe_arg_t;
-
 /* Churn case worker argument type */
 typedef struct mt_churn_arg {
     const char *path;
@@ -158,24 +159,16 @@ typedef struct mt_mount_arg {
     int id;
 } mt_mount_arg_t;
 
-/* Dentry pressure case worker argument type */
-typedef struct mt_dentry_arg {
-    const char *dir;
-    int id;
-} mt_dentry_arg_t;
-
-/* Append worker: appends tagged blocks to one file with O_APPEND */
 static void *mt_append_worker(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
-    mt_append_arg_t *arg = worker->ctx;
+    const char *path = worker->ctx;
     mr_file_t file = MR_FILE_INIT(file);
     mr_uint8_t block[MT_FS_BLOCK];
     int i, k;
     mr_err_t ret;
 
-    ret = mr_fs_open(&file, arg->path,
-                     MR_O_WRONLY | MR_O_CREAT | MR_O_APPEND);
+    ret = mr_fs_open(&file, path, MR_O_WRONLY | MR_O_APPEND);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     if (ret != 0) {
         return MR_NULL;
@@ -183,43 +176,44 @@ static void *mt_append_worker(void *argument) {
     for (i = 0; i < MT_FS_ITERS; i++) {
         /* Each block carries a magic, owner id, sequence and XOR pattern */
         block[0] = 0xA5;
-        block[1] = (mr_uint8_t)arg->id;
+        block[1] = (mr_uint8_t)worker->id;
         block[2] = (mr_uint8_t)(i & 0xff);
         block[3] = (mr_uint8_t)((i >> 8) & 0xff);
         for (k = 4; k < MT_FS_BLOCK; k++) {
-            block[k] = (mr_uint8_t)(arg->id ^ (i & 0xff) ^ k);
+            block[k] = (mr_uint8_t)(worker->id ^ (i & 0xff) ^ k);
         }
-        MR_TEST_EXPECT_EQ_INT(mr_fs_write(&file, block, MT_FS_BLOCK),
+        MR_TEST_EXPECT_EQ_INT(mt_fs_write_retry(&file, block, MT_FS_BLOCK),
                               MT_FS_BLOCK);
     }
     MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
     return MR_NULL;
 }
 
-/* Test: concurrent O_APPEND writers must preserve every tagged block */
 MR_TEST(fs, mt_append_integrity) {
     mt_fs_worker_t workers[MT_FS_THREADS];
-    mt_append_arg_t args[MT_FS_THREADS];
     mr_file_t file = MR_FILE_INIT(file);
     mr_stat_t stat;
     mr_uint8_t block[MT_FS_BLOCK];
+    mr_bool_t seen[MT_FS_THREADS][MT_FS_ITERS] = {0};
     char path[] = "/appended";
     int blocks = 0;
     int created;
-    int i, k;
+    int k;
     mr_err_t ret;
+    mr_ssize_t n;
     mr_bool_t mounted = MR_FALSE;
 
     ret = fs_test_mount_root("ramfs", 0, MR_NULL);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     mounted = MR_TRUE;
 
-    for (i = 0; i < MT_FS_THREADS; i++) {
-        args[i].path = path;
-        args[i].id = i;
+    ret = mt_fs_create_file(path);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    if (ret != 0) {
+        goto _exit;
     }
     created = mt_fs_spawn(workers, MT_FS_THREADS, mt_append_worker,
-                          __test_status, args);
+                          __test_status, path);
     mt_fs_join(workers, created, __test_status);
     if (created != MT_FS_THREADS) {
         goto _exit;
@@ -234,7 +228,7 @@ MR_TEST(fs, mt_append_integrity) {
     MR_TEST_EXPECT_EQ_INT(mr_fs_fstat(&file, &stat), 0);
     MR_TEST_EXPECT_EQ_INT((int)stat.size,
                           MT_FS_THREADS * MT_FS_ITERS * MT_FS_BLOCK);
-    while (mr_fs_read(&file, block, MT_FS_BLOCK) == MT_FS_BLOCK) {
+    while ((n = mr_fs_read(&file, block, MT_FS_BLOCK)) == MT_FS_BLOCK) {
         int tid = block[1];
         int seq = block[2] | (block[3] << 8);
 
@@ -242,11 +236,17 @@ MR_TEST(fs, mt_append_integrity) {
         MR_TEST_EXPECT_EQ_UINT(block[0], 0xA5);
         MR_TEST_EXPECT_LT_INT(tid, MT_FS_THREADS);
         MR_TEST_EXPECT_LT_INT(seq, MT_FS_ITERS);
+        if ((tid >= MT_FS_THREADS) || (seq >= MT_FS_ITERS)) {
+            continue;
+        }
+        MR_TEST_EXPECT_EQ_INT(seen[tid][seq], MR_FALSE);
+        seen[tid][seq] = MR_TRUE;
         for (k = 4; k < MT_FS_BLOCK; k++) {
             MR_TEST_EXPECT_EQ_UINT(block[k],
                                    (mr_uint8_t)(tid ^ (seq & 0xff) ^ k));
         }
     }
+    MR_TEST_EXPECT_EQ_INT(n, 0);
     /* Every block must appear exactly once, no overwrite and no gap */
     MR_TEST_EXPECT_EQ_INT(blocks, MT_FS_THREADS * MT_FS_ITERS);
     MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
@@ -258,18 +258,17 @@ _exit:
     }
 }
 
-/* Stripe worker: writes a private offset range through its own handle */
 static void *mt_stripe_worker(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
-    mt_stripe_arg_t *arg = worker->ctx;
+    const char *path = worker->ctx;
     mr_file_t file = MR_FILE_INIT(file);
     mr_uint8_t buf[MT_FS_STRIPE];
-    int base = arg->id * MT_FS_STRIPE;
+    int base = worker->id * MT_FS_STRIPE;
     int i;
     mr_err_t ret;
 
-    ret = mr_fs_open(&file, arg->path, MR_O_RDWR | MR_O_CREAT);
+    ret = mr_fs_open(&file, path, MR_O_WRONLY);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     if (ret != 0) {
         return MR_NULL;
@@ -279,16 +278,14 @@ static void *mt_stripe_worker(void *argument) {
     }
     /* Seek based write into a range no other thread touches */
     MR_TEST_EXPECT_EQ_INT((int)mr_fs_lseek(&file, base, MR_SEEK_SET), base);
-    MR_TEST_EXPECT_EQ_INT(mr_fs_write(&file, buf, MT_FS_STRIPE),
+    MR_TEST_EXPECT_EQ_INT(mt_fs_write_retry(&file, buf, MT_FS_STRIPE),
                           MT_FS_STRIPE);
     MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
     return MR_NULL;
 }
 
-/* Test: concurrent seek writes into disjoint ranges must not corrupt bytes */
 MR_TEST(fs, mt_stripe_write) {
     mt_fs_worker_t workers[MT_FS_THREADS];
-    mt_stripe_arg_t args[MT_FS_THREADS];
     mr_file_t file = MR_FILE_INIT(file);
     mr_stat_t stat;
     mr_uint8_t buf[MT_FS_STRIPE];
@@ -302,12 +299,13 @@ MR_TEST(fs, mt_stripe_write) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     mounted = MR_TRUE;
 
-    for (i = 0; i < MT_FS_THREADS; i++) {
-        args[i].path = path;
-        args[i].id = i;
+    ret = mt_fs_create_file(path);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    if (ret != 0) {
+        goto _exit;
     }
     created = mt_fs_spawn(workers, MT_FS_THREADS, mt_stripe_worker,
-                          __test_status, args);
+                          __test_status, path);
     mt_fs_join(workers, created, __test_status);
     if (created != MT_FS_THREADS) {
         goto _exit;
@@ -333,10 +331,6 @@ MR_TEST(fs, mt_stripe_write) {
         }
     }
     MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
-    /* Potential bug: ramfs_regular_write() samples inode->size, reallocates
-     * and copies in separate steps, so two writers extending the file at the
-     * same time can lose one extension and later writes splice into a stale
-     * buffer */
 _exit:
     if (mounted) {
         MR_TEST_EXPECT_EQ_INT(mr_fs_chdir("/"), 0);
@@ -344,7 +338,6 @@ _exit:
     }
 }
 
-/* Exclusive create worker: attempts one exclusive create per round */
 static void *mt_excl_worker(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
@@ -373,8 +366,6 @@ static void *mt_excl_worker(void *argument) {
     return MR_NULL;
 }
 
-/* Test: concurrent O_CREAT|O_EXCL on one path must admit exactly one winner
- * per round */
 MR_TEST(fs, mt_creat_excl_single_winner) {
     mt_fs_worker_t workers[2];
     mt_excl_ctx_t ctx;
@@ -435,7 +426,6 @@ _exit:
     }
 }
 
-/* Unlink and rename churn worker: races destructive ops on one path */
 static void *mt_unlink_rename_worker(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
@@ -448,41 +438,39 @@ static void *mt_unlink_rename_worker(void *argument) {
 
     for (i = 0; i < MT_FS_ITERS; i++) {
         switch (worker->id) {
-        case 0:
-            /* Creator keeps the path populated */
-            ret = mr_fs_open(&file, arg->path, MR_O_WRONLY | MR_O_CREAT);
-            MR_TEST_EXPECT_EQ_INT(ret, 0);
-            if (ret == 0) {
-                MR_TEST_EXPECT_EQ_INT(mr_fs_write(&file, &byte, 1), 1);
-                MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
-            }
-            break;
-        case 1:
-            /* Unlinker removes it whenever it exists */
-            ret = mr_fs_unlink(arg->path);
-            mt_fs_expect_ret(__test_status, ret, -MR_ENOENT, 0);
-            break;
-        case 2:
-            /* Renamer moves it away and removes the destination */
-            ret = mr_fs_rename(arg->path, arg->alt_path);
-            mt_fs_expect_ret(__test_status, ret, -MR_ENOENT, 0);
-            if (ret == 0) {
-                ret = mr_fs_unlink(arg->alt_path);
+            case 0:
+                /* Creator keeps the path populated */
+                ret = mr_fs_open(&file, arg->path, MR_O_WRONLY | MR_O_CREAT);
+                MR_TEST_EXPECT_EQ_INT(ret, 0);
+                if (ret == 0) {
+                    MR_TEST_EXPECT_EQ_INT(mr_fs_write(&file, &byte, 1), 1);
+                    MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
+                }
+                break;
+            case 1:
+                /* Unlinker removes it whenever it exists */
+                ret = mr_fs_unlink(arg->path);
                 mt_fs_expect_ret(__test_status, ret, -MR_ENOENT, 0);
-            }
-            break;
-        default:
-            /* Statter only accepts existence or a clean absence */
-            ret = fs_test_stat(arg->path, &stat);
-            mt_fs_expect_ret(__test_status, ret, -MR_ENOENT, 0);
-            break;
+                break;
+            case 2:
+                /* Renamer moves it away and removes the destination */
+                ret = mr_fs_rename(arg->path, arg->alt_path);
+                mt_fs_expect_ret(__test_status, ret, -MR_ENOENT, 0);
+                if (ret == 0) {
+                    ret = mr_fs_unlink(arg->alt_path);
+                    mt_fs_expect_ret(__test_status, ret, -MR_ENOENT, 0);
+                }
+                break;
+            default:
+                /* Statter only accepts existence or a clean absence */
+                ret = fs_test_stat(arg->path, &stat);
+                mt_fs_expect_ret(__test_status, ret, -MR_ENOENT, 0);
+                break;
         }
     }
     return MR_NULL;
 }
 
-/* Test: concurrent create, unlink, rename and stat of one path must stay
- * consistent and never crash */
 MR_TEST(fs, mt_unlink_rename_churn) {
     mt_fs_worker_t workers[MT_FS_THREADS];
     mt_churn_arg_t args[MT_FS_THREADS];
@@ -536,7 +524,6 @@ _exit:
     }
 }
 
-/* Mkdir and rmdir churn worker: races directory create and remove */
 static void *mt_mkdir_rmdir_worker(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
@@ -556,8 +543,6 @@ static void *mt_mkdir_rmdir_worker(void *argument) {
     return MR_NULL;
 }
 
-/* Test: concurrent mkdir and rmdir of one directory name must end in a
- * consistent state */
 MR_TEST(fs, mt_mkdir_rmdir_churn) {
     mt_fs_worker_t workers[MT_FS_THREADS];
     mt_churn_arg_t args[MT_FS_THREADS];
@@ -605,7 +590,20 @@ _exit:
     }
 }
 
-/* Truncate worker: shrinks and refills one file repeatedly */
+static mr_err_t mt_fs_truncate_retry(mr_file_t *file, mr_int64_t length) {
+    mr_err_t ret;
+    int tries = 0;
+
+    do {
+        ret = mr_fs_ftruncate(file, length);
+        if (ret != -MR_EBUSY) {
+            break;
+        }
+        sched_yield();
+    } while (++tries < MT_FS_SPIN);
+    return ret;
+}
+
 static void *mt_truncate_worker(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
@@ -615,30 +613,30 @@ static void *mt_truncate_worker(void *argument) {
     int i;
     mr_err_t ret;
 
-    ret = mr_fs_open(&file, ctx->path, MR_O_RDWR | MR_O_CREAT);
+    ret = mr_fs_open(&file, ctx->path, MR_O_RDWR);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
     if (ret != 0) {
         return MR_NULL;
     }
     mr_memset(buf, ctx->pattern, sizeof(buf));
     for (i = 0; i < MT_FS_ITERS; i++) {
-        MR_TEST_EXPECT_EQ_INT(mr_fs_ftruncate(&file, 0), 0);
-        MR_TEST_EXPECT_EQ_INT(mr_fs_write(&file, buf, sizeof(buf)),
+        MR_TEST_EXPECT_EQ_INT(mt_fs_truncate_retry(&file, 0), 0);
+        MR_TEST_EXPECT_EQ_INT((int)mr_fs_lseek(&file, 0, MR_SEEK_SET), 0);
+        MR_TEST_EXPECT_EQ_INT(mt_fs_write_retry(&file, buf, sizeof(buf)),
                               (int)sizeof(buf));
-        MR_TEST_EXPECT_EQ_INT(mr_fs_ftruncate(&file, MT_FS_STRIPE), 0);
+        MR_TEST_EXPECT_EQ_INT(mt_fs_truncate_retry(&file, MT_FS_STRIPE), 0);
     }
     MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
     return MR_NULL;
 }
 
-/* Truncate reader worker: reads a file while its size churns */
 static void *mt_truncate_reader(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
     mt_trunc_ctx_t *ctx = worker->ctx;
     mr_file_t file = MR_FILE_INIT(file);
     mr_uint8_t buf[MT_FS_STRIPE];
-    int i, j;
+    int i, j, tries;
     mr_ssize_t n;
     mr_err_t ret;
 
@@ -651,8 +649,14 @@ static void *mt_truncate_reader(void *argument) {
         /* Rewind so every read can observe live data instead of draining
          * the file once and reading nothing afterwards */
         MR_TEST_EXPECT_EQ_INT((int)mr_fs_lseek(&file, 0, MR_SEEK_SET), 0);
-        n = mr_fs_read(&file, buf, MT_FS_STRIPE);
-        /* Reads must never fail while the file is only truncated */
+        tries = 0;
+        do {
+            n = mr_fs_read(&file, buf, sizeof(buf));
+            if (n != -MR_EBUSY) {
+                break;
+            }
+            sched_yield();
+        } while (++tries < MT_FS_SPIN);
         MR_TEST_EXPECT_GE_INT((int)n, 0);
         for (j = 0; j < (int)n; j++) {
             /* Every visible byte is either a hole zero or the pattern */
@@ -665,8 +669,6 @@ static void *mt_truncate_reader(void *argument) {
     return MR_NULL;
 }
 
-/* Test: readers of a file being truncated must see partial or empty data,
- * never garbage or errors */
 MR_TEST(fs, mt_truncate_vs_read) {
     mt_fs_worker_t workers[MT_FS_THREADS];
     mt_trunc_ctx_t ctx;
@@ -679,6 +681,12 @@ MR_TEST(fs, mt_truncate_vs_read) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     mounted = MR_TRUE;
 
+    ret = mt_fs_create_file(path);
+    MR_TEST_EXPECT_EQ_INT(ret, 0);
+    if (ret != 0) {
+        goto _exit;
+    }
+
     ctx.path = path;
     ctx.pattern = 0xAA;
 
@@ -690,11 +698,6 @@ MR_TEST(fs, mt_truncate_vs_read) {
     if (created != MT_FS_THREADS) {
         goto _exit;
     }
-    /* Potential bug: ramfs_inode_truncate() frees node->regular.data while a
-     * concurrent ramfs_regular_read() already sampled inode->size and copies
-     * from the old buffer, so a read racing a truncate to zero dereferences
-     * freed memory */
-
 _exit:
     if (mounted) {
         MR_TEST_EXPECT_EQ_INT(mr_fs_chdir("/"), 0);
@@ -702,24 +705,30 @@ _exit:
     }
 }
 
-/* Mount worker: repeatedly mounts and unmounts a ramfs at one mount point */
 static void *mt_mount_worker(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
     mt_mount_arg_t *arg = worker->ctx;
-    int i;
+    int i, tries;
     mr_err_t ret;
 
     for (i = 0; i < 20; i++) {
         ret = mr_fs_mount(MR_NULL, arg->mount_path, "ramfs", 0, MR_NULL);
         mt_fs_expect_ret(__test_status, ret, -MR_EEXIST, -MR_EBUSY);
-        ret = mr_fs_umount(arg->mount_path);
+        /* A concurrent stat can hold the mount open briefly */
+        tries = 0;
+        do {
+            ret = mr_fs_umount(arg->mount_path);
+            if (ret != -MR_EBUSY) {
+                break;
+            }
+            sched_yield();
+        } while (++tries < MT_FS_SPIN);
         mt_fs_expect_ret(__test_status, ret, -MR_ENOENT, 0);
     }
     return MR_NULL;
 }
 
-/* Stable worker: does file ops away from the mount point */
 static void *mt_stable_worker(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
@@ -750,8 +759,6 @@ static void *mt_stable_worker(void *argument) {
     return MR_NULL;
 }
 
-/* Test: mount and umount of a subdirectory while other threads operate on
- * files elsewhere must not disturb the rest of the tree */
 MR_TEST(fs, mt_mount_umount_vs_ops) {
     mt_fs_worker_t workers[MT_FS_THREADS];
     mt_mount_arg_t args[MT_FS_THREADS];
@@ -782,10 +789,9 @@ MR_TEST(fs, mt_mount_umount_vs_ops) {
         goto _exit;
     }
 
-    /* The mount worker always unmounts after mounting, so the mount point
-     * must be free again or absent, never still mounted */
+    /* Verify the worker already detached the last mount */
     ret = mr_fs_umount(mount_path);
-    mt_fs_expect_ret(__test_status, ret, -MR_ENOENT, 0);
+    MR_TEST_EXPECT_EQ_INT(ret, -MR_ENOENT);
     /* Potential bug: path resolution samples the mounted flag and the child
      * dentry of a mount point in separate steps, so a lookup racing umount
      * can return the covered dentry or a stale super block pointer */
@@ -802,7 +808,6 @@ _exit:
 }
 
 #if defined(MR_USE_FS_RAMFS_FIFO)
-/* Fifo writer worker: writes an increasing byte sequence through the fifo */
 static void *mt_fifo_writer(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
@@ -821,25 +826,26 @@ static void *mt_fifo_writer(void *argument) {
     }
     for (value = 0; value < MT_FIFO_BYTES; value++) {
         byte = (mr_uint8_t)value;
-        /* Partial or zero writes are retried until the byte is accepted */
+        /* Retry while the node is busy or the FIFO is full */
         spins = 0;
         do {
             n = mr_fs_write(&file, &byte, 1);
-            MR_TEST_EXPECT_GE_INT((int)n, 0);
-            if (++spins > MT_FS_SPIN) {
+            if ((n != 0) && (n != -MR_EBUSY)) {
                 break;
             }
-        } while (n == 0);
-        if (n == 1) {
-            ctx->total_written++;
+            sched_yield();
+        } while (++spins < MT_FS_SPIN);
+        MR_TEST_EXPECT_EQ_INT(n, 1);
+        if (n != 1) {
+            break;
         }
+        ctx->total_written++;
     }
     MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
     mr_atomic_store(&ctx->writer_done, 1);
     return MR_NULL;
 }
 
-/* Fifo reader worker: drains the fifo and checks per reader ordering */
 static void *mt_fifo_reader(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
@@ -851,6 +857,7 @@ static void *mt_fifo_reader(void *argument) {
     int i;
     mr_ssize_t n;
     mr_err_t ret;
+    mr_bool_t done;
 
     ret = mr_fs_open(&file, ctx->path, MR_O_RDONLY);
     MR_TEST_EXPECT_EQ_INT(ret, 0);
@@ -858,8 +865,18 @@ static void *mt_fifo_reader(void *argument) {
         return MR_NULL;
     }
     while (spins < MT_FS_SPIN) {
+        /* An empty read proves the FIFO is drained only after the last write */
+        done = mr_atomic_load(&ctx->writer_done) == 1;
         n = mr_fs_read(&file, buf, sizeof(buf));
+        if (n == -MR_EBUSY) {
+            sched_yield();
+            spins++;
+            continue;
+        }
         MR_TEST_EXPECT_GE_INT((int)n, 0);
+        if (n < 0) {
+            break;
+        }
         if (n > 0) {
             spins = 0;
             /* The fifo preserves global order, so each reader view of the
@@ -871,17 +888,17 @@ static void *mt_fifo_reader(void *argument) {
             mr_atomic_fetch_add(&ctx->total_read, (mr_atomic_t)n);
             continue;
         }
-        /* Empty read after the writer finished means the fifo is drained */
-        if (mr_atomic_load(&ctx->writer_done) == 1) {
+        if (done) {
             break;
         }
+        sched_yield();
         spins++;
     }
+    MR_TEST_EXPECT_LT_INT(spins, MT_FS_SPIN);
     MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
     return MR_NULL;
 }
 
-/* Test: one fifo writer and two readers must conserve every byte in order */
 MR_TEST(fs, mt_fifo_rw_conservation) {
     mt_fs_worker_t workers[3];
     mt_fifo_fs_ctx_t ctx;
@@ -901,8 +918,7 @@ MR_TEST(fs, mt_fifo_rw_conservation) {
     mr_atomic_init(&ctx.total_read, 0);
 
     created = mt_fs_spawn(workers, 1, mt_fifo_writer, __test_status, &ctx);
-    created += mt_fs_spawn(workers + 1, 2, mt_fifo_reader,
-                           __test_status, &ctx);
+    created += mt_fs_spawn(workers + 1, 2, mt_fifo_reader, __test_status, &ctx);
     mt_fs_join(workers, created, __test_status);
     if (created != 3) {
         goto _exit;
@@ -912,10 +928,6 @@ MR_TEST(fs, mt_fifo_rw_conservation) {
     MR_TEST_EXPECT_EQ_INT(ctx.total_written, MT_FIFO_BYTES);
     MR_TEST_EXPECT_EQ_INT((int)mr_atomic_load(&ctx.total_read),
                           ctx.total_written);
-    /* Potential bug: mr_fifo_write() and mr_fifo_read() check space or
-     * length, copy data and advance the index in separate steps, so a
-     * concurrent reader can copy a partially updated element or two readers
-     * can pop the same byte, breaking byte conservation and order */
 
 _exit:
     mr_fs_unlink(path);
@@ -926,12 +938,10 @@ _exit:
 }
 #endif /* defined(MR_USE_FS_RAMFS_FIFO) */
 
-/* Dentry pressure worker: creates and unlinks names around the inline and
- * heap boundary */
 static void *mt_dentry_worker(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
-    mt_dentry_arg_t *arg = worker->ctx;
+    const char *dir = worker->ctx;
     mr_file_t file = MR_FILE_INIT(file);
     char path[96];
     int i;
@@ -939,13 +949,12 @@ static void *mt_dentry_worker(void *argument) {
 
     for (i = 0; i < MT_FS_ITERS; i++) {
         if (i & 1) {
-            /* Long name beyond the 32 byte inline dentry storage */
+            /* Exercise longer names alongside the short names below */
             mr_snprintf(path, sizeof(path), "%s%d-%d", MT_FS_LONG_NAME,
-                        arg->id, i);
+                        worker->id, i);
         } else {
             /* Short name inside the inline dentry storage */
-            mr_snprintf(path, sizeof(path), "%s/s%d-%d", arg->dir,
-                        arg->id, i);
+            mr_snprintf(path, sizeof(path), "%s/s%d-%d", dir, worker->id, i);
         }
         ret = mr_fs_open(&file, path, MR_O_WRONLY | MR_O_CREAT | MR_O_EXCL);
         MR_TEST_EXPECT_EQ_INT(ret, 0);
@@ -959,11 +968,10 @@ static void *mt_dentry_worker(void *argument) {
     return MR_NULL;
 }
 
-/* Dentry walker worker: reads the whole directory while it churns */
 static void *mt_dentry_walker(void *argument) {
     mt_fs_worker_t *worker = argument;
     volatile mr_uint32_t *__test_status = worker->__test_status;
-    mt_dentry_arg_t *arg = worker->ctx;
+    const char *dir = worker->ctx;
     mr_file_t file = MR_FILE_INIT(file);
     mr_dirent_t dirent;
     int i;
@@ -971,7 +979,7 @@ static void *mt_dentry_walker(void *argument) {
     mr_err_t ret;
 
     for (i = 0; i < MT_FS_WALK_ITERS; i++) {
-        ret = mr_fs_open(&file, arg->dir, MR_O_RDONLY | MR_O_DIRECTORY);
+        ret = mr_fs_open(&file, dir, MR_O_RDONLY | MR_O_DIRECTORY);
         MR_TEST_EXPECT_EQ_INT(ret, 0);
         if (ret != 0) {
             continue;
@@ -980,24 +988,18 @@ static void *mt_dentry_walker(void *argument) {
             /* Every reported entry must carry a non empty name */
             MR_TEST_EXPECT_NE_UINT(dirent.name[0], '\0');
         }
-        /* A negative readdir while entries churn concurrently is tolerated
-         * but still recorded as a non fatal suspicion */
         MR_TEST_EXPECT_GE_INT((int)r, 0);
         MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
     }
     return MR_NULL;
 }
 
-/* Test: create and unlink churn around the inline and heap dentry boundary
- * while one thread walks the parent must not corrupt listings */
 MR_TEST(fs, mt_dentry_pressure_walk) {
     mt_fs_worker_t workers[MT_FS_THREADS];
-    mt_dentry_arg_t args[MT_FS_THREADS];
     mr_file_t file = MR_FILE_INIT(file);
     mr_dirent_t dirent;
     char dir[] = "/dirt";
     int created;
-    int di;
     mr_err_t ret;
     mr_bool_t mounted = MR_FALSE;
 
@@ -1006,15 +1008,11 @@ MR_TEST(fs, mt_dentry_pressure_walk) {
     mounted = MR_TRUE;
     MR_TEST_ASSERT_EQ_INT(mr_fs_mkdir(dir), 0);
 
-    for (di = 0; di < MT_FS_THREADS; di++) {
-        args[di].dir = dir;
-        args[di].id = di;
-    }
     /* Workers 0 to 2 churn names, worker 3 walks the directory */
     created = mt_fs_spawn(workers, MT_FS_THREADS - 1, mt_dentry_worker,
-                          __test_status, args);
+                          __test_status, dir);
     created += mt_fs_spawn(workers + MT_FS_THREADS - 1, 1, mt_dentry_walker,
-                           __test_status, &args[MT_FS_THREADS - 1]);
+                            __test_status, dir);
     mt_fs_join(workers, created, __test_status);
     if (created != MT_FS_THREADS) {
         goto _exit;
@@ -1027,10 +1025,6 @@ MR_TEST(fs, mt_dentry_pressure_walk) {
         MR_TEST_EXPECT_EQ_INT(mr_fs_readdir(&file, &dirent), 0);
         MR_TEST_EXPECT_EQ_INT(mr_fs_close(&file), 0);
     }
-    /* Potential bug: ramfs directory insertion and removal move entries
-     * between the inline array and the heap list while readdir walks the
-     * same storage, so a concurrent walk can skip or repeat entries */
-
 _exit:
     mr_fs_rmdir(dir);
     if (mounted) {
@@ -1039,7 +1033,8 @@ _exit:
     }
 }
 
-#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS)                           \
-        * && defined(MR_USE_TEST_PTHREAD) */
+#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) &&                        \
+          defined(MR_USE_FS_RAMFS)                                             \
+          && defined(MR_USE_TEST_PTHREAD) */
 
 #endif /* defined(MR_USE_FS_RACE_PROBE) */

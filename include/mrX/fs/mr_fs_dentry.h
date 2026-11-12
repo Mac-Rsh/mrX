@@ -158,7 +158,7 @@ mr_err_t mr_dentry_remove(mr_dentry_t *dentry);
 /**
  * @brief This function moves a dentry to a new parent and/or renames it.
  *
- * @param dentry The dentry to move(must already be added to a tree).
+ * @param dentry The dentry to move.
  * @param upper The new upper(parent) dentry.
  * @param name The new single-component name(no '/').
  * @return 0 on success, a negative error code on failure.
@@ -180,7 +180,7 @@ mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
 /**
  * @brief This function renames a filesystem dentry.
  *
- * @param dentry The dentry to rename(must already be added to a tree).
+ * @param dentry The dentry to rename.
  * @param upper The new upper(parent) dentry.
  * @param name The new single-component name(no '/').
  * @return 0 on success, a negative error code on failure.

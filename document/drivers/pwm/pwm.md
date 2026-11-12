@@ -1,6 +1,7 @@
 # PWM 驱动（PWM）
 
-> PWM 驱动在统一设备模型上提供控制器时基、多通道输出、互补死区、故障保护和硬件 signal 接口。
+> PWM 驱动在统一设备模型上提供控制器时基、多通道输出、互补死区、故障保护和硬件
+> signal 接口。
 
 | 项目     | 说明                                                                   |
 |----------|------------------------------------------------------------------------|
@@ -16,9 +17,11 @@
 
 一个 PWM 驱动实例表示一个共享时基的控制器。控制器配置周期、对齐方式和更新时机；通道配置脉宽、相位、
 极性、互补输出、死区和停止后的输出状态。`channel_mask`、`comp_mask` 和 `fault_mask`
-描述实例实际拥有的通道与 fault 资源，位 n 对应编号 n。硬件同步 signal 属于整个控制器，不属于单个 PWM 通道。
+描述实例实际拥有的通道与 fault 资源，位 n 对应编号 n。硬件同步 signal
+属于整个控制器，不属于单个 PWM 通道。
 
-PWM 与 [TMR](../tmr/tmr.md) 是两种并列驱动类型。同一硬件定时器应在 HTS 中只选择一种 compatible，不应在运行时
+PWM 与 [TMR](../tmr/tmr.md) 是两种并列驱动类型。同一硬件定时器应在 HTS 中只选择一种
+compatible，不应在运行时
 在 TMR 和 PWM 之间切换所有权。
 
 公共接口支持：
@@ -29,7 +32,8 @@ PWM 与 [TMR](../tmr/tmr.md) 是两种并列驱动类型。同一硬件定时器
 - cycle-by-cycle 或锁存故障保护；
 - 用于 ADC、DAC 或 DMA 同步的可配置硬件 signal。
 
-具体 backend 可以只实现其硬件支持的可选能力。公共层发现对应 callback 为空时返回 `-MR_ENOSYS`。
+具体 backend 可以只实现其硬件支持的可选能力。公共层发现对应 callback 为空时返回
+`-MR_ENOSYS`。
 
 ### 2. 配置与依赖
 
@@ -39,7 +43,8 @@ PWM 与 [TMR](../tmr/tmr.md) 是两种并列驱动类型。同一硬件定时器
 
 启用后重新生成 `mr_config.h`。
 
-`period`、`pulse`、`phase`、`dead_rise`、`dead_fall`、fault `filter` 和 signal `offset`
+`period`、`pulse`、`phase`、`dead_rise`、`dead_fall`、fault `filter` 和 signal
+`offset`
 统一使用纳秒。backend 负责量化为硬件计数，并在 `*_configuration` 接口中返回实际生效值。
 
 ### 3. 快速上手
@@ -94,22 +99,31 @@ static void pwm_start_three_phase(mr_driver_t *pwm) {
 - `mr_pwm_channel_configure` 只允许配置 `channel_mask` 中的通道；正在运行的目标通道返回
   `-MR_EBUSY`。
 - 请求互补输出时，通道还必须存在于 `comp_mask`，否则返回 `-MR_ENOSYS`。
-- 公共层校验枚举值和资源编号。硬件能否表示具体脉宽、相位、死区或对齐组合，由 backend 校验。
-- `mr_pwm_start` 在任一请求通道已运行时返回 `-MR_EBUSY`；`mr_pwm_stop` 只把请求掩码中实际运行的
+- 公共层校验枚举值和资源编号。硬件能否表示具体脉宽、相位、死区或对齐组合，由 backend
+  校验。
+- `mr_pwm_start` 在任一请求通道已运行时返回 `-MR_EBUSY`；`mr_pwm_stop`
+  只把请求掩码中实际运行的
   通道交给 backend，全部已停止时直接返回 0。
 
 **原子更新与输出状态**
 
-`mr_pwm_update` 的 `updates[0..count-1]` 是单个逻辑事务：backend 必须在访问硬件前完成整批参数校验；成功返回时，整批更新必须作为一次提交生效。对于无法物理回滚的外部总线器件，如果提交过程中发生 I/O 错误，允许返回错误并把物理输出状态视为待重新同步，但不得把新的软件状态发布为成功。
-`MR_PWM_UPDATE_PERIOD` 要求所有通道在同一周期边界生效。每个 update 可把主/互补输出分别设为 PWM、强制无效、
+`mr_pwm_update` 的 `updates[0..count-1]` 是单个逻辑事务：backend
+必须在访问硬件前完成整批参数校验；成功返回时，整批更新必须作为一次提交生效。对于无法物理回滚的外部总线器件，如果提交过程中发生
+I/O 错误，允许返回错误并把物理输出状态视为待重新同步，但不得把新的软件状态发布为成功。
+`MR_PWM_UPDATE_PERIOD` 要求所有通道在同一周期边界生效。每个 update 可把主/互补输出分别设为
+PWM、强制无效、
 强制有效或高阻。
 
 **故障、signal 与事件**
 
-- fault 可配置有效极性、滤波时间和 cycle-by-cycle/锁存模式。锁存故障通过 `mr_pwm_fault_clear` 清除。
-- `MR_PWM_SIGNAL_PERIOD` 在完整周期边界产生；`MR_PWM_SIGNAL_COMPARE` 在配置的 `offset` 位置产生。
-- 每个控制器只有一个对外 signal，同一时刻只能启用一种来源。计数方向、TRGO/TRGO2、compare 资源和消费者连接由 HTS/backend 固定。
-- `mr_pwm_event_attach` 只订阅 waitable；`event_enable/disable` 调用可选 `event_control`。
+- fault 可配置有效极性、滤波时间和 cycle-by-cycle/锁存模式。锁存故障通过
+  `mr_pwm_fault_clear` 清除。
+- `MR_PWM_SIGNAL_PERIOD` 在完整周期边界产生；`MR_PWM_SIGNAL_COMPARE` 在配置的
+  `offset` 位置产生。
+- 每个控制器只有一个对外 signal，同一时刻只能启用一种来源。计数方向、TRGO/TRGO2、compare
+  资源和消费者连接由 HTS/backend 固定。
+- `mr_pwm_event_attach` 只订阅 waitable；`event_enable/disable` 调用可选
+  `event_control`。
 - `mr_pwm_event_raise` 同步分发 waiter。`data` 可为 `MR_NULL`；非空指针只在当次分发期间有效。
 
 | 事件                 | 含义               |
@@ -127,7 +141,8 @@ static void pwm_start_three_phase(mr_driver_t *pwm) {
 | `comp_mask`    | 可选，0 | 支持互补输出的通道  |
 | `fault_mask`   | 可选，0 | 已接线的 fault 输入 |
 
-消费者属性用 `[phandle, channel]` 创建 `mr_ht_pwm_spec_t`。同一个 spec 既可操作目标通道，也可操作其所属控制器的 signal；
+消费者属性用 `[phandle, channel]` 创建 `mr_ht_pwm_spec_t`。同一个 spec
+既可操作目标通道，也可操作其所属控制器的 signal；
 signal 的硬件资源不作为独立消费者 spec 暴露。
 
 ### 5. API 参考
@@ -145,7 +160,8 @@ signal 的硬件资源不作为独立消费者 spec 暴露。
 | `mr_pwm_event_*`                                            | 订阅、启停和上报事件                   |
 | `MR_PWM_DEFINE` / `MR_PWM_INSTALL` / `MR_HT_PWM_INSTALL`    | 定义或安装静态驱动                     |
 
-所有返回 `mr_err_t` 的接口都以 0 表示成功，负数表示错误码。指针和驱动类型是编程前置条件，由 `MR_ASSERT` /
+所有返回 `mr_err_t` 的接口都以 0 表示成功，负数表示错误码。指针和驱动类型是编程前置条件，由
+`MR_ASSERT` /
 `MR_DRIVER_ASSERT` 检查。
 
 **控制器、通道和状态**
@@ -164,8 +180,10 @@ mr_err_t mr_pwm_stop(mr_driver_t *drv, mr_uint32_t channels);
 mr_err_t mr_pwm_state(mr_driver_t *drv, mr_pwm_state_t *state);
 ```
 
-`channel` 是 0～31 的通道编号，`channels` 是非零且不超出 `channel_mask` 的位掩码。`count == 0` 的空事务不执行任何更新并
-直接返回 `0`，此时 `updates` 允许为 `MR_NULL`；`count > 0` 时 `updates` 必须指向 `count` 个条目。资源不存在或字段枚举越界时返回
+`channel` 是 0～31 的通道编号，`channels` 是非零且不超出 `channel_mask` 的位掩码。
+`count == 0` 的空事务不执行任何更新并
+直接返回 `0`，此时 `updates` 允许为 `MR_NULL`；`count > 0` 时 `updates` 必须指向
+`count` 个条目。资源不存在或字段枚举越界时返回
 `-MR_EINVAL`；不支持 update 时返回 `-MR_ENOSYS`。
 
 **fault 和 signal**
@@ -186,7 +204,8 @@ mr_err_t mr_pwm_signal_disable(mr_driver_t *drv, mr_pwm_signal_t signal);
 ```
 
 `fault` 是资源编号，`faults` 是非零位掩码。signal 必须是 `MR_PWM_SIGNAL_PERIOD` 或
-`MR_PWM_SIGNAL_COMPARE`；PERIOD 的 `offset` 必须为 0。signal 配置只能在所有 PWM 通道停止时修改。
+`MR_PWM_SIGNAL_COMPARE`；PERIOD 的 `offset` 必须为 0。signal 配置只能在所有 PWM
+通道停止时修改。
 callback 缺失返回 `-MR_ENOSYS`，其余 backend 错误原样透传。
 
 **事件**
@@ -204,9 +223,8 @@ mr_err_t mr_pwm_event_raise(mr_driver_t *drv, mr_uint32_t events,
 
 ### 6. 完整示例
 
-除下面的单路输出外，PWM signal 触发 ADC 的同步采集、通用启停顺序和
-STM32H5 PERIOD/COMPARE 能力边界见[驱动组合与进阶示例](../examples.md)。当前 PWM
-公共 API 不提供外部 PWM 的输入捕获。
+除下面的单路输出外，PWM signal 与 ADC 的同步采集和通用启停顺序见
+[驱动组合与进阶示例](../examples.md)。公共 API 不提供外部 PWM 的输入捕获。
 
 下例使用 HardTree 通道 spec 配置单路 PWM，更新脉宽后查询状态；省略错误分支：
 
@@ -253,7 +271,8 @@ static void fan_start(void) {
 
 **为什么 configure 返回 `-MR_EBUSY`？**
 
-控制器配置会影响共享时基，因此只有所有通道停止时才能修改。通道 configure 也不能修改正在输出的目标通道。
+控制器配置会影响共享时基，因此只有所有通道停止时才能修改。通道 configure
+也不能修改正在输出的目标通道。
 
 **为什么请求互补输出返回 `-MR_ENOSYS`？**
 
@@ -261,7 +280,8 @@ static void fan_start(void) {
 
 **为什么 update/fault/signal/event 返回 `-MR_ENOSYS`？**
 
-当前 backend 没有实现该可选 callback。应根据硬件能力选择其他实例、在 backend 补齐能力，或调整上层功能。
+当前 backend 没有实现该可选 callback。应根据硬件能力选择其他实例、在 backend
+补齐能力，或调整上层功能。
 
 **删除驱动时会自动停止输出吗？**
 
@@ -283,10 +303,13 @@ PWM 公共层分成三部分：
 
 ### 9. 数据结构
 
-`mr_pwm_data_t` 保存通道、互补、fault 三种静态资源掩码和一个实例级 waitable。资源由平台和 HardTree 确定，不提供运行时查询接口。
+`mr_pwm_data_t` 保存通道、互补、fault 三种静态资源掩码和一个实例级 waitable。资源由平台和
+HardTree 确定，不提供运行时查询接口。
 
-`mr_pwm_config_t` 描述公共时基；`mr_pwm_channel_config_t` 描述静态通道行为；`mr_pwm_update_t` 携带可在运行中按单个逻辑事务改变的
-通道、脉宽、相位和两路输出状态。成功返回表示整批更新已经提交；外部串行器件的 I/O 失败恢复规则由 backend 文档说明。配置枚举在结构中使用与其取值范围匹配的位域，与现有驱动结构风格一致。
+`mr_pwm_config_t` 描述公共时基；`mr_pwm_channel_config_t` 描述静态通道行为；
+`mr_pwm_update_t` 携带可在运行中按单个逻辑事务改变的
+通道、脉宽、相位和两路输出状态。成功返回表示整批更新已经提交；外部串行器件的 I/O
+失败恢复规则由 backend 文档说明。配置枚举在结构中使用与其取值范围匹配的位域，与现有驱动结构风格一致。
 
 ### 10. 核心流程
 
@@ -299,16 +322,21 @@ PWM 公共层分成三部分：
 
 ### 11. 并发与中断安全
 
-公共层不为同一 PWM 实例建立大锁。调用方应串行化 configure、start/stop 和 fault clear。若 update 允许同时从
-ISR 和线程调用，backend 必须自己保证成功提交时的单次事务原子性，并明确 I/O 失败后的重新同步规则。
+公共层不为同一 PWM 实例建立大锁。调用方应串行化 configure、start/stop 和 fault
+clear。若 update 允许同时从
+ISR 和线程调用，backend 必须自己保证成功提交时的单次事务原子性，并明确 I/O
+失败后的重新同步规则。
 
-`mr_pwm_event_raise` 在调用者上下文同步执行 waiter。从 IRQ 上报时，所有 waiter 回调都必须满足平台的 ISR 限制。fault
+`mr_pwm_event_raise` 在调用者上下文同步执行 waiter。从 IRQ 上报时，所有 waiter
+回调都必须满足平台的 ISR 限制。fault
 的安全关断不得依赖 waiter 执行。
 
 ### 12. 扩展与派生
 
-新 backend 先实现 `configure`、`configuration`、`channel_configure`、`channel_configuration`、`start`、
-`stop` 和 `state` 七个基础 callback。其他 callback 按硬件能力独立实现，未实现的字段置 `MR_NULL`。
+新 backend 先实现 `configure`、`configuration`、`channel_configure`、
+`channel_configuration`、`start`、
+`stop` 和 `state` 七个基础 callback。其他 callback 按硬件能力独立实现，未实现的字段置
+`MR_NULL`。
 
 平台实现、安全契约、HardTree 资源和验收项见 [PWM 驱动移植指南](porting.md)。
 

@@ -117,41 +117,42 @@ MR_TEST(flash, probe_geometry_and_validation) {
 }
 
 MR_TEST(flash, region_io_and_optional_operations) {
-    mr_driver_t *drv;
     mr_flash_ops_t optional_ops = flash_ops;
+    mr_flash_data_t data = {0};
     mr_flash_region_t region;
+    mr_driver_t drv;
     mr_uint8_t value = 0U;
 
     flash_reset();
-    drv = flash_create(&flash_ops);
-    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
-    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(drv), 0);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_region(drv, 1U, &region), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_init(&drv, &data, MR_NULL, &optional_ops),
+                          0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_region(&drv, 1U, &region), 0);
     MR_TEST_ASSERT_EQ_UINT(region.offset, 128U);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_region(drv, 2U, &region), -MR_EINVAL);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_read(drv, 255U, &value, 1U), 1);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_region(&drv, 2U, &region), -MR_EINVAL);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_read(&drv, 255U, &value, 1U), 1);
     MR_TEST_ASSERT_EQ_INT(value, 0x5aU);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_program(drv, 4U, &value, 1U), 1);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_program(&drv, 4U, &value, 1U), 1);
     MR_TEST_ASSERT_EQ_UINT(flash_offset, 4U);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_erase(drv, 32U, 64U), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_erase(&drv, 32U, 64U), 0);
     MR_TEST_ASSERT_EQ_UINT(flash_offset, 32U);
     MR_TEST_ASSERT_EQ_UINT(flash_erase_size, 64U);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_read(drv, 256U, MR_NULL, 0U), 0);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_read(drv, 257U, MR_NULL, 0U), -MR_EINVAL);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_program(drv, 255U, &value, 2U), -MR_EINVAL);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_erase(drv, 200U, 57U), -MR_EINVAL);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_read(&drv, 256U, MR_NULL, 0U), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_read(&drv, 257U, MR_NULL, 0U), -MR_EINVAL);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_program(&drv, 255U, &value, 2U), -MR_EINVAL);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_erase(&drv, 200U, 57U), -MR_EINVAL);
 
     optional_ops.region = MR_NULL;
     optional_ops.read = MR_NULL;
     optional_ops.program = MR_NULL;
     optional_ops.erase = MR_NULL;
-    drv->ops = (mr_ptr_t)&optional_ops;
-    MR_TEST_ASSERT_EQ_INT(mr_flash_region(drv, 0U, &region), -MR_ENOSYS);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_read(drv, 0U, &value, 1U), -MR_ENOSYS);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_program(drv, 0U, &value, 1U), -MR_ENOSYS);
-    MR_TEST_ASSERT_EQ_INT(mr_flash_erase(drv, 0U, 16U), -MR_ENOSYS);
-    drv->ops = (mr_ptr_t)&flash_ops;
-    mr_flash_del(drv);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_region(&drv, 0U, &region), -MR_ENOSYS);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_read(&drv, 0U, &value, 1U), -MR_ENOSYS);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_program(&drv, 0U, &value, 1U), -MR_ENOSYS);
+    MR_TEST_ASSERT_EQ_INT(mr_flash_erase(&drv, 0U, 16U), -MR_ENOSYS);
+    MR_TEST_ASSERT_EQ_PTR(mr_flash_get(&drv), &drv);
+    MR_TEST_EXPECT_EQ_INT(mr_flash_del(&drv), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_flash_put(&drv), MR_TRUE);
 }
 
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_DRIVER_FLASH) */

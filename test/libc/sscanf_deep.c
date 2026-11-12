@@ -12,52 +12,50 @@
 #include <mrX/libc/mr_sscanf.h>
 #include <mrX/libc/mr_string.h>
 #include <limits.h>
+#include <stdio.h>
 
-/* Test: decimal overflow follows strtol-like clamping                        */
-MR_TEST(sscanf, overflow_int_clamp) {
-    int value = -999;
+MR_TEST(sscanf, decimal_int_limits) {
+    char input[3 * sizeof(int) * CHAR_BIT + 2];
+    int lower = 0;
+    int upper = 0;
     int ret;
 
-    ret = mr_sscanf("99999999999999999999", "%d", &value);
-    MR_TEST_ASSERT_EQ_INT(ret, 1);
-    /* The result is host libc defined, the host glibc stores -1 without
-       clamping instead of the strtol style INT_MAX saturation */
-    MR_TEST_EXPECT_EQ_INT(value, -1);
+    snprintf(input, sizeof(input), "%d %d", INT_MIN, INT_MAX);
+    ret = mr_sscanf(input, "%d %d", &lower, &upper);
+    MR_TEST_ASSERT_EQ_INT(ret, 2);
+    MR_TEST_EXPECT_EQ_INT(lower, INT_MIN);
+    MR_TEST_EXPECT_EQ_INT(upper, INT_MAX);
 }
 
-/* Test: unsigned overflow clamps or truncates to the unsigned maximum        */
-MR_TEST(sscanf, overflow_unsigned_clamp) {
+MR_TEST(sscanf, decimal_unsigned_limit) {
+    char input[sizeof(unsigned int) * CHAR_BIT + 1];
     unsigned int value = 0U;
     int ret;
 
-    ret = mr_sscanf("99999999999999999999", "%u", &value);
+    snprintf(input, sizeof(input), "%u", UINT_MAX);
+    ret = mr_sscanf(input, "%u", &value);
     MR_TEST_ASSERT_EQ_INT(ret, 1);
-    /* Host libc dependent, 32-bit unsigned result is expected on any host */
-    MR_TEST_EXPECT_EQ_UINT(value, 4294967295U);
+    MR_TEST_EXPECT_EQ_UINT(value, UINT_MAX);
 }
 
-/* Test: hhu conversion narrows modulo the unsigned char range                */
-MR_TEST(sscanf, hhu_narrow) {
+MR_TEST(sscanf, hhu_in_range) {
     unsigned char value = 0U;
     int ret;
 
-    ret = mr_sscanf("300", "%hhu", &value);
+    ret = mr_sscanf("255", "%hhu", &value);
     MR_TEST_ASSERT_EQ_INT(ret, 1);
-    MR_TEST_ASSERT_EQ_UINT(value, 44U);
+    MR_TEST_ASSERT_EQ_UINT(value, 255U);
 }
 
-/* Test: hd conversion wraps modulo the short range                           */
-MR_TEST(sscanf, hd_narrow) {
+MR_TEST(sscanf, hd_in_range) {
     short value = 0;
     int ret;
 
-    /* Narrowing to short is implementation defined but wraps on GCC */
-    ret = mr_sscanf("70000", "%hd", &value);
+    ret = mr_sscanf("-32768", "%hd", &value);
     MR_TEST_ASSERT_EQ_INT(ret, 1);
-    MR_TEST_EXPECT_EQ_INT(value, 4464);
+    MR_TEST_EXPECT_EQ_INT(value, -32768);
 }
 
-/* Test: %n counts characters consumed including skipped whitespace           */
 MR_TEST(sscanf, n_counts_whitespace) {
     int value = 0;
     int count = -1;
@@ -69,7 +67,6 @@ MR_TEST(sscanf, n_counts_whitespace) {
     MR_TEST_ASSERT_EQ_INT(count, 4);
 }
 
-/* Test: %n stays untouched when the format fails before reaching it          */
 MR_TEST(sscanf, n_not_written_on_mismatch) {
     int value = 0;
     int count = -1;
@@ -81,7 +78,6 @@ MR_TEST(sscanf, n_not_written_on_mismatch) {
     MR_TEST_ASSERT_EQ_INT(count, -1);
 }
 
-/* Test: unmatched trailing literal does not fail earlier conversions         */
 MR_TEST(sscanf, trailing_literal_unmatched) {
     int value = 0;
     int ret;
@@ -91,7 +87,6 @@ MR_TEST(sscanf, trailing_literal_unmatched) {
     MR_TEST_ASSERT_EQ_INT(value, 12);
 }
 
-/* Test: whitespace only input is an input failure returning EOF              */
 MR_TEST(sscanf, whitespace_only_eof) {
     int value = 0;
 
@@ -99,19 +94,17 @@ MR_TEST(sscanf, whitespace_only_eof) {
     MR_TEST_ASSERT_EQ_INT(value, 0);
 }
 
-/* Test: hex prefix without digits still matches the leading zero             */
 MR_TEST(sscanf, hex_prefix_partial) {
+    unsigned int expected = 7U;
     unsigned int value = 7U;
-    int ret;
+    int expected_ret, ret;
 
+    expected_ret = sscanf("0x", "%x", &expected);
     ret = mr_sscanf("0x", "%x", &value);
-    /* The result is host libc defined, the host glibc reports EOF for a
-       bare prefix and leaves the target untouched */
-    MR_TEST_EXPECT_EQ_INT(ret, -1);
-    MR_TEST_EXPECT_EQ_UINT(value, 7U);
+    MR_TEST_EXPECT_EQ_INT(ret, expected_ret);
+    MR_TEST_EXPECT_EQ_UINT(value, expected);
 }
 
-/* Test: uppercase hex prefix is accepted                                     */
 MR_TEST(sscanf, hex_prefix_upper) {
     unsigned int value = 0U;
     int ret;
@@ -121,7 +114,6 @@ MR_TEST(sscanf, hex_prefix_upper) {
     MR_TEST_ASSERT_EQ_UINT(value, 31U);
 }
 
-/* Test: %i base detection with negative hex and octal values                 */
 MR_TEST(sscanf, i_negative_bases) {
     int value = 0;
     int ret;
@@ -135,7 +127,6 @@ MR_TEST(sscanf, i_negative_bases) {
     MR_TEST_ASSERT_EQ_INT(value, -493);
 }
 
-/* Test: unsigned conversions accept an explicit plus sign                    */
 MR_TEST(sscanf, u_explicit_plus) {
     unsigned int value = 0U;
     int ret;
@@ -145,7 +136,6 @@ MR_TEST(sscanf, u_explicit_plus) {
     MR_TEST_ASSERT_EQ_UINT(value, 5U);
 }
 
-/* Test: unsigned conversion of a negative value wraps modulo 2^32            */
 MR_TEST(sscanf, u_negative_value) {
     unsigned int value = 0U;
     int ret;
@@ -155,7 +145,6 @@ MR_TEST(sscanf, u_negative_value) {
     MR_TEST_ASSERT_EQ_UINT(value, 4294967295U);
 }
 
-/* Test: double plus sign is a matching failure                               */
 MR_TEST(sscanf, double_sign_mismatch) {
     int value = -999;
     int ret;

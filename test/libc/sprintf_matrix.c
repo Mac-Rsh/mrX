@@ -194,7 +194,6 @@ MR_TEST(sprintf_matrix, zero_pad_negative_snprintf_size_one) {
     MR_TEST_ASSERT_EQ_INT(buffer[0], '\0');
 }
 
-/* Bounded output must preserve both return length and the following byte */
 MR_TEST(sprintf_matrix, snprintf_size_zero_preserves_buffer) {
     char buffer[2] = {'X', '\0'};
     int ret;
@@ -255,9 +254,9 @@ MR_TEST(sprintf_matrix, null_string_width_precision) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buffer, "    (nul"), 0);
 }
 
-/* Literal and unsupported effectors retain their source spelling */
+/* Literal percent escapes and unsupported effectors */
 SPRINTF_CASE0(empty_format, "", "")
-SPRINTF_CASE0(literal_percent, "%%", "%%")
+SPRINTF_CASE0(literal_percent, "%%", "%")
 SPRINTF_CASE1(unsupported_float, "%f", 1.0, "%f")
 SPRINTF_CASE0(unsupported_letter, "%q", "%q")
 SPRINTF_CASE0(trailing_percent, "end%", "end%")

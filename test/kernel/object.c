@@ -15,7 +15,6 @@
 static int test_object_statik_release_called;
 static int test_object_dynamic_release_called;
 
-/* Mock release handlers */
 static void test_object_statik_release(struct mr_object *obj) {
     MR_IGNORE(obj);
     test_object_statik_release_called++;
@@ -34,7 +33,6 @@ MR_CLAZZES_DEFINE(test_object, test_object_statik_release,
 static int test_sub_object_statik_release_called;
 static int test_sub_object_dynamic_release_called;
 
-/* Sub-object mock release handlers */
 static void test_sub_object_statik_release(struct mr_object *obj) {
     MR_IGNORE(obj);
     test_sub_object_statik_release_called++;
@@ -85,7 +83,6 @@ static void test_object_cleanup_refs(mr_object_t *obj, int *refs_held) {
     }
 }
 
-/* Tests */
 MR_TEST(object, init_normal) {
     mr_object_t obj;
     mr_err_t ret;
@@ -308,7 +305,6 @@ MR_TEST(object, lifecycle) {
     test_object_cleanup_refs(&obj, &refs_held);
 }
 
-/* mr_object_derive tests */
 MR_TEST(object, derive_normal) {
     mr_object_t obj;
     mr_err_t ret;
@@ -447,7 +443,6 @@ MR_TEST(object, derive_get_after) {
     mr_object_del(&obj);
 }
 
-/* mr_clazz_is_kind_of inline tests */
 MR_TEST(object, clazz_is_kind_of_self) {
     test_object_reset();
     MR_TEST_EXPECT_EQ_INT(mr_clazz_is_kind_of(MR_CLAZZES_STATIK(test_object),
@@ -477,7 +472,6 @@ MR_TEST(object, clazz_is_kind_of_null) {
         mr_clazz_is_kind_of(MR_NULL, MR_CLAZZES_STATIK(test_object)), MR_FALSE);
 }
 
-/* mr_clazz_init runtime test */
 MR_TEST(object, clazz_init_runtime) {
     mr_clazz_t runtime_clazz;
     mr_object_t obj;
@@ -497,7 +491,6 @@ MR_TEST(object, clazz_init_runtime) {
     MR_TEST_EXPECT_EQ_INT(test_object_statik_release_called, 1);
 }
 
-/* Post-del edge case tests */
 MR_TEST(object, get_after_del) {
     mr_object_t obj;
     mr_object_t *ret_obj;

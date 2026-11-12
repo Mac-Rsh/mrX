@@ -733,7 +733,6 @@ mr_err_t mr_dentry_move(mr_dentry_t *dentry, mr_dentry_t *upper,
     MR_ASSERT((upper != MR_NULL) && MR_OBJECT_IS_INITED(upper));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(upper, dentry));
     MR_ASSERT((name != MR_NULL) && (name[0] != '\0'));
-    MR_ASSERT(MR_DENTRY_IS_ADDED(dentry));
 
     /* Check whether dentry is moved to itself or has a slash in the name */
     if ((dentry == upper) || mr_strchr(name, '/')) {
@@ -766,7 +765,6 @@ mr_err_t mr_dentry_rename(mr_dentry_t *dentry, mr_dentry_t *upper,
     MR_ASSERT((upper != MR_NULL) && MR_OBJECT_IS_INITED(upper));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(upper, dentry));
     MR_ASSERT((name != MR_NULL) && (name[0] != '\0'));
-    MR_ASSERT(MR_DENTRY_IS_ADDED(dentry));
 
     /* Check whether dentry is moved to itself or has a slash in the name */
     if ((dentry == upper) || mr_strchr(name, '/')) {

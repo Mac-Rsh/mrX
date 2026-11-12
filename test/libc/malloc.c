@@ -11,7 +11,6 @@
 #if defined(MR_USE_MALLOC)
 #include <mrX/libc/mr_malloc.h>
 
-/* Utility: fill/verify canary pattern                                        */
 static void canary_fill(void *p, mr_size_t usable) {
     mr_uint8_t *data;
     mr_size_t i;
@@ -33,7 +32,6 @@ static int canary_verify(void *p, mr_size_t usable) {
     return 1;
 }
 
-/* Test: allocate, write pattern, verify, free */
 MR_TEST(malloc, free_basic) {
     mr_size_t usable;
     void *p = MR_NULL;
@@ -74,7 +72,6 @@ _exit:
     mr_free(p);
 }
 
-/* Test: memory must be zero-filled                                           */
 MR_TEST(malloc, calloc_zero) {
     const mr_size_t n = 16, sz = 32;
     mr_size_t usable, i;
@@ -115,7 +112,6 @@ _exit:
     mr_free(p);
 }
 
-/* Test: resize buffer and retain original data                               */
 MR_TEST(malloc, realloc_resize) {
     void *p1 = MR_NULL, *p2 = MR_NULL, *p3 = MR_NULL;
 
@@ -158,7 +154,6 @@ _exit:
     mr_free(p3);
 }
 
-/* Test: Zero-size malloc should return NULL                                  */
 MR_TEST(malloc, malloc_zero) {
     void *p;
 
@@ -167,8 +162,6 @@ MR_TEST(malloc, malloc_zero) {
     mr_free(p);
 }
 
-
-/* Test: allocate, free, re-allocate                                          */
 MR_TEST(malloc, frag_merge) {
     enum {
         NUM = 16,
@@ -212,7 +205,6 @@ _exit:
     }
 }
 
-/* Test: may fail gracefully if heap too small                                */
 MR_TEST(malloc, malloc_max) {
     const mr_size_t huge = 3 * 1024;
     mr_size_t usable;
@@ -240,7 +232,6 @@ _exit:
     mr_free(p);
 }
 
-/* Test: add memory region                                                    */
 MR_TEST(malloc, malloc_region) {
     static mr_uint8_t test_mem1[128];
     static mr_uint8_t test_mem2[256];
@@ -259,14 +250,13 @@ MR_TEST(malloc, malloc_region) {
     MR_TEST_EXPECT_GT_UINT(after.free_bytes, before.free_bytes);
 }
 
-/* Test: a region below the minimum size is rejected without changes         */
 MR_TEST(malloc, region_too_small_skipped) {
     static mr_uint8_t tiny_mem[64];
     mr_heap_info_t before;
     mr_heap_info_t after;
     const mr_heap_region_t regions[] = {
         {.address = tiny_mem, .size = sizeof(tiny_mem)},
-        {.address = MR_NULL,  .size = 0}
+        { .address = MR_NULL,                .size = 0}
     };
 
     before = mr_heap_information(MR_TRUE);
@@ -277,7 +267,6 @@ MR_TEST(malloc, region_too_small_skipped) {
     MR_TEST_EXPECT_EQ_UINT(after.frag_num, before.frag_num);
 }
 
-/* Test: realloc(NULL, size) behaves like malloc                              */
 MR_TEST(malloc, realloc_null) {
     void *p = MR_NULL;
 
@@ -291,7 +280,6 @@ MR_TEST(malloc, realloc_null) {
     mr_free(p);
 }
 
-/* Test: heap information tracks used and free bytes                          */
 MR_TEST(malloc, heap_information) {
     mr_heap_info_t before;
     mr_heap_info_t after;
@@ -319,7 +307,6 @@ MR_TEST(malloc, heap_information) {
     MR_TEST_EXPECT_EQ_UINT(restored.free_bytes, before.free_bytes);
 }
 
-/* Test: realloc of a live block keeps identity of the data prefix            */
 MR_TEST(malloc, realloc_same_size) {
     void *p1 = MR_NULL;
     void *p2 = MR_NULL;

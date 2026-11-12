@@ -9,16 +9,7 @@
 #include <mrX/modules/crypto/ecc/mr_ecdsa_p256.h>
 #if defined(MR_USE_MODULE_CRYPTO_ECDSA_P256)
 #include <mrX/libc/mr_assert.h>
-
-/* ECDSA P-256 memory zeroize */
-static void ecdsa_p256_zeroize(void *data, mr_size_t size) {
-    volatile mr_uint8_t *bytes;
-
-    bytes = data;
-    while (size-- != 0U) {
-        *bytes++ = 0U;
-    }
-}
+#include <mrX/libc/mr_string.h>
 
 mr_bool_t mr_ecdsa_p256_verify(
     mr_ecdsa_p256_t *ecdsa, const mr_p256_public_key_t *public_key,
@@ -27,7 +18,6 @@ mr_bool_t mr_ecdsa_p256_verify(
     mr_p256_point_t *public_point, *p1, *p2, *sum;
     mr_p256_value_t *r, *s, *z, *w, *u1, *u2, *v;
     mr_bool_t valid;
-    mr_uint32_t i;
 
     /* Check parameter */
     MR_ASSERT(ecdsa != MR_NULL);
@@ -35,7 +25,7 @@ mr_bool_t mr_ecdsa_p256_verify(
     MR_ASSERT(digest != MR_NULL);
     MR_ASSERT(signature != MR_NULL);
 
-    /* Get working memory */
+    /* Assign workspace slots */
     public_point = &ecdsa->point[0];
     p1 = &ecdsa->point[1];
     p2 = &ecdsa->point[2];
@@ -49,7 +39,7 @@ mr_bool_t mr_ecdsa_p256_verify(
     v = &ecdsa->value[6];
     valid = MR_FALSE;
 
-    /* Load signature and public key */
+    /* Decode and validate scalars and public key */
     mr_p256_value_from_be(r, signature->r);
     mr_p256_value_from_be(s, signature->s);
     mr_p256_point_from_public(public_point, public_key);
@@ -58,7 +48,7 @@ mr_bool_t mr_ecdsa_p256_verify(
         goto _exit;
     }
 
-    /* Compute u1*G + u2*Q */
+    /* Compute u1 = z/s and u2 = r/s modulo n */
     mr_p256_value_from_be(z, digest);
     mr_p256_scalar_reduce(z);
     if (!mr_p256_scalar_inv(&ecdsa->p256, w, s)) {
@@ -66,6 +56,8 @@ mr_bool_t mr_ecdsa_p256_verify(
     }
     mr_p256_scalar_mul(&ecdsa->p256, u1, z, w);
     mr_p256_scalar_mul(&ecdsa->p256, u2, r, w);
+
+    /* Compute u1*G + u2*Q and reject infinity */
     mr_p256_point_mul_generator(&ecdsa->p256, p1, u1);
     mr_p256_point_mul(&ecdsa->p256, p2, public_point, u2);
     mr_p256_point_add(&ecdsa->p256, sum, p1, p2);
@@ -73,19 +65,13 @@ mr_bool_t mr_ecdsa_p256_verify(
         goto _exit;
     }
 
-    /* Compare v with r */
+    /* Compare x modulo n with r */
     *v = sum->x;
     mr_p256_scalar_reduce(v);
-    valid = MR_TRUE;
-    for (i = 0U; i < MR_P256_VALUE_WORDS; i++) {
-        if (v->v[i] != r->v[i]) {
-            valid = MR_FALSE;
-            break;
-        }
-    }
+    valid = (mr_memcmp(v->v, r->v, sizeof(v->v)) == 0);
 _exit:
-    /* Clear working memory */
-    ecdsa_p256_zeroize(ecdsa, sizeof(*ecdsa));
+    /* Clear workspace on all exits */
+    mr_memset(ecdsa, 0, sizeof(*ecdsa));
     return valid;
 }
 #endif /* defined(MR_USE_MODULE_CRYPTO_ECDSA_P256) */

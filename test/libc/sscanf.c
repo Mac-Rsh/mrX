@@ -12,7 +12,6 @@
 #include <mrX/libc/mr_sscanf.h>
 #include <mrX/libc/mr_string.h>
 
-/* Test: basic integer and string extraction                                  */
 MR_TEST(sscanf, basic) {
     int val, ret;
     char buf[8];
@@ -23,7 +22,6 @@ MR_TEST(sscanf, basic) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "hello"), 0);
 }
 
-/* Test: format mismatch                                                      */
 MR_TEST(sscanf, mismatch) {
     int val, ret;
 
@@ -31,7 +29,6 @@ MR_TEST(sscanf, mismatch) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
 
-/* Test: null / empty input                                                   */
 MR_TEST(sscanf, null_empty) {
     int val;
 
@@ -41,7 +38,6 @@ MR_TEST(sscanf, null_empty) {
     MR_TEST_ASSERT_EQ_INT(mr_sscanf("123", MR_NULL, &val), -1);
 }
 
-/* Test: signed, unsigned, hex, octal, and char conversions                   */
 MR_TEST(sscanf, numeric_formats) {
     unsigned int u;
     int d;
@@ -75,7 +71,6 @@ MR_TEST(sscanf, numeric_formats) {
     MR_TEST_ASSERT_EQ_INT(n, 2);
 }
 
-/* Test: field width, whitespace, and literal percent                         */
 MR_TEST(sscanf, width_and_whitespace) {
     int a;
     int b;
@@ -105,7 +100,6 @@ MR_TEST(sscanf, width_and_whitespace) {
     MR_TEST_ASSERT_EQ_INT(mr_strcmp(buf, "abc"), 0);
 }
 
-/* Test: scanset and partial assignment count                                 */
 MR_TEST(sscanf, scanset_and_partial) {
     int val;
     int ret;

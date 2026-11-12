@@ -1,9 +1,9 @@
 /**
- * @copyright (c) 2024-2026, MacRsh
+ * @copyright (c) 2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
- * @date 2026-09-20        MacRsh        First version
+ * @date 2024-09-06        MacRsh        First version
  */
 
 #include <mrX/platform/mr_platform.h>
@@ -12,10 +12,10 @@
 #include "stm32h5xx_hal_iwdg.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT st_stm32h5_wdt
+#define MR_HT_COMPAT                    st_stm32h5_wdt
 #if MR_HT_HAS_DRIVER()
 
-/* WDT operations */
+/* Driver WDT operations */
 static mr_err_t wdt_configure(const mr_driver_t *drv,
                               const mr_wdt_config_t *config);
 static mr_err_t wdt_configuration(const mr_driver_t *drv,
@@ -35,7 +35,7 @@ MR_UNUSED static const mr_wdt_ops_t __wdt_ops = {
     .event_control = wdt_event_control,
 };
 
-/* Watchdog state, requested timing, and optional pretimeout IRQ */
+/* WDT private data type */
 typedef struct wdt_priv {
     IWDG_HandleTypeDef handle;
     void (*clk_enable)(void);
@@ -46,19 +46,21 @@ typedef struct wdt_priv {
     mr_uint32_t ticks;
     mr_uint32_t ewit;
     mr_atomic_t running;
-    mr_bool_t configured;
 } wdt_priv_t;
 
-/* LSI clock and representable IWDG timeout limits */
-#define WDT_LSI_KHZ       (32ULL)
-#define WDT_PRESCALER_MAX (1024U)
-#define WDT_RELOAD_MAX    (4095U)
+/* LSI clock and IWDG timeout limit definition */
+#define WDT_LSI_KHZ                     (32ULL)
+#define WDT_PRESCALER_MAX               (1024U)
+#define WDT_RELOAD_MAX                  (4095U)
 #define WDT_TIMEOUT_MAX                                                        \
     (4096ULL * WDT_PRESCALER_MAX * 1000ULL / (WDT_LSI_KHZ * 1000ULL))
+
 /* Round a millisecond timeout up to the selected prescaler tick count */
-#define WDT_TICKS(_ms, _p) (((_ms) * WDT_LSI_KHZ + (_p) - 1ULL) / (_p))
-/* Event bits accepted by the watchdog event-control operation */
-#define WDT_EVENT_MASK (MR_WDT_WAIT_PRETIMEOUT)
+#define WDT_TICKS(_ms, _p)              \
+    (((_ms) * WDT_LSI_KHZ + (_p) - 1ULL) / (_p))
+
+/* WDT event mask definition */
+#define WDT_EVENT_MASK                  MR_WDT_WAIT_PRETIMEOUT
 
 static mr_err_t wdt_quantize_timeout(mr_uint64_t timeout,
                                      mr_uint32_t *prescaler,
@@ -103,8 +105,7 @@ static mr_err_t wdt_configure(const mr_driver_t *drv,
         return ret;
     }
 
-    /* EWI must sit strictly inside the timeout and leave one reset tick */
-    /* Convert an optional early-warning deadline to IWDG ticks */
+    /* Leave one reset tick after the early-warning interrupt */
     pre_ticks = 0ULL;
     if (config->pretimeout != 0ULL) {
         pre_ticks = WDT_TICKS(config->pretimeout, (4ULL << prescaler));
@@ -117,7 +118,6 @@ static mr_err_t wdt_configure(const mr_driver_t *drv,
     priv->prescaler = prescaler;
     priv->ticks = (mr_uint32_t)ticks;
     priv->ewit = (pre_ticks != 0ULL) ? (mr_uint32_t)(pre_ticks - 1ULL) : 0U;
-    priv->configured = MR_TRUE;
     return 0;
 }
 
@@ -126,11 +126,11 @@ static mr_err_t wdt_configuration(const mr_driver_t *drv,
     wdt_priv_t *priv = MR_DRIVER_PRIV(drv);
 
     /* Check parameter */
-    if (!priv->configured) {
+    if (priv->ticks == 0U) {
         return -MR_EINVAL;
     }
 
-    /* Report the quantized values actually used by the hardware */
+    /* Report quantized hardware timings */
     config->feed_min = 0ULL;
     config->feed_max
         = (mr_uint64_t)priv->ticks * (4ULL << priv->prescaler) / WDT_LSI_KHZ;
@@ -148,7 +148,7 @@ static mr_err_t wdt_start(const mr_driver_t *drv) {
     mr_err_t ret;
 
     /* Check parameter */
-    if (!priv->configured) {
+    if (priv->ticks == 0U) {
         return -MR_EINVAL;
     }
     if (priv->clk_enable == MR_NULL) {
@@ -157,6 +157,8 @@ static mr_err_t wdt_start(const mr_driver_t *drv) {
 
     /* LSI is forced on by hardware once the IWDG starts */
     priv->clk_enable();
+
+    /* Program the prescaler, reload value and early-warning threshold */
     priv->handle.Init.Prescaler = priv->prescaler;
     priv->handle.Init.Reload = priv->ticks - 1U;
     priv->handle.Init.Window = IWDG_WINDOW_DISABLE;
@@ -165,6 +167,8 @@ static mr_err_t wdt_start(const mr_driver_t *drv) {
     if (ret != 0) {
         return ret;
     }
+
+    /* Enable the IRQ only for a configured pretimeout */
     if (priv->ewit != 0U) {
         HAL_NVIC_SetPriority(priv->irqn, priv->irq_priority, 0U);
         HAL_NVIC_EnableIRQ(priv->irqn);
@@ -201,7 +205,7 @@ static mr_err_t wdt_event_control(const mr_driver_t *drv, mr_uint32_t events,
         return -MR_ENOSYS;
     }
 
-    /* Update the early-wakeup interrupt while IWDG writes are unlocked */
+    /* Unlock IWDG writes before updating the early-wakeup interrupt */
     IWDG_ENABLE_WRITE_ACCESS(&priv->handle);
     if (enable) {
         priv->handle.Instance->EWCR |= IWDG_EWCR_EWIE;
@@ -219,22 +223,25 @@ void HAL_IWDG_EarlyWakeupCallback(IWDG_HandleTypeDef *hiwdg) {
 
     /* Forward the pretimeout event to the owning watchdog driver */
     if ((mr_atomic_load(&priv->running) != 0) && (priv->drv != MR_NULL)) {
-        (void)mr_wdt_event_raise(priv->drv, MR_WDT_WAIT_PRETIMEOUT);
+        mr_wdt_event_raise(priv->drv, MR_WDT_WAIT_PRETIMEOUT);
     }
 }
 
-/* Install a watchdog instance and its optional pretimeout IRQ */
+/* Instance install */
 #define ST_HT_WDT_INSTALL(_id, _ops)                                           \
     static void MR_CAT(__wdt_clk_enable_, _id)(void) {                         \
         if (!__HAL_RCC_RTC_IS_CLK_ENABLED()) {                                 \
             __HAL_RCC_RTC_CLK_ENABLE();                                        \
         }                                                                      \
     }                                                                          \
-    static wdt_priv_t MR_CAT(__wdt_priv_, _id)                                 \
-        = {.handle.Instance = MR_HT_DRIVER_PROP(_id, st_iwdgx),                \
-           .clk_enable = MR_CAT(__wdt_clk_enable_, _id),                       \
-           .irqn = MR_HT_DRIVER_PROP(_id, st_irqn),                            \
-           .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority)};           \
+    static wdt_priv_t MR_CAT(__wdt_priv_, _id) = {                             \
+        .handle = {                                                            \
+            .Instance = MR_HT_DRIVER_PROP(_id, st_iwdgx),                      \
+        },                                                                     \
+        .clk_enable = MR_CAT(__wdt_clk_enable_, _id),                          \
+        .irqn = MR_HT_DRIVER_PROP(_id, st_irqn),                               \
+        .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),               \
+    };                                                                         \
     void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {                        \
         HAL_IWDG_IRQHandler(&MR_CAT(__wdt_priv_, _id).handle);                 \
     }                                                                          \

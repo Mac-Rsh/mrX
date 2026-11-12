@@ -10,15 +10,11 @@
 #if defined(MR_USE_TEST)
 #include <mrX/kernel/mr_clock.h>
 
-/* Helpers */
 static mr_tick_t deep_clock_hook(void) {
     /* A constant positive tickless constraint */
     return 7;
 }
 
-/* Tests */
-
-/* Test: microsecond to tick conversion rounds down at every boundary */
 MR_TEST(clock, deep_tick_convert_usec_rounding) {
     MR_TEST_ASSERT_EQ_UINT(MR_TICK_USEC(0), 0);
     MR_TEST_ASSERT_EQ_UINT(MR_TICK_USEC(1), 0);
@@ -35,7 +31,6 @@ MR_TEST(clock, deep_tick_convert_usec_rounding) {
     MR_TEST_ASSERT_EQ_UINT(MR_TICK_USEC(2000), 2);
 }
 
-/* Test: millisecond to tick conversion follows the scale formula */
 MR_TEST(clock, deep_tick_convert_msec_formula) {
     MR_TEST_ASSERT_EQ_UINT(MR_TICK_MSEC(0), 0);
     MR_TEST_ASSERT_EQ_UINT(
@@ -51,7 +46,6 @@ MR_TEST(clock, deep_tick_convert_msec_formula) {
                            MR_CFG_TICK_PER_SECOND);
 }
 
-/* Test: uptime advances by at least the increased ticks */
 MR_TEST(clock, deep_uptime_small_increase) {
     mr_uptime_t base, now;
     mr_uint64_t diff;
@@ -66,7 +60,6 @@ MR_TEST(clock, deep_uptime_small_increase) {
     MR_TEST_EXPECT_LE_UINT(diff, 5 + 1000);
 }
 
-/* Test: hires timestamp of the unix epoch is exactly zero time */
 MR_TEST(clock, deep_hires_timestamp_epoch) {
     mr_hires_timestamp_t timestamp;
 
@@ -81,7 +74,6 @@ MR_TEST(clock, deep_hires_timestamp_epoch) {
     MR_TEST_ASSERT_EQ_INT(timestamp.microsecond, 0);
 }
 
-/* Test: 2000 is a leap year so 2000-02-29 must exist */
 MR_TEST(clock, deep_hires_timestamp_leap_century) {
     mr_hires_timestamp_t timestamp;
 
@@ -99,7 +91,6 @@ MR_TEST(clock, deep_hires_timestamp_leap_century) {
     MR_TEST_ASSERT_EQ_INT(timestamp.day, 1);
 }
 
-/* Test: 2100 is not a leap year so February has 28 days */
 MR_TEST(clock, deep_hires_timestamp_nonleap_century) {
     mr_hires_timestamp_t timestamp;
 
@@ -111,7 +102,6 @@ MR_TEST(clock, deep_hires_timestamp_nonleap_century) {
     MR_TEST_ASSERT_EQ_INT(timestamp.day, 1);
 }
 
-/* Test: the year rollover boundary converts to adjacent days */
 MR_TEST(clock, deep_hires_timestamp_year_rollover) {
     mr_hires_timestamp_t timestamp;
 
@@ -134,7 +124,6 @@ MR_TEST(clock, deep_hires_timestamp_year_rollover) {
     MR_TEST_ASSERT_EQ_INT(timestamp.second, 0);
 }
 
-/* Test: subsecond fields split correctly around one second edges */
 MR_TEST(clock, deep_hires_timestamp_subsecond_edges) {
     mr_hires_timestamp_t timestamp;
 
@@ -149,7 +138,6 @@ MR_TEST(clock, deep_hires_timestamp_subsecond_edges) {
     MR_TEST_ASSERT_EQ_INT(timestamp.microsecond, 0);
 }
 
-/* Test: positive time zones shift within and across the clamp limit */
 MR_TEST(clock, deep_hires_timestamp_timezone_positive) {
     mr_hires_timestamp_t timestamp;
 
@@ -165,7 +153,6 @@ MR_TEST(clock, deep_hires_timestamp_timezone_positive) {
     MR_TEST_ASSERT_EQ_INT(timestamp.hour, 13);
 }
 
-/* Test: negative local time is clamped to the epoch */
 MR_TEST(clock, deep_hires_timestamp_timezone_negative) {
     mr_hires_timestamp_t timestamp;
 
@@ -177,7 +164,6 @@ MR_TEST(clock, deep_hires_timestamp_timezone_negative) {
     MR_TEST_EXPECT_EQ_INT(timestamp.hour, 0);
 }
 
-/* Test: a time zone that shifts the date backwards across a month */
 MR_TEST(clock, deep_hires_timestamp_timezone_day_shift) {
     mr_hires_timestamp_t timestamp;
 
@@ -190,7 +176,6 @@ MR_TEST(clock, deep_hires_timestamp_timezone_day_shift) {
     MR_TEST_ASSERT_EQ_INT(timestamp.minute, 0);
 }
 
-/* Test: the clock hook table has a strictly limited number of slots */
 MR_TEST(clock, deep_hook_capacity) {
     mr_err_t ret;
 
@@ -205,7 +190,6 @@ MR_TEST(clock, deep_hook_capacity) {
     }
 }
 
-/* Test: the 32-bit tick wraps while uptime keeps counting */
 MR_TEST(clock, deep_tick_wraparound_uptime) {
     mr_uptime_t up_before, up_after;
     mr_tick_t t_before, delta, t_after;

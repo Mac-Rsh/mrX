@@ -1,5 +1,5 @@
 /**
- * @copyright (c) 2024-2026, MacRsh
+ * @copyright (c) 2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
@@ -14,14 +14,14 @@
 /* Enable UART streaming only when the DMA backend is available */
 #define UART_USE_STREAM
 #include <mrX/drivers/dma/mr_dma.h>
-#endif /* UART stream + DMA */
+#endif /* defined(MR_USE_DRIVER_UART_STREAM) && defined(MR_USE_DRIVER_DMA) */
 #include "stm32h5xx_hal_uart.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT st_stm32h5_uart
+#define MR_HT_COMPAT                    st_stm32h5_uart
 #if MR_HT_HAS_DRIVER()
 
-/* UART operations */
+/* Driver UART operations */
 static mr_err_t uart_configure(const mr_driver_t *drv,
                                const mr_uart_config_t *config);
 static mr_err_t uart_configuration(const mr_driver_t *drv,
@@ -65,14 +65,14 @@ MR_UNUSED static const mr_uart_ops_t __uart_ops = {
     .event_control = uart_event_control,
 };
 
-/* GPIO alternate-function mapping for one UART signal */
+/* UART pin type */
 typedef struct uart_pin {
     mr_ht_gpio_spec_t spec;
     uint32_t alternate;
 } uart_pin_t;
 
 #if defined(UART_USE_STREAM)
-/* DMA stream state shared by completion and event paths */
+/* UART stream type */
 typedef struct uart_stream {
     mr_ht_dma_spec_t dma;
     mr_dma_transfer_t transfer;
@@ -81,12 +81,12 @@ typedef struct uart_stream {
     mr_atomic_t active;
     mr_atomic_t complete;
     mr_atomic_t dma_complete;
-    mr_bool_t circular;
-    mr_bool_t failed;
+    mr_uint8_t circular: 1;
+    mr_uint8_t failed: 1;
 } uart_stream_t;
 #endif /* defined(UART_USE_STREAM) */
 
-/* UART instance state, pins, stream state, and event subscriptions */
+/* UART private data type */
 typedef struct uart_priv {
     UART_HandleTypeDef handle;
     void (*clk_enable)(void);
@@ -97,14 +97,14 @@ typedef struct uart_priv {
     mr_driver_t *driver;
     mr_uint32_t event_mask;
     mr_uart_config_t config;
-    mr_bool_t initialized;
+    mr_uint8_t initialized: 1;
 #if defined(UART_USE_STREAM)
     uart_stream_t rx_stream;
     uart_stream_t tx_stream;
 #endif /* defined(UART_USE_STREAM) */
 } uart_priv_t;
 
-/* Event bits accepted by the UART event-control operation */
+/* UART event mask definition */
 #define UART_EVENT_BASE_MASK                                                   \
     (MR_UART_WAIT_RX_IDLE | MR_UART_WAIT_RX_READY | MR_UART_WAIT_TX_DONE       \
      | MR_UART_WAIT_RX_ERROR | MR_UART_WAIT_TX_ERROR)
@@ -114,27 +114,31 @@ typedef struct uart_priv {
      | MR_UART_WAIT_RX_STREAM_FULL | MR_UART_WAIT_TX_STREAM_HALF               \
      | MR_UART_WAIT_TX_STREAM_DONE)
 #else
-#define UART_EVENT_MASK UART_EVENT_BASE_MASK
+#define UART_EVENT_MASK                 UART_EVENT_BASE_MASK
 #endif /* defined(UART_USE_STREAM) */
 
 /* HAL word length includes the optional parity bit */
 static const uint32_t __uart_word_length[][2] = {
-    {UART_WORDLENGTH_7B, UART_WORDLENGTH_8B},
-    {UART_WORDLENGTH_8B, UART_WORDLENGTH_9B},
+    {
+        UART_WORDLENGTH_7B, UART_WORDLENGTH_8B,
+    },
+    {
+        UART_WORDLENGTH_8B, UART_WORDLENGTH_9B,
+    },
 };
-
+/* UART stop bit mapping */
 static const uint32_t __uart_stop_bits[] = {
     UART_STOPBITS_1,
     UART_STOPBITS_1_5,
     UART_STOPBITS_2,
 };
-
+/* UART parity mapping */
 static const uint32_t __uart_parity[] = {
     UART_PARITY_NONE,
     UART_PARITY_ODD,
     UART_PARITY_EVEN,
 };
-
+/* UART mode mapping */
 static const uint32_t __uart_mode[] = {
     UART_MODE_RX,
     UART_MODE_TX,
@@ -166,6 +170,7 @@ static mr_err_t uart_make_init(const mr_uart_config_t *config,
         return -MR_EINVAL;
     }
 
+    /* Translate the validated frame to HAL settings */
     data_index = (mr_uint32_t)(config->data_bits - MR_UART_DATA_BITS_7);
     parity_index = (config->parity != MR_UART_PARITY_NONE) ? 1U : 0U;
     init->BaudRate = config->baud_rate;
@@ -184,7 +189,7 @@ static void uart_interrupts_update(uart_priv_t *priv) {
     mr_bool_t rx_ready_enable;
     mr_bool_t tc_enable;
 
-    /* Keep UART IRQ sources aligned with the enabled event mask */
+    /* Suppress RX_READY while DMA owns the receive register */
     rx_ready_enable = ((priv->event_mask & MR_UART_WAIT_RX_READY) != 0U);
 #if defined(UART_USE_STREAM)
     if (mr_atomic_load(&priv->rx_stream.active) != 0) {
@@ -227,7 +232,7 @@ static void uart_interrupts_update(uart_priv_t *priv) {
 }
 
 static mr_err_t uart_pin_check(const uart_pin_t *pin) {
-    /* Validate one HardTree pin and its alternate-function number */
+    /* Check the HardTree pin and alternate function */
     if ((pin->spec.drv == MR_NULL) || (pin->spec.pin > 15U)
         || (pin->alternate > 15U)) {
         return -MR_EINVAL;
@@ -283,7 +288,6 @@ static mr_err_t uart_configure(const mr_driver_t *drv,
     mr_bool_t reconfigure;
     mr_err_t ret;
 
-    init = (UART_InitTypeDef){0};
     /* Check board-provided resources */
     if ((priv->handle.Instance == MR_NULL) || (priv->clk_enable == MR_NULL)) {
         return -MR_EINVAL;
@@ -302,6 +306,7 @@ static mr_err_t uart_configure(const mr_driver_t *drv,
     }
 
     /* Translate the UART frame */
+    init = (UART_InitTypeDef){0};
     ret = uart_make_init(config, &init);
     if (ret != 0) {
         return ret;
@@ -321,7 +326,7 @@ static mr_err_t uart_configure(const mr_driver_t *drv,
         }
     }
 
-    /* Enable clocks and apply a new UART frame */
+    /* Stop the previous frame before changing pin ownership */
     reconfigure = priv->initialized;
     priv->clk_enable();
     if (priv->initialized) {
@@ -331,6 +336,8 @@ static mr_err_t uart_configure(const mr_driver_t *drv,
         }
         priv->initialized = MR_FALSE;
     }
+
+    /* Apply the new pin routing before starting the peripheral */
     ret = uart_gpio_configure(priv, config->mode, reconfigure);
     if (ret != 0) {
         return ret;
@@ -343,6 +350,8 @@ static mr_err_t uart_configure(const mr_driver_t *drv,
         priv->initialized = MR_FALSE;
         return ret;
     }
+
+    /* Publish the new state before enabling its interrupt sources */
     priv->config = *config;
     priv->driver = (mr_driver_t *)drv;
     priv->initialized = MR_TRUE;
@@ -371,9 +380,7 @@ static mr_ssize_t uart_read(const mr_driver_t *drv, void *buf, mr_size_t size) {
     mr_size_t completed;
     mr_uint8_t *dst;
 
-    dst = (mr_uint8_t *)buf;
-    completed = 0U;
-
+    /* Check UART state and RX DMA ownership */
     if (!priv->initialized) {
         return -MR_ENODEV;
     }
@@ -384,6 +391,8 @@ static mr_ssize_t uart_read(const mr_driver_t *drv, void *buf, mr_size_t size) {
 #endif /* defined(UART_USE_STREAM) */
 
     /* Drain bytes already in RDR without waiting */
+    dst = (mr_uint8_t *)buf;
+    completed = 0U;
     while ((completed < size)
            && (__HAL_UART_GET_FLAG(&priv->handle, UART_FLAG_RXNE) != 0U)) {
         *dst++ = (mr_uint8_t)(priv->handle.Instance->RDR
@@ -393,7 +402,7 @@ static mr_ssize_t uart_read(const mr_driver_t *drv, void *buf, mr_size_t size) {
         completed++;
     }
 
-    /* Rearm RX_READY after the consumer has drained the receive register */
+    /* Rearm RX_READY after draining RDR */
     uart_interrupts_update(priv);
     return (mr_ssize_t)completed;
 }
@@ -404,9 +413,7 @@ static mr_ssize_t uart_write(const mr_driver_t *drv, const void *buf,
     const mr_uint8_t *src;
     mr_size_t completed;
 
-    src = (const mr_uint8_t *)buf;
-    completed = 0U;
-
+    /* Check UART state and TX DMA ownership */
     if (!priv->initialized) {
         return -MR_ENODEV;
     }
@@ -417,11 +424,15 @@ static mr_ssize_t uart_write(const mr_driver_t *drv, const void *buf,
 #endif /* defined(UART_USE_STREAM) */
 
     /* Push bytes into TDR while the holding register is empty */
+    src = (const mr_uint8_t *)buf;
+    completed = 0U;
     while ((completed < size)
            && (__HAL_UART_GET_FLAG(&priv->handle, UART_FLAG_TXE) != 0U)) {
         priv->handle.Instance->TDR = *src++;
         completed++;
     }
+
+    /* Report TX_DONE after the last stop bit */
     if ((completed != 0U) && (priv->event_mask & MR_UART_WAIT_TX_DONE)) {
         __HAL_UART_ENABLE_IT(&priv->handle, UART_IT_TC);
     }
@@ -432,7 +443,7 @@ static mr_ssize_t uart_write(const mr_driver_t *drv, const void *buf,
 static void uart_stream_waiter_release(uart_stream_t *stream) {
     /* Detach the waiter before releasing stream ownership */
     if (stream->driver != MR_NULL) {
-        (void)mr_waiter_del(&stream->waiter);
+        mr_waiter_del(&stream->waiter);
         stream->driver = MR_NULL;
     }
 }
@@ -487,7 +498,7 @@ static void uart_stream_dma_event(uart_priv_t *priv, uart_stream_t *stream,
         }
     }
     if (uart_event != 0U) {
-        (void)mr_uart_event_raise(stream->driver, uart_event);
+        mr_uart_event_raise(stream->driver, uart_event);
     }
 }
 
@@ -626,7 +637,7 @@ static mr_err_t uart_stream_start(const mr_driver_t *drv, uart_stream_t *stream,
     }
 
     /* Attach a fresh waiter so it can be released on stream stop */
-    stream->circular = circular;
+    stream->circular = (circular != MR_FALSE);
     stream->failed = MR_FALSE;
     mr_atomic_store(&stream->active, 1);
     mr_atomic_store(&stream->complete, 0);
@@ -649,7 +660,7 @@ static mr_err_t uart_stream_start(const mr_driver_t *drv, uart_stream_t *stream,
         goto _fail;
     }
 
-    /* Start DMA before enabling UART DMA requests */
+    /* Arm DMA before opening the peripheral request path */
     stream->transfer.next = circular ? &stream->transfer : MR_NULL;
     stream->transfer.src = src;
     stream->transfer.dst = dst;
@@ -659,13 +670,15 @@ static mr_err_t uart_stream_start(const mr_driver_t *drv, uart_stream_t *stream,
         goto _fail;
     }
     if (!receive) {
+        /* Discard completion left by the previous transmission */
         __HAL_UART_CLEAR_FLAG(&priv->handle, UART_CLEAR_TCF);
     }
     SET_BIT(priv->handle.Instance->CR3, dma_mask);
     return 0;
 
 _fail:
-    (void)uart_stream_stop(priv, stream, dma_mask);
+    /* Clean up the stream and preserve the start error */
+    uart_stream_stop(priv, stream, dma_mask);
     return ret;
 }
 
@@ -782,7 +795,7 @@ static void uart_irq_handle(uart_priv_t *priv) {
 
     if ((__HAL_UART_GET_FLAG(&priv->handle, UART_FLAG_RXNE) != 0U)
         && (__HAL_UART_GET_IT_SOURCE(&priv->handle, UART_IT_RXNE) != 0U)) {
-        /* One-shot notification; mr_uart_read() rearms RX_READY afterwards */
+        /* RX_READY stays masked until mr_uart_read() */
         __HAL_UART_DISABLE_IT(&priv->handle, UART_IT_RXNE);
         event |= MR_UART_WAIT_RX_READY;
     }
@@ -793,7 +806,7 @@ static void uart_irq_handle(uart_priv_t *priv) {
     }
     if ((__HAL_UART_GET_FLAG(&priv->handle, UART_FLAG_TC) != 0U)
         && (__HAL_UART_GET_IT_SOURCE(&priv->handle, UART_IT_TC) != 0U)) {
-        /* Preserve the idle flag for configure; rearm on the next write */
+        /* Keep TC set for the reconfiguration check */
         __HAL_UART_DISABLE_IT(&priv->handle, UART_IT_TC);
 #if defined(UART_USE_STREAM)
         if (mr_atomic_load(&priv->tx_stream.active) != 0) {
@@ -813,6 +826,7 @@ static void uart_irq_handle(uart_priv_t *priv) {
             }
         }
     }
+    /* Acknowledge receive errors before notifying the owning driver */
     if (((__HAL_UART_GET_FLAG(&priv->handle, UART_FLAG_PE) != 0U)
          || (__HAL_UART_GET_FLAG(&priv->handle, UART_FLAG_FE) != 0U)
          || (__HAL_UART_GET_FLAG(&priv->handle, UART_FLAG_NE) != 0U)
@@ -825,7 +839,7 @@ static void uart_irq_handle(uart_priv_t *priv) {
         event |= MR_UART_WAIT_RX_ERROR;
     }
     if ((event != 0U) && (priv->driver != MR_NULL)) {
-        (void)mr_uart_event_raise(priv->driver, event);
+        mr_uart_event_raise(priv->driver, event);
     }
 }
 
@@ -833,43 +847,57 @@ static void uart_irq_handle(uart_priv_t *priv) {
 /* Initialize optional RX/TX DMA and waiter state from HardTree properties */
 #define UART_STREAM_INIT(_id)                                                  \
     MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_rx_dma),                         \
-                (.rx_stream.dma = MR_HT_DMA_SPEC(_id, st_rx_dma)),             \
-                (.rx_stream.dma = {0})),                                       \
-        MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_tx_dma),                     \
-                    (.tx_stream.dma = MR_HT_DMA_SPEC(_id, st_tx_dma)),         \
-                    (.tx_stream.dma = {0})),
+                (.rx_stream = {                                                \
+                    .dma = MR_HT_DMA_SPEC(_id, st_rx_dma),                     \
+                }),                                                            \
+                (.rx_stream = {0})),                                           \
+    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_tx_dma),                         \
+                (.tx_stream = {                                                \
+                    .dma = MR_HT_DMA_SPEC(_id, st_tx_dma),                     \
+                }),                                                            \
+                (.tx_stream = {0})),
 #else
 #define UART_STREAM_INIT(_id)
 #endif /* defined(UART_USE_STREAM) */
 
-/* clang-format off */
-/* Install a UART instance and its pin/stream mappings */
+/* Instance install */
 #define ST_HT_UART_INSTALL(_id, _ops)                                          \
     static void MR_CAT(__uart_clk_enable_, _id)(void) {                        \
         MR_HT_DRIVER_PROP(_id, st_clken)();                                    \
     }                                                                          \
     static uart_priv_t MR_CAT(__uart_priv_, _id) = {                           \
-        UART_STREAM_INIT(_id)                                                  \
-        .handle.Instance = MR_HT_DRIVER_PROP(_id, st_uartx),                   \
+        .handle = {                                                            \
+            .Instance = MR_HT_DRIVER_PROP(_id, st_uartx),                      \
+        },                                                                     \
         .clk_enable = MR_CAT(__uart_clk_enable_, _id),                         \
         .tx = MR_MACRO_IF(                                                     \
             MR_HT_DRIVER_HAS_PROP(_id, st_tx),                                 \
-            ({.spec = MR_HT_GPIO_SPEC(_id, st_tx),                             \
-              .alternate = MR_HT_DRIVER_PROP_OR(_id, st_tx_af, 0)}),           \
-            ({.spec = {0}, .alternate = 0})),                                  \
+            ({                                                                 \
+                .spec = MR_HT_GPIO_SPEC(_id, st_tx),                           \
+                .alternate = MR_HT_DRIVER_PROP_OR(_id, st_tx_af, 0),           \
+            }),                                                                \
+            ({                                                                 \
+                .spec = {0},                                                   \
+                .alternate = 0,                                                \
+            })),                                                               \
         .rx = MR_MACRO_IF(                                                     \
             MR_HT_DRIVER_HAS_PROP(_id, st_rx),                                 \
-            ({.spec = MR_HT_GPIO_SPEC(_id, st_rx),                             \
-              .alternate = MR_HT_DRIVER_PROP_OR(_id, st_rx_af, 0)}),           \
-            ({.spec = {0}, .alternate = 0})),                                  \
+            ({                                                                 \
+                .spec = MR_HT_GPIO_SPEC(_id, st_rx),                           \
+                .alternate = MR_HT_DRIVER_PROP_OR(_id, st_rx_af, 0),           \
+            }),                                                                \
+            ({                                                                 \
+                .spec = {0},                                                   \
+                .alternate = 0,                                                \
+            })),                                                               \
         .irqn = MR_HT_DRIVER_PROP(_id, st_irqn),                               \
         .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),               \
+        UART_STREAM_INIT(_id)                                                  \
     };                                                                         \
     void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {                        \
         uart_irq_handle(&MR_CAT(__uart_priv_, _id));                           \
     }                                                                          \
     MR_HT_UART_INSTALL(_id, &MR_CAT(__uart_priv_, _id), _ops)
-/* clang-format on */
 MR_HT_DRIVER_FOREACH(ST_HT_UART_INSTALL, &__uart_ops);
 #endif /* MR_HT_HAS_DRIVER() */
 #endif /* defined(MR_USE_DRIVER_UART) */

@@ -7,12 +7,15 @@
  */
 
 #include <mrX/test/mr_test.h>
-#if defined(MR_USE_TEST) && defined(MR_USE_FS)
+#if defined(MR_USE_TEST) && defined(MR_USE_FS) && defined(MR_USE_FS_RAMFS)
 #include <mrX.h>
 #include <mrX/test/fs/fs_test.h>
 
+#if defined(MR_USE_FS_RAMFS_FIFO) && (MR_CFG_FS_RAMFS_FIFO_SIZE == 32)
 #define RAMFS_FIFO_CAP_DEFAULT (32)
-#define RAMFS_RECLAIM_CYCLES   (8)
+#endif /* defined(MR_USE_FS_RAMFS_FIFO) && (MR_CFG_FS_RAMFS_FIFO_SIZE == 32)   \
+        */
+#define RAMFS_RECLAIM_CYCLES (8)
 
 static void ramfs_expect(volatile mr_uint32_t *__test_status, const char *name,
                          mr_int64_t actual, mr_int64_t expected) {
@@ -30,7 +33,6 @@ static void ramfs_heap_expect(volatile mr_uint32_t *__test_status,
                  after->total_bytes == before->total_bytes, MR_TRUE);
 }
 
-/* Test: regular file edges cover hole writes, EOF reads and range checks */
 MR_TEST(fs, ramfs_regular_edges) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_stat_t stat;
@@ -100,7 +102,7 @@ _exit:
     return;
 }
 
-/* Test: FIFO ring buffer wraps and rejects seeks */
+#if defined(MR_USE_FS_RAMFS_FIFO) && (MR_CFG_FS_RAMFS_FIFO_SIZE == 32)
 MR_TEST(fs, ramfs_fifo_ring) {
     static const char full[] = "FGHIJKLMNOPQRSTVWXYZ123456789abc";
     mr_heap_info_t heap_before;
@@ -178,7 +180,9 @@ _exit:
     return;
 }
 
-/* Test: repeated growth and truncation releases all regular-file storage */
+#endif /* defined(MR_USE_FS_RAMFS_FIFO) && (MR_CFG_FS_RAMFS_FIFO_SIZE == 32)   \
+        */
+
 MR_TEST(fs, ramfs_reclaim_cycles) {
     mr_heap_info_t heap_before;
     mr_heap_info_t heap_after;
@@ -237,4 +241,5 @@ _exit:
     ramfs_heap_expect(__test_status, &heap_before, &heap_after);
 }
 
-#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */
+#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) &&                        \
+          defined(MR_USE_FS_RAMFS) */

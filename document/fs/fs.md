@@ -17,19 +17,22 @@
 
 ### 1. 模块概述
 
-本模块是 mrX 的虚拟文件系统（VFS）核心，解决的问题是： **用统一的路径与句柄接口访问 不同来源的文件、目录与设备节点**。
+本模块是 mrX 的虚拟文件系统（VFS）核心，解决的问题是： **用统一的路径与句柄接口访问
+不同来源的文件、目录与设备节点**。
 
 特性：
 
 - 路径树与内容分离：目录项（dentry）组成命名空间树，inode 携带类型、大小与数据。
-- 句柄式 I/O：`mr_fs_open` 打开后通过 `mr_file_t` 句柄读写；rename/unlink 不会 使句柄失效，正常卸载则会在句柄关闭前返回
+- 句柄式 I/O：`mr_fs_open` 打开后通过 `mr_file_t` 句柄读写；rename/unlink 不会
+  使句柄失效，正常卸载则会在句柄关闭前返回
   `-MR_EBUSY`。
 - 支持目录、普通文件、设备节点与 FIFO 等节点类型。
 - 支持按名字注册文件系统，并在任意目录挂载点上挂载/卸载（见
   [RamFS](ramfs.md)、[RootFS](rootfs.md)）。
 - 支持工作目录（`chdir`/`getcwd`）与根目录切换（`chroot`），可选按任务隔离的 多用户命名空间。
 
-具体的数据存储由挂载的文件系统提供：RamFS 提供内存中的普通文件与 FIFO， RootFS 只维护目录结构，两者都不需要用户直接操作内部对象。
+具体的数据存储由挂载的文件系统提供：RamFS 提供内存中的普通文件与 FIFO， RootFS
+只维护目录结构，两者都不需要用户直接操作内部对象。
 
 ### 2. 配置与依赖
 
@@ -46,7 +49,8 @@
 #include <mrX/fs/mr_fs_file.h>
 ```
 
-该头文件会自动引入挂载框架、dentry、inode 等依赖头。内核初始化时会自动初始化 全局命名空间（单用户模式），无需手动调用初始化函数。
+该头文件会自动引入挂载框架、dentry、inode 等依赖头。内核初始化时会自动初始化
+全局命名空间（单用户模式），无需手动调用初始化函数。
 
 ### 3. 快速上手
 
@@ -92,18 +96,25 @@ static int fs_demo(void) {
 
 **句柄生命周期**
 
-- 静态方式：定义 `mr_file_t` 并用 `MR_FILE_INIT`（或 `mr_file_init`、全零存储） 初始化；`mr_fs_close`
+- 静态方式：定义 `mr_file_t` 并用 `MR_FILE_INIT`（或 `mr_file_init`、全零存储） 初始化；
+  `mr_fs_close`
   后句柄回到"已关闭"状态，可重复 `open`，无需重新初始化。
-- 句柄只有打开/关闭两种状态，可用 `mr_file_is_open()` 查询当前状态；对一个 已打开的句柄重复 `open` 返回 `-MR_EBUSY`。
-- `mr_fs_close` 无论返回值如何都会使句柄失效；返回负数只表示后端 flush/收尾失败， 不可重试。对未打开句柄 `close` 返回
+- 句柄只有打开/关闭两种状态，可用 `mr_file_is_open()` 查询当前状态；对一个
+  已打开的句柄重复 `open` 返回 `-MR_EBUSY`。
+- `mr_fs_close` 无论返回值如何都会使句柄失效；返回负数只表示后端 flush/收尾失败，
+  不可重试。对未打开句柄 `close` 返回
   `-MR_EBADF`。
-- 介质被移除（`mr_fs_media_detach`）后，打开句柄上的新操作返回 `-MR_ENODEV`； 对此类句柄 `close` 仍会调用后端收尾以释放私有内存，并返回
+- 介质被移除（`mr_fs_media_detach`）后，打开句柄上的新操作返回 `-MR_ENODEV`； 对此类句柄
+  `close` 仍会调用后端收尾以释放私有内存，并返回
   `-MR_ENODEV`。
 
 **并发访问**
 
-- VFS 只保证命名空间操作（open/mkdir/rename/unlink/mount 等）之间以及它们与卸载 之间的一致性；同一文件上的数据读写是否可以并发、冲突时如何表现，由具体文件系统
-  决定并在其文档中说明（如 [RamFS](ramfs.md) 在冲突时返回 `-MR_EBUSY`）。
+- VFS 保护命名空间的内部状态，并协调命名空间操作与卸载。同一文件上的数据读写能否
+  并发、冲突时如何表现，由具体文件系统决定（如 [RamFS](ramfs.md) 在冲突时返回
+  `-MR_EBUSY`）。
+- 调用方应串行执行针对同一目录项的 `mr_fs_unlink` 和 `mr_fs_rename`。若两者并发，
+  `unlink` 可能在查找后删除已经改名的目录项。
 
 **打开标志**
 
@@ -119,10 +130,13 @@ static int fs_demo(void) {
 **路径与命名空间规则**
 
 - 路径长度（不含结尾符）必须小于 `MR_CFG_FS_PATH_LEN`，否则 `-MR_ENAMETOOLONG`。
-- 创建类操作（`mkdir`/`mknod`/`mkfifo` 的目标）不接受以 `/` 结尾 的路径，末段名字不能为空、`.` 或 `..`（`-MR_EINVAL`）。
+- 创建类操作（`mkdir`/`mknod`/`mkfifo` 的目标）不接受以 `/` 结尾 的路径，末段名字不能为空、
+  `.` 或 `..`（`-MR_EINVAL`）。
 - `..` 不会越过当前命名空间根：`chroot` 之后 `..` 无法逃出新根。
-- 单用户模式下全局只有一份 root/cwd，由 `mr_fs_file_init()` 自动调用 `mr_fs_struct_init()` 初始化。`MR_USE_FS_MULTIUSER`
-  启用后，这个自动初始化分支被编译掉；平台需为每个调用者提供 `mr_fs_struct_current()`，并负责让对应 `mr_fs_struct_t` 在使用前完成
+- 单用户模式下全局只有一份 root/cwd，由 `mr_fs_file_init()` 自动调用
+  `mr_fs_struct_init()` 初始化。`MR_USE_FS_MULTIUSER`
+  启用后，这个自动初始化分支被编译掉；平台需为每个调用者提供
+  `mr_fs_struct_current()`，并负责让对应 `mr_fs_struct_t` 在使用前完成
   `mr_fs_struct_init()`。
 
 **目录操作**
@@ -130,11 +144,13 @@ static int fs_demo(void) {
 - 目录只能以 `MR_O_RDONLY` 打开（可加 `MR_O_DIRECTORY`）。
 - `mr_fs_readdir` 返回 `1` 表示读到一项（`mr_dirent_t.name` + `type`），返回 `0`
   表示目录结束，负数为错误；循环条件是返回值大于 0。
-- `mr_fs_rmdir` 只能删除空目录（`-MR_ENOTEMPTY`）；挂载点目录不能删除 （`-MR_EBUSY`）。
+- `mr_fs_rmdir` 只能删除空目录（`-MR_ENOTEMPTY`）；挂载点目录不能删除 （
+  `-MR_EBUSY`）。
 
 **卸载与打开句柄**
 
-- `mr_fs_unlink`/`mr_fs_rename` 作用于路径，已打开的句柄不受影响：unlink 后句柄 仍可读写，`mr_fs_fstat`
+- `mr_fs_unlink`/`mr_fs_rename` 作用于路径，已打开的句柄不受影响：unlink 后句柄
+  仍可读写，`mr_fs_fstat`
   仍能取到状态，数据在最后一个引用释放后回收。
 - 正常卸载要求目标挂载实例没有打开句柄；只要 `open_cnt` 非零，
   `mr_fs_umount` 就返回 `-MR_EBUSY`，句柄仍然有效，应先 `mr_fs_close` 再重试。
@@ -219,7 +235,8 @@ mr_ssize_t mr_fs_write(mr_file_t *file, const void *buf, mr_size_t size);
 ```
 
 成功返回实际读/写的字节数（可为 0，如读到 EOF），失败返回负数错误码。只写句柄
-`read`、只读句柄 `write` 返回 `-MR_EBADF`；目录的读写返回 `-MR_EISDIR`； 后端未提供该操作返回 `-MR_ENOSYS`。
+`read`、只读句柄 `write` 返回 `-MR_EBADF`；目录的读写返回 `-MR_EISDIR`； 后端未提供该操作返回
+`-MR_ENOSYS`。
 
 **`mr_fs_lseek`**
 
@@ -227,8 +244,10 @@ mr_ssize_t mr_fs_write(mr_file_t *file, const void *buf, mr_size_t size);
 mr_int64_t mr_fs_lseek(mr_file_t *file, mr_int64_t offset, int whence);
 ```
 
-`whence` 取 `MR_SEEK_SET` / `MR_SEEK_CUR` / `MR_SEEK_END`。若后端提供 `fops->llseek`，VFS 直接调用并原样返回其结果，位置语义也由后端负责。只有在没有自定义
-`llseek` 时才使用默认实现：负目标位置返回 `-MR_EINVAL`，有符号加法溢出返回 `-MR_ERANGE`，失败时 `file->pos` 保持不变。FIFO
+`whence` 取 `MR_SEEK_SET` / `MR_SEEK_CUR` / `MR_SEEK_END`。若后端提供
+`fops->llseek`，VFS 直接调用并原样返回其结果，位置语义也由后端负责。只有在没有自定义
+`llseek` 时才使用默认实现：负目标位置返回 `-MR_EINVAL`，有符号加法溢出返回
+`-MR_ERANGE`，失败时 `file->pos` 保持不变。FIFO
 等不可定位对象通常由后端 `llseek` 返回 `-MR_ESPIPE`。
 
 **`mr_fs_mknod`**
@@ -237,9 +256,12 @@ mr_int64_t mr_fs_lseek(mr_file_t *file, mr_int64_t offset, int whence);
 mr_err_t mr_fs_mknod(const char *path, mr_inode_type_t type, void *priv);
 ```
 
-`type` 为 `MR_INODE_REG`/`MR_INODE_DIR`/`MR_INODE_CHR`/`MR_INODE_BLK`/`MR_INODE_FIFO` 之一。若父 inode 实现 `mknod`，
-`priv` 会原样透传；若没有 `mknod` 但实现了 `create`，VFS 会退化为 `create(dir, name, type, &inode)`，此时没有 `priv`
-参数，调用者不能依赖私有数据被传递。父目录必须已存在（`-MR_ENOENT`），同名节点返回 `-MR_EEXIST`。
+`type` 为 `MR_INODE_REG`/`MR_INODE_DIR`/`MR_INODE_CHR`/`MR_INODE_BLK`/
+`MR_INODE_FIFO` 之一。若父 inode 实现 `mknod`，
+`priv` 会原样透传；若没有 `mknod` 但实现了 `create`，VFS 会退化为
+`create(dir, name, type, &inode)`，此时没有 `priv`
+参数，调用者不能依赖私有数据被传递。父目录必须已存在（`-MR_ENOENT`），同名节点返回
+`-MR_EEXIST`。
 
 **`mr_fs_mount` / `mr_fs_umount`**
 
@@ -250,7 +272,8 @@ mr_err_t mr_fs_umount(const char *path);
 ```
 
 - `fstype` 必须是已注册的文件系统名（`-MR_ENOENT`）。
-- 非根挂载点必须已存在且为目录（`-MR_ENOENT`/`-MR_ENOTDIR`）；重复挂载同一 挂载点返回 `-MR_EBUSY`。挂载后原目录内容被覆盖隐藏，卸载后恢复。
+- 非根挂载点必须已存在且为目录（`-MR_ENOENT`/`-MR_ENOTDIR`）；重复挂载同一 挂载点返回
+  `-MR_EBUSY`。挂载后原目录内容被覆盖隐藏，卸载后恢复。
 - `source`/`flags`/`data` 透传给文件系统挂载回调（内建文件系统忽略它们）。
 - 正常卸载会原子检查挂载状态；有子挂载、在途操作或打开句柄时返回
   `-MR_EBUSY`，应先关闭句柄并按从子到父的顺序卸载。
@@ -262,9 +285,12 @@ mr_err_t mr_fs_media_detach(const char *path);
 ```
 
 - 仅用于后端介质已经消失的异常摘除，不是通用强制卸载。
-- 将目标挂载及全部子挂载永久标记为 `OFFLINE` 并从可见命名空间摘除，打开句柄此后的新操作返回 `-MR_ENODEV`，状态不可恢复。
-- 有在途操作或其他不可回收状态时本次调用可返回 `-MR_EBUSY`，可用同一路径重试。OFFLINE 摘除逻辑本身不访问已消失设备；当某个
-  super-block 的最后引用在此过程中或之后释放时，仍会同步进入文件系统的 `unmount` 清理钩子。该钩子的公共契约要求只释放内存资源、不得访问设备且不能失败。
+- 将目标挂载及全部子挂载永久标记为 `OFFLINE` 并从可见命名空间摘除，打开句柄此后的新操作返回
+  `-MR_ENODEV`，状态不可恢复。
+- 有在途操作或其他不可回收状态时本次调用可返回 `-MR_EBUSY`，可用同一路径重试。OFFLINE
+  摘除逻辑本身不访问已消失设备；当某个
+  super-block 的最后引用在此过程中或之后释放时，仍会同步进入文件系统的 `unmount`
+  清理钩子。该钩子的公共契约要求只释放内存资源、不得访问设备且不能失败。
 
 ### 6. 完整示例
 
@@ -325,16 +351,19 @@ static void mount_demo(void) {
 
 **Q：挂载返回 `-MR_EBUSY`？**
 
-目标挂载点已被占用：全局根只能挂载一次，同一目录上不允许叠加第二个文件系统。 先 `mr_fs_umount` 旧挂载，或换一个挂载点。
+目标挂载点已被占用：全局根只能挂载一次，同一目录上不允许叠加第二个文件系统。 先
+`mr_fs_umount` 旧挂载，或换一个挂载点。
 
 **Q：卸载返回 `-MR_EBUSY`？**
 
-该挂载实例仍有打开句柄、在途操作或子挂载。先关闭所有相关句柄，等待在途操作 结束，并按从子到父的顺序卸载。另外挂载点目录本身不能用
+该挂载实例仍有打开句柄、在途操作或子挂载。先关闭所有相关句柄，等待在途操作
+结束，并按从子到父的顺序卸载。另外挂载点目录本身不能用
 `mr_fs_rmdir`/`mr_fs_unlink` 删除。
 
 **Q：文件被 unlink / rename 后，句柄还能用吗？**
 
-能。句柄在打开时固定了 inode 与 dentry 引用，unlink 只移除路径名，rename 只改 名字；数据与读写位置保持到 `mr_fs_close`
+能。句柄在打开时固定了 inode 与 dentry 引用，unlink 只移除路径名，rename 只改
+名字；数据与读写位置保持到 `mr_fs_close`
 为止。句柄仍可通过
 `mr_fs_fstat` 读取 inode 的当前状态。
 
@@ -350,7 +379,8 @@ static void mount_demo(void) {
 **Q：`mr_fs_getcwd` 返回 `-MR_ERANGE` / `-MR_ENOENT`？**
 
 `-MR_ERANGE` 表示缓冲区小于工作目录路径长度（推荐使用
-`MR_CFG_FS_PATH_LEN` 大小的缓冲区）；`-MR_ENOENT` 表示当前工作目录所在挂载已被 卸载，需要先 `mr_fs_chdir` 到有效目录。
+`MR_CFG_FS_PATH_LEN` 大小的缓冲区）；`-MR_ENOENT` 表示当前工作目录所在挂载已被
+卸载，需要先 `mr_fs_chdir` 到有效目录。
 
 ---
 
@@ -379,11 +409,14 @@ VFS 位于路径 API 与具体文件系统之间，由五个对象层组成：
 +------------------+
 ```
 
-- `mr_file_system_t` 是文件系统"类型"（名字 + mount/unmount 回调）， 通过 `mr_file_system_register` 注册到全局链表（
+- `mr_file_system_t` 是文件系统"类型"（名字 + mount/unmount 回调）， 通过
+  `mr_file_system_register` 注册到全局链表（
   `mrX/fs/system.c:18`）。
-- 每次挂载生成一个 `mr_sblock_t` 实例；根挂载"原位"占用全局根 dentry， 子挂载在挂载点 dentry 与"已挂载根" dentry 之间建立
+- 每次挂载生成一个 `mr_sblock_t` 实例；根挂载"原位"占用全局根 dentry， 子挂载在挂载点
+  dentry 与"已挂载根" dentry 之间建立
   `mounted` 覆盖链 （`mrX/fs/sblock.c:195`）。
-- 文件系统结构（root/cwd）由 `mr_fs_struct_t` 持有；单用户模式下是全局静态实例 （`mrX/fs/struct.c:20`），初始化发生在内核初始化序列
+- 文件系统结构（root/cwd）由 `mr_fs_struct_t` 持有；单用户模式下是全局静态实例 （
+  `mrX/fs/struct.c:20`），初始化发生在内核初始化序列
   `mrX/kernel/initcall.c:31`
   调用的 `mr_fs_file_init()`（`mrX/fs/file.c:1897`）。
 
@@ -409,74 +442,100 @@ VFS 位于路径 API 与具体文件系统之间，由五个对象层组成：
 `fops`（`mr_file_ops_t`：open/close/read/write/llseek/ioctl/readdir/fsync）、`priv`。
 
 `mr_file_t`（`mrX/include/mrX/fs/mr_fs_file.h:45`）——打开句柄：`dentry`/`inode`
-（打开时固定的引用）、`fops`（来自 inode）、`pos`（64 位位置）、`flags`（打开 标志）、`priv`（后端私有状态）。
+（打开时固定的引用）、`fops`（来自 inode）、`pos`（64 位位置）、`flags`（打开 标志）、`priv`
+（后端私有状态）。
 
-`mr_sblock_t`（`mrX/include/mrX/fs/mr_fs_sblock.h:38`）——挂载实例：`mnt`（挂载点 dentry）、`root_dentry`（已挂载根 dentry，根挂载时与
-`mnt` 相同）、`root`（根 inode）、`next`（全局超级块链表）、`mount_parent`/`mount_child`/`mount_next`
+`mr_sblock_t`（`mrX/include/mrX/fs/mr_fs_sblock.h:38`）——挂载实例：`mnt`（挂载点
+dentry）、`root_dentry`（已挂载根 dentry，根挂载时与
+`mnt` 相同）、`root`（根 inode）、`next`（全局超级块链表）、`mount_parent`/
+`mount_child`/`mount_next`
 （挂载拓扑）、`type`（所属文件系统）、`dops`（本挂载的 dentry 名字操作）、
 `state`、`move_busy`（rename 串行化标志）、`flags`（挂载标志）、`op_cnt` 与
 `open_cnt`（卸载和介质摘除屏障）、`priv`。
 
-`mr_fs_struct_t`（`mrX/include/mrX/fs/mr_fs_struct.h:26`）——文件系统结构：`root` 与 `cwd` 两个 dentry 指针。单用户实例由 VFS
-初始化；多用户模式下平台提供 current 选择机制并负责各实例初始化。`mr_dirent_t` 与 `mr_stat_t` 是 API 层的值结构（
+`mr_fs_struct_t`（`mrX/include/mrX/fs/mr_fs_struct.h:26`）——文件系统结构：`root` 与
+`cwd` 两个 dentry 指针。单用户实例由 VFS
+初始化；多用户模式下平台提供 current 选择机制并负责各实例初始化。`mr_dirent_t` 与
+`mr_stat_t` 是 API 层的值结构（
 `mrX/include/mrX/fs/mr_fs_inode.h:44,53`）。
 
 ### 10. 核心流程
 
-**路径解析（两级流水）**：`fs_lookup`（`mrX/fs/file.c:114`）先把路径复制到可写 缓冲区并固定文件系统结构快照：绝对路径从
+**路径解析（两级流水）**：`fs_lookup`（`mrX/fs/file.c:114`）先把路径复制到可写
+缓冲区并固定文件系统结构快照：绝对路径从
 `fs_struct->root` 开始，否则从
 `fs_struct->cwd` 开始，同时记录解析上限 `root`。随后逐组件调用
 `mr_dentry_lookup`（`mrX/fs/dentry.c:1202`）。后者先走缓存
 `dentry_path_lookup`（`mrX/fs/dentry.c:979`）：`.`/`..` 由路径组件处理，`..`
 在 `limit`（文件系统结构根）处停住；命中 `mounted` 则进入挂载链。缓存缺失时
-`dentry_fs_lookup`（`mrX/fs/dentry.c`）调用父目录 inode 的 `ops->lookup` 回填。 lookup 填出的 dentry
-把创建引用交给这次查找，树不钉死它；句柄、cwd、未走完的 路径或其子节点仍持有引用时留在树上，最后一次 `put`
-后从父链表摘掉。mkdir / mknod / `O_CREAT` 仍把创建引用留在树上（ramfs/rootfs 的命名空间）。
+`dentry_fs_lookup`（`mrX/fs/dentry.c`）调用父目录 inode 的 `ops->lookup` 回填。
+lookup 填出的 dentry
+把创建引用交给这次查找，树不钉死它；句柄、cwd、未走完的 路径或其子节点仍持有引用时留在树上，最后一次
+`put`
+后从父链表摘掉。mkdir / mknod / `O_CREAT` 仍把创建引用留在树上（ramfs/rootfs
+的命名空间）。
 
 **挂载**：`mr_fs_mount_root`/`mr_fs_mount` 汇合到 `fs_mount_dentry`
 （`mrX/fs/file.c:228`）：查重（已挂载 `-MR_EBUSY`）、校验挂载点为目录，然后
 `mr_sblock_create`（`mrX/fs/sblock.c:113`）分配超级块并调用文件系统的
-`mount` 回调填充 `sb->root`（必须是目录 inode）；mount 回调失败由后端自行清理， mount 成功但根 inode 校验失败则调用
-`unmount` 收尾。子挂载新建一个与挂载点同名的"已挂载根"dentry 并绑 定根 inode；全局根则原位绑定（`mrX/fs/file.c:288`）。
+`mount` 回调填充 `sb->root`（必须是目录 inode）；mount 回调失败由后端自行清理，
+mount 成功但根 inode 校验失败则调用
+`unmount` 收尾。子挂载新建一个与挂载点同名的"已挂载根"dentry 并绑 定根
+inode；全局根则原位绑定（`mrX/fs/file.c:288`）。
 `mr_sblock_attach`
-（`mrX/fs/sblock.c:195`）在文件系统结构锁内把已挂载根接到挂载拓扑 （`mnt->mounted = root`）。
+（`mrX/fs/sblock.c:195`）在文件系统结构锁内把已挂载根接到挂载拓扑 （
+`mnt->mounted = root`）。
 
-**正常卸载**：`mr_fs_umount` 直接调用 `mr_sblock_detach`，在文件系统结构锁内一次性 检查子挂载、`op_cnt` 与 `open_cnt`
+**正常卸载**：`mr_fs_umount` 直接调用 `mr_sblock_detach`，在文件系统结构锁内一次性
+检查子挂载、`op_cnt` 与 `open_cnt`
 ；任一非零均返回 `-MR_EBUSY`，成功则把状态从
 `ACTIVE` 改为 `INACTIVE` 并摘除 `mounted` 覆盖与挂载拓扑。随后
-`fs_purge_children`（`mrX/fs/file.c:396`）后序删除缓存子树，`mr_sblock_del` 摘除全局链表并释放根 inode
+`fs_purge_children`（`mrX/fs/file.c:396`）后序删除缓存子树，`mr_sblock_del`
+摘除全局链表并释放根 inode
 的创建引用。最后一个超级块引用释放时才调用无 I/O、无失败的后端
 `unmount` 回调释放内存资源，不存在准备、回滚或可失败的卸载事务。
 
-**介质移除**：`mr_fs_media_detach` 把目标及全部子挂载永久标记为 `OFFLINE`，阻止新操作并让旧句柄的新操作返回 `-MR_ENODEV`
-；随后按 leaf-first 顺序尝试回收。OFFLINE 状态下 `open_cnt` 不阻止 detach，但 `op_cnt`、move 或子挂载关系仍可能让回收返回
-`-MR_EBUSY`，调用者可重试。摘除阶段不会再执行设备 I/O；super-block 最后引用释放时仍会调用 `unmount`
+**介质移除**：`mr_fs_media_detach` 把目标及全部子挂载永久标记为 `OFFLINE`
+，阻止新操作并让旧句柄的新操作返回 `-MR_ENODEV`
+；随后按 leaf-first 顺序尝试回收。OFFLINE 状态下 `open_cnt` 不阻止 detach，但
+`op_cnt`、move 或子挂载关系仍可能让回收返回
+`-MR_EBUSY`，调用者可重试。摘除阶段不会再执行设备 I/O；super-block 最后引用释放时仍会调用
+`unmount`
 ，因此文件系统实现必须遵守“只做内存清理、设备可能已经离线、不得失败”的契约。
 
-**节点创建**：`fs_create_node_op`（`mrX/fs/file.c:642`）采用"先占位、后提交"：先 在父目录下预留 dentry（`mr_dentry_add`），再调用后端
-`create`/`mknod` 生成 inode，校验类型并将超级块引用转移给 inode，最后 `mr_dentry_instantiate` 提交 绑定；任一步失败回滚预留。
+**节点创建**：`fs_create_node_op`（`mrX/fs/file.c:642`）采用"先占位、后提交"：先
+在父目录下预留 dentry（`mr_dentry_add`），再调用后端
+`create`/`mknod` 生成 inode，校验类型并将超级块引用转移给 inode，最后
+`mr_dentry_instantiate` 提交 绑定；任一步失败回滚预留。
 
-**打开与截断**：`fs_file_open` 先固定 dentry/inode 引用并增加 `open_cnt`，再调用 后端 `open`，最后才执行 `MR_O_TRUNC`
+**打开与截断**：`fs_file_open` 先固定 dentry/inode 引用并增加 `open_cnt`，再调用
+后端 `open`，最后才执行 `MR_O_TRUNC`
 ——保证打开失败绝不丢数据，同时正常卸载 不会越过已打开句柄。
 `MR_O_APPEND` 由可写后端在自身数据锁内把位置重设为 `inode->size`（RamFS 见
 `mr_file_apply_append`）。失败或零长写恢复原位置；VFS 不再预改 `pos`。
 
 ### 11. 并发与中断安全
 
-- 全部文件系统结构数据（dentry 树、超级块链表与拓扑、fs 链表、root/cwd）由同一把 关中断自旋锁保护；API 经 `mr_fs_struct_lock`/
+- 全部文件系统结构数据（dentry 树、超级块链表与拓扑、fs 链表、root/cwd）由同一把
+  关中断自旋锁保护；API 经 `mr_fs_struct_lock`/
   `mr_fs_struct_unlock` 进入临界区， 临界区内只做指针与链表操作。
 - 文件系统回调（mount/unmount/create/lookup/read 等）一律在锁外调用；调用前通过
   `fs_op_enter_by_dentry`/`fs_op_enter_by_file`（`mrX/fs/file.c`）固定超级块并递增
   `op_cnt`，卸载因此无法与回调并发进行。
-- 句柄打开期间持有 dentry/inode 引用；正常 umount 由 `open_cnt` 拒绝，介质摘除 后对象仍由引用保活，直到 close 释放；
+- 句柄打开期间持有 dentry/inode 引用；正常 umount 由 `open_cnt` 拒绝，介质摘除
+  后对象仍由引用保活，直到 close 释放；
   `mr_fs_readdir` 对"挂载点被复用"的句柄 做绑定校验。
 - VFS 不对同一 inode 的数据操作（read/write/truncate 等）做互斥。`MR_O_APPEND`
   是 write 回调的契约：后端必须在自己的数据序列化里选 EOF（RamFS 在节点锁内调用
   `mr_file_apply_append`）。冲突返回 `-MR_EBUSY`，见 [RamFS](ramfs.md) 第 11 节。
-- rename 在锁内固定源父目录快照（`dentry_move_t.old_upper`），后端 `rename` 回调与 提交都以该快照为准，不会在锁外重读
-  `dentry->upper`；`fs_rename_dentry` 同样在锁内 固定源父目录后再做目录类型与 `-MR_EXDEV` 校验。
-- `fs_purge_children` 遇到无法删除的子项（处于 `MOVING`/`UNLINKING`）会立即停止 遍历而不是反复重试同一子项，剩余对象由引用计数保活直到释放。
-- API 设计为线程上下文调用；文件系统结构锁临界区内禁止阻塞或调用文件系统实现回调 （
+- rename 在锁内固定源父目录快照（`dentry_move_t.old_upper`），后端 `rename` 回调与
+  提交都以该快照为准，不会在锁外重读
+  `dentry->upper`；`fs_rename_dentry` 同样在锁内 固定源父目录后再做目录类型与
+  `-MR_EXDEV` 校验。
+- `fs_purge_children` 遇到无法删除的子项（处于 `MOVING`/`UNLINKING`）会立即停止
+  遍历而不是反复重试同一子项，剩余对象由引用计数保活直到释放。
+- API
+  设计为线程上下文调用；文件系统结构锁临界区内禁止阻塞或调用文件系统实现回调 （
   `mrX/include/mrX/fs/mr_fs_struct.h:59-66` 的约定）。
 
 ### 12. 扩展与派生
@@ -484,16 +543,21 @@ VFS 位于路径 API 与具体文件系统之间，由五个对象层组成：
 实现一个新文件系统只需三步（参考 [RamFS](ramfs.md) 源码）：
 
 1. 用 `MR_FILE_SYSTEM_INIT` 定义描述符：名字、`mount`（必选，填充 `sb->root`
-   目录 inode 与可选 `sb->dops`）、`unmount`（可选，在最后一个引用释放后清理 后端内存；不得访问设备、不得失败）。持久化由文件
+   目录 inode 与可选 `sb->dops`）、`unmount`（可选，在最后一个引用释放后清理
+   后端内存；不得访问设备、不得失败）。持久化由文件
    close/fsync 完成。
-2. 实现 `mr_inode_ops_t` 中需要的回调（至少 `create` 或 `mknod` 之一供节点创建； 预缓存型文件系统可不实现 `lookup`）与
+2. 实现 `mr_inode_ops_t` 中需要的回调（至少 `create` 或 `mknod` 之一供节点创建；
+   预缓存型文件系统可不实现 `lookup`）与
    `mr_file_ops_t` 中的读写回调。
 3. 在初始化阶段调用 `mr_file_system_register` 注册（通常通过
    `MR_INIT_EXPORT` 挂到 `MR_INIT_LEVEL_FS`），随后按名字挂载。
 
-dentry 的 `ops->hash`/`ops->compare` 可用于大小写不敏感等名字策略；子 dentry 会继承父的名字操作（`mrX/fs/dentry.c:381-392`
-）。名字是否重复以该比较策略为准： 例如大小写不敏感时，`CaseName` 与 `casename` 是同一名字，第二次创建返回
-`-MR_EEXIST`。inode 的 `ops->destroy` 是后端释放私有资源的收尾钩子 （`mrX/fs/inode.c:84`）。
+dentry 的 `ops->hash`/`ops->compare` 可用于大小写不敏感等名字策略；子 dentry
+会继承父的名字操作（`mrX/fs/dentry.c:381-392`
+）。名字是否重复以该比较策略为准： 例如大小写不敏感时，`CaseName` 与 `casename`
+是同一名字，第二次创建返回
+`-MR_EEXIST`。inode 的 `ops->destroy` 是后端释放私有资源的收尾钩子 （
+`mrX/fs/inode.c:84`）。
 
 #### 12.1 后端开发者 API 导览
 
@@ -511,8 +575,10 @@ dentry 的 `ops->hash`/`ops->compare` 可用于大小写不敏感等名字策略
 | dentry 查询     | `mr_dentry_is_empty`、`mr_dentry_is_root`                        | 检查目录子项及是否为当前全局根                            |
 | inode           | `mr_inode_init/create/get/put`                                   | 初始化、分配和引用 inode                                  |
 
-`mr_dentry_is_root(dentry)` 与 `mr_fs_struct_root()` 的当前返回值比较，判断的是全局根，不是某个子文件系统的挂载根。所有结构级
-API 都需遵守本文第 11 节的锁顺序、引用计数和卸载边界；不应绕过 `mr_fs_*` 用户 API 直接组装业务文件操作。
+`mr_dentry_is_root(dentry)` 与 `mr_fs_struct_root()`
+的当前返回值比较，判断的是全局根，不是某个子文件系统的挂载根。所有结构级
+API 都需遵守本文第 11 节的锁顺序、引用计数和卸载边界；不应绕过 `mr_fs_*` 用户 API
+直接组装业务文件操作。
 
 ### 13. 源码导读
 
@@ -543,7 +609,8 @@ API 都需遵守本文第 11 节的锁顺序、引用计数和卸载边界；不
 | `MR_CFG_FS_INLINE_NAME_LEN` | dentry 内联短名缓冲，默认 8                                         |
 | `MR_O_*` / `MR_SEEK_*`      | 打开标志与定位基准（`mr_fs_file.h:29-42`）                          |
 
-**错误码**（`mrX/include/mrX/libc/mr_errno.h`）：本模块失败返回负数错误码， 常用取值：`-MR_EPERM`(1)、`-MR_ENOENT`(2)、
+**错误码**（`mrX/include/mrX/libc/mr_errno.h`）：本模块失败返回负数错误码， 常用取值：
+`-MR_EPERM`(1)、`-MR_ENOENT`(2)、
 `-MR_EIO`(5)、`-MR_EBADF`(9)、
 `-MR_EAGAIN`(11)、`-MR_ENOMEM`(12)、`-MR_EBUSY`(16)、`-MR_EEXIST`(17)、
 `-MR_EXDEV`(18)、`-MR_ENOTDIR`(20)、`-MR_EISDIR`(21)、`-MR_EINVAL`(22)、

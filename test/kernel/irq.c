@@ -20,7 +20,6 @@ static int disable_count = 0;
 static int unmask_count = 0;
 static int mask_count = 0;
 
-/* Helpers */
 static void test_irq_reset(void) {
     last_priority = 0;
     last_type = 0;
@@ -90,7 +89,6 @@ static mr_irq_return_t test_irq_handler(mr_uint32_t irq, void *owner) {
     return MR_IRQ_HANDLED;
 }
 
-/* Tests */
 MR_TEST(irq, init_del) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -342,7 +340,6 @@ MR_TEST(irq, error_cases) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
 }
 
-/* Test: unregistered irq operations return their documented empty result */
 MR_TEST(irq, unregistered_operations) {
     static int owner;
 
@@ -355,7 +352,6 @@ MR_TEST(irq, unregistered_operations) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_handle(7), MR_IRQ_NONE);
 }
 
-/* Test: repeated enable and disable requests keep the depth within bounds */
 MR_TEST(irq, depth_saturation_without_action) {
     mr_irq_t irq;
     mr_err_t ret;

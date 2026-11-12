@@ -84,8 +84,8 @@ static const mr_driver_clazz_t dd_driver_retry_clazz = MR_DRIVER_CLAZZ_INIT(
 static const mr_driver_clazz_t dd_deep_find_clazz = MR_DRIVER_CLAZZ_INIT(
     "dd_deep_find", dd_driver_init, dd_driver_deinit, dd_driver_release);
 
-MR_DRIVER_INSTALL(dd_deep_find, &dd_deep_find_clazz,
-                  MR_DRIVER_TYPE_RAM, MR_NULL, MR_NULL, MR_NULL, "3.7");
+MR_DRIVER_INSTALL(dd_deep_find, &dd_deep_find_clazz, MR_DRIVER_TYPE_RAM,
+                  MR_NULL, MR_NULL, MR_NULL, "3.7");
 
 MR_TEST(driver, setup_busy_with_manual_lock) {
     mr_driver_t *drv = MR_NULL;
@@ -365,14 +365,12 @@ MR_TEST(adc, event_edge_latch_and_rewait) {
     MR_TEST_EXPECT_EQ_INT(level_count, 0);
 
     MR_TEST_ASSERT_EQ_INT(mr_waiter_init(&level_waiter, dd_adc_waiter_entry,
-                                         &level_count,
-                                         MR_ADC_WAIT_STREAM_HALF),
+                                         &level_count, MR_ADC_WAIT_STREAM_HALF),
                           0);
-    MR_TEST_ASSERT_EQ_INT(mr_waiter_init(&edge_waiter, dd_adc_waiter_entry,
-                                         &edge_count,
-                                         MR_ADC_WAIT_STREAM_HALF
-                                             | MR_WAIT_EDGE),
-                          0);
+    MR_TEST_ASSERT_EQ_INT(
+        mr_waiter_init(&edge_waiter, dd_adc_waiter_entry, &edge_count,
+                       MR_ADC_WAIT_STREAM_HALF | MR_WAIT_EDGE),
+        0);
 
     /* Attaching the same waiter twice must be rejected */
     MR_TEST_EXPECT_EQ_INT(mr_adc_event_attach(drv, &level_waiter), 0);
@@ -986,7 +984,8 @@ MR_TEST(driver, d2_create_type_variants) {
     MR_TEST_EXPECT_EQ_INT((int)mr_driver_type(ram), MR_DRIVER_TYPE_RAM);
     MR_TEST_EXPECT_EQ_INT((int)mr_driver_type(uart), MR_DRIVER_TYPE_UART);
     MR_TEST_EXPECT_EQ_INT(MR_DRIVER_IS_TYPE(i2c, MR_DRIVER_TYPE_I2C), MR_TRUE);
-    MR_TEST_EXPECT_EQ_INT(MR_DRIVER_IS_TYPE(dma, MR_DRIVER_TYPE_GPIO), MR_FALSE);
+    MR_TEST_EXPECT_EQ_INT(MR_DRIVER_IS_TYPE(dma, MR_DRIVER_TYPE_GPIO),
+                          MR_FALSE);
 
     /* Drivers of every type set up and shut down through the same core */
     MR_TEST_EXPECT_EQ_INT(mr_driver_setup(uart), 0);
@@ -1214,8 +1213,9 @@ MR_TEST(adc, d2_event_wrong_type_waiter_never_fires) {
 
     /* A combined raise still wakes it only once */
     MR_TEST_EXPECT_EQ_INT(
-        mr_adc_event_raise(drv, MR_ADC_WAIT_STREAM_HALF
-                                    | MR_ADC_WAIT_STREAM_FULL), 0);
+        mr_adc_event_raise(drv,
+                           MR_ADC_WAIT_STREAM_HALF | MR_ADC_WAIT_STREAM_FULL),
+        0);
     MR_TEST_EXPECT_EQ_INT(count, 2);
 
     mr_waiter_del(&waiter);
@@ -1238,10 +1238,9 @@ MR_TEST(adc, d2_conversion_resolution_bounds) {
     /* Negative raw values pass through with the gain applied, the
        integer division truncates toward zero so small negatives yield 0
        while a full scale negative code maps to the negative reference */
-    MR_TEST_EXPECT_EQ_INT(mr_adc_raw2millivolt(3300, MR_ADC_GAIN_2, 12, -2),
-                          0);
-    MR_TEST_EXPECT_EQ_INT(
-        mr_adc_raw2millivolt(3300, MR_ADC_GAIN_2, 12, -4096), -1650);
+    MR_TEST_EXPECT_EQ_INT(mr_adc_raw2millivolt(3300, MR_ADC_GAIN_2, 12, -2), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_adc_raw2millivolt(3300, MR_ADC_GAIN_2, 12, -4096),
+                          -1650);
 }
 
 #endif /* defined(MR_USE_DRIVER_ADC) */
@@ -1620,9 +1619,9 @@ MR_TEST(gpio, d2_event_attach_boundary_pin) {
     MR_TEST_ASSERT_EQ_INT(mr_driver_setup(drv), 0);
 
     /* The highest existing pin accepts an event attachment */
-    MR_TEST_ASSERT_EQ_INT(
-        mr_waiter_init(&waiter, dd2_gpio_waiter_entry, &dd2_gpio_waiter_count,
-                       MR_WAIT_IN), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_waiter_init(&waiter, dd2_gpio_waiter_entry,
+                                         &dd2_gpio_waiter_count, MR_WAIT_IN),
+                          0);
     MR_TEST_EXPECT_EQ_INT(mr_gpio_event_attach(drv, 31, &waiter), 0);
     MR_TEST_EXPECT_EQ_INT(dd2_gpio_event_attach_count, 1);
     MR_TEST_EXPECT_EQ_UINT(dd2_gpio_last_pin, 31U);
@@ -1654,7 +1653,7 @@ static mr_err_t dd2_ram_probe(const mr_driver_t *drv, mr_ram_info_t *info) {
 }
 
 static mr_ssize_t dd2_ram_write(const mr_driver_t *drv, mr_uint64_t offset,
-                                 const mr_uint8_t *buf, mr_size_t size) {
+                                const mr_uint8_t *buf, mr_size_t size) {
     MR_IGNORE(drv);
     dd2_ram_write_count++;
     mr_memcpy(&dd2_ram_store[(mr_size_t)offset], buf, size);

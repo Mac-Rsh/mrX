@@ -1,0 +1,22 @@
+menu "ETH: Ethernet"
+
+# ==================================
+# ETH
+# ==================================
+config MR_USE_DRIVER_ETH
+    depends on MR_USE_DRIVER
+    bool "Use Ethernet"
+    default n
+    help
+        Enable the Ethernet driver framework.
+        Provides frame receive and transmit, link status and port configuration.
+
+config MR_USE_DRIVER_ETH_STREAM
+    depends on MR_USE_DRIVER_ETH
+    bool "Use Ethernet stream"
+    default y
+    help
+        Enable independent receive and transmit streams with per-frame
+        submission. The backend returns accepted frames via Wait notifications.
+
+endmenu

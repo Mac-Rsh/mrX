@@ -15,10 +15,12 @@
 
 ### 1. 模块概述
 
-DMA 公共层描述控制器通道、搬运配置和传输操作。SoC backend 负责寄存器、请求路由、可达内存范围、cache 一致性与硬件限制；ADC、UART、DAC
+DMA 公共层描述控制器通道、搬运配置和传输操作。SoC backend 负责寄存器、请求路由、可达内存范围、cache
+一致性与硬件限制；ADC、UART、DAC
 等外设适配层则把外设数据寄存器和应用缓冲区组装成传输描述符。
 
-当前公共接口不提供通道 claim/release，也不创建公共 waitable。固定通道分配、请求/trigger 映射及事件对象归 backend 和平台集成管理。
+当前公共接口不提供通道 claim/release，也不创建公共 waitable。固定通道分配、请求/trigger
+映射及事件对象归 backend 和平台集成管理。
 
 ### 2. 配置与依赖
 
@@ -27,12 +29,14 @@ DMA 公共层描述控制器通道、搬运配置和传输操作。SoC backend �
 | `MR_USE_DRIVER`     | n    | 驱动框架总开关 |
 | `MR_USE_DRIVER_DMA` | n    | DMA 公共层开关 |
 
-`mr_dma_data_t.exist_mask` 为 64 位通道存在掩码：bit n 为 1 表示通道 n 存在，因此公共通道号范围为 0–63。公共操作对越界或不存在通道返回
+`mr_dma_data_t.exist_mask` 为 64 位通道存在掩码：bit n 为 1 表示通道 n
+存在，因此公共通道号范围为 0–63。公共操作对越界或不存在通道返回
 `-MR_EINVAL`。
 
 ### 3. 快速上手
 
-下例演示一次内存到外设的搬运。`count` 的确切单位和寄存器地址约束需以目标 backend 文档为准：
+下例演示一次内存到外设的搬运。`count` 的确切单位和寄存器地址约束需以目标 backend
+文档为准：
 
 ```c
 #include <mrX/drivers/dma/mr_dma.h>
@@ -66,22 +70,29 @@ static mr_err_t dma_send(mr_driver_t *dma, mr_uint32_t channel,
 }
 ```
 
-使用前应先完成 `mr_driver_setup()`。`transfer` 指向调用方持有的描述符；描述符、源缓冲和目标区域在传输期间必须保持有效，直到成功停止并确认
+使用前应先完成 `mr_driver_setup()`。`transfer`
+指向调用方持有的描述符；描述符、源缓冲和目标区域在传输期间必须保持有效，直到成功停止并确认
 backend 不再访问它们；不要把函数局部栈对象传入异步传输。删除驱动前由调用方停止所有通道。
 
 ### 4. 配置、传输与事件
 
-`mr_dma_config_t` 描述源/目标宽度、地址调整、burst 及传输方向。宽度支持 8/16/32/64 位，地址可递增、递减或固定，burst 枚举覆盖
+`mr_dma_config_t` 描述源/目标宽度、地址调整、burst 及传输方向。宽度支持 8/16/32/64
+位，地址可递增、递减或固定，burst 枚举覆盖
 1–256，方向为 P2M、M2P 或 M2M。公共层不校验枚举组合是否可由硬件实现。
 
-外部 trigger 不属于单次软件传输参数。需要由 DRDY、定时器 TRGO 等硬件事件控制节奏时，平台应把 trigger source、极性和粒度静态绑定到
-DMA channel；应用仍使用同一组 `mr_dma_configure/start/stop` 接口。具体绑定格式和可用 trigger 由目标 backend 规定。
+外部 trigger 不属于单次软件传输参数。需要由 DRDY、定时器 TRGO 等硬件事件控制节奏时，平台应把
+trigger source、极性和粒度静态绑定到
+DMA channel；应用仍使用同一组 `mr_dma_configure/start/stop` 接口。具体绑定格式和可用
+trigger 由目标 backend 规定。
 
-`mr_dma_transfer_t` 含 `next`、`count`、`src`、`dst`。公共层只校验首个描述符及其 `count/src/dst`，不遍历 `next`
-，也不复制描述符或缓冲区。链式描述符是否支持、`count` 映射为字节还是元素、对齐和生命期都由 backend 定义；`mr_dma_offset`
+`mr_dma_transfer_t` 含 `next`、`count`、`src`、`dst`。公共层只校验首个描述符及其
+`count/src/dst`，不遍历 `next`
+，也不复制描述符或缓冲区。链式描述符是否支持、`count` 映射为字节还是元素、对齐和生命期都由
+backend 定义；`mr_dma_offset`
 的公共输出统一为字节进度。
 
-事件位为 `MR_DMA_WAIT_HALF`、`MR_DMA_WAIT_DONE`、`MR_DMA_WAIT_ERROR`。`event_attach` 订阅 backend 提供的事件对象，
+事件位为 `MR_DMA_WAIT_HALF`、`MR_DMA_WAIT_DONE`、`MR_DMA_WAIT_ERROR`。
+`event_attach` 订阅 backend 提供的事件对象，
 `event_enable/disable` 只控制来源；公共层不校验 mask、不生成事件。
 
 ### 5. API 参考
@@ -111,10 +122,13 @@ mr_err_t mr_dma_offset(mr_driver_t *drv, mr_uint32_t channel,
                        mr_size_t *offset);
 ```
 
-上述 API 成功返回 0，失败返回负错误码。通道不存在固定返回 `-MR_EINVAL`；其他错误由 backend 透传。事件回调未实现时返回
-`-MR_ENOSYS`。空指针、错误驱动类型、空传输描述符和零 `count` 等前置条件由 `MR_ASSERT` 约束。
+上述 API 成功返回 0，失败返回负错误码。通道不存在固定返回 `-MR_EINVAL`；其他错误由
+backend 透传。事件回调未实现时返回
+`-MR_ENOSYS`。空指针、错误驱动类型、空传输描述符和零 `count` 等前置条件由
+`MR_ASSERT` 约束。
 
-HardTree 为上述通道 API 提供同名 `mr_ht_dma_*` 包装，`mr_ht_dma_spec_t` 只保存驱动和通道号，不表示独占权。
+HardTree 为上述通道 API 提供同名 `mr_ht_dma_*` 包装，`mr_ht_dma_spec_t`
+只保存驱动和通道号，不表示独占权。
 
 ### 6. 事件示例
 
@@ -143,7 +157,8 @@ static mr_err_t dma_events_start(mr_driver_t *dma, mr_uint32_t channel) {
 
 **`mr_dma_start` 成功后能否立即复用 descriptor 或 buffer？**
 
-不能由公共层保证。真实 DMA 往往在返回后继续异步访问它们，必须遵守目标 backend 的生命期和 cache 约定。
+不能由公共层保证。真实 DMA 往往在返回后继续异步访问它们，必须遵守目标 backend
+的生命期和 cache 约定。
 
 **为什么事件 API 返回 `-MR_ENOSYS`？**
 
@@ -172,22 +187,27 @@ DMA 公共层（类型、通道存在性、生命周期）
 mr_dma_ops_t backend（路由、寄存器、IRQ、cache）
 ```
 
-DMA clazz 不实现 init/deinit，只在动态驱动最终释放时回收 `mr_dma_data_t`。公共层不保存通道配置、忙状态或传输描述符。
+DMA clazz 不实现 init/deinit，只在动态驱动最终释放时回收 `mr_dma_data_t`
+。公共层不保存通道配置、忙状态或传输描述符。
 
 ### 9. 数据结构与核心流程
 
-`mr_dma_ops_t` 的 `channel_configure`、`channel_configuration`、`start`、`stop`、`is_busy`、`offset` 是基础能力，公共 API
+`mr_dma_ops_t` 的 `channel_configure`、`channel_configuration`、`start`、`stop`、
+`is_busy`、`offset` 是基础能力，公共 API
 直接断言它们存在；`event_attach` 和 `event_control` 是可选能力。
 
-`mr_dma_configure/configuration` 在 `mrX/drivers/dma/dma.c` 中实现，先校验驱动类型和通道存在性，再透传至 backend。其他通道
+`mr_dma_configure/configuration` 在 `mrX/drivers/dma/dma.c`
+中实现，先校验驱动类型和通道存在性，再透传至 backend。其他通道
 API 在头文件中内联实现，采用同样的检查顺序。
 
 ### 10. 并发与中断安全
 
 - DMA 公共层不添加锁，同一通道的配置、启停与查询是否可并发由 backend 决定。
-- waiter 的触发上下文由 backend 的 IRQ/轮询设计决定，回调不因为通过 DMA API 挂接就自动获得可阻塞性。
+- waiter 的触发上下文由 backend 的 IRQ/轮询设计决定，回调不因为通过 DMA API
+  挂接就自动获得可阻塞性。
 - 删除或重新配置前，平台需确认硬件已停止访问 descriptor 和 buffer。
-- cache clean/invalidate 时机和对齐由 backend 处理，详见 [DMA 驱动移植指南](porting.md)。
+- cache clean/invalidate 时机和对齐由 backend
+  处理，详见 [DMA 驱动移植指南](porting.md)。
 
 ### 11. 扩展与源码导读
 
@@ -197,6 +217,6 @@ API 在头文件中内联实现，采用同样的检查顺序。
 | `mrX/drivers/dma/dma.c`                          | 配置/读回分发与 clazz                 |
 | `mrX/include/mrX/drivers/dma/Kconfig`            | DMA 功能开关                          |
 | `mrX/test/drivers/dma/dma.c`                     | 公共层通道、事件和错误路径约束        |
-| `mrX/arch/st/stm32h5/platform/drivers/dma/dma.c` | STM32H5 GPDMA 参考 backend            |
 
-实现新 backend 时还必须明确通道号与硬件实例映射、请求路由、`count` 单位、descriptor 寿命、stop 后硬件状态、offset 语义和事件上下文。
+实现新 backend 时还必须明确通道号与硬件实例映射、请求路由、`count` 单位、descriptor
+寿命、stop 后硬件状态、offset 语义和事件上下文。

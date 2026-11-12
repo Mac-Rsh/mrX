@@ -1,12 +1,13 @@
 # MCP3008 ADC
 
-复用 [ADC API](adc.md)，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
+复用 [ADC API](adc.md)
+，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
 
-| 项目 | 说明 |
-|---|---|
-| 功能宏 | `MR_USE_DRIVER_ADC`，及对应的 `MR_USE_DRIVER_SPI` |
-| 头文件 | `<mrX/drivers/adc/mr_adc.h>` |
-| 依赖模块 | SPI、Driver；仅 HardTree 有实例时编译 |
+| 项目     | 说明                                              |
+|----------|---------------------------------------------------|
+| 功能宏   | `MR_USE_DRIVER_ADC`，及对应的 `MR_USE_DRIVER_SPI` |
+| 头文件   | `<mrX/drivers/adc/mr_adc.h>`                      |
+| 依赖模块 | SPI、Driver；仅 HardTree 有实例时编译             |
 
 ## 用户指南
 
@@ -28,7 +29,7 @@ SPI 请求 1 MHz、mode 0、8 位、MSB first，每样本保持 CS 连续低电�
 
 通道 0..7 默认单端；只支持 `MR_ADC_REF_EXTERNAL_0` 和 `MR_ADC_GAIN_1`。
 支持 `MR_ADC_DIFF_DIFF`，通道 n 对应 CHn 为正端、
-CH(n xor 1) 为负端，即 0/1、2/3、4/5、6/7 的两个方向。
+CH (n xor 1) 为负端，即 0/1、2/3、4/5、6/7 的两个方向。
 这是单极性伪差分转换，负差值饱和为 0，结果不是有符号 ADC 值。
 
 `resolution` 必须是 10，`oversample` 必须是 0。

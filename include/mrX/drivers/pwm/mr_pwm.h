@@ -123,7 +123,7 @@ typedef struct mr_pwm_state {
     mr_uint32_t fault_mask;
 } mr_pwm_state_t;
 
-/* PWM event payload type */
+/* PWM event data type */
 typedef struct mr_pwm_event_data {
     mr_uint32_t channel_mask;
     mr_uint32_t fault_mask;

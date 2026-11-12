@@ -12,9 +12,8 @@
 #include <mrX/kernel/mr_irq.h>
 
 /* Helpers */
-#define DEEP_IRQ_MAX_OWNERS            (4)
+#define DEEP_IRQ_MAX_OWNERS (4)
 
-/* Owners are encoded as (id + 1) so a handler can decode its index */
 static void *deep_irq_owner(int id) {
     return (void *)((mr_intptr_t)(id + 1));
 }
@@ -159,7 +158,6 @@ static mr_irq_return_t deep_irq_defer_entry(mr_uint32_t irq, void *owner) {
     return MR_IRQ_HANDLED;
 }
 
-/* Handler that triggers one nested handle of the same irq */
 static mr_irq_return_t deep_irq_handler_nested(mr_uint32_t irq, void *owner) {
     MR_IGNORE(owner);
     deep_irq_nested_depth++;
@@ -169,7 +167,6 @@ static mr_irq_return_t deep_irq_handler_nested(mr_uint32_t irq, void *owner) {
     return MR_IRQ_HANDLED;
 }
 
-/* Handler that deletes its own irq controller */
 static mr_irq_return_t deep_irq_handler_del(mr_uint32_t irq, void *owner) {
     MR_IGNORE(irq);
     MR_IGNORE(owner);
@@ -178,9 +175,6 @@ static mr_irq_return_t deep_irq_handler_del(mr_uint32_t irq, void *owner) {
     return MR_IRQ_HANDLED;
 }
 
-/* Tests */
-
-/* Test: the first and last irq numbers of the table are fully usable */
 MR_TEST(irq, deep_boundary_numbers) {
     mr_irq_t irq0;
     mr_irq_t irq15;
@@ -212,7 +206,6 @@ MR_TEST(irq, deep_boundary_numbers) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq15), 0);
 }
 
-/* Test: a failed overlapping range insert leaves untouched numbers free */
 MR_TEST(irq, deep_range_insert_rollback) {
     mr_irq_t irq_a;
     mr_irq_t irq_b;
@@ -242,7 +235,6 @@ MR_TEST(irq, deep_range_insert_rollback) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq_b), 0);
 }
 
-/* Test: duplicate owner is rejected and a busy line rejects new owners */
 MR_TEST(irq, deep_double_request_and_busy) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -272,8 +264,6 @@ MR_TEST(irq, deep_double_request_and_busy) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq), 0);
 }
 
-/* Test: the first request resets priority to default and later shared
- * requests keep a custom priority */
 MR_TEST(irq, deep_priority_default_and_persist) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -289,7 +279,8 @@ MR_TEST(irq, deep_priority_default_and_persist) {
     /* The first request installs the default priority again */
     MR_TEST_ASSERT_EQ_INT(mr_irq_request(11, deep_irq_handler_none,
                                          deep_irq_owner(0),
-                                         MR_IRQ_SHARED | MR_IRQ_LEVEL_HIGH), 0);
+                                         MR_IRQ_SHARED | MR_IRQ_LEVEL_HIGH),
+                          0);
     MR_TEST_ASSERT_EQ_INT(mr_irq_priority(11), 0);
     MR_TEST_ASSERT_EQ_INT(deep_irq_last_priority, 0);
 
@@ -297,7 +288,8 @@ MR_TEST(irq, deep_priority_default_and_persist) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_priority_set(11, 7), 0);
     MR_TEST_ASSERT_EQ_INT(mr_irq_request(11, deep_irq_handler_none,
                                          deep_irq_owner(1),
-                                         MR_IRQ_SHARED | MR_IRQ_LEVEL_HIGH), 0);
+                                         MR_IRQ_SHARED | MR_IRQ_LEVEL_HIGH),
+                          0);
     MR_TEST_ASSERT_EQ_INT(mr_irq_priority(11), 7);
 
     MR_TEST_ASSERT_EQ_INT(mr_irq_free(11, deep_irq_owner(0)), 0);
@@ -305,7 +297,6 @@ MR_TEST(irq, deep_priority_default_and_persist) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq), 0);
 }
 
-/* Test: freeing the last action rearms the line type on the next request */
 MR_TEST(irq, deep_type_rearm_after_free) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -332,7 +323,6 @@ MR_TEST(irq, deep_type_rearm_after_free) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq), 0);
 }
 
-/* Test: a handled return stops the shared chain, none runs all actions */
 MR_TEST(irq, deep_handle_shared_shortcut) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -374,7 +364,6 @@ MR_TEST(irq, deep_handle_shared_shortcut) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq), 0);
 }
 
-/* Test: a disabled line still delivers on handle and stays masked */
 MR_TEST(irq, deep_handle_mask_depth) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -413,8 +402,6 @@ MR_TEST(irq, deep_handle_mask_depth) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq), 0);
 }
 
-/* Test: repeated deferred edges before one execution coalesce into a
- * single defer run and requeue cleanly afterwards */
 MR_TEST(irq, deep_defer_edge_coalesce) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -452,7 +439,6 @@ MR_TEST(irq, deep_defer_edge_coalesce) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq), 0);
 }
 
-/* Test: a plain request treats a deferred return as handled */
 MR_TEST(irq, deep_deferred_without_defer_entry) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -475,7 +461,6 @@ MR_TEST(irq, deep_deferred_without_defer_entry) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq), 0);
 }
 
-/* Test: a handler may trigger one nested handle of the same line */
 MR_TEST(irq, deep_nested_handle_same_line) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -500,8 +485,6 @@ MR_TEST(irq, deep_nested_handle_same_line) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq), 0);
 }
 
-/* Test: deleting the irq from within its own handler must not corrupt the
- * pending action bookkeeping */
 MR_TEST(irq, deep_del_from_own_handler) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -530,8 +513,6 @@ MR_TEST(irq, deep_del_from_own_handler) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_free(6, deep_irq_owner(0)), -MR_ENOENT);
 }
 
-/* Test: freeing a middle shared action keeps the remaining ones working
- * and only the last free disables the line */
 MR_TEST(irq, deep_free_middle_shared_depth) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -543,13 +524,16 @@ MR_TEST(irq, deep_free_middle_shared_depth) {
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     MR_TEST_ASSERT_EQ_INT(mr_irq_request(3, deep_irq_handler_none,
                                          deep_irq_owner(0),
-                                         MR_IRQ_SHARED | MR_IRQ_LEVEL_HIGH), 0);
+                                         MR_IRQ_SHARED | MR_IRQ_LEVEL_HIGH),
+                          0);
     MR_TEST_ASSERT_EQ_INT(mr_irq_request(3, deep_irq_handler_none,
                                          deep_irq_owner(1),
-                                         MR_IRQ_SHARED | MR_IRQ_LEVEL_HIGH), 0);
+                                         MR_IRQ_SHARED | MR_IRQ_LEVEL_HIGH),
+                          0);
     MR_TEST_ASSERT_EQ_INT(mr_irq_request(3, deep_irq_handler_none,
                                          deep_irq_owner(2),
-                                         MR_IRQ_SHARED | MR_IRQ_LEVEL_HIGH), 0);
+                                         MR_IRQ_SHARED | MR_IRQ_LEVEL_HIGH),
+                          0);
 
     /* No disable happens while valid owners remain */
     MR_TEST_ASSERT_EQ_INT(deep_irq_disable_count, 0);
@@ -577,8 +561,6 @@ MR_TEST(irq, deep_free_middle_shared_depth) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq), 0);
 }
 
-/* Test: enable and disable calls without any request still balance the
- * hardware operations */
 MR_TEST(irq, deep_enable_disable_without_action) {
     mr_irq_t irq;
     mr_err_t ret;
@@ -617,8 +599,6 @@ MR_TEST(irq, deep_enable_disable_without_action) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_del(&irq), 0);
 }
 
-/* Test: a dynamic controller spanning the last numbers of the table works
- * across its whole range */
 MR_TEST(irq, deep_dynamic_range_upper_boundary) {
     mr_irq_t *irq;
 
@@ -632,7 +612,8 @@ MR_TEST(irq, deep_dynamic_range_upper_boundary) {
                                          deep_irq_owner(0), MR_IRQ_EDGE_RISING),
                           0);
     MR_TEST_ASSERT_EQ_INT(mr_irq_request(15, deep_irq_handler_handled,
-                                         deep_irq_owner(1), MR_IRQ_EDGE_FALLING),
+                                         deep_irq_owner(1),
+                                         MR_IRQ_EDGE_FALLING),
                           0);
 
     MR_TEST_ASSERT_EQ_INT(mr_irq_handle(14), MR_IRQ_HANDLED);

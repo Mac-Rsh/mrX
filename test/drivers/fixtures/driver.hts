@@ -1,0 +1,37 @@
+/dts-v1/;
+
+/ {
+    driver-test {
+        driver_test_auto: driver-test-auto@12 {
+            compatible = "test,driver-core";
+            status = "okay";
+            test-value = <7>;
+            test-values = <3 5>, <8 13>;
+        };
+
+        driver_test_defer: driver-test-defer {
+            compatible = "test,driver-core";
+            status = "defer";
+        };
+
+        driver_test_disabled: driver-test-disabled {
+            compatible = "test,driver-core";
+            status = "disabled";
+        };
+
+        spi_test: driver-test-spi {
+            compatible = "test,driver-spi";
+            status = "defer";
+            specs = <&spi_test 3>, <&spi_test 7>;
+        };
+
+        pwm_test: driver-test-pwm {
+            compatible = "test,driver-pwm";
+            status = "defer";
+            channel-mask = <5>;
+            comp-mask = <4>;
+            fault-mask = <2>;
+            specs = <&pwm_test 0>, <&pwm_test 2>;
+        };
+    };
+};

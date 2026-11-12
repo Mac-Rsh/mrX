@@ -192,7 +192,6 @@ mr_err_t mr_i2c_configuration(mr_driver_t *drv, mr_i2c_config_t *config);
 MR_INLINE mr_ssize_t mr_i2c_transfer(mr_driver_t *drv, const mr_i2c_msg_t *msgs,
                                      mr_size_t num) {
     const mr_i2c_ops_t *i2c_ops;
-    mr_size_t i;
 
     /* Check parameter */
     MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_I2C);

@@ -98,6 +98,9 @@
 #if defined(MR_USE_DRIVER_FLASH)
 #include <mrX/drivers/flash/mr_flash.h>
 #endif /* defined(MR_USE_DRIVER_FLASH) */
+#if defined(MR_USE_DRIVER_ETH)
+#include <mrX/drivers/eth/mr_eth.h>
+#endif /* defined(MR_USE_DRIVER_ETH) */
 #endif /* defined(MR_USE_DRIVER) */
 
 /** @} */

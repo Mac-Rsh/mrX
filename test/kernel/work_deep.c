@@ -52,7 +52,6 @@ static void deep_work_entry(struct mr_work *work, void *param) {
     deep_work_record(arg->ctx, arg->id);
 }
 
-/* Entry that cancels another pending work of the same batch while running */
 static void deep_work_cancel_sibling_entry(struct mr_work *work, void *param) {
     deep_work_arg_t *arg = param;
     deep_work_ctx_t *ctx = arg->ctx;
@@ -65,7 +64,6 @@ static void deep_work_cancel_sibling_entry(struct mr_work *work, void *param) {
     }
 }
 
-/* Entry that deletes another pending work of the same batch while running */
 static void deep_work_del_sibling_entry(struct mr_work *work, void *param) {
     deep_work_arg_t *arg = param;
     deep_work_ctx_t *ctx = arg->ctx;
@@ -78,7 +76,6 @@ static void deep_work_del_sibling_entry(struct mr_work *work, void *param) {
     }
 }
 
-/* Entry that resubmits itself until a limit is reached */
 static void deep_work_resubmit_entry(struct mr_work *work, void *param) {
     deep_work_arg_t *arg = param;
     deep_work_ctx_t *ctx = arg->ctx;
@@ -89,7 +86,6 @@ static void deep_work_resubmit_entry(struct mr_work *work, void *param) {
     }
 }
 
-/* Entry that deletes its own static work object while running */
 static void deep_work_self_del_entry(struct mr_work *work, void *param) {
     deep_work_arg_t *arg = param;
     deep_work_ctx_t *ctx = arg->ctx;
@@ -117,9 +113,6 @@ static void deep_work_reset(deep_work_ctx_t *ctx) {
     }
 }
 
-/* Tests */
-
-/* Test: one execute drains a multi work batch in submit order */
 MR_TEST(work, deep_batch_fifo_order) {
     deep_work_ctx_t ctx;
     deep_work_arg_t args[4];
@@ -168,7 +161,6 @@ MR_TEST(work, deep_batch_fifo_order) {
     MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(&queue), 0);
 }
 
-/* Test: a running work can cancel a not yet run work of the same batch */
 MR_TEST(work, deep_cancel_sibling_from_work) {
     deep_work_ctx_t ctx;
     deep_work_arg_t args[3];
@@ -218,7 +210,6 @@ MR_TEST(work, deep_cancel_sibling_from_work) {
     MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(&queue), 0);
 }
 
-/* Test: a running work can delete a not yet run static work of the batch */
 MR_TEST(work, deep_del_sibling_from_work) {
     deep_work_ctx_t ctx;
     deep_work_arg_t args[2];
@@ -257,7 +248,6 @@ MR_TEST(work, deep_del_sibling_from_work) {
     MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(&queue), 0);
 }
 
-/* Test: a work may resubmit itself from within its own entry */
 MR_TEST(work, deep_self_resubmit_from_work) {
     deep_work_ctx_t ctx;
     deep_work_arg_t arg;
@@ -304,7 +294,6 @@ MR_TEST(work, deep_self_resubmit_from_work) {
     MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(&queue), 0);
 }
 
-/* Test: a static work may delete itself from within its own entry */
 MR_TEST(work, deep_self_del_from_work) {
     deep_work_ctx_t ctx;
     deep_work_arg_t arg;
@@ -334,7 +323,6 @@ MR_TEST(work, deep_self_del_from_work) {
     MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(&queue), 0);
 }
 
-/* Test: submitting an idle work to another queue moves its binding */
 MR_TEST(work, deep_rebind_second_queue) {
     deep_work_ctx_t ctx;
     deep_work_arg_t arg;
@@ -380,7 +368,6 @@ MR_TEST(work, deep_rebind_second_queue) {
     MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(&queue2), 0);
 }
 
-/* Test: delayed works sharing one deadline fire in submit order */
 MR_TEST(work, deep_delayed_fifo_same_tick) {
     deep_work_ctx_t ctx;
     deep_work_arg_t args[3];
@@ -421,8 +408,6 @@ MR_TEST(work, deep_delayed_fifo_same_tick) {
     MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(&queue), 0);
 }
 
-/* Test: delayed works fire exactly on their own deadlines when inserted
- * out of order */
 MR_TEST(work, deep_delayed_out_of_order_deadlines) {
     deep_work_ctx_t ctx;
     deep_work_arg_t args[3];
@@ -473,8 +458,6 @@ MR_TEST(work, deep_delayed_out_of_order_deadlines) {
     MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(&queue), 0);
 }
 
-/* Test: a cancelled delayed work leaves the timer rearmable and never
- * fires stale submissions */
 MR_TEST(work, deep_delayed_cancel_rearm) {
     deep_work_ctx_t ctx;
     deep_work_arg_t args[2];
@@ -522,8 +505,6 @@ MR_TEST(work, deep_delayed_cancel_rearm) {
     MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(&queue), 0);
 }
 
-/* Test: a zero delay schedule is immediate and mixes with the running
- * batch in submit order */
 MR_TEST(work, deep_delayed_zero_mixes_with_batch) {
     deep_work_ctx_t ctx;
     deep_work_arg_t args[2];
@@ -567,8 +548,6 @@ MR_TEST(work, deep_delayed_zero_mixes_with_batch) {
     MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(&queue), 0);
 }
 
-/* Test: a work of a deleted queue reports no entry until rebound and the
- * static queue can be reinitialized */
 MR_TEST(work, deep_queue_reinit_and_rebind) {
     deep_work_ctx_t ctx;
     deep_work_arg_t arg;
@@ -649,7 +628,6 @@ static void *deep_work_mt_producer(void *argument) {
     return MR_NULL;
 }
 
-/* Test: concurrent producers never lose or duplicate queued works */
 MR_TEST(work, deep_concurrent_submit) {
     deep_work_mt_arg_t mt_args[DEEP_WORK_MT_THREADS];
     pthread_t threads[DEEP_WORK_MT_THREADS];

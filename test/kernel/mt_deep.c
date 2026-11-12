@@ -17,23 +17,23 @@
 #include <pthread.h>
 
 /* Multi-thread test thread count definition */
-#define MT_THREADS                         (4)
+#define MT_THREADS (4)
 
 /* Multi-thread test iteration count definition */
-#define MT_ITERS                           (200)
+#define MT_ITERS (200)
 
 /* Multi-thread test per-push retry limit definition */
-#define MT_PUSH_RETRY                      (1000)
+#define MT_PUSH_RETRY (1000)
 
 /* Multi-thread test spin safety limit definition */
-#define MT_SPIN_LIMIT                      (2000000)
+#define MT_SPIN_LIMIT (2000000)
 
 /* Fifo test tag encoding definition */
-#define MT_FIFO_TAG(_pid, _seq)            (((mr_uint32_t)(_pid) << 16) | \
-                                            (mr_uint32_t)(_seq))
+#define MT_FIFO_TAG(_pid, _seq)                                                \
+    (((mr_uint32_t)(_pid) << 16) | (mr_uint32_t)(_seq))
 
 /* Fifo test tag slot number definition */
-#define MT_FIFO_SLOTS                      (MT_THREADS * MT_ITERS)
+#define MT_FIFO_SLOTS (MT_THREADS * MT_ITERS)
 
 /* Multi-thread fifo context type */
 typedef struct mt_fifo_ctx {
@@ -92,7 +92,6 @@ typedef struct mt_spin_arg {
     int count;
 } mt_spin_arg_t;
 
-/* Helper: records a popped tag for loss and duplication detection */
 static void mt_fifo_record(mt_fifo_ctx_t *ctx, mr_uint32_t tag) {
     mr_uint32_t producer = tag >> 16;
     mr_uint32_t sequence = tag & 0xffffU;
@@ -112,7 +111,6 @@ static void mt_fifo_record(mt_fifo_ctx_t *ctx, mr_uint32_t tag) {
     }
 }
 
-/* Helper: counts duplicated tags after a drain */
 static int mt_fifo_dup_count(mt_fifo_ctx_t *ctx) {
     int dups = 0;
     mr_uint32_t i;
@@ -125,7 +123,6 @@ static int mt_fifo_dup_count(mt_fifo_ctx_t *ctx) {
     return dups;
 }
 
-/* Fifo worker: pushes tagged elements with bounded retry on full */
 static void *mt_fifo_producer(void *argument) {
     mt_fifo_arg_t *arg = argument;
     mt_fifo_ctx_t *ctx = arg->ctx;
@@ -154,7 +151,6 @@ static void *mt_fifo_producer(void *argument) {
     return MR_NULL;
 }
 
-/* Fifo worker: pops until empty and all producers are done(bounded) */
 static void *mt_fifo_consumer(void *argument) {
     mt_fifo_arg_t *arg = argument;
     mt_fifo_ctx_t *ctx = arg->ctx;
@@ -170,7 +166,7 @@ static void *mt_fifo_consumer(void *argument) {
         mr_spinlock_lock(&ctx->consumer_lock);
         popped = mr_fifo_pop(&ctx->fifo, &tag);
         done = (mr_atomic_load(&ctx->producers_done) == ctx->producers)
-               && mr_fifo_is_empty(&ctx->fifo);
+            && mr_fifo_is_empty(&ctx->fifo);
         if (popped != 0) {
             mt_fifo_record(ctx, tag);
         }
@@ -187,7 +183,6 @@ static void *mt_fifo_consumer(void *argument) {
     return MR_NULL;
 }
 
-/* Test: externally serialized MPSC push must preserve every element */
 MR_TEST(fifo, mt_mpsc_push) {
     mt_fifo_arg_t args[MT_THREADS];
     mt_fifo_arg_t carg[2];
@@ -202,8 +197,8 @@ MR_TEST(fifo, mt_mpsc_push) {
     mr_spinlock_init(&ctx.consumer_lock);
     ctx.producers = MT_THREADS;
     ctx.consumers = 1;
-    MR_TEST_ASSERT_EQ_UINT(mr_fifo_init(&ctx.fifo, buf, sizeof(buf),
-                                        sizeof(mr_uint32_t)), 16);
+    MR_TEST_ASSERT_EQ_UINT(
+        mr_fifo_init(&ctx.fifo, buf, sizeof(buf), sizeof(mr_uint32_t)), 16);
 
     for (i = 0; i < MT_THREADS; i++) {
         args[i].thread.started = 0;
@@ -211,7 +206,8 @@ MR_TEST(fifo, mt_mpsc_push) {
         args[i].ctx = &ctx;
         args[i].count = MT_ITERS;
         if (pthread_create(&args[i].thread.handle, MR_NULL, mt_fifo_producer,
-                           &args[i]) != 0) {
+                           &args[i])
+            != 0) {
             break;
         }
         args[i].thread.started = 1;
@@ -224,7 +220,8 @@ MR_TEST(fifo, mt_mpsc_push) {
         carg[i].ctx = &ctx;
         carg[i].count = 0;
         if (pthread_create(&carg[i].thread.handle, MR_NULL, mt_fifo_consumer,
-                           &carg[i]) == 0) {
+                           &carg[i])
+            == 0) {
             carg[i].thread.started = 1;
             ccreated++;
         }
@@ -246,7 +243,6 @@ MR_TEST(fifo, mt_mpsc_push) {
     MR_TEST_EXPECT_EQ_INT(mt_fifo_dup_count(&ctx), 0);
 }
 
-/* Test: externally serialized SPMC pop must preserve every element */
 MR_TEST(fifo, mt_spmc_pop) {
     mt_fifo_arg_t carg[MT_THREADS];
     mt_fifo_ctx_t ctx;
@@ -260,8 +256,8 @@ MR_TEST(fifo, mt_spmc_pop) {
     mr_spinlock_init(&ctx.consumer_lock);
     ctx.producers = 1;
     ctx.consumers = MT_THREADS;
-    MR_TEST_ASSERT_EQ_UINT(mr_fifo_init(&ctx.fifo, buf, sizeof(buf),
-                                        sizeof(mr_uint32_t)), 32);
+    MR_TEST_ASSERT_EQ_UINT(
+        mr_fifo_init(&ctx.fifo, buf, sizeof(buf), sizeof(mr_uint32_t)), 32);
 
     /* Start serialized consumers before filling the bounded fifo */
     for (i = 0; i < MT_THREADS; i++) {
@@ -270,7 +266,8 @@ MR_TEST(fifo, mt_spmc_pop) {
         carg[i].ctx = &ctx;
         carg[i].count = 0;
         if (pthread_create(&carg[i].thread.handle, MR_NULL, mt_fifo_consumer,
-                           &carg[i]) == 0) {
+                           &carg[i])
+            == 0) {
             carg[i].thread.started = 1;
             created++;
         }
@@ -302,7 +299,6 @@ MR_TEST(fifo, mt_spmc_pop) {
     MR_TEST_EXPECT_EQ_INT(mt_fifo_dup_count(&ctx), 0);
 }
 
-/* Test: externally serialized MPMC ring must conserve every element */
 MR_TEST(fifo, mt_mpmc_ring) {
     mt_fifo_arg_t args[2];
     mt_fifo_arg_t carg[2];
@@ -317,8 +313,8 @@ MR_TEST(fifo, mt_mpmc_ring) {
     mr_spinlock_init(&ctx.consumer_lock);
     ctx.producers = 2;
     ctx.consumers = 2;
-    MR_TEST_ASSERT_EQ_UINT(mr_fifo_init(&ctx.fifo, buf, sizeof(buf),
-                                        sizeof(mr_uint32_t)), 16);
+    MR_TEST_ASSERT_EQ_UINT(
+        mr_fifo_init(&ctx.fifo, buf, sizeof(buf), sizeof(mr_uint32_t)), 16);
 
     for (i = 0; i < 2; i++) {
         args[i].thread.started = 0;
@@ -326,7 +322,8 @@ MR_TEST(fifo, mt_mpmc_ring) {
         args[i].ctx = &ctx;
         args[i].count = MT_ITERS;
         if (pthread_create(&args[i].thread.handle, MR_NULL, mt_fifo_producer,
-                           &args[i]) != 0) {
+                           &args[i])
+            != 0) {
             break;
         }
         args[i].thread.started = 1;
@@ -339,7 +336,8 @@ MR_TEST(fifo, mt_mpmc_ring) {
         carg[i].ctx = &ctx;
         carg[i].count = 0;
         if (pthread_create(&carg[i].thread.handle, MR_NULL, mt_fifo_consumer,
-                           &carg[i]) == 0) {
+                           &carg[i])
+            == 0) {
             carg[i].thread.started = 1;
             ccreated++;
         }
@@ -361,7 +359,6 @@ MR_TEST(fifo, mt_mpmc_ring) {
     MR_TEST_EXPECT_EQ_INT(mt_fifo_dup_count(&ctx), 0);
 }
 
-/* Test: serialized zero-copy access publishes each claim exactly once */
 MR_TEST(fifo, claim_serialized_publish) {
     mt_fifo_ctx_t ctx;
     mr_uint32_t buf[16];
@@ -370,8 +367,8 @@ MR_TEST(fifo, claim_serialized_publish) {
     int producer, i;
 
     mr_memset(&ctx, 0, sizeof(ctx));
-    MR_TEST_ASSERT_EQ_UINT(mr_fifo_init(&ctx.fifo, buf, sizeof(buf),
-                                        sizeof(mr_uint32_t)), 16);
+    MR_TEST_ASSERT_EQ_UINT(
+        mr_fifo_init(&ctx.fifo, buf, sizeof(buf), sizeof(mr_uint32_t)), 16);
 
     for (i = 0; i < MT_ITERS; i++) {
         for (producer = 0; producer < 2; producer++) {
@@ -394,7 +391,6 @@ MR_TEST(fifo, claim_serialized_publish) {
     MR_TEST_EXPECT_EQ_INT(mr_fifo_is_empty(&ctx.fifo), MR_TRUE);
 }
 
-/* Ref release callback: counts releases without freeing anything */
 static void mt_ref_release(mr_ref_t *ref) {
     mr_ref_t *target = ref;
     mt_ref_ctx_t *ctx;
@@ -404,7 +400,6 @@ static void mt_ref_release(mr_ref_t *ref) {
     mr_atomic_fetch_add(&ctx->releases, 1);
 }
 
-/* Ref worker: hammers get and put in pairs(bounded iterations) */
 static void *mt_ref_hammer_worker(void *argument) {
     mt_ref_arg_t *arg = argument;
     mt_ref_ctx_t *ctx = arg->ctx;
@@ -412,22 +407,20 @@ static void *mt_ref_hammer_worker(void *argument) {
 
     for (i = 0; i < arg->count; i++) {
         if (mr_ref_get(&ctx->ref)) {
-            (void)mr_ref_put(&ctx->ref, mt_ref_release);
+            mr_ref_put(&ctx->ref, mt_ref_release);
         }
     }
     return MR_NULL;
 }
 
-/* Ref worker: puts the ref exactly once */
 static void *mt_ref_put_worker(void *argument) {
     mt_ref_arg_t *arg = argument;
     mt_ref_ctx_t *ctx = arg->ctx;
 
-    (void)mr_ref_put(&ctx->ref, mt_ref_release);
+    mr_ref_put(&ctx->ref, mt_ref_release);
     return MR_NULL;
 }
 
-/* Test: concurrent get and put must preserve the ref count and magic */
 MR_TEST(ref, mt_get_put_hammer) {
     mt_ref_arg_t args[MT_THREADS];
     mt_ref_ctx_t ctx;
@@ -443,7 +436,8 @@ MR_TEST(ref, mt_get_put_hammer) {
         args[i].ctx = &ctx;
         args[i].count = MT_ITERS;
         if (pthread_create(&args[i].thread.handle, MR_NULL,
-                           mt_ref_hammer_worker, &args[i]) != 0) {
+                           mt_ref_hammer_worker, &args[i])
+            != 0) {
             break;
         }
         args[i].thread.started = 1;
@@ -459,7 +453,6 @@ MR_TEST(ref, mt_get_put_hammer) {
     MR_TEST_EXPECT_EQ_UINT((mr_uint32_t)mr_atomic_load(&ctx.releases), 0);
 }
 
-/* Test: puts racing to reach zero must fire exactly one release */
 MR_TEST(ref, mt_release_race_to_zero) {
     mt_ref_arg_t args[2];
     mt_ref_ctx_t ctx;
@@ -478,7 +471,8 @@ MR_TEST(ref, mt_release_race_to_zero) {
         args[i].ctx = &ctx;
         args[i].count = 0;
         if (pthread_create(&args[i].thread.handle, MR_NULL, mt_ref_put_worker,
-                           &args[i]) != 0) {
+                           &args[i])
+            != 0) {
             break;
         }
         args[i].thread.started = 1;
@@ -494,7 +488,6 @@ MR_TEST(ref, mt_release_race_to_zero) {
     MR_TEST_EXPECT_EQ_UINT((mr_uint32_t)MR_REF_IS_INITED(ctx.ref), MR_FALSE);
 }
 
-/* Test: excess puts invalidate a zeroed ref without repeating release */
 MR_TEST(ref, mt_put_below_zero) {
     mt_ref_arg_t args[MT_THREADS];
     mt_ref_ctx_t ctx;
@@ -511,7 +504,8 @@ MR_TEST(ref, mt_put_below_zero) {
         args[i].ctx = &ctx;
         args[i].count = 0;
         if (pthread_create(&args[i].thread.handle, MR_NULL, mt_ref_put_worker,
-                           &args[i]) != 0) {
+                           &args[i])
+            != 0) {
             break;
         }
         args[i].thread.started = 1;
@@ -529,7 +523,6 @@ MR_TEST(ref, mt_put_below_zero) {
     mr_ref_init(&ctx.ref);
 }
 
-/* Spinlock worker: hammers lock and unlock around a shared counter */
 static void *mt_spin_hammer_worker(void *argument) {
     mt_spin_arg_t *arg = argument;
     mt_spin_ctx_t *ctx = arg->ctx;
@@ -543,7 +536,6 @@ static void *mt_spin_hammer_worker(void *argument) {
     return MR_NULL;
 }
 
-/* Spinlock worker: nests lock_irqsave with a second lock in fixed order */
 static void *mt_spin_nest_worker(void *argument) {
     mt_spin_arg_t *arg = argument;
     mt_spin_ctx_t *ctx = arg->ctx;
@@ -560,7 +552,6 @@ static void *mt_spin_nest_worker(void *argument) {
     return MR_NULL;
 }
 
-/* Spinlock worker: takes two locks in one consistent global order */
 static void *mt_spin_ordered_worker(void *argument) {
     mt_spin_arg_t *arg = argument;
     mt_spin_ctx_t *ctx = arg->ctx;
@@ -577,7 +568,6 @@ static void *mt_spin_ordered_worker(void *argument) {
     return MR_NULL;
 }
 
-/* Test: spinlock hammer must keep the shared counter exact */
 MR_TEST(spinlock, mt_contention_hammer) {
     mt_spin_arg_t args[MT_THREADS];
     mt_spin_ctx_t ctx;
@@ -594,7 +584,8 @@ MR_TEST(spinlock, mt_contention_hammer) {
         args[i].ctx = &ctx;
         args[i].count = 1000;
         if (pthread_create(&args[i].thread.handle, MR_NULL,
-                           mt_spin_hammer_worker, &args[i]) != 0) {
+                           mt_spin_hammer_worker, &args[i])
+            != 0) {
             break;
         }
         args[i].thread.started = 1;
@@ -610,7 +601,6 @@ MR_TEST(spinlock, mt_contention_hammer) {
                            MR_FALSE);
 }
 
-/* Test: lock_irqsave and unlock_irqrestore nesting must stay exact */
 MR_TEST(spinlock, mt_irqsave_nesting) {
     mt_spin_arg_t args[MT_THREADS];
     mt_spin_ctx_t ctx;
@@ -626,8 +616,9 @@ MR_TEST(spinlock, mt_irqsave_nesting) {
         args[i].thread.id = i;
         args[i].ctx = &ctx;
         args[i].count = 500;
-        if (pthread_create(&args[i].thread.handle, MR_NULL,
-                           mt_spin_nest_worker, &args[i]) != 0) {
+        if (pthread_create(&args[i].thread.handle, MR_NULL, mt_spin_nest_worker,
+                           &args[i])
+            != 0) {
             break;
         }
         args[i].thread.started = 1;
@@ -645,7 +636,6 @@ MR_TEST(spinlock, mt_irqsave_nesting) {
                            MR_FALSE);
 }
 
-/* Test: two locks taken in a consistent global order must never deadlock */
 MR_TEST(spinlock, mt_two_lock_fixed_order) {
     mt_spin_arg_t args[MT_THREADS];
     mt_spin_ctx_t ctx;
@@ -662,7 +652,8 @@ MR_TEST(spinlock, mt_two_lock_fixed_order) {
         args[i].ctx = &ctx;
         args[i].count = 500;
         if (pthread_create(&args[i].thread.handle, MR_NULL,
-                           mt_spin_ordered_worker, &args[i]) != 0) {
+                           mt_spin_ordered_worker, &args[i])
+            != 0) {
             break;
         }
         args[i].thread.started = 1;

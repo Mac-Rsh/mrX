@@ -10,11 +10,9 @@
 #if defined(MR_USE_TEST)
 #include <mrX/kernel/mr_hook.h>
 
-/* Helpers */
 static void test_hook_entry(void) {
 }
 
-/* Tests */
 MR_TEST(hook, static_init) {
     mr_ptr_t buf[4];
     mr_hook_t hook = MR_HOOK_INIT(buf, 4);

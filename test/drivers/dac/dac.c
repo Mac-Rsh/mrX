@@ -15,6 +15,8 @@ static int dac_write_count;
 static int dac_stream_start_count;
 static int dac_stream_stop_count;
 static mr_uint32_t dac_last_channel;
+static mr_uint32_t dac_events;
+static mr_bool_t dac_events_enabled;
 static mr_dac_config_t dac_last_config;
 static mr_dac_seq_t dac_last_seq;
 #if defined(MR_USE_DRIVER_DAC_STREAM)
@@ -111,6 +113,14 @@ static mr_err_t dac_stream_offset(const mr_driver_t *drv, mr_size_t *offset) {
 }
 #endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 
+static mr_err_t dac_event_control(const mr_driver_t *drv, mr_uint32_t events,
+                                  mr_bool_t enable) {
+    MR_IGNORE(drv);
+    dac_events = events;
+    dac_events_enabled = enable;
+    return 0;
+}
+
 static const mr_dac_ops_t dac_ops = {
     .channel_configure = dac_channel_configure,
     .channel_configuration = dac_channel_configuration,
@@ -121,6 +131,7 @@ static const mr_dac_ops_t dac_ops = {
     .stream_is_busy = dac_stream_is_busy,
     .stream_offset = dac_stream_offset,
 #endif
+    .event_control = dac_event_control,
 };
 
 static mr_driver_t *dac_create(mr_uint32_t exist_mask) {
@@ -243,6 +254,65 @@ static void dac_waiter_entry(mr_waiter_t *waiter, void *param,
     MR_IGNORE(event);
     MR_IGNORE(data);
     (*count)++;
+}
+
+MR_TEST(dac, hardtree_specification) {
+    mr_ht_dac_spec_t spec = {
+        .channel = 3U,
+        .resolution = 8U,
+        .config = {.ref = MR_DAC_REF_VDD_1},
+    };
+    const mr_uint8_t value = 127U;
+    mr_dac_seq_t seq = {.size = sizeof(value), .buf = &value};
+#if defined(MR_USE_DRIVER_DAC_STREAM)
+    const mr_dac_stream_config_t config = {0};
+    mr_size_t offset = 0U;
+    mr_bool_t busy = MR_FALSE;
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
+
+    dac_test_reset();
+    spec.drv = dac_create(1U << 3);
+    MR_TEST_ASSERT_NE_PTR(spec.drv, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(spec.drv), 0);
+
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dac_configure(&spec), 0);
+    MR_TEST_EXPECT_EQ_UINT(dac_last_channel, 3U);
+    MR_TEST_EXPECT_EQ_UINT(dac_last_config.ref, MR_DAC_REF_VDD_1);
+    mr_ht_dac_seq_init(&spec, &seq);
+    MR_TEST_EXPECT_EQ_UINT(seq.channels, 1U << 3);
+    MR_TEST_EXPECT_EQ_UINT(seq.resolution, 8U);
+    MR_TEST_EXPECT_EQ_PTR(seq.buf, &value);
+    dac_write_ret = sizeof(value);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dac_write(&spec, &seq), sizeof(value));
+    MR_TEST_EXPECT_EQ_UINT(dac_last_seq.channels, 1U << 3);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dac_millivolt2raw(&spec, 1650), 127);
+    spec.ref_voltage = 2000;
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dac_microvolt2raw(&spec, 1000000), 127);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dac_volt2raw(&spec, 1.0f), 127);
+
+    MR_TEST_EXPECT_EQ_INT(
+        mr_ht_dac_event_enable(&spec, MR_DAC_WAIT_STREAM_HALF), 0);
+    MR_TEST_EXPECT_EQ_UINT(dac_events, MR_DAC_WAIT_STREAM_HALF);
+    MR_TEST_EXPECT_EQ_INT(dac_events_enabled, MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(
+        mr_ht_dac_event_disable(&spec, MR_DAC_WAIT_STREAM_DONE), 0);
+    MR_TEST_EXPECT_EQ_UINT(dac_events, MR_DAC_WAIT_STREAM_DONE);
+    MR_TEST_EXPECT_EQ_INT(dac_events_enabled, MR_FALSE);
+
+#if defined(MR_USE_DRIVER_DAC_STREAM)
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dac_stream_start(&spec, &seq, &config), 0);
+    MR_TEST_EXPECT_EQ_INT(dac_stream_start_count, 1);
+    dac_busy = MR_TRUE;
+    dac_offset = 1U;
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dac_stream_is_busy(&spec, &busy), 0);
+    MR_TEST_EXPECT_EQ_INT(busy, MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dac_stream_offset(&spec, &offset), 0);
+    MR_TEST_EXPECT_EQ_UINT(offset, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dac_stream_stop(&spec), 0);
+    MR_TEST_EXPECT_EQ_INT(dac_stream_stop_count, 1);
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
+
+    MR_TEST_EXPECT_EQ_INT(mr_dac_del(spec.drv), 0);
 }
 
 MR_TEST(dac, init_static_and_reference) {

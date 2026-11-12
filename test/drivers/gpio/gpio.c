@@ -15,6 +15,8 @@ static int gpio_write_count;
 static int gpio_event_attach_count;
 static mr_uint8_t gpio_last_value;
 static mr_uint32_t gpio_last_pin;
+static mr_uint32_t gpio_events;
+static mr_bool_t gpio_events_enabled;
 static mr_gpio_config_t gpio_last_config;
 static mr_err_t gpio_configure_ret;
 static mr_err_t gpio_configuration_ret;
@@ -101,6 +103,15 @@ static mr_err_t gpio_event_attach(const mr_driver_t *drv, mr_uint32_t pin,
     gpio_event_attach_count++;
     gpio_last_pin = pin;
     return gpio_event_attach_ret;
+}
+
+static mr_err_t gpio_event_control(const mr_driver_t *drv, mr_uint32_t pin,
+                                   mr_uint32_t events, mr_bool_t enable) {
+    MR_IGNORE(drv);
+    gpio_last_pin = pin;
+    gpio_events = events;
+    gpio_events_enabled = enable;
+    return 0;
 }
 
 static const mr_gpio_ops_t gpio_ops = {
@@ -310,6 +321,58 @@ MR_TEST(gpio, configuration_restores_inverted_level) {
     MR_TEST_ASSERT_EQ_INT(saved.level, MR_GPIO_LEVEL_HIGH);
 
     mr_gpio_del(drv);
+}
+
+MR_TEST(gpio, hardtree_specification) {
+    mr_gpio_data_t data = MR_GPIO_DATA_INIT(1U << 2, 1U << 2);
+    const mr_gpio_config_t config = {.mode = MR_GPIO_MODE_INPUT};
+    mr_gpio_config_t saved = {0};
+    mr_gpio_ops_t ops = gpio_ops;
+    mr_driver_t drv;
+    mr_ht_gpio_spec_t spec = {.drv = &drv, .pin = 2U};
+    mr_waiter_t waiter;
+    mr_uint8_t value = 0U;
+
+    gpio_test_reset();
+    ops.event_attach = gpio_event_attach;
+    ops.event_control = gpio_event_control;
+    MR_TEST_ASSERT_EQ_INT(mr_gpio_init(&drv, &data, MR_NULL, &ops), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(
+        mr_waiter_init(&waiter, gpio_waiter_entry, MR_NULL, MR_GPIO_WAIT_EXTI),
+        0);
+
+    MR_TEST_EXPECT_EQ_INT(mr_ht_gpio_configure(&spec, &config), 0);
+    MR_TEST_EXPECT_EQ_UINT(gpio_last_pin, 2U);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_gpio_input(&spec, MR_GPIO_PULL_UP), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_gpio_configuration(&spec, &saved), 0);
+    MR_TEST_EXPECT_EQ_UINT(saved.pull, MR_GPIO_PULL_UP);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_gpio_output(&spec, MR_GPIO_OTYPE_OD, 0U), 0);
+    MR_TEST_EXPECT_EQ_UINT(gpio_last_config.level, MR_GPIO_LEVEL_HIGH);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_gpio_write(&spec, 1U), sizeof(value));
+    MR_TEST_EXPECT_EQ_UINT(gpio_last_value, 0U);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_gpio_read(&spec, &value), sizeof(value));
+    MR_TEST_EXPECT_EQ_UINT(value, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_gpio_toggle(&spec), 0);
+    MR_TEST_EXPECT_EQ_UINT(gpio_last_value, 1U);
+
+    MR_TEST_EXPECT_EQ_INT(mr_ht_gpio_event_attach(&spec, &waiter), 0);
+    MR_TEST_EXPECT_EQ_INT(gpio_event_attach_count, 1);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_gpio_event_enable(&spec, MR_GPIO_WAIT_EXTI), 0);
+    MR_TEST_EXPECT_EQ_UINT(gpio_last_pin, 2U);
+    MR_TEST_EXPECT_EQ_UINT(gpio_events, MR_GPIO_WAIT_EXTI);
+    MR_TEST_EXPECT_EQ_INT(gpio_events_enabled, MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_gpio_event_disable(&spec, MR_GPIO_WAIT_EXTI),
+                          0);
+    MR_TEST_EXPECT_EQ_INT(gpio_events_enabled, MR_FALSE);
+    spec.pin = 1U;
+    MR_TEST_EXPECT_EQ_INT(mr_ht_gpio_event_enable(&spec, MR_GPIO_WAIT_EXTI),
+                          -MR_EINVAL);
+    MR_TEST_EXPECT_EQ_UINT(gpio_last_pin, 2U);
+    MR_TEST_EXPECT_EQ_INT(gpio_events_enabled, MR_FALSE);
+
+    MR_TEST_EXPECT_EQ_INT(mr_waiter_del(&waiter), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_gpio_del(&drv), 0);
 }
 
 #endif

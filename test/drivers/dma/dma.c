@@ -181,4 +181,50 @@ MR_TEST(dma, event_paths) {
     mr_dma_del(drv);
 }
 
+MR_TEST(dma, hardtree_specification) {
+    mr_dma_data_t data = MR_DMA_DATA_INIT(1ULL << 5);
+    const mr_dma_config_t config = {.direction = MR_DMA_DIR_M2M};
+    mr_dma_config_t saved = {0};
+    mr_uint8_t src = 1U, dst = 0U;
+    mr_dma_transfer_t transfer = {.count = 1U, .src = &src, .dst = &dst};
+    mr_driver_t drv;
+    mr_ht_dma_spec_t spec = {.drv = &drv, .channel = 5U};
+    mr_waiter_t waiter = {0};
+    mr_size_t offset = 0U;
+    mr_bool_t busy = MR_FALSE;
+
+    MR_TEST_ASSERT_EQ_INT(
+        mr_dma_init(&drv, &data, MR_NULL, (mr_dma_ops_t *)&dma_ops), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dma_configure(&spec, &config), 0);
+    MR_TEST_EXPECT_EQ_UINT(dma_channel, 5U);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dma_configuration(&spec, &saved), 0);
+    MR_TEST_EXPECT_EQ_UINT(saved.direction, config.direction);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dma_start(&spec, &transfer), 0);
+    MR_TEST_EXPECT_EQ_PTR(dma_transfer, &transfer);
+    dma_busy = MR_TRUE;
+    dma_transfer_offset = 1U;
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dma_is_busy(&spec, &busy), 0);
+    MR_TEST_EXPECT_EQ_INT(busy, MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dma_offset(&spec, &offset), 0);
+    MR_TEST_EXPECT_EQ_UINT(offset, 1U);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dma_stop(&spec), 0);
+
+    dma_event_attach_count = 0;
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dma_event_attach(&spec, &waiter), 0);
+    MR_TEST_EXPECT_EQ_INT(dma_event_attach_count, 1);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dma_event_enable(&spec, MR_DMA_WAIT_DONE), 0);
+    MR_TEST_EXPECT_EQ_UINT(dma_events, MR_DMA_WAIT_DONE);
+    MR_TEST_EXPECT_EQ_INT(dma_event_enable_state, MR_TRUE);
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dma_event_disable(&spec, MR_DMA_WAIT_ERROR), 0);
+    MR_TEST_EXPECT_EQ_UINT(dma_events, MR_DMA_WAIT_ERROR);
+    MR_TEST_EXPECT_EQ_INT(dma_event_enable_state, MR_FALSE);
+    spec.channel = 6U;
+    MR_TEST_EXPECT_EQ_INT(mr_ht_dma_start(&spec, &transfer), -MR_EINVAL);
+    MR_TEST_EXPECT_EQ_UINT(dma_channel, 5U);
+
+    MR_TEST_EXPECT_EQ_INT(mr_dma_del(&drv), 0);
+}
+
 #endif /* defined(MR_USE_TEST) && defined(MR_USE_DRIVER_DMA) */

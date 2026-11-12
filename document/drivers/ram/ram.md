@@ -17,8 +17,10 @@
 
 ### 1. 模块概述
 
-RAM 驱动把“RAM 是什么”与“RAM 怎么连接”分开。公共层只描述容量、CPU 可直接 寻址区域以及按偏移读写能力；具体设备可以是片内
-SRAM、FMC/EMC SDRAM、memory- mapped PSRAM，也可以是 SPI/QSPI 等控制器后面的间接访问 RAM。
+RAM 驱动把“RAM 是什么”与“RAM 怎么连接”分开。公共层只描述容量、CPU 可直接
+寻址区域以及按偏移读写能力；具体设备可以是片内
+SRAM、FMC/EMC SDRAM、memory- mapped PSRAM，也可以是 SPI/QSPI 等控制器后面的间接访问
+RAM。
 
 两类设备都使用同一个模型：
 
@@ -67,7 +69,8 @@ typedef struct mr_ram_region {
 } mr_ram_region_t;
 ```
 
-`info.size` 是整个 RAM 设备的逻辑容量。`region` 只描述 CPU 可以直接解引用的 memory-mapped 区域，因此它不是读写接口的分片表，也不要求所有
+`info.size` 是整个 RAM 设备的逻辑容量。`region` 只描述 CPU 可以直接解引用的
+memory-mapped 区域，因此它不是读写接口的分片表，也不要求所有
 RAM 都存在。
 
 典型情况：
@@ -87,11 +90,13 @@ RAM setup 时公共层调用：
 ops->probe(drv, &info);
 ```
 
-`probe` 可以只返回固定几何，也可以完成外部 RAM 控制器初始化、读取器件 ID、确定 容量等工作。成功后公共层校验 `size` 和 region
+`probe` 可以只返回固定几何，也可以完成外部 RAM 控制器初始化、读取器件 ID、确定
+容量等工作。成功后公共层校验 `size` 和 region
 能力，并把信息缓存到
 `mr_ram_data_t.info`。
 
-shutdown 时只清空公共层缓存；第一版没有 teardown/remove 回调。再次 setup 会重新 执行 `probe`。
+shutdown 时只清空公共层缓存；第一版没有 teardown/remove 回调。再次 setup 会重新 执行
+`probe`。
 
 ### 4. 读写
 
@@ -107,10 +112,12 @@ offset <= info.size
 size   <= info.size - offset
 ```
 
-因此不会通过 `offset + size` 产生整数溢出。`offset == info.size && size == 0` 合法； 任何真正越过设备末尾的访问返回
+因此不会通过 `offset + size` 产生整数溢出。`offset == info.size && size == 0` 合法；
+任何真正越过设备末尾的访问返回
 `-MR_EINVAL`，不会进入 backend。
 
-具体的数据搬运由 backend 完成。memory-mapped RAM 可以直接 memcpy；SPI/QSPI PSRAM 可以在 `read`/`write` 中发送控制器命令。
+具体的数据搬运由 backend 完成。memory-mapped RAM 可以直接 memcpy；SPI/QSPI PSRAM
+可以在 `read`/`write` 中发送控制器命令。
 
 ### 5. 后端接口
 
@@ -166,7 +173,8 @@ MR_RAM_INSTALL(ram0, &ram0_data, MR_NULL, &ram0_ops,
                MR_DRIVER_LEVEL_NORMAL);
 ```
 
-由于公共层已经按 `info.size` 做范围检查，backend 不需要重复实现同一层的总容量 边界检查；backend 仍负责控制器自身的事务限制、对齐、缓存等约束。
+由于公共层已经按 `info.size` 做范围检查，backend 不需要重复实现同一层的总容量
+边界检查；backend 仍负责控制器自身的事务限制、对齐、缓存等约束。
 
 ### 7. HardTree
 
@@ -176,7 +184,8 @@ MR_RAM_INSTALL(ram0, &ram0_data, MR_NULL, &ram0_ops,
 MR_HT_RAM_INSTALL(id, priv, ops)
 ```
 
-只创建零初始化的 `mr_ram_data_t` 并注册实例，不再假定几何一定在 HardTree 中静态 可知。具体 backend 自己决定从寄存器、器件
+只创建零初始化的 `mr_ram_data_t` 并注册实例，不再假定几何一定在 HardTree 中静态
+可知。具体 backend 自己决定从寄存器、器件
 ID、固定参数或 HardTree 属性得到容量和 region。
 
 ### 8. API 参考
@@ -249,9 +258,11 @@ RAM 与 FLASH 现在使用同一代几何发现模型：
 | `write`  | `program` |
 | 无       | `erase`   |
 
-二者区别在于 region 的意义：RAM region 表示 CPU 直接映射区；FLASH region 表示擦除 几何区域。
+二者区别在于 region 的意义：RAM region 表示 CPU 直接映射区；FLASH region 表示擦除
+几何区域。
 
-平台 RAM backend 的 probe/region、memory-map、cache 与 HardTree 接入见 [RAM 驱动移植指南](porting.md)。
+平台 RAM backend 的 probe/region、memory-map、cache 与 HardTree
+接入见 [RAM 驱动移植指南](porting.md)。
 
 ### 12. 源码导读
 

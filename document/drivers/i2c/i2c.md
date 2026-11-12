@@ -1,7 +1,8 @@
 # I2C 驱动（I2C）
 
 > I2C 驱动提供控制器级的 Master 消息传输、Slave 数据通路和 waitable 事件接口。
-> 公共层保持轻量：负责驱动对象、基础参数和能力检查，具体总线时序与硬件能力由 backend 实现。
+> 公共层保持轻量：负责驱动对象、基础参数和能力检查，具体总线时序与硬件能力由
+> backend 实现。
 
 | 项       | 说明                                                                                            |
 |----------|-------------------------------------------------------------------------------------------------|
@@ -22,7 +23,8 @@ I2C 公共层把控制器能力分成三部分：
 - Master：`mr_i2c_transfer` 传入消息数组；
 - Slave：`mr_i2c_slave_read` / `mr_i2c_slave_write` 与 waitable 事件。
 
-公共层不负责设备地址所有权、寄存器协议、传输排队、DMA/IRQ 选择或总线恢复策略。这些能力由 backend 或更上层设备驱动承担。
+公共层不负责设备地址所有权、寄存器协议、传输排队、DMA/IRQ 选择或总线恢复策略。这些能力由
+backend 或更上层设备驱动承担。
 
 ### 2. 配置与数据结构
 
@@ -49,7 +51,8 @@ typedef struct mr_i2c_config {
 - `addr10`：本控制器地址是否使用 10-bit 形式；
 - `role`：`MR_I2C_ROLE_MASTER` 或 `MR_I2C_ROLE_SLAVE`。
 
-`mr_i2c_configure` 会断言 `config != MR_NULL` 和 `ops->configure != MR_NULL`，然后直接调用 backend。`mr_i2c_configuration`
+`mr_i2c_configure` 会断言 `config != MR_NULL` 和 `ops->configure != MR_NULL`
+，然后直接调用 backend。`mr_i2c_configuration`
 同理。
 
 Master 消息结构：
@@ -73,8 +76,10 @@ typedef struct mr_i2c_msg {
 #define MR_I2C_MSG_ADDR10   (1U << 3)
 ```
 
-这里没有 `MR_I2C_MSG_FLAG_MASK`。公共层不会用白名单拒绝未知 flag bit，也不会检查地址范围或 STOP/NOSTOP 组合；`flags` 与
-`addr` 会原样交给 backend。这样 backend 可以按控制器能力解释公共 flag，也可以忽略自己不支持或不认识的扩展 bit。
+这里没有 `MR_I2C_MSG_FLAG_MASK`。公共层不会用白名单拒绝未知 flag bit，也不会检查地址范围或
+STOP/NOSTOP 组合；`flags` 与
+`addr` 会原样交给 backend。这样 backend 可以按控制器能力解释公共
+flag，也可以忽略自己不支持或不认识的扩展 bit。
 
 ### 3. Master 传输
 
@@ -96,7 +101,8 @@ mr_ssize_t mr_i2c_transfer(mr_driver_t *drv,
 5. `ops->transfer == MR_NULL` 时返回 `-MR_ENOSYS`；
 6. 其余情况直接调用 `ops->transfer(drv, msgs, num)`。
 
-头文件把成功返回值定义为“完成的 message 数”。是否支持 repeated START、10-bit 地址、STOP/NOSTOP、零长度 address-only
+头文件把成功返回值定义为“完成的 message 数”。是否支持 repeated START、10-bit
+地址、STOP/NOSTOP、零长度 address-only
 transaction，以及错误发生后的总线恢复行为，都由 backend 实现。
 
 示例：一次写后读请求：
@@ -131,7 +137,8 @@ mr_ssize_t mr_i2c_slave_read(mr_driver_t *drv, void *buf, mr_size_t size);
 mr_ssize_t mr_i2c_slave_write(mr_driver_t *drv, const void *buf, mr_size_t size);
 ```
 
-这两个接口不主动发起 Master transaction，而是把当前 Slave controller 的数据收发能力暴露给上层。
+这两个接口不主动发起 Master transaction，而是把当前 Slave controller
+的数据收发能力暴露给上层。
 
 公共层规则：
 
@@ -164,8 +171,10 @@ mr_i2c_event_disable(drv, events);
 mr_i2c_event_raise(drv, events);
 ```
 
-`mr_i2c_event_attach` 是框架级 waitable 挂接，不依赖 backend callback。`event_enable` / `event_disable` 通过可选的
-`ops->event_control` 控制来源；缺少该 callback 时返回 `-MR_ENOSYS`，公共层不会校验 event mask。
+`mr_i2c_event_attach` 是框架级 waitable 挂接，不依赖 backend callback。
+`event_enable` / `event_disable` 通过可选的
+`ops->event_control` 控制来源；缺少该 callback 时返回 `-MR_ENOSYS`，公共层不会校验
+event mask。
 
 `mr_i2c_event_raise` 调用：
 
@@ -173,10 +182,12 @@ mr_i2c_event_raise(drv, events);
 mr_waitable_raise(&i2c_data->event, (mr_wait_event_t)events, MR_NULL);
 ```
 
-因此没有额外 payload，并且 waiter 会同步运行在 raise 的调用上下文。如果 backend 从硬件 ISR 调用 `mr_i2c_event_raise`
+因此没有额外 payload，并且 waiter 会同步运行在 raise 的调用上下文。如果 backend
+从硬件 ISR 调用 `mr_i2c_event_raise`
 ，waiter 也会在该 ISR 上下文执行。
 
-对于 Slave backend，`RX_START/RX_READY/TX_START/TX_READY/STOP/ERROR` 可以作为协议时序通知；具体在哪个硬件状态点 raise、是否使用
+对于 Slave backend，`RX_START/RX_READY/TX_START/TX_READY/STOP/ERROR`
+可以作为协议时序通知；具体在哪个硬件状态点 raise、是否使用
 clock stretching、一次 `slave_read/write` 处理多少数据，仍由 backend 定义。
 
 ### 6. 生命周期
@@ -189,13 +200,15 @@ typedef struct mr_i2c_data {
 } mr_i2c_data_t;
 ```
 
-setup 时 `i2c_init` 初始化 waitable，shutdown 时 `i2c_deinit` 删除 waitable。动态创建使用 dynamic clazz，最终 release 会：
+setup 时 `i2c_init` 初始化 waitable，shutdown 时 `i2c_deinit` 删除
+waitable。动态创建使用 dynamic clazz，最终 release 会：
 
 ```c
 mr_free(MR_DRIVER_DATA(drv));
 ```
 
-因此传给 `mr_i2c_create` 的 `data` 必须符合这一所有权规则；`priv` 和 `ops` 不由 I2C release 自动释放。
+因此传给 `mr_i2c_create` 的 `data` 必须符合这一所有权规则；`priv` 和 `ops` 不由
+I2C release 自动释放。
 
 ### 7. API 参考
 
@@ -222,16 +235,19 @@ mr_free(MR_DRIVER_DATA(drv));
 
 **Q：为什么公共层不检查 7-bit/10-bit 地址范围？**
 
-I2C core 当前只负责统一数据结构和调用边界。地址是否合法、控制器是否支持某种地址模式，由 backend 判断；这样不会在 core
+I2C core 当前只负责统一数据结构和调用边界。地址是否合法、控制器是否支持某种地址模式，由
+backend 判断；这样不会在 core
 中提前封死控制器扩展能力。
 
 **Q：未知 message flag 会返回 `-MR_EINVAL` 吗？**
 
-不会。公共层没有 flag mask，也没有未知 flag 校验。backend 可以解释、忽略或按自己的能力处理这些 bit。
+不会。公共层没有 flag mask，也没有未知 flag 校验。backend 可以解释、忽略或按自己的能力处理这些
+bit。
 
 **Q：为什么 `mr_i2c_transfer` 会返回 `-MR_ENOSYS`？**
 
-该 driver 的 `ops->transfer` 为空。这允许一个 backend 只实现 Slave 能力而不实现 Master transfer。
+该 driver 的 `ops->transfer` 为空。这允许一个 backend 只实现 Slave 能力而不实现
+Master transfer。
 
 **Q：为什么 `mr_i2c_slave_read/write` 也可能返回 `-MR_ENOSYS`？**
 
@@ -239,7 +255,8 @@ Slave 数据路径同样是可选能力；纯 Master controller 可以不提供�
 
 **Q：event attach 成功，但 event enable 返回 `-MR_ENOSYS`？**
 
-waitable 属于 I2C core，所以 attach 可以工作；事件源控制属于 backend，如果没有 `event_control` 就会返回 `-MR_ENOSYS`。
+waitable 属于 I2C core，所以 attach 可以工作；事件源控制属于 backend，如果没有
+`event_control` 就会返回 `-MR_ENOSYS`。
 
 ---
 
@@ -292,17 +309,22 @@ typedef struct mr_i2c_ops {
 } mr_i2c_ops_t;
 ```
 
-`configure` 与 `configuration` 是当前公共 API 会直接 `MR_ASSERT` 的基础 callback。`transfer`、`slave_read`、`slave_write`、
+`configure` 与 `configuration` 是当前公共 API 会直接 `MR_ASSERT` 的基础
+callback。`transfer`、`slave_read`、`slave_write`、
 `event_control` 都按可选能力处理，缺失时相应公共 API 返回 `-MR_ENOSYS`。
 
 ### 11. 实现注意事项
 
-- `mr_i2c_transfer` 不会替 backend 检查 message address、flag 组合或未知 flag；backend 不应假定这些已经被 core 清洗。
-- message descriptor 是 `const mr_i2c_msg_t *`，但 READ message 可以通过 `msg->buf` 写入接收数据。
+- `mr_i2c_transfer` 不会替 backend 检查 message address、flag 组合或未知
+  flag；backend 不应假定这些已经被 core 清洗。
+- message descriptor 是 `const mr_i2c_msg_t *`，但 READ message 可以通过
+  `msg->buf` 写入接收数据。
 - 零长度 message 是公共层允许的输入；是否有实际总线意义由 backend 决定。
-- Slave 事件通过 waitable 同步分发。如果 backend 在 IRQ 中 raise，回调会直接进入同一 IRQ 调用链，因此 backend
+- Slave 事件通过 waitable 同步分发。如果 backend 在 IRQ 中 raise，回调会直接进入同一
+  IRQ 调用链，因此 backend
   设计应考虑这种重入与执行时间。
-- 公共层没有 bus lock、transaction queue 或自动 recovery；需要这些能力时放在 backend 或更上层。
+- 公共层没有 bus lock、transaction queue 或自动 recovery；需要这些能力时放在
+  backend 或更上层。
 
 ### 12. HardTree
 
@@ -317,7 +339,8 @@ typedef struct mr_i2c_ops {
 
 它只安装整颗控制器，没有 I2C client/device spec。
 
-平台 controller backend 的总线状态机、Master transfer、Slave 事件、HardTree 与验收见 [I2C 驱动移植指南](porting.md)。
+平台 controller backend 的总线状态机、Master transfer、Slave 事件、HardTree
+与验收见 [I2C 驱动移植指南](porting.md)。
 
 ### 13. 源码导读
 
@@ -332,8 +355,10 @@ typedef struct mr_i2c_ops {
 
 公共层明确产生的错误主要是：
 
-- `-MR_ENOSYS`：可选 `transfer`、`slave_read`、`slave_write` 或 `event_control` 没有实现；
+- `-MR_ENOSYS`：可选 `transfer`、`slave_read`、`slave_write` 或 `event_control`
+  没有实现；
 - 其他 configure/transfer/slave/backend 错误码直接透传。
 
-驱动类型、必需 callback、空指针与非零长度 buffer 等编程约束通过 `MR_ASSERT` / `MR_DRIVER_ASSERT` 检查，而不是统一转换为
+驱动类型、必需 callback、空指针与非零长度 buffer 等编程约束通过 `MR_ASSERT` /
+`MR_DRIVER_ASSERT` 检查，而不是统一转换为
 `-MR_EINVAL`。

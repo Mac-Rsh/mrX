@@ -316,10 +316,9 @@ MR_TEST(xvm_gdb, queries) {
     if (packet_size > ((mr_size_t)MR_CFG_XVM_GDB_REPLY_SIZE - 4U)) {
         packet_size = (mr_size_t)MR_CFG_XVM_GDB_REPLY_SIZE - 4U;
     }
-    MR_TEST_ASSERT_GT_INT(
-        mr_snprintf(size_token, sizeof(size_token), "PacketSize=%zx",
-                    packet_size),
-        0);
+    MR_TEST_ASSERT_GT_INT(mr_snprintf(size_token, sizeof(size_token),
+                                      "PacketSize=%zx", packet_size),
+                          0);
     MR_TEST_ASSERT_EQ_INT(test_gdb_contains(payload, size_token), MR_TRUE);
     MR_TEST_ASSERT_EQ_INT(test_gdb_contains(payload, "qXfer:features:read+"),
                           MR_TRUE);

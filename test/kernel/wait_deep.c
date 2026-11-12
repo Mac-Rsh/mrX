@@ -83,9 +83,9 @@ static void deep_wait_cb(mr_waiter_t *waiter, void *param,
         ctx->cancel_target = -1;
     }
     if (ctx->event_set_target >= 0) {
-        ctx->event_set_ret = (int)mr_waiter_event_set(
-            ctx->waiters[ctx->event_set_target],
-            (mr_wait_event_t)ctx->event_set_event);
+        ctx->event_set_ret
+            = (int)mr_waiter_event_set(ctx->waiters[ctx->event_set_target],
+                                       (mr_wait_event_t)ctx->event_set_event);
         ctx->event_set_target = -1;
     }
     if ((ctx->rewait_self == arg->id) && (ctx->rewait_self >= 0)) {
@@ -94,7 +94,6 @@ static void deep_wait_cb(mr_waiter_t *waiter, void *param,
     }
 }
 
-/* Callback that raises the same waitable once (guarded) */
 static void deep_wait_nested_cb(mr_waiter_t *waiter, void *param,
                                 mr_wait_event_t event, const void *data) {
     deep_wait_arg_t *arg = param;
@@ -109,7 +108,6 @@ static void deep_wait_nested_cb(mr_waiter_t *waiter, void *param,
     }
 }
 
-/* Callback that cancels all waiters of the waitable */
 static void deep_wait_cancel_all_cb(mr_waiter_t *waiter, void *param,
                                     mr_wait_event_t event, const void *data) {
     deep_wait_arg_t *arg = param;
@@ -124,9 +122,6 @@ static void deep_wait_cancel_all_cb(mr_waiter_t *waiter, void *param,
     }
 }
 
-/* Tests */
-
-/* Test: waiters are woken strictly in wait order */
 MR_TEST(wait, deep_fifo_wake_order) {
     deep_wait_ctx_t ctx;
     deep_wait_arg_t args[4];
@@ -163,8 +158,6 @@ MR_TEST(wait, deep_fifo_wake_order) {
     mr_waitable_del(&able);
 }
 
-/* Test: a waiter requeued from its own callback is visited again at the
- * tail of the same raise */
 MR_TEST(wait, deep_rewait_moves_to_tail) {
     deep_wait_ctx_t ctx;
     deep_wait_arg_t args[3];
@@ -220,7 +213,6 @@ MR_TEST(wait, deep_rewait_moves_to_tail) {
     mr_waitable_del(&able);
 }
 
-/* Test: cancelling all waiters from a callback stops the current raise */
 MR_TEST(wait, deep_cancel_all_during_handle) {
     deep_wait_ctx_t ctx;
     deep_wait_arg_t args[3];
@@ -237,8 +229,8 @@ MR_TEST(wait, deep_cancel_all_during_handle) {
     for (i = 0; i < 3; i++) {
         args[i].ctx = &ctx;
         args[i].id = i;
-        ret = mr_waiter_init(&waiters[i], i == 0 ? deep_wait_cancel_all_cb
-                                                 : deep_wait_cb,
+        ret = mr_waiter_init(&waiters[i],
+                             i == 0 ? deep_wait_cancel_all_cb : deep_wait_cb,
                              &args[i], MR_WAIT_IN);
         MR_TEST_ASSERT_EQ_INT(ret, 0);
         ctx.waiters[i] = &waiters[i];
@@ -261,7 +253,6 @@ MR_TEST(wait, deep_cancel_all_during_handle) {
     mr_waitable_del(&able);
 }
 
-/* Test: an edge waiter masks the previous event out of the delivered event */
 MR_TEST(wait, deep_edge_payload_masking) {
     static const int data = 0x5a5a5a5a;
     deep_wait_ctx_t ctx;
@@ -298,7 +289,6 @@ MR_TEST(wait, deep_edge_payload_masking) {
     mr_waitable_del(&able);
 }
 
-/* Test: the edge bit of a raised event is stripped before delivery */
 MR_TEST(wait, deep_raise_edge_bit_stripped) {
     deep_wait_ctx_t ctx;
     deep_wait_arg_t args[2];
@@ -334,7 +324,6 @@ MR_TEST(wait, deep_raise_edge_bit_stripped) {
     mr_waitable_del(&able);
 }
 
-/* Test: waiting again clears the edge state of a waiter */
 MR_TEST(wait, deep_wait_resets_edge_state) {
     deep_wait_ctx_t ctx;
     deep_wait_arg_t arg;
@@ -377,7 +366,6 @@ MR_TEST(wait, deep_wait_resets_edge_state) {
     mr_waitable_del(&able);
 }
 
-/* Test: a multi bit event mask matches each bit independently */
 MR_TEST(wait, deep_multi_bit_event_mask) {
     deep_wait_ctx_t ctx;
     deep_wait_arg_t arg;
@@ -391,8 +379,7 @@ MR_TEST(wait, deep_multi_bit_event_mask) {
 
     arg.ctx = &ctx;
     arg.id = 0;
-    ret = mr_waiter_init(&waiter, deep_wait_cb, &arg,
-                         MR_WAIT_IN | MR_WAIT_OUT);
+    ret = mr_waiter_init(&waiter, deep_wait_cb, &arg, MR_WAIT_IN | MR_WAIT_OUT);
     MR_TEST_ASSERT_EQ_INT(ret, 0);
     ctx.waiters[0] = &waiter;
     ret = mr_waiter_wait(&waiter, &able);
@@ -419,8 +406,6 @@ MR_TEST(wait, deep_multi_bit_event_mask) {
     mr_waitable_del(&able);
 }
 
-/* Test: changing the event of an unvisited waiter from a callback removes
- * it from the current raise */
 MR_TEST(wait, deep_event_set_during_handle) {
     deep_wait_ctx_t ctx;
     deep_wait_arg_t args[2];
@@ -472,7 +457,6 @@ MR_TEST(wait, deep_event_set_during_handle) {
     mr_waitable_del(&able);
 }
 
-/* Test: a waiter can be moved between waitables */
 MR_TEST(wait, deep_two_waitables_sequential) {
     deep_wait_ctx_t ctx;
     deep_wait_arg_t arg;
@@ -516,7 +500,6 @@ MR_TEST(wait, deep_two_waitables_sequential) {
     mr_waitable_del(&able2);
 }
 
-/* Test: a waiter can switch to another waitable from its own callback */
 MR_TEST(wait, deep_wait_other_able_from_callback) {
     deep_wait_ctx_t ctx;
     deep_wait_arg_t arg;
@@ -561,8 +544,6 @@ MR_TEST(wait, deep_wait_other_able_from_callback) {
     mr_waitable_del(&able2);
 }
 
-/* Test: cancelling an unvisited waiter from a callback skips it without
- * disturbing the iteration of the others */
 MR_TEST(wait, deep_cancel_mid_list_from_callback) {
     deep_wait_ctx_t ctx;
     deep_wait_arg_t args[5];
@@ -602,8 +583,6 @@ MR_TEST(wait, deep_cancel_mid_list_from_callback) {
     mr_waitable_del(&able);
 }
 
-/* Test: a nested raise runs on its own cursor and leaves the outer raise
- * consistent */
 MR_TEST(wait, deep_nested_raise_cursor_isolation) {
     deep_wait_ctx_t ctx;
     deep_wait_arg_t args[3];

@@ -1,9 +1,9 @@
 /**
- * @copyright (c) 2024-2026, MacRsh
+ * @copyright (c) 2026, MacRsh
  *
  * @license SPDX-License-Identifier: Apache-2.0
  *
- * @date 2026-09-16        MacRsh        First version
+ * @date 2024-09-06        MacRsh        First version
  */
 
 #include <mrX/platform/mr_platform.h>
@@ -12,10 +12,10 @@
 #include "stm32h5xx_hal_tim.h"
 
 /* HardTree compatible */
-#define MR_HT_COMPAT st_stm32h5_tmr
+#define MR_HT_COMPAT                    st_stm32h5_tmr
 #if MR_HT_HAS_DRIVER()
 
-/* TMR operations */
+/* Driver TMR operations */
 static mr_err_t tmr_configure(const mr_driver_t *drv,
                               const mr_tmr_config_t *config);
 static mr_err_t tmr_configuration(const mr_driver_t *drv,
@@ -37,7 +37,7 @@ MR_UNUSED static const mr_tmr_ops_t __tmr_ops = {
     .event_control = tmr_event_control,
 };
 
-/* Timer instance state and its event/signal configuration */
+/* TMR private data type */
 typedef struct tmr_priv {
     TIM_HandleTypeDef handle;
     void (*clk_enable)(void);
@@ -45,15 +45,16 @@ typedef struct tmr_priv {
     mr_uint32_t irq_priority;
     mr_driver_t *drv;
     mr_tmr_config_t config;
-    mr_bool_t configured;
-    mr_bool_t signal_enabled;
-    mr_bool_t event_enabled;
+    mr_uint8_t signal_enabled: 1;
+    mr_uint8_t event_enabled: 1;
 } tmr_priv_t;
 
-/* Nanosecond conversion and prescaler search limits */
-#define TMR_NANOSECONDS      (1000000000ULL)
-#define TMR_PRESCALER_MAX    (65536ULL)
-#define TMR_PSC_SEARCH_LIMIT (64ULL)
+/* TMR time conversion definition */
+#define TMR_NANOSECONDS                 (1000000000ULL)
+
+/* TMR prescaler limit definition */
+#define TMR_PRESCALER_MAX               (65536ULL)
+#define TMR_PSC_SEARCH_LIMIT            (64ULL)
 
 static mr_bool_t tmr_is_apb2(TIM_TypeDef *instance) {
 #if defined(TIM1)
@@ -88,11 +89,11 @@ static mr_bool_t tmr_hw_busy(tmr_priv_t *priv) {
     mr_bool_t busy;
 
     /* Reconcile HAL state after hardware clears CEN in one-pulse mode */
-    busy = priv->configured
+    busy = (priv->drv != MR_NULL)
         && ((priv->handle.Instance->CR1 & TIM_CR1_CEN) != 0U);
-    if (priv->configured && !busy
+    if ((priv->drv != MR_NULL) && !busy
         && ((priv->handle.Instance->CR1 & TIM_CR1_OPM) != 0U)) {
-        (void)HAL_TIM_Base_Stop(&priv->handle);
+        HAL_TIM_Base_Stop(&priv->handle);
     }
     return busy;
 }
@@ -101,6 +102,7 @@ static mr_uint64_t tmr_clock(TIM_TypeDef *instance) {
     mr_uint32_t ppre, apb_div;
     mr_uint64_t pclk;
 
+    /* Get the APB clock and prescaler for this timer */
     if (tmr_is_apb2(instance)) {
         pclk = HAL_RCC_GetPCLK2Freq();
         ppre = (RCC->CFGR2 & RCC_CFGR2_PPRE2) >> RCC_CFGR2_PPRE2_Pos;
@@ -108,6 +110,8 @@ static mr_uint64_t tmr_clock(TIM_TypeDef *instance) {
         pclk = HAL_RCC_GetPCLK1Freq();
         ppre = (RCC->CFGR2 & RCC_CFGR2_PPRE1) >> RCC_CFGR2_PPRE1_Pos;
     }
+
+    /* Apply the APB prescaler and TIMPRE clock rules */
     if (ppre < 4U) {
         /* APB /1: the timer kernel clock equals PCLK */
         return pclk;
@@ -131,6 +135,7 @@ static mr_err_t tmr_make_period(TIM_TypeDef *instance, mr_uint64_t period,
     mr_uint64_t best_psc, best_counts, best_error;
     mr_uint64_t seconds, remainder;
 
+    /* Determine the timer clock and hardware counter range */
     best_psc = 0U;
     best_counts = 0U;
     best_error = MR_UINT64_MAX;
@@ -141,7 +146,7 @@ static mr_err_t tmr_make_period(TIM_TypeDef *instance, mr_uint64_t period,
         return -MR_ERANGE;
     }
 
-    /* Round nanoseconds to the nearest timer clock tick */
+    /* Split the period to avoid overflowing the nanosecond product */
     seconds = period / TMR_NANOSECONDS;
     remainder = period % TMR_NANOSECONDS;
     if (seconds > (MR_UINT64_MAX / timer_clock)) {
@@ -149,7 +154,7 @@ static mr_err_t tmr_make_period(TIM_TypeDef *instance, mr_uint64_t period,
     }
     ticks = seconds * timer_clock;
     remainder = ((remainder * timer_clock) + (TMR_NANOSECONDS / 2U))
-              / TMR_NANOSECONDS;
+        / TMR_NANOSECONDS;
     if (ticks > (MR_UINT64_MAX - remainder)) {
         return -MR_ERANGE;
     }
@@ -186,6 +191,7 @@ static mr_err_t tmr_make_period(TIM_TypeDef *instance, mr_uint64_t period,
         return -MR_ERANGE;
     }
 
+    /* Return the register values and their actual period */
     *prescaler = (uint32_t)(best_psc - 1U);
     *arr = (uint32_t)(best_counts - 1U);
     actual_ticks = best_counts * best_psc;
@@ -242,24 +248,23 @@ static mr_err_t tmr_configure(const mr_driver_t *drv,
         return ret;
     }
 
-    /* Select one-shot or periodic */
+    /* HAL base initialization does not configure one-pulse mode */
     if (config->mode == MR_TMR_MODE_ONESHOT) {
         SET_BIT(priv->handle.Instance->CR1, TIM_CR1_OPM);
     } else {
         CLEAR_BIT(priv->handle.Instance->CR1, TIM_CR1_OPM);
     }
 
-    /* Enable the NVIC line after a successful first init */
-    /* Return only a configuration that has been applied to hardware */
-    if (!priv->configured) {
+    /* Save the configuration applied to hardware */
+    priv->config = *config;
+    priv->config.period = actual_period;
+
+    /* Set the IRQ owner before enabling the line */
+    if (priv->drv == MR_NULL) {
+        priv->drv = (mr_driver_t *)drv;
         HAL_NVIC_SetPriority(priv->irqn, priv->irq_priority, 0U);
         HAL_NVIC_EnableIRQ(priv->irqn);
     }
-
-    priv->config = *config;
-    priv->config.period = actual_period;
-    priv->drv = (mr_driver_t *)drv;
-    priv->configured = MR_TRUE;
     return 0;
 }
 
@@ -268,7 +273,7 @@ static mr_err_t tmr_configuration(const mr_driver_t *drv,
     tmr_priv_t *priv = MR_DRIVER_PRIV(drv);
 
     /* Check that the time base has been initialized */
-    if (!priv->configured) {
+    if (priv->drv == MR_NULL) {
         return -MR_ENODEV;
     }
 
@@ -281,7 +286,8 @@ static mr_err_t tmr_start(const mr_driver_t *drv) {
     tmr_priv_t *priv = MR_DRIVER_PRIV(drv);
     HAL_StatusTypeDef status;
 
-    if (!priv->configured) {
+    /* Check configuration */
+    if (priv->drv == MR_NULL) {
         return -MR_ENODEV;
     }
 
@@ -295,6 +301,7 @@ static mr_err_t tmr_start(const mr_driver_t *drv) {
     /* Reload from 0 so the first period is complete */
     __HAL_TIM_SET_COUNTER(&priv->handle, 0U);
     __HAL_TIM_CLEAR_FLAG(&priv->handle, TIM_FLAG_UPDATE);
+    /* Enable update IRQs only for a timeout subscription */
     if (priv->event_enabled) {
         status = HAL_TIM_Base_Start_IT(&priv->handle);
     } else {
@@ -323,27 +330,25 @@ static mr_err_t tmr_signal_control(const mr_driver_t *drv,
     TIM_MasterConfigTypeDef master;
     mr_err_t ret;
 
-    master = (TIM_MasterConfigTypeDef){0};
     /* Check signal and hardware capability */
     if (signal != MR_TMR_SIGNAL_PERIOD) {
         return -MR_EINVAL;
     }
-    /* Check signal and hardware capability */
-    if (!priv->configured) {
+    if (priv->drv == MR_NULL) {
         return -MR_ENODEV;
     }
     if (!IS_TIM_MASTER_INSTANCE(priv->handle.Instance)) {
         return -MR_ENOSYS;
     }
 
-    /* Select the natural update event without starting or stopping the TMR */
-    /* Select the natural update event without starting or stopping the TMR */
+    /* Route update events without changing counter state */
+    master = (TIM_MasterConfigTypeDef){0};
     master.MasterOutputTrigger = enable ? TIM_TRGO_UPDATE : TIM_TRGO_RESET;
     master.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
     ret = mr_stm32h5_hal_status(
         HAL_TIMEx_MasterConfigSynchronization(&priv->handle, &master));
     if (ret == 0) {
-        priv->signal_enabled = enable;
+        priv->signal_enabled = (enable != MR_FALSE);
     }
     return ret;
 }
@@ -353,7 +358,6 @@ static mr_err_t tmr_event_control(const mr_driver_t *drv, mr_uint32_t events,
     tmr_priv_t *priv = MR_DRIVER_PRIV(drv);
 
     /* Check parameter */
-    /* Check parameter */
     if ((events == 0U) || ((events & ~MR_TMR_WAIT_TIMEOUT) != 0U)) {
         return -MR_EINVAL;
     }
@@ -362,7 +366,8 @@ static mr_err_t tmr_event_control(const mr_driver_t *drv, mr_uint32_t events,
     if (tmr_hw_busy(priv)) {
         return -MR_EBUSY;
     }
-    priv->event_enabled = enable;
+    /* Apply the subscription on the next start */
+    priv->event_enabled = (enable != MR_FALSE);
     return 0;
 }
 
@@ -378,20 +383,26 @@ static void tmr_irq(tmr_priv_t *priv) {
         = ((__HAL_TIM_GET_FLAG(&priv->handle, TIM_FLAG_UPDATE) != 0U)
            && (__HAL_TIM_GET_IT_SOURCE(&priv->handle, TIM_IT_UPDATE) != 0U));
     HAL_TIM_IRQHandler(&priv->handle);
-    if (update_pending && priv->event_enabled) {
-        (void)mr_tmr_event_raise(priv->drv, MR_TMR_WAIT_TIMEOUT);
+
+    /* Deliver only subscribed update events */
+    if (update_pending && priv->event_enabled && (priv->drv != MR_NULL)) {
+        mr_tmr_event_raise(priv->drv, MR_TMR_WAIT_TIMEOUT);
     }
 }
 
+/* Instance install with per-timer state and IRQ handler */
 #define ST_HT_TMR_INSTALL(_id, _ops)                                           \
     static void MR_CAT(__tmr_clk_enable_, _id)(void) {                         \
         MR_HT_DRIVER_PROP(_id, st_clken)();                                    \
     }                                                                          \
-    static tmr_priv_t MR_CAT(__tmr_priv_, _id)                                 \
-        = {.handle = {.Instance = MR_HT_DRIVER_PROP(_id, st_timx)},            \
-           .clk_enable = MR_CAT(__tmr_clk_enable_, _id),                       \
-           .irqn = MR_HT_DRIVER_PROP(_id, st_irqn),                            \
-           .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority)};           \
+    static tmr_priv_t MR_CAT(__tmr_priv_, _id) = {                             \
+        .handle = {                                                            \
+            .Instance = MR_HT_DRIVER_PROP(_id, st_timx),                       \
+        },                                                                     \
+        .clk_enable = MR_CAT(__tmr_clk_enable_, _id),                          \
+        .irqn = MR_HT_DRIVER_PROP(_id, st_irqn),                               \
+        .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),               \
+    };                                                                         \
     void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {                        \
         tmr_irq(&MR_CAT(__tmr_priv_, _id));                                    \
     }                                                                          \

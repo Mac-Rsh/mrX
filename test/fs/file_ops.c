@@ -7,7 +7,7 @@
  */
 
 #include <mrX/test/mr_test.h>
-#if defined(MR_USE_TEST) && defined(MR_USE_FS)
+#if defined(MR_USE_TEST) && defined(MR_USE_FS) && defined(MR_USE_FS_RAMFS)
 #include <mrX.h>
 #include <mrX/test/fs/fs_test.h>
 
@@ -57,8 +57,7 @@ MR_TEST(fs, dir_policy) {
     dir_stat_expect(__test_status, "/parent/child", 0);
 
     /* Remove children then the parent */
-    dir_expect(__test_status, "rmdir child", mr_fs_rmdir("/parent/child"),
-               0);
+    dir_expect(__test_status, "rmdir child", mr_fs_rmdir("/parent/child"), 0);
     dir_expect(__test_status, "rmdir parent", mr_fs_rmdir("/parent"), 0);
     dir_stat_expect(__test_status, "/parent", -MR_ENOENT);
 
@@ -79,14 +78,14 @@ MR_TEST(fs, dir_policy) {
     if (ret == 0) {
         dir_expect(__test_status, "close dst", mr_fs_close(&file), 0);
     }
-    dir_expect(__test_status, "rename over exist",
-               mr_fs_rename("/src", "/dst"), -MR_EEXIST);
+    dir_expect(__test_status, "rename over exist", mr_fs_rename("/src", "/dst"),
+               -MR_EEXIST);
     dir_stat_expect(__test_status, "/src", 0);
     dir_stat_expect(__test_status, "/dst", 0);
 
     /* Same-name rename is a no-op success */
-    dir_expect(__test_status, "rename same name",
-               mr_fs_rename("/src", "/src"), 0);
+    dir_expect(__test_status, "rename same name", mr_fs_rename("/src", "/src"),
+               0);
     dir_stat_expect(__test_status, "/src", 0);
 
     /* Cross-directory rename within the same FS */
@@ -160,8 +159,8 @@ MR_TEST(fs, dir_policy) {
     dir_stat_expect(__test_status, "/again2", 0);
 
     /* Remove the renamed directory */
-    dir_expect(__test_status, "rmdir renamed directory",
-               mr_fs_rmdir("/again2"), 0);
+    dir_expect(__test_status, "rmdir renamed directory", mr_fs_rmdir("/again2"),
+               0);
     dir_stat_expect(__test_status, "/again2", -MR_ENOENT);
 
     /* Open-file still readable after umount of nested FS is covered elsewhere;
@@ -173,7 +172,6 @@ MR_TEST(fs, dir_policy) {
     dir_expect(__test_status, "final umount", mr_fs_umount("/"), 0);
     return;
 }
-/* ==== from open_flags.c ==== */
 static void open_flags_expect(volatile mr_uint32_t *__test_status,
                               const char *name, mr_int64_t actual,
                               mr_int64_t expected) {
@@ -346,7 +344,6 @@ MR_TEST(fs, open_flags) {
     open_flags_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
 }
-/* ==== from truncate.c ==== */
 static void truncate_expect(volatile mr_uint32_t *__test_status,
                             const char *name, mr_int64_t actual,
                             mr_int64_t expected) {
@@ -497,7 +494,6 @@ _exit:
     truncate_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
 }
-/* ==== from relative.c ==== */
 static void fs_relative_expect(volatile mr_uint32_t *__test_status,
                                const char *name, mr_int64_t actual,
                                mr_int64_t expected) {
@@ -599,14 +595,14 @@ MR_TEST(fs, relative) {
         MR_TEST_EXPECT_EQ_INT(mr_strcmp(root_exact, "/"), 0);
     }
     fs_relative_expect(__test_status, "getcwd root short size",
-                       mr_fs_getcwd(root_short, sizeof(root_short)), -MR_ERANGE);
+                       mr_fs_getcwd(root_short, sizeof(root_short)),
+                       -MR_ERANGE);
     fs_relative_expect(__test_status, "getcwd root short keeps data",
                        root_short[0], 'X');
     fs_relative_expect(__test_status, "rmdir base", mr_fs_rmdir("/base"), 0);
     fs_relative_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
 }
-/* ==== from rename_cwd.c ==== */
 static void rename_cwd_expect(volatile mr_uint32_t *__test_status,
                               const char *name, mr_int64_t actual,
                               mr_int64_t expected) {
@@ -628,7 +624,6 @@ static void rename_cwd_expect_path(volatile mr_uint32_t *__test_status,
     }
 }
 
-/* Test: rename an active ancestor without invalidating CWD or open files */
 MR_TEST(fs, rename_cwd) {
     mr_file_t file = MR_FILE_INIT(file);
     mr_stat_t stat;
@@ -722,7 +717,6 @@ _exit:
         rename_cwd_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     }
 }
-/* ==== from path_resolve.c ==== */
 static void path_expect(volatile mr_uint32_t *__test_status, const char *name,
                         mr_int64_t actual, mr_int64_t expected) {
     MR_IGNORE(name);
@@ -842,7 +836,6 @@ MR_TEST(fs, path_resolve) {
     path_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
 }
-/* ==== from lifecycle_edges.c ==== */
 static void lifecycle_edges_expect(volatile mr_uint32_t *__test_status,
                                    const char *name, mr_int64_t actual,
                                    mr_int64_t expected) {
@@ -914,7 +907,6 @@ MR_TEST(fs, lifecycle_edges) {
     lifecycle_edges_expect(__test_status, "umount ramfs", mr_fs_umount("/"), 0);
     return;
 }
-/* ==== from io_errors.c ==== */
 static void io_errors_expect(volatile mr_uint32_t *__test_status,
                              const char *name, mr_int64_t actual,
                              mr_int64_t expected) {
@@ -984,8 +976,8 @@ MR_TEST(fs, io_errors) {
                      mr_fs_lseek(&file, 1, MR_SEEK_SET), -MR_EBADF);
     io_errors_expect(__test_status, "position closed",
                      mr_fs_lseek(&file, 0, MR_SEEK_CUR), -MR_EBADF);
-    io_errors_expect(__test_status, "truncate closed", mr_fs_ftruncate(&file, 1),
-                     -MR_EBADF);
+    io_errors_expect(__test_status, "truncate closed",
+                     mr_fs_ftruncate(&file, 1), -MR_EBADF);
 
     /* getcwd buffer too small at root */
     io_errors_expect(__test_status, "chdir root", mr_fs_chdir("/"), 0);
@@ -1011,8 +1003,8 @@ static mr_err_t syncfs_inode_create(mr_inode_t *dir, const char *name,
                                     mr_inode_type_t type, mr_inode_t **out);
 static mr_err_t syncfs_file_sync(mr_file_t *file);
 static mr_err_t syncfs_file_ioctl(mr_file_t *file, int cmd, void *arg);
-static mr_err_t syncfs_mount(mr_sblock_t *sb, const char *source,
-                             int flags, void *data);
+static mr_err_t syncfs_mount(mr_sblock_t *sb, const char *source, int flags,
+                             void *data);
 
 static const mr_inode_ops_t __syncfs_inode_ops = {
     .create = syncfs_inode_create,
@@ -1060,8 +1052,8 @@ static mr_err_t syncfs_file_ioctl(mr_file_t *file, int cmd, void *arg) {
     return (cmd == 0x55) ? 0 : -MR_EINVAL;
 }
 
-static mr_err_t syncfs_mount(mr_sblock_t *sb, const char *source,
-                             int flags, void *data) {
+static mr_err_t syncfs_mount(mr_sblock_t *sb, const char *source, int flags,
+                             void *data) {
     MR_IGNORE(source);
     MR_IGNORE(flags);
     MR_IGNORE(data);
@@ -1148,4 +1140,5 @@ MR_TEST(fs, sync_ioctl) {
     return;
 }
 
-#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) */
+#endif /* defined(MR_USE_TEST) && defined(MR_USE_FS) &&                        \
+          defined(MR_USE_FS_RAMFS) */

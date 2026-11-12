@@ -50,7 +50,6 @@ MR_TEST(fs, dentry_name_and_empty) {
     MR_TEST_EXPECT_EQ_INT(mr_dentry_put(dentry), MR_FALSE);
     mr_dentry_del(dentry);
 }
-/* ==== from dentry_lookup.c ==== */
 static void dentry_lookup_expect(volatile mr_uint32_t *__test_status,
                                  const char *name, mr_int64_t actual,
                                  mr_int64_t expected) {
@@ -59,7 +58,6 @@ static void dentry_lookup_expect(volatile mr_uint32_t *__test_status,
     MR_TEST_EXPECT_EQ_INT(actual, expected);
 }
 
-/* Test: direct dentry path lookup over a manually built tree */
 MR_TEST(fs, dentry_lookup_api) {
     mr_dentry_t *root;
     mr_dentry_t *a;
@@ -70,7 +68,8 @@ MR_TEST(fs, dentry_lookup_api) {
 
     /* Build root/a/b/leaf */
     root = mr_dentry_create(MR_NULL, "%s", "root");
-    dentry_lookup_expect(__test_status, "create root", root != MR_NULL, MR_TRUE);
+    dentry_lookup_expect(__test_status, "create root", root != MR_NULL,
+                         MR_TRUE);
     if (!root) {
         return;
     }
@@ -91,8 +90,7 @@ MR_TEST(fs, dentry_lookup_api) {
     }
     dentry_lookup_expect(__test_status, "add a", mr_dentry_add(a, root), 0);
     dentry_lookup_expect(__test_status, "add b", mr_dentry_add(b, a), 0);
-    dentry_lookup_expect(__test_status, "add leaf",
-                         mr_dentry_add(leaf, b), 0);
+    dentry_lookup_expect(__test_status, "add leaf", mr_dentry_add(leaf, b), 0);
 
     /* A plain multi-component path resolves to the leaf */
     result = MR_NULL;
@@ -107,9 +105,9 @@ MR_TEST(fs, dentry_lookup_api) {
 
     /* Dot components are skipped and dot-dot climbs the tree */
     result = MR_NULL;
-    dentry_lookup_expect(__test_status, "resolve dots",
-                         mr_dentry_lookup(root, MR_NULL, "a/./b/../b/leaf",
-                                          &result), 0);
+    dentry_lookup_expect(
+        __test_status, "resolve dots",
+        mr_dentry_lookup(root, MR_NULL, "a/./b/../b/leaf", &result), 0);
     dentry_lookup_expect(__test_status, "dots resolved leaf", result == leaf,
                          MR_TRUE);
     if (result) {
@@ -138,8 +136,8 @@ MR_TEST(fs, dentry_lookup_api) {
     result = MR_NULL;
     dentry_lookup_expect(__test_status, "resolve clamped dot-dot",
                          mr_dentry_lookup(root, b, "a/b/..", &result), 0);
-    dentry_lookup_expect(__test_status, "dot-dot stopped at limit",
-                         result == b, MR_TRUE);
+    dentry_lookup_expect(__test_status, "dot-dot stopped at limit", result == b,
+                         MR_TRUE);
     if (result) {
         mr_dentry_put(result);
     }
@@ -157,8 +155,8 @@ MR_TEST(fs, dentry_lookup_api) {
     dentry_lookup_expect(__test_status, "resolve missing leaf",
                          mr_dentry_lookup(root, MR_NULL, "a/missing", &result),
                          -MR_ENOENT);
-    dentry_lookup_expect(__test_status, "missing leaf result", result == MR_NULL,
-                         MR_TRUE);
+    dentry_lookup_expect(__test_status, "missing leaf result",
+                         result == MR_NULL, MR_TRUE);
 
     /* Walking through a non-directory inode is rejected */
     inode = mr_inode_create(MR_INODE_REG, MR_NULL, MR_NULL, MR_NULL);
@@ -168,9 +166,10 @@ MR_TEST(fs, dentry_lookup_api) {
         dentry_lookup_expect(__test_status, "instantiate leaf",
                              mr_dentry_instantiate(leaf, inode), 0);
         result = MR_NULL;
-        dentry_lookup_expect(__test_status, "resolve through file",
-                             mr_dentry_lookup(root, MR_NULL, "a/b/leaf/x",
-                                              &result), -MR_ENOTDIR);
+        dentry_lookup_expect(
+            __test_status, "resolve through file",
+            mr_dentry_lookup(root, MR_NULL, "a/b/leaf/x", &result),
+            -MR_ENOTDIR);
         dentry_lookup_expect(__test_status, "uninstantiate leaf",
                              mr_dentry_uninstantiate(leaf), 0);
         mr_inode_put(inode);
@@ -183,7 +182,6 @@ MR_TEST(fs, dentry_lookup_api) {
     dentry_lookup_expect(__test_status, "del root", mr_dentry_del(root), 0);
     return;
 }
-/* ==== from dentry_ops.c ==== */
 static void dentry_ops_expect(volatile mr_uint32_t *__test_status,
                               const char *name, mr_int64_t actual,
                               mr_int64_t expected) {
@@ -382,15 +380,13 @@ static const mr_inode_ops_t __fsops_dir_ops = {
     .unlink = fsops_inode_unlink,
 };
 
-static void fsops_expect(volatile mr_uint32_t *__test_status,
-                         const char *name, mr_int64_t actual,
-                         mr_int64_t expected) {
+static void fsops_expect(volatile mr_uint32_t *__test_status, const char *name,
+                         mr_int64_t actual, mr_int64_t expected) {
     MR_IGNORE(name);
 
     MR_TEST_EXPECT_EQ_INT(actual, expected);
 }
 
-/* Test: dentry rename with backing directory inodes */
 MR_TEST(fs, dentry_rename_api) {
     mr_dentry_t *root;
     mr_dentry_t *p1;
@@ -433,7 +429,8 @@ MR_TEST(fs, dentry_rename_api) {
     q2 = mr_dentry_create(MR_NULL, "%s", "q2");
     fsops_expect(__test_status, "create parents",
                  (p1 != MR_NULL) && (p2 != MR_NULL) && (q1 != MR_NULL)
-                     && (q2 != MR_NULL), MR_TRUE);
+                     && (q2 != MR_NULL),
+                 MR_TRUE);
     if ((!p1) || (!p2) || (!q1) || (!q2)) {
         if (p1) {
             mr_dentry_del(p1);
@@ -456,15 +453,18 @@ MR_TEST(fs, dentry_rename_api) {
     fsops_expect(__test_status, "add p2", mr_dentry_add(p2, root), 0);
     fsops_expect(__test_status, "add q1", mr_dentry_add(q1, root), 0);
     fsops_expect(__test_status, "add q2", mr_dentry_add(q2, root), 0);
-    fsops_expect(__test_status, "bind dir1", mr_dentry_instantiate(p1, dir1), 0);
-    fsops_expect(__test_status, "bind dir2", mr_dentry_instantiate(p2, dir2), 0);
+    fsops_expect(__test_status, "bind dir1", mr_dentry_instantiate(p1, dir1),
+                 0);
+    fsops_expect(__test_status, "bind dir2", mr_dentry_instantiate(p2, dir2),
+                 0);
 
     child = mr_dentry_create(MR_NULL, "%s", "c");
     child2 = mr_dentry_create(MR_NULL, "%s", "c2");
     childq = mr_dentry_create(MR_NULL, "%s", "cq");
     fsops_expect(__test_status, "create children",
                  (child != MR_NULL) && (child2 != MR_NULL)
-                     && (childq != MR_NULL), MR_TRUE);
+                     && (childq != MR_NULL),
+                 MR_TRUE);
     if ((!child) || (!child2) || (!childq)) {
         if (child) {
             mr_dentry_del(child);
@@ -509,8 +509,8 @@ MR_TEST(fs, dentry_rename_api) {
     /* Rename without backed parents is rejected and the tree is unchanged */
     fsops_expect(__test_status, "rename unbacked parents",
                  mr_dentry_rename(childq, q2, "moved"), -MR_ENOENT);
-    fsops_expect(__test_status, "childq still in q1",
-                 mr_dentry_is_empty(q1), MR_FALSE);
+    fsops_expect(__test_status, "childq still in q1", mr_dentry_is_empty(q1),
+                 MR_FALSE);
 
     /* A failing backend rename keeps the source in place */
     __fsops_rename_fail = MR_TRUE;
@@ -531,8 +531,8 @@ MR_TEST(fs, dentry_rename_api) {
                  (mr_int64_t)__fsops_rename_calls, 2);
     fsops_expect(__test_status, "old parent keeps child2",
                  mr_dentry_is_empty(p1), MR_FALSE);
-    fsops_expect(__test_status, "new parent has child",
-                 mr_dentry_is_empty(p2), MR_FALSE);
+    fsops_expect(__test_status, "new parent has child", mr_dentry_is_empty(p2),
+                 MR_FALSE);
 
     /* Teardown */
     fsops_expect(__test_status, "del child", mr_dentry_del(child), 0);
@@ -553,7 +553,6 @@ MR_TEST(fs, dentry_rename_api) {
     return;
 }
 
-/* Test: dentry unlink with backing directory inodes */
 MR_TEST(fs, dentry_unlink_api) {
     mr_dentry_t *root;
     mr_dentry_t *p;
@@ -590,14 +589,15 @@ MR_TEST(fs, dentry_unlink_api) {
     fsops_expect(__test_status, "create inodes",
                  (dir != MR_NULL) && (dir2 != MR_NULL) && (reg != MR_NULL)
                      && (sub_dir != MR_NULL) && (leaf_reg != MR_NULL)
-                     && (data_reg != MR_NULL), MR_TRUE);
+                     && (data_reg != MR_NULL),
+                 MR_TRUE);
     p = mr_dentry_create(MR_NULL, "%s", "p");
     p2 = mr_dentry_create(MR_NULL, "%s", "p2");
     pr = mr_dentry_create(MR_NULL, "%s", "pr");
     fsops_expect(__test_status, "create parents",
                  (p != MR_NULL) && (p2 != MR_NULL) && (pr != MR_NULL), MR_TRUE);
-    if ((!dir) || (!dir2) || (!reg) || (!sub_dir) || (!leaf_reg)
-        || (!data_reg) || (!p) || (!p2) || (!pr)) {
+    if ((!dir) || (!dir2) || (!reg) || (!sub_dir) || (!leaf_reg) || (!data_reg)
+        || (!p) || (!p2) || (!pr)) {
         if (p) {
             mr_dentry_del(p);
         }
@@ -632,7 +632,8 @@ MR_TEST(fs, dentry_unlink_api) {
     fsops_expect(__test_status, "add p2", mr_dentry_add(p2, root), 0);
     fsops_expect(__test_status, "add pr", mr_dentry_add(pr, root), 0);
     fsops_expect(__test_status, "bind dir", mr_dentry_instantiate(p, dir), 0);
-    fsops_expect(__test_status, "bind dir2", mr_dentry_instantiate(p2, dir2), 0);
+    fsops_expect(__test_status, "bind dir2", mr_dentry_instantiate(p2, dir2),
+                 0);
     fsops_expect(__test_status, "bind reg parent",
                  mr_dentry_instantiate(pr, reg), 0);
 
@@ -650,8 +651,8 @@ MR_TEST(fs, dentry_unlink_api) {
     inreg = mr_dentry_create(MR_NULL, "%s", "inreg");
     fsops_expect(__test_status, "create inreg", inreg != MR_NULL, MR_TRUE);
     if (inreg) {
-        mr_inode_t *inreg_reg = mr_inode_create(MR_INODE_REG, MR_NULL, MR_NULL,
-                                                MR_NULL);
+        mr_inode_t *inreg_reg
+            = mr_inode_create(MR_INODE_REG, MR_NULL, MR_NULL, MR_NULL);
         if (inreg_reg) {
             fsops_expect(__test_status, "bind inreg inode",
                          mr_dentry_instantiate(inreg, inreg_reg), 0);
@@ -687,8 +688,8 @@ MR_TEST(fs, dentry_unlink_api) {
         fsops_expect(__test_status, "unlink non-empty dir",
                      mr_dentry_unlink(sub), -MR_ENOTEMPTY);
         fsops_expect(__test_status, "unlink leaf", mr_dentry_unlink(leaf), 0);
-        fsops_expect(__test_status, "unlink emptied dir",
-                     mr_dentry_unlink(sub), 0);
+        fsops_expect(__test_status, "unlink emptied dir", mr_dentry_unlink(sub),
+                     0);
         fsops_expect(__test_status, "sub parent empty", mr_dentry_is_empty(p2),
                      MR_TRUE);
     }

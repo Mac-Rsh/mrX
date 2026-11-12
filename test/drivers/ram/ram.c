@@ -180,10 +180,11 @@ MR_TEST(ram, region_and_io) {
     /* A zero-size access at the end is valid, beyond the end is not */
     MR_TEST_ASSERT_EQ_INT(
         mr_ram_write(drv, sizeof(ram_region_mem), MR_NULL, 0U), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_ram_read(drv, sizeof(ram_region_mem), MR_NULL, 0U),
+                          0);
     MR_TEST_ASSERT_EQ_INT(
-        mr_ram_read(drv, sizeof(ram_region_mem), MR_NULL, 0U), 0);
-    MR_TEST_ASSERT_EQ_INT(
-        mr_ram_write(drv, sizeof(ram_region_mem) + 1U, MR_NULL, 0U), -MR_EINVAL);
+        mr_ram_write(drv, sizeof(ram_region_mem) + 1U, MR_NULL, 0U),
+        -MR_EINVAL);
     MR_TEST_ASSERT_EQ_INT(
         mr_ram_read(drv, sizeof(ram_region_mem) - 1U, &output, 2U), -MR_EINVAL);
 
@@ -191,19 +192,22 @@ MR_TEST(ram, region_and_io) {
 }
 
 MR_TEST(ram, unsupported_io) {
-    mr_driver_t *drv;
+    mr_ram_data_t data = {0};
+    mr_ram_ops_t ops = ram_probe_only_ops;
     mr_ram_region_t region;
+    mr_driver_t drv;
     mr_uint8_t value = 0U;
 
     ram_test_reset();
     ram_regions_num = 0U;
-    drv = ram_create(&ram_probe_only_ops);
-    MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
-    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(drv), 0);
-    MR_TEST_ASSERT_EQ_INT(mr_ram_region(drv, 0U, &region), -MR_ENOSYS);
-    MR_TEST_ASSERT_EQ_INT(mr_ram_read(drv, 0U, &value, 1U), -MR_ENOSYS);
-    MR_TEST_ASSERT_EQ_INT(mr_ram_write(drv, 0U, &value, 1U), -MR_ENOSYS);
-    mr_ram_del(drv);
+    MR_TEST_ASSERT_EQ_INT(mr_ram_init(&drv, &data, MR_NULL, &ops), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_ram_region(&drv, 0U, &region), -MR_ENOSYS);
+    MR_TEST_EXPECT_EQ_INT(mr_ram_read(&drv, 0U, &value, 1U), -MR_ENOSYS);
+    MR_TEST_EXPECT_EQ_INT(mr_ram_write(&drv, 0U, &value, 1U), -MR_ENOSYS);
+    MR_TEST_ASSERT_EQ_PTR(mr_ram_get(&drv), &drv);
+    MR_TEST_EXPECT_EQ_INT(mr_ram_del(&drv), 0);
+    MR_TEST_EXPECT_EQ_INT(mr_ram_put(&drv), MR_TRUE);
 }
 
 #endif

@@ -10,12 +10,10 @@
 #if defined(MR_USE_TEST)
 #include <mrX/kernel/mr_ref.h>
 
-/* Helpers */
 static void test_ref_stub_release(mr_ref_t *ref) {
     *ref = 0xdeadbeef;
 }
 
-/* Tests */
 MR_TEST(ref, static_init) {
     static mr_ref_t r = MR_REF_INIT();
 

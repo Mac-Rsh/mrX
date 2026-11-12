@@ -14,7 +14,8 @@
 
 ### 1. 侵入式双向链表
 
-`mr_list_t` 既可作为链表头，也可内嵌到业务对象中作为节点。空链表头的 `next/prev` 都指向自身。
+`mr_list_t` 既可作为链表头，也可内嵌到业务对象中作为节点。空链表头的 `next/prev`
+都指向自身。
 
 ```c
 typedef struct item {
@@ -56,12 +57,14 @@ int mask = mr_spinlock_lock_irqsave(&lock);
 mr_spinlock_unlock_irqrestore(&lock, mask);
 ```
 
-`mr_spinlock_lock` 会忙等，`mr_spinlock_try_lock` 只尝试一次。`irqsave` 变体先保存并关闭本地中断，解锁时必须把原 mask 传回
+`mr_spinlock_lock` 会忙等，`mr_spinlock_try_lock` 只尝试一次。`irqsave`
+变体先保存并关闭本地中断，解锁时必须把原 mask 传回
 `mr_spinlock_unlock_irqrestore`。不要在自旋锁临界区中阻塞、等待事件或执行无界耗时操作。
 
 ### 3. 引用计数
 
-`mr_ref_t` 把 magic 和计数存在同一原子值中。`mr_ref_init` 以计数 1 开始生命周期；`mr_ref_get` 仅在 magic 有效且计数非零时成功；
+`mr_ref_t` 把 magic 和计数存在同一原子值中。`mr_ref_init` 以计数 1 开始生命周期；
+`mr_ref_get` 仅在 magic 有效且计数非零时成功；
 `mr_ref_put` 在最后一个引用上先清除 magic，再同步调用可选 `release`。
 
 `MR_USE_REF_LONG_COUNT` 关闭时计数字段为 8 位，开启时为 16
@@ -69,18 +72,24 @@ mr_spinlock_unlock_irqrestore(&lock, mask);
 
 ### 4. 通用工具宏与奇偶校验
 
-`mr_service.h` 提供 `MR_CONTAINER_OF`、`MR_ARRAY_SIZE`、`MR_MIN/MAX`、`MR_ALIGN_UP/DOWN`、`MR_ROUND_DIV`、`MR_MAKE_LOCAL`
+`mr_service.h` 提供 `MR_CONTAINER_OF`、`MR_ARRAY_SIZE`、`MR_MIN/MAX`、
+`MR_ALIGN_UP/DOWN`、`MR_ROUND_DIV`、`MR_MAKE_LOCAL`
 、`MR_BSWAP16/32/64`、参数计数、拼接及条件展开等宏，以及 `mr_parity_even/odd`。
 
-`MR_MIN`、`MR_MAX` 可能多次求值参数，不得传入带自增、函数调用等副作用的表达式。`MR_ALIGN_UP/DOWN` 使用位运算，对齐值应为 2
-的幂。`MR_BSWAP16/32/64` 分别反转 16/32/64 位值的字节顺序，与当前 CPU 字节序无关；参数会多次求值，不得传入带副作用的表达式。
+`MR_MIN`、`MR_MAX` 可能多次求值参数，不得传入带自增、函数调用等副作用的表达式。
+`MR_ALIGN_UP/DOWN` 使用位运算，对齐值应为 2
+的幂。`MR_BSWAP16/32/64` 分别反转 16/32/64 位值的字节顺序，与当前 CPU
+字节序无关；参数会多次求值，不得传入带副作用的表达式。
 
 ### 5. 预处理展开与版本
 
-`MR_LISTIFY(n, separator, fn, ...)` 在预处理阶段展开 `fn(0, ...)` 到 `fn(n - 1, ...)`，支持的 n 上限为 4095；
-`MR_LISTIFY_NEST` 是用于避免同名递归展开冲突的辅助变体，上限为 255。这些宏主要用于静态初始化和代码生成，不产生运行期循环。
+`MR_LISTIFY(n, separator, fn, ...)` 在预处理阶段展开 `fn(0, ...)` 到
+`fn(n - 1, ...)`，支持的 n 上限为 4095；
+`MR_LISTIFY_NEST` 是用于避免同名递归展开冲突的辅助变体，上限为
+255。这些宏主要用于静态初始化和代码生成，不产生运行期循环。
 
-`mr_version.h` 提供 `MR_VERSION_MAJOR/MINOR/PATCH`、`MR_VERSION`、`MR_VERSION_CODE`、`MR_VERSION_IS`。`MR_VERSION` 编码为
+`mr_version.h` 提供 `MR_VERSION_MAJOR/MINOR/PATCH`、`MR_VERSION`、
+`MR_VERSION_CODE`、`MR_VERSION_IS`。`MR_VERSION` 编码为
 `major << 16 | minor << 8 | patch`。
 
 ---
@@ -91,7 +100,8 @@ mr_spinlock_unlock_irqrestore(&lock, mask);
 
 - list/service/version/listify 都不提供自动并发保护。
 - spinlock 的真实跨核和 IRQ 语义依赖 `mr_atomic_*` 与 `mr_port_irq_*` 的平台实现。
-- ref 的计数更新为原子操作，但最后一次 put 会在当前调用上下文同步执行 release；release 能否阻塞或在 ISR 执行由上层决定。
+- ref 的计数更新为原子操作，但最后一次 put 会在当前调用上下文同步执行
+  release；release 能否阻塞或在 ISR 执行由上层决定。
 - 上述工具都不跟踪业务对象所有权，不会防止误用已释放容器或节点。
 
 ### 7. 源码导读

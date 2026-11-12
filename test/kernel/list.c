@@ -17,8 +17,6 @@ typedef struct test_node {
     int id;
 } test_node_t;
 
-/* Tests */
-
 MR_TEST(list, static_init) {
     static mr_list_t head = MR_LIST_INIT(&head);
 
