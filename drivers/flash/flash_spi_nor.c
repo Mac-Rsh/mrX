@@ -1261,7 +1261,7 @@ static mr_err_t drv_probe(const mr_driver_t *drv, mr_flash_info_t *info) {
     info->program_size = 1U;
     info->page_size = geometry.page_size;
     info->regions_num = 1U;
-    info->erased_value = 0xffU;
+    mr_memset(info->erased_value, 0xff, sizeof(info->erased_value));
     return 0;
 }
 

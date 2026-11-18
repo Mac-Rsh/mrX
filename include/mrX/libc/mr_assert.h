@@ -13,7 +13,7 @@
 #if defined(MR_USE_ASSERT_STD)
 #include <assert.h>
 #elif defined(MR_USE_ASSERT_3RD)
-#include <mrX/3party/libc/mr_assert.h>
+#include <mrX/platform/libc/mr_assert.h>
 #elif defined(MR_USE_ASSERT)
 #include <mrX/port/mr_port_assert.h>
 #endif /* defined(MR_USE_ASSERT_STD) */
@@ -32,7 +32,7 @@ extern "C" {
 #define MR_ASSERT(_expr)                assert(_expr)
 #define MR_PANIC()                      assert(0)
 #elif defined(MR_USE_ASSERT_3RD)
-/* In 'mrX/3party/libc/mr_assert.h' */
+/* In 'mrX/platform/libc/mr_assert.h' */
 #elif defined(MR_USE_ASSERT)
 #define MR_ASSERT(_expr)                                                       \
     do {                                                                       \

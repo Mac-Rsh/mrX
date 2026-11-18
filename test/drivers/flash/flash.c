@@ -81,7 +81,7 @@ static void flash_reset(void) {
         .program_size = 4U,
         .page_size = 32U,
         .regions_num = 2U,
-        .erased_value = 0xffU,
+        .erased_value = {0xffU, 0xffU, 0xffU, 0xffU},
     };
     flash_probe_ret = 0;
     flash_offset = 0U;

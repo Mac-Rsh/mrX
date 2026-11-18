@@ -79,6 +79,8 @@ mrX/document/
 |----------------------------------|------------------------------------------------------------------------------------------|
 | [Usage](usage.md)                | 框架接入的最短流程、Kconfig UI、HTC、纳入构建、注册段、初始化和排查                      |
 | [Platform](platform/platform.md) | 已有平台安装、`install.toml`、新芯片移植和 `mr_port_*` 契约                              |
+| [WCH CH32](../arch/wch/ch32/README.md) | CH32V00x、CH32VM00X、CH32V20x 与 CH32V30x 的 EVT 工程接入 |
+| [STM32 平台适配](../arch/st/stm32/README.md) | 通用 STM32 的 HAL/Cube 工程接入与运行期语义 |
 | [脚本教程](scripts/README.md)    | CLI 入口及 `kconfig`、`htc`、`platform`、`sections`、`rpc-idl`、`mdk`、`echo` 的详细用法 |
 | [Test](test/test.md)             | 测试框架、测试用例注册和运行方式                                                         |
 
@@ -143,7 +145,10 @@ mrX/document/
 
 | 入口 | 说明 |
 |------|------|
-| [平台适配规范](arch/st/st.md) | 具体芯片的实现约束在对应 `arch/` 目录管理，不属于框架通用 API |
+| [ST（STM32）平台适配规范](arch/st/st.md) | ST 厂商适配的命名约定与分层归属 |
+| [STM32 平台适配](../arch/st/stm32/README.md) | 通用 STM32 各外设 compatible 的运行期语义与能力限制 |
+| [WCH（CH32）平台适配规范](arch/wch/wch.md) | WCH 厂商适配的命名约定与分层归属 |
+| [WCH CH32 平台适配](../arch/wch/ch32/README.md) | CH32 系列 EVT 工程的运行期语义 |
 
 适配规范在文档目录，芯片的运行期语义在源码目录，跟着适配代码走，避免两边漂移。新增厂商时两处都要补齐：
 `document/arch/<vendor>/` 下写规范，`mrX/arch/<vendor>/<target>/README.md`

@@ -35,7 +35,8 @@ choice
     config MR_USE_ASSERT_3RD
         bool "3RD"
         help
-            Use third-party assertion library. Provides custom panic handlers.
+            Use the assertion backend provided by the installed platform in
+            <mrX/platform/libc/mr_assert.h>.
 
     config MR_USE_ASSERT
         bool "INT"
@@ -173,7 +174,8 @@ choice
     config MR_USE_ATOMIC_3RD
         bool "3RD"
         help
-            Use third-party atomic operations library (e.g., C11 stdatomic.h).
+            Use the atomic backend provided by the installed platform in
+            <mrX/platform/libc/mr_atomic.h>. Windows uses native compiler atomics.
 
     config MR_USE_ATOMIC
         bool "INT"

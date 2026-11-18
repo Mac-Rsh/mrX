@@ -7,7 +7,7 @@
  * @date 2026-09-07        MacRsh        Flush output before exit
  */
 
-#include <mrX/platform/mr_platform.h>
+#include <mrX/port/mr_port_assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 

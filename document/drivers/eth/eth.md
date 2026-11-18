@@ -93,7 +93,7 @@ mr_ssize_t eth_receive_once(const char *name, void *buf, mr_size_t capacity) {
 | 4 | `MR_ETH_SPEED_1000M` | 1000 Mbit/s |
 | 5 | `MR_ETH_SPEED_2_5G` | 2.5 Gbit/s |
 
-回环模式中，`MR_ETH_LOOPBACK_MAC` 在 MAC 内部回送数据，`MR_ETH_LOOPBACK_PHY` 使用 PHY 本地回环。平台可以限制回环支持的速率或模式；STM32H5 后端要求回环时使用固定 10/100 Mbit/s 速率。回环启用时 `link.up` 表示本地回环数据路径已建立，而不是外部网线链路。
+回环模式中，`MR_ETH_LOOPBACK_MAC` 在 MAC 内部回送数据，`MR_ETH_LOOPBACK_PHY` 使用 PHY 本地回环。平台可以限制回环支持的速率或模式；STM32 后端当前要求回环时使用固定 10/100 Mbit/s 速率。回环启用时 `link.up` 表示本地回环数据路径已建立，而不是外部网线链路。
 
 HardTree 可通过 `speed`、`duplex`、`loopback`、`flow_rx`、`flow_tx`、`csum_rx` 和 `csum_tx` 指定初始配置；省略时分别使用自动协商、自动双工、关闭回环，并关闭流控和校验和卸载。`mtu` 省略时使用 1500。
 平台可用的速率由后端决定。运行时关闭端口后，可以重新配置速率启用端口，再按需启动 Stream。

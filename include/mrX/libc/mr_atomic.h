@@ -11,7 +11,7 @@
 
 #include <mrX/mr_config.h>
 #if defined(MR_USE_ATOMIC_3RD)
-#include <mrX/3party/libc/mr_atomic.h>
+#include <mrX/platform/libc/mr_atomic.h>
 #else
 #include <mrX/port/mr_port_irq.h>
 #endif /* defined(MR_USE_ATOMIC_3RD) */
@@ -29,7 +29,7 @@ extern "C" {
 
 /* Atomic definition */
 #if defined(MR_USE_ATOMIC_3RD)
-/* In 'mrX/3party/libc/mr_atomic.h' */
+/* In 'mrX/platform/libc/mr_atomic.h' */
 #else
 /* Atomic type */
 typedef mr_intptr_t                     mr_atomic_t;

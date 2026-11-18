@@ -13,7 +13,7 @@
 #if defined(MR_USE_ERRNO_STD)
 #include <errno.h>
 #elif defined(MR_USE_ERRNO_3RD)
-#include <mrX/3party/libc/mr_errno.h>
+#include <mrX/platform/libc/mr_errno.h>
 #endif /* defined(MR_USE_ERRNO_STD) */
 
 #ifdef __cplusplus
@@ -53,7 +53,7 @@ typedef int mr_err_t;
 #define MR_ELOOP                        ELOOP
 #define MR_ESPIPE                       ESPIPE
 #elif defined(MR_USE_ERRNO_3RD)
-/* In 'mrX/3party/libc/mr_errno.h' */
+/* In 'mrX/platform/libc/mr_errno.h' */
 #else
 #define MR_EPERM                        (1)
 #define MR_ENOENT                       (2)

@@ -78,7 +78,7 @@ typedef struct mr_dma_config {
 /* DMA transfer type */
 typedef struct mr_dma_transfer {
     struct mr_dma_transfer *next;
-    mr_size_t count;
+    mr_size_t count; /* Logical transfer item count */
     const void *src;
     void *dst;
 } mr_dma_transfer_t;

@@ -42,7 +42,11 @@ mr_flash_region(flash, 0, &region);
 | `program_size` | 最小编程单位，单位字节            |
 | `page_size`    | 编程页大小；无页边界概念时为 0    |
 | `regions_num`  | 擦除 region 数量                  |
-| `erased_value` | 擦除后的字节值，NOR 通常为 `0xff` |
+| `erased_value[4]` | 擦除后从 Flash 偏移 0 起按地址顺序重复的四字节模式 |
+
+擦除后偏移 `offset` 处的预期读回字节为 `erased_value[offset % 4U]`。
+全 `0xff` 的 NOR 填 `{0xff, 0xff, 0xff, 0xff}`，擦除后交替读回 `39 E3` 的
+CH32 型号填 `{0x39, 0xe3, 0x39, 0xe3}`。
 
 `mr_flash_region_t` 描述一个擦除几何区域：`offset`、`size` 与该区域的最小
 `erase_size`。不同 region 可以具有不同擦除粒度，因此能够覆盖部分

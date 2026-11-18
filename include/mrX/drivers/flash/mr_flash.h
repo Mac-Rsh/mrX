@@ -30,7 +30,7 @@ typedef struct mr_flash_info {
     mr_uint32_t program_size;
     mr_uint32_t page_size;
     mr_uint32_t regions_num;
-    mr_uint8_t erased_value;
+    mr_uint8_t erased_value[4];
 } mr_flash_info_t;
 
 /* Flash erase region type */

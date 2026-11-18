@@ -1,0 +1,54 @@
+menu "Platform: STM32"
+
+# ==================================
+# PLATFORM
+# ==================================
+config MR_USE_PLATFORM
+    def_bool y
+
+config MR_USE_STM32
+    def_bool y
+
+config MR_CFG_STM32_HAL_HEADER
+    string "STM32 HAL umbrella header"
+    default "stm32xxxx_hal.h"
+    help
+        HAL umbrella header provided by the board/Cube project. For example:
+        stm32f4xx_hal.h, stm32g4xx_hal.h or stm32h5xx_hal.h. The default is a
+        placeholder and must be replaced by the board configuration.
+
+# ==================================
+# CACHE
+# ==================================
+config MR_USE_DCACHE
+    bool "Use data cache port"
+    default n
+    help
+        Enable the generic STM32 D-cache port. The backend selects either a
+        STM32 HAL DCACHE peripheral or a CMSIS SCB D-cache from the capabilities
+        provided by the selected device/HAL headers. The HAL DCACHE instance is
+        initialized lazily by the cache port. Board code should use this port
+        instead of managing the same cache through a parallel HAL handle.
+
+config MR_USE_ICACHE
+    bool "Use instruction cache port"
+    default n
+    help
+        Enable the generic STM32 I-cache port. The backend selects either a
+        STM32 HAL ICACHE peripheral or a CMSIS SCB I-cache from the capabilities
+        provided by the selected device/HAL headers.
+
+# ==================================
+# CLOCK
+# ==================================
+config MR_CFG_STM32_CLOCK_IRQ_PRIORITY
+    int "Clock irq priority"
+    default 15
+    range 0 15
+    help
+        NVIC priority for the SysTick interrupt (0=highest, 15=lowest).
+        The default matches the common CubeMX setting and keeps the system
+        tick below application interrupts. Boards without DWT CYCCNT support
+        must disable MR_USE_CLOCK_HIRES.
+
+endmenu

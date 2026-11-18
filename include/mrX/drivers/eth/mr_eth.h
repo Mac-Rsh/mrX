@@ -591,7 +591,9 @@ MR_INLINE mr_err_t mr_eth_event_attach(mr_driver_t *drv, mr_waiter_t *entry) {
  */
 MR_INLINE mr_err_t mr_eth_event_raise(mr_driver_t *drv, mr_uint32_t events,
                                       const void *data) {
+#if defined(MR_USE_DRIVER_ETH_STREAM)
     const mr_eth_frame_t *frame;
+#endif /* defined(MR_USE_DRIVER_ETH_STREAM) */
     mr_eth_data_t *eth_data;
 
     /* Check parameter */
@@ -644,8 +646,6 @@ MR_INLINE mr_err_t mr_eth_event_raise(mr_driver_t *drv, mr_uint32_t events,
             eth_data->stats.tx_errors++;
         }
     }
-#else
-    MR_IGNORE(frame);
 #endif /* defined(MR_USE_DRIVER_ETH_STREAM) */
 
     /* Raise ETH events */

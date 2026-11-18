@@ -78,6 +78,10 @@ mrX/arch/<vendor>/<target>/platform/drivers/dma/dma.c
 
 将 `mr_dma_config_t` 和 transfer descriptor 中的源、目的、数据宽度、方向、增量、请求及循环关系映射到目标 DMA 控制器。公共层不决定 request/trigger 的数值、控制器通道数量及物理连接；backend 应按目标硬件验证路由、地址及能力限制。
 
+`src_width` / `dst_width` 描述的是 DMA 在源端和目的端实际发起的访问宽度，不是 C/CMSIS 结构体成员的声明宽度。比如寄存器成员可能声明为 `uint32_t`，但 ADC 单次结果、12-bit right-aligned DAC 数据或 7/8-bit UART 数据仍可能分别要求 16-bit、16-bit 或 8-bit DMA access；consumer 必须按外设的数据访问语义配置，不能从寄存器成员类型推导。
+
+`mr_dma_transfer_t.count` 统一表示逻辑 transfer item 次数，不表示字节数。一次 item 在 source/destination 两端可以具有不同访问宽度，但 count 仍只增加 1；backend 负责把 item count 映射到目标硬件计数器或 block-size 单位。`mr_dma_offset` 继续返回 source-side 字节进度，因此 backend 应先得到已完成 item 数，再乘 source width 换算。
+
 ## 4. Transfer、busy 与 offset
 
 `start` 成功后 backend 持有 transfer 所引用的缓冲区，直到完成或 `stop` 确认硬件已停止访问。对长度、数据宽度、地址对齐和描述符链接不支持的组合返回明确错误。`is_busy` 表示硬件真实活动状态；`offset` 按公共 DMA 契约报告已处理的数据进度，循环流必须明确回绕行为，不能把 DMA 硬件计数直接冒充字节数。

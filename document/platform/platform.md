@@ -71,6 +71,34 @@ python ./scripts/cli.py platform uninstall -i arch/<vendor>/<target>/install.tom
 
 芯片运行期限制应查阅目标平台对应的 `arch/` 文档，不属于本页的通用接口契约。
 
+#### Windows 宿主时钟
+
+Windows 平台的安装描述为 `arch/win/install.toml`。普通 tick 线程按
+`MR_CFG_TICK_PER_SECOND` 将性能计数器经过的时间换算为 tick，并在宿主调度延迟后补发。
+线程优先使用可等待定时器，定时器不可用或等待失败时使用 `Sleep`。
+
+启用 `MR_USE_CLOCK_HIRES` 时，启动阶段读取一次系统 UTC 时间，并按
+`MR_CFG_HIRES_TICK_PER_SECOND` 换算成自 Unix 纪元起的 tick。此后，高分辨率时钟随
+性能计数器推进。调用 `mr_clock_hires_tick_set()` 会从设值时的计数器位置起重新计时。
+关闭高分辨率时钟时，普通 tick 和微秒忙等待仍可使用。
+
+#### Windows 原子操作
+
+安装 Windows 平台后，在 Kconfig 的 `Libc: Standard library → Atomic` 中选择
+`3RD`（`MR_USE_ATOMIC_3RD`）即可启用 Windows 原子后端。选择默认的
+`INT`（`MR_USE_ATOMIC`）则使用基于临界区的内置后端。
+
+Windows 后端使用 GCC 兼容的 `__atomic` 内建函数，并在编译期要求自然对齐的
+`mr_atomic_t` 可无锁访问。初始化使用宽松存储，其余原子操作使用顺序一致的内存序。
+现有临界区接口仍负责保护需要整体执行的多步操作。
+
+#### Windows 断言
+
+安装 Windows 平台后，在 Kconfig 的 `Libc: Standard library → Assertion` 中选择
+`3RD`（`MR_USE_ASSERT_3RD`），即可使用平台头文件提供的 `MR_ASSERT` 和 `MR_PANIC`。
+它们与默认的 `INT` 共用 Windows 断言处理函数，失败时输出文件名、行号和失败表达式
+或 `panic`，刷新标准输出后以状态码 1 退出。
+
 ### 1.2 `install.toml` 的最小结构
 
 每个平台必须提供 `install.toml`，声明平台名称、基准目录和复制规则：

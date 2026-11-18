@@ -35,8 +35,9 @@ DMA 公共层描述控制器通道、搬运配置和传输操作。SoC backend �
 
 ### 3. 快速上手
 
-下例演示一次内存到外设的搬运。`count` 的确切单位和寄存器地址约束需以目标 backend
-文档为准：
+下例演示一次内存到外设的搬运。`count` 表示逻辑 transfer item 次数；每个 item 在
+source/destination 两端分别使用 `src_width` / `dst_width` 指定的访问宽度。寄存器地址约束
+仍需以目标 backend 文档为准：
 
 ```c
 #include <mrX/drivers/dma/mr_dma.h>
@@ -85,11 +86,10 @@ trigger source、极性和粒度静态绑定到
 DMA channel；应用仍使用同一组 `mr_dma_configure/start/stop` 接口。具体绑定格式和可用
 trigger 由目标 backend 规定。
 
-`mr_dma_transfer_t` 含 `next`、`count`、`src`、`dst`。公共层只校验首个描述符及其
-`count/src/dst`，不遍历 `next`
-，也不复制描述符或缓冲区。链式描述符是否支持、`count` 映射为字节还是元素、对齐和生命期都由
-backend 定义；`mr_dma_offset`
-的公共输出统一为字节进度。
+`mr_dma_transfer_t` 含 `next`、`count`、`src`、`dst`。`count` 统一表示逻辑
+transfer item 次数；一次 item 即使 source/destination width 不同，也只计一次。公共层只校验
+首个描述符及其 `count/src/dst`，不遍历 `next`，也不复制描述符或缓冲区。链式描述符是否支持、
+地址对齐和生命期由 backend 定义；`mr_dma_offset` 的公共输出统一为 source-side 字节进度。
 
 事件位为 `MR_DMA_WAIT_HALF`、`MR_DMA_WAIT_DONE`、`MR_DMA_WAIT_ERROR`。
 `event_attach` 订阅 backend 提供的事件对象，

@@ -1,0 +1,63 @@
+menu "Platform: WCH CH32"
+
+# ==================================
+# PLATFORM
+# ==================================
+config MR_USE_PLATFORM
+    def_bool y
+
+config MR_USE_CH32
+    def_bool y
+
+choice
+    prompt "WCH EVT SDK family"
+    default MR_USE_CH32V00X
+
+config MR_USE_CH32V00X
+    bool "CH32V003 (CH32V00x SDK)"
+
+config MR_USE_CH32VM00X
+    bool "CH32V002/004/005/006/007 (CH32VM00X SDK)"
+
+config MR_USE_CH32V10X
+    bool "CH32V103 (CH32V10x SDK)"
+
+config MR_USE_CH32V20X
+    bool "CH32V20x"
+
+config MR_USE_CH32V205
+    bool "CH32V205/V203CCT6 (CH32V205 SDK)"
+
+config MR_USE_CH32V30X
+    bool "CH32V30x"
+
+config MR_USE_CH32V4X7
+    bool "CH32V407/V467 (CH32V4x7 SDK)"
+
+endchoice
+
+# ==================================
+# CACHE
+# ==================================
+config MR_USE_ICACHE
+    bool "Use instruction fetch synchronization port"
+    default n
+    help
+        Provide the mr_port_icache invalidation APIs through fence.i on
+        the local hart. The supported CH32 families have no software-
+        controlled instruction cache. Enable and disable return -MR_ENOSYS,
+        and the line size is zero.
+
+# ==================================
+# DEBUG
+# ==================================
+config MR_USE_CH32_DEBUG_OUTPUT
+    bool "Use WCH EVT debug output"
+    default y
+    help
+        Forward mrX diagnostic output to the _write function from the
+        WCH EVT Debug/debug.c. Initialize the selected debug transport
+        before calling mr_user_init. Disable this option if the board
+        supplies its own diagnostic output hook.
+
+endmenu

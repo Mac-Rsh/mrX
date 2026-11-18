@@ -53,6 +53,9 @@ backend 应当把回调一并提供。
 
 `probe` 返回 `mr_flash_info_t`，`region` 返回 `mr_flash_region_t`。backend 必须保证报告的容量、编程粒度、擦除粒度和 region 范围与实际器件一致。公共层只做其头文件规定的基本校验；不要把某个控制器的扇区大小、bank 数或编程宽度写成通用约束。
 
+`probe` 成功时须填写 `erased_value` 的四个字节，按 `read` 的地址顺序从 Flash 偏移 0
+起表示擦除后的重复模式。单字节模式重复四次，双字节模式重复两次。
+
 ## 4. read
 
 `read` 成功时返回实际读取的字节数，可能短读。backend 自行负责映射、访问校验和缓存可见性；公共层不指定 memory-mapped 或总线读取方式。
