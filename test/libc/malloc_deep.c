@@ -456,5 +456,30 @@ _exit:
     }
 }
 
+MR_TEST(malloc, eight_byte_alignment_and_realloc_shrink) {
+    mr_heap_info_t before, shrunk, after;
+    void *p, *q;
+
+    before = mr_heap_information(MR_TRUE);
+
+    p = mr_malloc(256);
+    MR_TEST_ASSERT_NE_PTR(p, MR_NULL);
+    MR_TEST_EXPECT_EQ_UINT((mr_uintptr_t)p & 7U, 0U);
+    deep_fill(p, 256, 0x42);
+
+    /* Shrinking in-place keeps the pointer and prefix intact */
+    q = mr_realloc(p, 32);
+    MR_TEST_ASSERT_EQ_PTR(q, p);
+    MR_TEST_EXPECT_EQ_INT(deep_verify(q, 32, 0x42), 1);
+    shrunk = mr_heap_information(MR_TRUE);
+    MR_TEST_EXPECT_GT_UINT(shrunk.free_bytes, before.free_bytes - 256U);
+
+    /* Realloc to size 0 frees the block and returns NULL */
+    p = mr_realloc(q, 0);
+    MR_TEST_EXPECT_EQ_PTR(p, MR_NULL);
+    after = mr_heap_information(MR_TRUE);
+    MR_TEST_EXPECT_EQ_UINT(after.free_bytes, before.free_bytes);
+}
+
 #endif /* defined(MR_USE_MALLOC) */
 #endif /* defined(MR_USE_TEST) */

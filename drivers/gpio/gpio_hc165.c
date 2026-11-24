@@ -197,11 +197,8 @@ static mr_err_t drv_port_read(const mr_driver_t *drv, mr_uint32_t *mask) {
 /* Instance install */
 #define GPIO_HC165_HT_GPIO_INSTALL(_id, _ops)                                  \
     static drv_gpio_hc165_priv_t MR_CAT(__drv_gpio_hc165_priv_, _id) = {       \
-        MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, clk_inh),                       \
-                    (.clk_inh = MR_HT_GPIO_SPEC(_id, clk_inh)),                \
-                    (.clk_inh = {0})),                                         \
-        MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, ser),                           \
-                    (.ser = MR_HT_GPIO_SPEC(_id, ser)), (.ser = {0})),         \
+        .clk_inh = MR_HT_GPIO_SPEC_OR(_id, clk_inh, {0}),                      \
+        .ser = MR_HT_GPIO_SPEC_OR(_id, ser, {0}),                              \
         .clk = MR_HT_GPIO_SPEC(_id, clk),                                      \
         .sh = MR_HT_GPIO_SPEC(_id, sh),                                        \
         .qh = MR_HT_GPIO_SPEC(_id, qh),                                        \

@@ -24,6 +24,7 @@ from ..common import (
     Document,
     EmptyValue,
     ErrorCode,
+    ExpressionValue,
     FloatValue,
     IdentifierValue,
     MemreserveDecl,
@@ -33,6 +34,7 @@ from ..common import (
     PropertyDecl,
     ReferenceValue,
     RootNode,
+    SourceLocation,
     SourceSpan,
     STATUS_DEFER,
     STATUS_EARLY,
@@ -58,12 +60,14 @@ class Parser:
 
     VALUE_START_TOKENS = (
         TokenType.STRING,
+        TokenType.CHAR,
         TokenType.NUMBER,
         TokenType.FLOAT,
         TokenType.IDENTIFIER,
         TokenType.AMPERSAND,
         TokenType.LT,
         TokenType.LBRACKET,
+        TokenType.LPAREN,
     )
 
     def __init__(self, tokens: list[Token],
@@ -111,24 +115,46 @@ class Parser:
                             "expected '/', '&label', or '&{/path}' "
                             "at top level",
                             token.span if token else None)
-                self._sync()
+                if self._check(TokenType.RBRACE):
+                    self._advance()
+                else:
+                    self._sync()
                 continue
 
             # Root node: `/ { ... }`
             if self._peek(1) is not None and self._peek(
                     1).type == TokenType.LBRACE:
                 self._advance()
-                self._advance()
-                self._parse_root_contents(document)
+                lbrace = self._advance()
+                self._parse_root_contents(document, lbrace.span)
                 continue
 
-            # Named top-level directives: `/memreserve/`, `/delete-node/`
+            # Named top-level directives: `/dts-v1/`, `/plugin/`,
+            # `/memreserve/`, `/delete-node/`
             if self._peek(1) is not None and self._peek(
                     1).type == TokenType.IDENTIFIER:
                 self._advance()
                 name = self._advance()
                 self._expect(TokenType.SLASH, ErrorCode.EXPECTED_SLASH,
                              f"expected '/' after '{name.value}'")
+                if name.value == "dts-v1":
+                    self._expect_semicolon(
+                        "expected ';' after '/dts-v1/'")
+                    if not document.dts_v1:
+                        document = Document(
+                            dts_v1=True,
+                            memreserves=document.memreserves,
+                            roots=document.roots,
+                            delete_nodes=document.delete_nodes,
+                            span=name.span,
+                            overrides=document.overrides,
+                            operations=document.operations,
+                        )
+                    continue
+                if name.value == "plugin":
+                    self._expect_semicolon(
+                        "expected ';' after '/plugin/'")
+                    continue
                 if name.value == "memreserve":
                     self._parse_memreserve(name, document)
                     continue
@@ -143,14 +169,26 @@ class Parser:
                 self._sync()
                 continue
 
+            token = self._peek()
+            self._error(ErrorCode.INVALID_NODE_DECL,
+                        "expected '{' or directive name after '/'",
+                        token.span if token else None)
+            self._advance()
+            self._sync()
+
         return document
 
-    def _parse_root_contents(self, document: Document) -> None:
+    def _parse_root_contents(
+            self,
+            document: Document,
+            lbrace_span: SourceSpan | None = None,
+    ) -> None:
         """Parse `/ { ... }` contents and append them to the document."""
         slash_span = self.tokens[self.pos - 2].span if self.pos >= 2 else None
         body = self._parse_node_body("root", slash_span)
-        self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
-                     "expected '}' to close root node")
+        if self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
+                        "expected '}' to close root node") is None:
+            self._attach_opening_note("{", lbrace_span)
         self._match(TokenType.SEMICOLON)
         root = RootNode(properties=body.properties,
                         deleted_properties=body.deleted_properties,
@@ -163,8 +201,7 @@ class Parser:
                           document: Document) -> None:
         """Parse a `/memreserve/ <...>;` declaration."""
         values = self._parse_memreserve_values()
-        self._expect(TokenType.SEMICOLON, ErrorCode.EXPECTED_SEMICOLON,
-                     "expected ';' after '/memreserve/'")
+        self._expect_semicolon("expected ';' after '/memreserve/'")
         document.memreserves.append(
             MemreserveDecl(values=values, span=name.span))
         if self.strict:
@@ -234,8 +271,7 @@ class Parser:
                         "expected node name or reference after '/delete-node/'",
                         token.span if token is not None else directive.span)
 
-        self._expect(TokenType.SEMICOLON, ErrorCode.EXPECTED_SEMICOLON,
-                     "expected ';' after '/delete-node/'")
+        self._expect_semicolon("expected ';' after '/delete-node/'")
         if target is None:
             return None
         return DeleteNodeDecl(target=target, is_reference=is_reference,
@@ -255,6 +291,15 @@ class Parser:
             if not self._match(TokenType.SLASH):
                 break
         return "/" if len(parts) == 1 else "/".join(parts)
+
+    def _starts_omit_if_no_ref(self) -> bool:
+        """Return True when the current tokens start `/omit-if-no-ref/`."""
+        return self._check(TokenType.SLASH) \
+            and self._peek(1) is not None \
+            and self._peek(1).type == TokenType.IDENTIFIER \
+            and self._peek(1).value == "omit-if-no-ref" \
+            and self._peek(2) is not None \
+            and self._peek(2).type == TokenType.SLASH
 
     def _starts_delete_node(self) -> bool:
         """Return True when the current tokens start `/delete-node/`."""
@@ -303,8 +348,7 @@ class Parser:
                               ErrorCode.EXPECTED_IDENTIFIER,
                               "expected property name after "
                               "'/delete-property/'")
-        self._expect(TokenType.SEMICOLON, ErrorCode.EXPECTED_SEMICOLON,
-                     "expected ';' after '/delete-property/'")
+        self._expect_semicolon("expected ';' after '/delete-property/'")
         if self.strict and legacy_form:
             self._warn(
                 ErrorCode.INVALID_NODE_DECL,
@@ -317,12 +361,24 @@ class Parser:
         return DeletePropertyDecl(name=target.value, span=span)
 
     def _parse_node(self) -> NodeDecl | None:
-        """Parse a DTS node with optional label, unit address, and `;`."""
+        """Parse a DTS node with optional labels, unit address, and `;`."""
         if self._peek() is None:
             return None
 
-        # Label
-        label = self._parse_optional_label()
+        # Zero or more labels and optional `/omit-if-no-ref/` qualifiers
+        labels: list[str] = []
+        while True:
+            if self._starts_omit_if_no_ref():
+                self._advance()
+                self._advance()
+                self._advance()
+                continue
+            parsed_label = self._parse_optional_label()
+            if parsed_label is not None:
+                labels.append(parsed_label)
+                continue
+            break
+        label = labels[0] if labels else None
 
         # Name
         name_token = self._expect(TokenType.IDENTIFIER,
@@ -348,15 +404,20 @@ class Parser:
         address = ",".join(address_parts) if address_parts else None
 
         # Expect '{'
-        self._expect(TokenType.LBRACE, ErrorCode.EXPECTED_LBRACE,
-                     f"expected '{{' after node '{name_token.value}'")
+        lbrace = self._expect(TokenType.LBRACE, ErrorCode.EXPECTED_LBRACE,
+                              f"expected '{{' after node '{name_token.value}'")
+        if lbrace is None:
+            self._sync()
+            return None
 
         body = self._parse_node_body(
             f"node '{name_token.value}'", name_token.span)
 
         # Expect '}' and accept optional trailing ';'
-        self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
-                     f"expected '}}' to close node '{name_token.value}'")
+        if self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
+                        f"expected '}}' to close node "
+                        f"'{name_token.value}'") is None:
+            self._attach_opening_note("{", lbrace.span)
         has_semicolon = self._match(TokenType.SEMICOLON)
         if self.strict and not has_semicolon:
             self._warn(
@@ -373,6 +434,7 @@ class Parser:
             deleted_nodes=body.deleted_nodes,
             children=body.children,
             span=name_token.span,
+            labels=tuple(labels),
         )
 
     def _parse_node_override(self) -> NodeOverrideDecl | None:
@@ -381,15 +443,17 @@ class Parser:
         if target is None:
             self._sync()
             return None
-        if self._expect(TokenType.LBRACE, ErrorCode.EXPECTED_LBRACE,
-                        "expected '{' after node reference") is None:
+        lbrace = self._expect(TokenType.LBRACE, ErrorCode.EXPECTED_LBRACE,
+                              "expected '{' after node reference")
+        if lbrace is None:
             self._sync()
             return None
 
         body = self._parse_node_body("node modification", target.span)
 
-        self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
-                     "expected '}' to close node modification")
+        if self._expect(TokenType.RBRACE, ErrorCode.EXPECTED_RBRACE,
+                        "expected '}' to close node modification") is None:
+            self._attach_opening_note("{", lbrace.span)
         has_semicolon = self._match(TokenType.SEMICOLON)
         if self.strict and not has_semicolon:
             self._warn(
@@ -424,20 +488,26 @@ class Parser:
                 if deletion is not None:
                     body.deleted_nodes.append(deletion)
                 continue
+            if self._starts_omit_if_no_ref():
+                child = self._parse_node()
+                if child is not None:
+                    body.children.append(child)
+                continue
             if not self._check(TokenType.IDENTIFIER):
                 token = self._peek()
-                self._error(
-                    ErrorCode.INVALID_NODE_DECL,
-                    f"expected property, child node, or delete directive in "
-                    f"{context}",
-                    token.span if token is not None else fallback_span,
-                )
                 if token is not None:
                     self._error(
-                        ErrorCode.EXPECTED_IDENTIFIER,
-                        f"unexpected token '{token.value}' "
-                        f"({token.type.value})",
+                        ErrorCode.INVALID_NODE_DECL,
+                        f"unexpected token '{token.value}' in {context}; "
+                        "expected property, child node, or delete directive",
                         token.span,
+                    )
+                else:
+                    self._error(
+                        ErrorCode.INVALID_NODE_DECL,
+                        f"expected property, child node, or delete directive "
+                        f"in {context}",
+                        fallback_span,
                     )
                 self._sync()
                 continue
@@ -462,16 +532,16 @@ class Parser:
 
         # Bare property, like: `status;`
         if not self._match(TokenType.ASSIGN):
-            self._expect(TokenType.SEMICOLON, ErrorCode.EXPECTED_SEMICOLON,
-                         f"expected ';' after property '{name_token.value}'")
+            self._expect_semicolon(
+                f"expected ';' after property '{name_token.value}'")
             return PropertyDecl(name=name_token.value,
                                 value=EmptyValue(name_token.span),
                                 span=name_token.span)
 
         # Assigned value, like: `status = "okay";`
         value = self._parse_value()
-        self._expect(TokenType.SEMICOLON, ErrorCode.EXPECTED_SEMICOLON,
-                     f"expected ';' after value for '{name_token.value}'")
+        self._expect_semicolon(
+            f"expected ';' after value for '{name_token.value}'")
         if value is None:
             return None
         if self.strict:
@@ -527,12 +597,12 @@ class Parser:
             diagnostic.with_source_span(span)
 
     def _parse_value(self) -> ValueExpr | None:
-        """Parse either a scalar value or a multi-element value sequence."""
+        """Parse either a scalar value or a comma-separated value sequence."""
         first = self._parse_value_atom()
         if first is None:
             return None
 
-        # Comma-separated list, like: `1, 2, 3`
+        # Comma-separated list, like: `1, 2, 3` or `<&a 1>, <&b 2>`
         if self._match(TokenType.COMMA):
             elements = [first]
             while True:
@@ -545,18 +615,6 @@ class Parser:
             return ArrayValue(elements=elements, mode=ArrayMode.EXPANDED,
                               span=first.span)
 
-        # Adjacent values, like: `<&uart0 1 2>` internals after atom parsing
-        if self._check(*self.VALUE_START_TOKENS):
-            elements = [first]
-            while self._check(*self.VALUE_START_TOKENS):
-                element = self._parse_value_atom()
-                if element is None:
-                    return None
-                elements.append(element)
-            if len(elements) > 1:
-                return ArrayValue(elements=elements,
-                                  mode=ArrayMode.EXPANDED,
-                                  span=first.span)
         return first
 
     def _parse_value_atom(self) -> ValueExpr | None:
@@ -566,10 +624,22 @@ class Parser:
             self._error(ErrorCode.EXPECTED_TOKEN, "expected value")
             return None
 
-        # String
+        # String (with C/DTS adjacent string literal concatenation)
         if token.type == TokenType.STRING:
             self._advance()
-            return StringValue(token.value, token.span)
+            parts = [token.value]
+            end_loc = token.span.end
+            while self._check(TokenType.STRING):
+                extra = self._advance()
+                parts.append(extra.value)
+                end_loc = extra.span.end
+            span = SourceSpan(token.span.start, end_loc)
+            return StringValue("".join(parts), span)
+
+        # Character literal
+        if token.type == TokenType.CHAR:
+            self._advance()
+            return self._parse_char_value(token)
 
         # Number
         if token.type == TokenType.NUMBER:
@@ -590,11 +660,24 @@ class Parser:
         if token.type == TokenType.AMPERSAND:
             return self._parse_reference()
 
+        # DTS `/bits/ <width> <...>` cell array
+        if (token.type == TokenType.SLASH
+                and self._peek(1) is not None
+                and self._peek(1).type == TokenType.IDENTIFIER
+                and self._peek(1).value == "bits"
+                and self._peek(2) is not None
+                and self._peek(2).type == TokenType.SLASH):
+            return self._parse_bits_array()
+
+        # Parenthesized C/DTS expression, like: `(1 << 4)` or `(FLAG_A | FLAG_B)`
+        if token.type == TokenType.LPAREN:
+            return self._parse_paren_expression()
+
         # Array
         if token.type == TokenType.LT:
             return self._parse_array()
 
-        # Inline array
+        # Inline array / DTS bytestring
         if token.type == TokenType.LBRACKET:
             return self._parse_inline_array()
 
@@ -603,6 +686,136 @@ class Parser:
                     f"expected value, found '{token.type.value}'", token.span)
         self._advance()
         return None
+
+    def _parse_bits_array(self) -> ArrayValue | None:
+        """Parse a DTS `/bits/ <width> <...>` cell array."""
+        self._advance()  # '/'
+        self._advance()  # 'bits'
+        self._advance()  # '/'
+        width = self._expect(TokenType.NUMBER, ErrorCode.EXPECTED_NUMBER,
+                             "expected bit width (8, 16, 32, or 64) after "
+                             "'/bits/'")
+        if width is not None and width.value not in {"8", "16", "32", "64"}:
+            self._error(ErrorCode.INVALID_NUMBER,
+                        f"invalid /bits/ width '{width.value}'; expected 8, "
+                        "16, 32, or 64",
+                        width.span)
+        return self._parse_array()
+
+    def _parse_paren_expression(self) -> ExpressionValue | None:
+        """Parse a parenthesized C/DTS expression preserving C syntax."""
+        lparen = self._expect(TokenType.LPAREN, ErrorCode.EXPECTED_TOKEN,
+                              "expected '(' to start expression")
+        if lparen is None:
+            return None
+
+        depth = 1
+        tokens: list[Token] = [lparen]
+        while not self._check(TokenType.EOF) and depth > 0:
+            if self._check(TokenType.SEMICOLON, TokenType.RBRACE):
+                break
+            token = self._advance()
+            tokens.append(token)
+            if token.type == TokenType.LPAREN:
+                depth += 1
+            elif token.type == TokenType.RPAREN:
+                depth -= 1
+
+        if depth > 0:
+            self._error(ErrorCode.EXPECTED_TOKEN,
+                        "expected ')' to close expression",
+                        self._eof_or_prev_span())
+            self._attach_opening_note("(", lparen.span)
+            return None
+
+        rendered = self._render_expression_tokens(tokens)
+        span = SourceSpan(lparen.span.start, tokens[-1].span.end)
+        return ExpressionValue(text=rendered, span=span)
+
+    @staticmethod
+    def _render_expression_tokens(tokens: list[Token]) -> str:
+        """Render expression tokens back into valid C expression text."""
+        parts: list[str] = []
+        value_types = {
+            TokenType.NUMBER,
+            TokenType.FLOAT,
+            TokenType.CHAR,
+            TokenType.IDENTIFIER,
+            TokenType.RPAREN,
+        }
+        compound_pairs = {
+            ("<", "<"),
+            (">", ">"),
+            ("<", "="),
+            (">", "="),
+            ("=", "="),
+            ("!", "="),
+            ("&", "&"),
+            ("|", "|"),
+        }
+        no_space_after = {TokenType.LPAREN, TokenType.TILDE, TokenType.BANG}
+        no_space_before = {TokenType.RPAREN, TokenType.COMMA}
+
+        prev: Token | None = None
+        for token in tokens:
+            text = f'"{token.value}"' if token.type == TokenType.STRING \
+                else token.value
+            if prev is None:
+                parts.append(text)
+                prev = token
+                continue
+
+            # Split `1-1` (lexed as NUMBER `1`, NUMBER `-1`) into `1 - 1`
+            if (prev.type in value_types
+                    and token.type in {TokenType.NUMBER, TokenType.FLOAT}
+                    and token.value.startswith("-")):
+                parts.append(" - ")
+                parts.append(token.value[1:])
+                prev = token
+                continue
+
+            # Keep two-character operators (`<<`, `>>`, `<=`, `&&`, `||`, ...)
+            # joined when they were adjacent in source.
+            if ((prev.value, token.value) in compound_pairs
+                    and Parser._tokens_are_adjacent(prev, token)):
+                parts.append(text)
+                prev = token
+                continue
+
+            if prev.type in no_space_after or token.type in no_space_before:
+                parts.append(text)
+            else:
+                parts.append(" ")
+                parts.append(text)
+            prev = token
+
+        return "".join(parts)
+
+    def _parse_char_value(self, token: Token) -> NumberValue:
+        """Decode a single-quoted character literal into a numeric value."""
+        inner = token.value[1:-1]
+        escapes = {
+            "\\n": "\n",
+            "\\r": "\r",
+            "\\t": "\t",
+            "\\0": "\0",
+            "\\a": "\a",
+            "\\b": "\b",
+            "\\f": "\f",
+            "\\v": "\v",
+            "\\\\": "\\",
+            "\\'": "'",
+            '\\"': '"',
+        }
+        if inner in escapes:
+            code = ord(escapes[inner])
+        elif inner.startswith("\\x"):
+            code = int(inner[2:], 16)
+        elif len(inner) == 1:
+            code = ord(inner)
+        else:
+            code = 0
+        return NumberValue(code, token.value, token.span)
 
     def _parse_reference(self) -> ReferenceValue | None:
         """Parse a label reference or absolute path reference."""
@@ -725,7 +938,7 @@ class Parser:
             and end.column == right.span.column
 
     def _parse_number_value(self, token: Token) -> NumberValue | None:
-        """Decode an integer literal token into a parsed number value."""
+        """Decode an integer literal token (with optional C suffixes)."""
         raw = token.value
         lowered = raw.lower()
         kind = "decimal"
@@ -743,9 +956,17 @@ class Parser:
         else:
             base = 10
 
+        # Strip optional C integer suffixes (U, L, UL, LU, LL, ULL, LLU)
+        cleaned = raw
+        suffix = lowered
+        for candidate in ("ull", "llu", "ul", "lu", "ll", "u", "l"):
+            if suffix.endswith(candidate):
+                cleaned = raw[:-len(candidate)]
+                break
+
         # Convert to integer
         try:
-            value = int(raw, base)
+            value = int(cleaned, base)
         except ValueError:
             self._error(ErrorCode.INVALID_NUMBER,
                         f"invalid {kind} literal", token.span)
@@ -753,9 +974,10 @@ class Parser:
         return NumberValue(value, raw, token.span)
 
     def _parse_float_value(self, token: Token) -> FloatValue | None:
-        """Decode a floating-point literal token into a parsed float value."""
+        """Decode a floating-point literal token (with optional C suffixes)."""
+        cleaned = token.value.rstrip("fFlL")
         try:
-            value = float(token.value)
+            value = float(cleaned)
         except ValueError:
             self._error(ErrorCode.INVALID_NUMBER, "invalid float literal",
                         token.span)
@@ -770,7 +992,8 @@ class Parser:
 
         # Elements
         elements: list[ValueExpr] = []
-        while not self._check(TokenType.GT, TokenType.EOF):
+        while not self._check(TokenType.GT, TokenType.SEMICOLON,
+                              TokenType.RBRACE, TokenType.EOF):
             # Optional comma separators
             if self._match(TokenType.COMMA):
                 continue
@@ -781,8 +1004,9 @@ class Parser:
             elements.append(element)
 
         # Expect '>'
-        self._expect(TokenType.GT, ErrorCode.EXPECTED_GT,
-                     "expected '>' to close array")
+        if self._expect(TokenType.GT, ErrorCode.EXPECTED_GT,
+                        "expected '>' to close array") is None:
+            self._attach_opening_note("<", lt.span if lt else None)
         return ArrayValue(elements=elements, mode=ArrayMode.EXPANDED,
                           span=lt.span if lt else None)
 
@@ -806,8 +1030,9 @@ class Parser:
                                 token.span)
                     break
                 values.append(int(token.value, 16))
-            self._expect(TokenType.RBRACKET, ErrorCode.EXPECTED_TOKEN,
-                         "expected ']' to close bytestring")
+            if self._expect(TokenType.RBRACKET, ErrorCode.EXPECTED_TOKEN,
+                            "expected ']' to close bytestring") is None:
+                self._attach_opening_note("[", lbracket.span)
             return ByteStringValue(
                 values=values,
                 original=" ".join(f"{value:02x}" for value in values),
@@ -815,7 +1040,8 @@ class Parser:
 
         # Legacy inline array: `[1, 2, 3]`
         elements: list[ValueExpr] = []
-        while not self._check(TokenType.RBRACKET, TokenType.EOF):
+        while not self._check(TokenType.RBRACKET, TokenType.SEMICOLON,
+                              TokenType.RBRACE, TokenType.EOF):
             element = self._parse_value_atom()
             if element is None:
                 self._sync()
@@ -825,8 +1051,9 @@ class Parser:
                 break
 
         # Expect ']'
-        self._expect(TokenType.RBRACKET, ErrorCode.EXPECTED_TOKEN,
-                     "expected ']' to close inline array")
+        if self._expect(TokenType.RBRACKET, ErrorCode.EXPECTED_TOKEN,
+                        "expected ']' to close inline array") is None:
+            self._attach_opening_note("[", lbracket.span)
         return ArrayValue(elements=elements, mode=ArrayMode.INLINE,
                           span=lbracket.span)
 
@@ -888,6 +1115,51 @@ class Parser:
             return True
         return False
 
+    def _prev_token(self) -> Token | None:
+        """Return the most recently consumed token, if any."""
+        if self.pos <= 0 or self.pos - 1 >= len(self.tokens):
+            return None
+        return self.tokens[self.pos - 1]
+
+    def _eof_or_prev_span(self) -> SourceSpan | None:
+        """Return a span at the end of the previous token when available."""
+        prev = self._prev_token()
+        if prev is not None:
+            loc = prev.span.end or prev.span.start
+            return SourceSpan(loc)
+        token = self._peek()
+        return token.span if token is not None else None
+
+    def _expect_semicolon(self, message: str) -> Token | None:
+        """Require `;`, pinning missing-semicolon errors to the prior line."""
+        token = self._peek()
+        if token is not None and token.type == TokenType.SEMICOLON:
+            return self._advance()
+        prev = self._prev_token()
+        span: SourceSpan | None
+        if (prev is not None
+                and (token is None
+                     or token.type == TokenType.EOF
+                     or token.span.file_path != prev.span.file_path
+                     or token.span.line != prev.span.line)):
+            anchor = prev.span.end or SourceLocation(
+                prev.span.file_path, prev.span.line, prev.span.column + 1)
+            span = SourceSpan(anchor)
+        else:
+            span = token.span if token is not None else None
+        self._error(ErrorCode.EXPECTED_SEMICOLON, message, span)
+        return None
+
+    def _attach_opening_note(self, opener: str,
+                             span: SourceSpan | None) -> None:
+        """Attach a note pointing to the unmatched opening delimiter."""
+        if self.diagnostics is None or span is None:
+            return
+        if not self.diagnostics.diagnostics:
+            return
+        self.diagnostics.diagnostics[-1].add_note(
+            f"opening '{opener}' was at {span}")
+
     def _expect(self, token_type: TokenType, code: ErrorCode,
                 message: str) -> Token | None:
         """Require a token type or emit a parser diagnostic."""
@@ -898,11 +1170,11 @@ class Parser:
         return None
 
     def _sync(self) -> None:
-        """Recover parser state by skipping to a safe boundary token."""
+        """Recover parser state without consuming an enclosing `}`."""
         while not self._check(TokenType.SEMICOLON, TokenType.RBRACE,
                               TokenType.EOF):
             self._advance()
-        if self._check(TokenType.SEMICOLON, TokenType.RBRACE):
+        if self._check(TokenType.SEMICOLON):
             self._advance()
 
     def _error(self, code: ErrorCode, message: str,

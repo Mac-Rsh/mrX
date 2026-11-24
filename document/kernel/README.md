@@ -1,35 +1,32 @@
-# 内核服务
+# 内核服务（Kernel）
 
-> 内核服务是 mrX 的核心层：时钟、中断、日志、对象系统、内存分配与各类调度原语。
-> 每个模块的完整文档见下表；其中部分服务由 `MR_USE_*` 开关控制，基础容器/对象等模块则始终参与编译。
+内核服务提供 mrX 的基础运行能力，包括时钟基准、软件定时器、中断管理、等待/工作队列、对象系统与常用容器。可配置模块通过
+`MR_USE_*` 开关裁剪，基础容器与工具宏始终编译。
 
-可配置模块只有在对应功能宏启用时才提供实现；无功能宏门控的基础模块始终可用。想确认具体编译条件、配置项与上下文约束，先看对应文档的“配置与依赖”和“并发与中断安全”章节。
+## 模块列表
 
-## 模块索引
-
-| 模块                | 文档                           | 一句话说明                                         |
-|---------------------|--------------------------------|----------------------------------------------------|
-| 初始化调用 Initcall | [initcall.md](initcall.md)     | 链接段收集初始化函数，由 `mr_user_init` 按级别执行 |
-| 入口 Entry          | [entry.md](entry.md)           | 工具链入口接线：在 `main` 之前完成内核初始化       |
-| 时钟 Clock          | [clock.md](clock.md)           | tick/uptime 基准与同步 hook、tickless 汇总         |
-| 软定时器 Timer      | [timer.md](timer.md)           | 一次/周期到期回调，支持静态与动态对象              |
-| 中断 Irq            | [irq.md](irq.md)               | IRQ 控制器/动作管理与可选 defer 工作队列           |
-| 等待队列 Wait       | [wait.md](wait.md)             | waitable/waiter 的同步回调式事件分发               |
-| 工作队列 Work       | [work.md](work.md)             | 立即/延时 work 排队，由调用者驱动 execute          |
-| 钩子 Hook           | [hook.md](hook.md)             | 固定容量、追加式条目表；遍历由使用模块解释         |
-| 对象系统 Object     | [object.md](object.md)         | 对象 clazz 注册、引用计数与生命周期                |
-| 内存块分配器 Slab   | [slab.md](slab.md)             | 固定块对象池，原子位图管理分配状态                 |
-| FIFO                | [fifo.md](fifo.md)             | 定长环形缓冲；普通读写支持 SPSC 使用模型           |
-| 哈希表 Hashmap      | [hashmap.md](hashmap.md)       | 以 32 位整数为键的键值容器，节点内嵌无额外分配     |
-| 日志 Log            | [log.md](log.md)               | 带级别和时间戳的日志输出                           |
-| 格式化输出 Printf   | [printf.md](printf.md)         | 格式化字符串并经由平台输出接口送出                 |
-| 基础工具 Foundation | [foundation.md](foundation.md) | 链表、引用计数、自旋锁、工具宏与版本宏             |
+| 模块                | 说明                                                         | 文档                           |
+|---------------------|--------------------------------------------------------------|--------------------------------|
+| 初始化调用 Initcall | 通过链接段收集初始化函数，由 `mr_user_init()` 按级别依次执行 | [initcall.md](initcall.md)     |
+| 入口 Entry          | 在 `main()` 之前完成内核初始化的工具链入口封装               | [entry.md](entry.md)           |
+| 时钟 Clock          | 系统 tick / uptime 基准、同步 hook 与 tickless 剩余时间汇总  | [clock.md](clock.md)           |
+| 软定时器 Timer      | 基于 tick 的单次/周期回调定时器                              | [timer.md](timer.md)           |
+| 中断 Irq            | 中断控制器与 action 管理，支持可选 defer 工作队列            | [irq.md](irq.md)               |
+| 等待队列 Wait       | 基于 `waitable`/`waiter` 的同步回调式事件通知                | [wait.md](wait.md)             |
+| 工作队列 Work       | 立即或延时 work 排队与驱动执行                               | [work.md](work.md)             |
+| 钩子 Hook           | 定长追加式回调表                                             | [hook.md](hook.md)             |
+| 对象系统 Object     | 对象类型（clazz）注册、引用计数与生命周期管理                | [object.md](object.md)         |
+| 块分配器 Slab       | 固定大小内存块对象池，使用原子位图管理                       | [slab.md](slab.md)             |
+| 环形缓冲 FIFO       | 定长环形缓冲区，单生产者单消费者（SPSC）无锁安全             | [fifo.md](fifo.md)             |
+| 哈希表 Hashmap      | 32 位整型键哈希表，节点内嵌无额外堆分配                      | [hashmap.md](hashmap.md)       |
+| 日志 Log            | 带级别过滤和时间戳的日志输出                                 | [log.md](log.md)               |
+| 跟踪 Trace          | 轻量级区间、事件与计数器内核跟踪接口                         | [trace.md](trace.md)           |
+| 格式化输出 Printf   | 格式化输出并经由平台接口发送                                 | [printf.md](printf.md)         |
+| 基础工具 Foundation | 侵入式链表、自旋锁、引用计数、常用工具宏与版本宏             | [foundation.md](foundation.md) |
 
 ## 相关文档
 
-- 内存分配 [Malloc](../libc/malloc.md)
-  、字符串与格式化 [Sprintf](../libc/sprintf.md) 属于 C
-  库层，见 [文档总索引](../README.md) 的 C 库一节。
-- 框架接入流程（Kconfig、HTC、注册段、启动）见 [框架使用指南](../usage.md)。
-- 平台相关的
-  tick、中断开关和输出接口实现见 [平台移植层](../platform/platform.md)。
+- 动态内存分配与字符串/格式化函数属于 C
+  库层，见 [Malloc](../libc/malloc.md)、[Sprintf](../libc/sprintf.md)。
+- 框架接入与编译配置见 [框架使用指南](../usage.md)。
+- 平台相关的 tick、中断开关与输出接口见 [平台移植层](../platform/platform.md)。

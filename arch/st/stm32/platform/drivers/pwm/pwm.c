@@ -1110,7 +1110,7 @@ static mr_err_t pwm_signal_control(const mr_driver_t *drv,
         },                                                                     \
         .clk_enable = MR_CAT(__pwm_clk_enable_, _id),                          \
         .channels = MR_CAT(__pwm_channel_, _id),                               \
-        .channels_num = MR_ARRAY_SIZE(MR_CAT(__pwm_channel_, _id)),            \
+        .channels_num = MR_HT_DRIVER_PROP_ELEM_NUM(_id, st_channels),          \
     };                                                                         \
     MR_HT_PWM_INSTALL(_id, &MR_CAT(__pwm_priv_, _id), _ops)
 

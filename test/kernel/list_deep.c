@@ -8,7 +8,7 @@
 
 #include <mrX/test/mr_test.h>
 #if defined(MR_USE_TEST)
-#include <mrX/kernel/mr_list.h>
+#include <mrX/kernel/mr_list_array.h>
 
 /* Helpers */
 

@@ -19,7 +19,7 @@ mr_uint32_t mr_fifo_init(mr_fifo_t *fifo, void *buf, mr_uint32_t size,
     mr_uint32_t capacity;
 
     /* Check parameter */
-    if ((buf == MR_NULL) || (elemsz == 0) || (size < elemsz)) {
+    if ((!fifo) || (buf == MR_NULL) || (elemsz == 0) || (size < elemsz)) {
         return 0;
     }
 
@@ -263,10 +263,30 @@ mr_uint32_t mr_fifo_peek(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
 }
 
 mr_uint32_t mr_fifo_read(mr_fifo_t *fifo, void *buf, mr_uint32_t num) {
-    /* Pop buffer */
-    num = mr_fifo_peek(fifo, buf, num);
-    fifo_cursor_add(fifo, &fifo->ridx, num);
-    return num;
+    mr_atomic_t curr, next;
+    mr_uint32_t n;
+
+    /* Check whether fifo is not initialized */
+    if (!fifo->buf) {
+        return 0;
+    }
+
+    do {
+        /* Get current read cursor */
+        curr = mr_atomic_load(&fifo->ridx);
+
+        /* Peek buffer */
+        n = mr_fifo_peek(fifo, buf, num);
+        if (n == 0U) {
+            return 0;
+        }
+
+        /* Get next read cursor */
+        next = (mr_atomic_t)fifo_cursor_advance(fifo, (mr_uint32_t)curr, n);
+
+        /* Try to advance read cursor */
+    } while (!mr_atomic_compare_exchange(&fifo->ridx, &curr, next));
+    return n;
 }
 
 mr_uint32_t mr_fifo_skip(mr_fifo_t *fifo, mr_uint32_t num) {

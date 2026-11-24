@@ -10,6 +10,10 @@
 #if defined(MR_USE_TIMER)
 #include <mrX/kernel/mr_spinlock.h>
 #include <mrX/libc/mr_malloc.h>
+#if defined(MR_USE_TIMER_TRACE)
+#define MR_TRACE_TAG                    "timer"
+#endif /* defined(MR_USE_TIMER_TRACE) */
+#include <mrX/kernel/mr_trace.h>
 
 /* Timer clazzes(static & dynamic) */
 static void timer_statik_release(mr_object_t *obj);
@@ -95,14 +99,12 @@ mr_err_t mr_timer_del(mr_timer_t *timer) {
     return 0;
 }
 
-static void timer_insert(mr_timer_t *timer) {
-    mr_tick_t tick;
+static void timer_insert_at(mr_timer_t *timer, mr_tick_t ttick) {
     mr_timer_t *t;
     mr_list_t *l;
 
-    /* Set timeout tick */
-    tick = timer->itick & (~MR_TIMER_PERIODIC);
-    timer->ttick = mr_clock_tick() + tick;
+    /* Set target timeout tick */
+    timer->ttick = ttick;
 
     /* Insert timer into timing list */
     MR_LIST_FOR_EACH(l, &__timer_list) {
@@ -122,6 +124,14 @@ static void timer_insert(mr_timer_t *timer) {
     mr_list_move(&timer->list, &__timer_list);
 }
 
+static void timer_insert(mr_timer_t *timer) {
+    mr_tick_t tick;
+
+    /* Set timeout tick from current clock */
+    tick = timer->itick & (~MR_TIMER_PERIODIC);
+    timer_insert_at(timer, mr_clock_tick() + tick);
+}
+
 mr_err_t mr_timer_start(mr_timer_t *timer) {
     int mask;
 
@@ -138,6 +148,9 @@ mr_err_t mr_timer_start(mr_timer_t *timer) {
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__timer_lock, mask);
+
+    /* Trace timer start */
+    MR_TRACE_EVENT("start", timer, timer->itick);
     return 0;
 }
 
@@ -148,6 +161,9 @@ mr_err_t mr_timer_stop(mr_timer_t *timer) {
 
     /* Remove timer */
     timer_remove(timer);
+
+    /* Trace timer stop */
+    MR_TRACE_EVENT("stop", timer);
     return 0;
 }
 
@@ -170,6 +186,9 @@ mr_err_t mr_timer_tick_set(mr_timer_t *timer, mr_tick_t tick) {
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__timer_lock, mask);
+
+    /* Trace timer tick set */
+    MR_TRACE_EVENT("set", timer, tick);
     return 0;
 }
 
@@ -200,6 +219,7 @@ static void timer_dynamic_release(mr_object_t *obj) {
 }
 
 static mr_tick_t timer_timeout_check(void) {
+    mr_tick_t period, next_ttick;
     mr_timer_entry_t *entry;
     mr_tick_t tless, tick;
     mr_timer_t *timer;
@@ -235,7 +255,9 @@ static mr_tick_t timer_timeout_check(void) {
         mr_spinlock_unlock_irqrestore(&__timer_lock, mask);
 
         /* Call timer entry */
+        MR_TRACE_BEGIN("exec", timer, entry, tick - timer->ttick);
         entry(timer, param);
+        MR_TRACE_END("exec", timer, entry);
 
         /* Lock */
         mask = mr_spinlock_lock_irqsave(&__timer_lock);
@@ -251,8 +273,17 @@ static mr_tick_t timer_timeout_check(void) {
             /* Drop the oneshot timer from the operation list */
             mr_list_del(&timer->list);
         } else {
-            /* Restart timer */
-            timer_insert(timer);
+            period = timer->itick & (~MR_TIMER_PERIODIC);
+            next_ttick = timer->ttick + period;
+
+            /* Re-anchor if the next timeout is due at the sampled tick */
+            if ((tick - next_ttick) < (MR_TICK_MAX / 2)) {
+                MR_TRACE_EVENT("overrun", timer, tick - timer->ttick);
+                next_ttick = tick + period;
+            }
+
+            /* Insert timer into timing list */
+            timer_insert_at(timer, next_ttick);
         }
     }
 

@@ -10,6 +10,10 @@
 #if defined(MR_USE_WAIT)
 #include <mrX/kernel/mr_spinlock.h>
 #include <mrX/libc/mr_malloc.h>
+#if defined(MR_USE_WAIT_TRACE)
+#define MR_TRACE_TAG                    "wait"
+#endif /* defined(MR_USE_WAIT_TRACE) */
+#include <mrX/kernel/mr_trace.h>
 
 /* Waitable clazzes(static & dynamic) */
 static void able_statik_release(mr_object_t *obj);
@@ -169,7 +173,9 @@ static void waitable_handle(mr_waitable_t *able, mr_wait_event_t event,
         mr_spinlock_unlock_irqrestore(&__wait_lock, mask);
 
         /* Call waiter entry */
+        MR_TRACE_BEGIN("notify", able, waiter, entry, event_edge);
         entry(waiter, param, event_edge, data);
+        MR_TRACE_END("notify", able, waiter, entry);
 
         /* Lock */
         mask = mr_spinlock_lock_irqsave(&__wait_lock);
@@ -189,6 +195,9 @@ mr_err_t mr_waitable_raise(mr_waitable_t *able, mr_wait_event_t event,
     MR_ASSERT((able != MR_NULL) && MR_OBJECT_IS_INITED(able));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(able, waitable));
 
+    /* Trace waitable raise */
+    MR_TRACE_EVENT("raise", able, event);
+
     /* Raise waitable event */
     waitable_handle(able, event, data);
     return 0;
@@ -201,6 +210,9 @@ mr_err_t mr_waitable_cancel_all(mr_waitable_t *able) {
 
     /* Cancel all waiters */
     waitable_cancel_all(able);
+
+    /* Trace waitable cancel all */
+    MR_TRACE_EVENT("cancel_all", able);
     return 0;
 }
 
@@ -334,6 +346,11 @@ mr_err_t mr_waiter_wait(mr_waiter_t *wait, mr_waitable_t *able) {
 _exit:
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__wait_lock, mask);
+
+    /* Trace waiter wait */
+    if (ret == 0) {
+        MR_TRACE_EVENT("wait", able, wait, wait->event);
+    }
     return ret;
 }
 
@@ -344,6 +361,9 @@ mr_err_t mr_waiter_cancel(mr_waiter_t *wait) {
 
     /* Remove waiter */
     waiter_remove(wait);
+
+    /* Trace waiter cancel */
+    MR_TRACE_EVENT("cancel", wait);
     return 0;
 }
 

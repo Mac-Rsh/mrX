@@ -1,115 +1,87 @@
 # PWM 驱动移植指南
 
-> 本文给出 PWM backend 的实现契约：ops 表与必需性、状态门控、时基量化、update
-> 事务、fault/signal 语义、事件、
-> HardTree 属性和验收清单。公共 API 见 [PWM 驱动](pwm.md)。
+本文面向平台与外设驱动开发者，说明如何实现 `mr_pwm_ops_t` 并接入 PWM 驱动框架。公共
+API 与使用方式见 [PWM 驱动](pwm.md)。
 
----
+## 移植边界
 
-## 1. 移植边界
+| 职责                                                                                      | 归属       |
+|-------------------------------------------------------------------------------------------|------------|
+| 类型校验、`setup` 时资源掩码合法性校验（`channel_mask != 0`、`comp_mask ⊆ channel_mask`） | PWM 公共层 |
+| `mr_pwm_data_t.event` 的初始化与销毁                                                      | PWM 公共层 |
+| `period != 0`、对齐/idle 枚举、通道/互补/故障掩码校验                                     | PWM 公共层 |
+| 基于 `ops->state` 的 `-MR_EBUSY` 门控与 `stop` 已停通道过滤                               | PWM 公共层 |
+| 可选回调缺失时的 `-MR_ENOSYS` 返回                                                        | PWM 公共层 |
+| 时基分频与纳秒量化、对齐/死区/相位硬件映射                                                | Backend    |
+| `update` 事务全批校验与原子提交、周期边界更新                                             | Backend    |
+| 硬件故障关断路径、锁存清除与同步信号（TRGO/Compare）路由                                  | Backend    |
 
-PWM 和 TMR 均可能使用同一类底层计时资源，但它们是不同的公共驱动类型。
-当具体平台为二者分配同一硬件实例时，backend 必须保证资源独占与状态一致，
-不得在两个独立设备对象之间共享未经同步的硬件上下文；无状态的换算工具可复用。
+PWM 与 TMR 若共用同一硬件定时器，backend 必须在驱动层保证资源独占，禁止两个驱动实例无保护地操作同一硬件上下文。
 
-本文定义 PWM 通道、互补输出、fault 与 signal 的公共移植契约；
-各平台自行记录实际可用资源与实现限制。
+## 操作表（ops）
 
-| 事项           | 公共层                                                                                                        | backend                                                |
-|----------------|---------------------------------------------------------------------------------------------------------------|--------------------------------------------------------|
-| 类型与生命周期 | `MR_DRIVER_TYPE_PWM` 校验；setup 校验 `channel_mask != 0` 且 `comp_mask ⊆ channel_mask`；waitable 生命周期    | 不实现 init/deinit；私有状态自行持有                   |
-| 资源存在性     | 用 `channel_mask`/`comp_mask`/`fault_mask` 校验资源编号与互补能力                                             | 提供与板级资源一致的掩码（HardTree 属性）              |
-| 枚举与范围校验 | `period != 0`、alignment 范围、idle/comp_idle 范围、PERIOD signal 的 `offset == 0`                            | 时间可表示性：量化、对齐支持、死区、phase              |
-| busy 门控      | configure 要求控制器空闲；channel_configure 只要求目标通道空闲；start 要求请求通道未运行；stop 过滤已停止通道 | 额外约束：运行中追加通道、任一通道运行时禁止改静态配置 |
-| update 事务    | 校验 op 存在、空事务（`count == 0`）直接成功、每个 `channel` 合法；不替 backend 提供提交原子性                | 先校验全部条目再改硬件；成功返回保持单次事务语义       |
-| signal         | 校验 signal 类型与 PERIOD 的 `offset`                                                                         | TRGO/TRGO2 资源、主从同步、消费者接线                  |
-| fault 安全     | 只校验资源编号/掩码与 op 是否缺失                                                                             | 硬件关断路径、锁存与清除条件、ISR 顺序                 |
-| 事件           | 提供实例级 waitable 与 `mr_pwm_event_raise` 同步分发                                                          | `event_control` 只开关通知来源，不得关闭保护           |
+### 必需回调
 
-建议实现位置：
+公共层入口对下列成员使用 `MR_ASSERT` 检查，不可为 `MR_NULL`：
 
-```text
-mrX/arch/<vendor>/<target>/platform/drivers/pwm/pwm.c
-```
+| 成员                    | 原型要点                                                            | 约定                                                                                                          |
+|-------------------------|---------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| `configure`             | `(drv, const mr_pwm_config_t *config) -> mr_err_t`                  | 量化并配置时基周期、有限周期数、对齐与更新模式；不支持组合返回 `-MR_ENOSYS`                                   |
+| `configuration`         | `(drv, mr_pwm_config_t *config) -> mr_err_t`                        | 返回量化后的实际生效配置                                                                                      |
+| `channel_configure`     | `(drv, channel, const mr_pwm_channel_config_t *config) -> mr_err_t` | 配置单通道脉宽、相位、极性、死区、idle 与互补使能                                                             |
+| `channel_configuration` | `(drv, channel, mr_pwm_channel_config_t *config) -> mr_err_t`       | 回读量化后的通道配置                                                                                          |
+| `start`                 | `(drv, mr_uint32_t channels) -> mr_err_t`                           | 启动掩码指定的通道输出                                                                                        |
+| `stop`                  | `(drv, mr_uint32_t channels) -> mr_err_t`                           | 停止掩码指定的通道，并立即应用配置的 `idle` 状态                                                              |
+| `state`                 | `(drv, mr_pwm_state_t *state) -> mr_err_t`                          | 返回当前 `running_mask` 与 `fault_mask`（公共层 `configure`/`channel_configure`/`start`/`stop` 均依赖此接口） |
 
-整个实现包在 `MR_HT_HAS_DRIVER()` 内；安装宏只保存资源描述，时钟、GPIO
-alternate、定时器初始化和 NVIC 出现在首次使用路径，
-安装时不得点亮任何功率输出。
+### 可选回调
 
----
+未实现的可选成员置 `MR_NULL`，公共层将返回 `-MR_ENOSYS`（切勿用逐通道写入模拟原子
+`update`，或用软件模拟硬件故障关断）。
 
-## 2. 操作表
+| 成员                   | 原型要点                                                             | 约定                                                                  |
+|------------------------|----------------------------------------------------------------------|-----------------------------------------------------------------------|
+| `update`               | `(drv, const mr_pwm_update_t *updates, mr_size_t count) -> mr_err_t` | 先校验全部条目再原子提交；`MR_PWM_UPDATE_PERIOD` 需在共同周期边界生效 |
+| `fault_configure`      | `(drv, fault, const mr_pwm_fault_config_t *config) -> mr_err_t`      | 配置故障输入滤波、极性与锁存/逐周期模式                               |
+| `fault_configuration`  | `(drv, fault, mr_pwm_fault_config_t *config) -> mr_err_t`            | 回读故障配置                                                          |
+| `fault_clear`          | `(drv, mr_uint32_t faults) -> mr_err_t`                              | 清除锁存故障标志                                                      |
+| `signal_configure`     | `(drv, signal, const mr_pwm_signal_config_t *config) -> mr_err_t`    | 配置 `MR_PWM_SIGNAL_PERIOD` / `COMPARE` 触发信号参数                  |
+| `signal_configuration` | `(drv, signal, mr_pwm_signal_config_t *config) -> mr_err_t`          | 回读同步信号配置                                                      |
+| `signal_control`       | `(drv, signal, mr_bool_t enable) -> mr_err_t`                        | 开关控制器对外同步信号                                                |
+| `event_control`        | `(drv, mr_uint32_t events, mr_bool_t enable) -> mr_err_t`            | 开关 `MR_PWM_WAIT_PERIOD` / `MR_PWM_WAIT_FAULT` 中断源                |
 
-`mr_pwm_ops_t` 的完整成员如下（顺序与头文件一致）。所有成员的第一个参数都是
-`const mr_driver_t *drv`。
+## 关键契约
 
-| ops 成员                | 签名要点                                                 | 必需性 | 公共层在 NULL 时的行为                                                                        |
-|-------------------------|----------------------------------------------------------|--------|-----------------------------------------------------------------------------------------------|
-| `configure`             | `(drv, const mr_pwm_config_t *config)`                   | 必需   | `mr_pwm_configure` 的 `MR_ASSERT` 失败                                                        |
-| `configuration`         | `(drv, mr_pwm_config_t *config)`                         | 必需   | `mr_pwm_configuration` 的 `MR_ASSERT` 失败                                                    |
-| `channel_configure`     | `(drv, channel, const mr_pwm_channel_config_t *config)`  | 必需   | `mr_pwm_channel_configure` 的 `MR_ASSERT` 失败                                                |
-| `channel_configuration` | `(drv, channel, mr_pwm_channel_config_t *config)`        | 必需   | `mr_pwm_channel_configuration` 的 `MR_ASSERT` 失败                                            |
-| `update`                | `(drv, const mr_pwm_update_t *updates, mr_size_t count)` | 可选   | `-MR_ENOSYS`                                                                                  |
-| `start`                 | `(drv, mr_uint32_t channels)`（通道掩码）                | 必需   | `mr_pwm_start` 的 `MR_ASSERT` 失败                                                            |
-| `stop`                  | `(drv, mr_uint32_t channels)`（通道掩码）                | 必需   | `mr_pwm_stop` 的 `MR_ASSERT` 失败                                                             |
-| `state`                 | `(drv, mr_pwm_state_t *state)`                           | 必需   | `mr_pwm_state` 的 `MR_ASSERT` 失败；`configure`/`channel_configure`/`start`/`stop` 也会调用它 |
-| `fault_configure`       | `(drv, fault, const mr_pwm_fault_config_t *config)`      | 可选   | `-MR_ENOSYS`（该检查先于 fault 编号校验）                                                     |
-| `fault_configuration`   | `(drv, fault, mr_pwm_fault_config_t *config)`            | 可选   | `-MR_ENOSYS`（先于编号校验）                                                                  |
-| `fault_clear`           | `(drv, faults)`（fault 掩码）                            | 可选   | `-MR_ENOSYS`（先于掩码校验）                                                                  |
-| `signal_configure`      | `(drv, signal, const mr_pwm_signal_config_t *config)`    | 可选   | `-MR_ENOSYS`                                                                                  |
-| `signal_configuration`  | `(drv, signal, mr_pwm_signal_config_t *config)`          | 可选   | `-MR_ENOSYS`                                                                                  |
-| `signal_control`        | `(drv, signal, mr_bool_t enable)`                        | 可选   | `mr_pwm_signal_enable/disable`：先校验 signal（非法返回 `-MR_EINVAL`），再返回 `-MR_ENOSYS`   |
-| `event_control`         | `(drv, mr_uint32_t events, mr_bool_t enable)`            | 可选   | `mr_pwm_event_enable/disable` 返回 `-MR_ENOSYS`                                               |
+- **安装阶段静默**：`MR_HT_PWM_INSTALL`
+  仅注册资源描述，不得在系统启动安装阶段开启时钟或点亮任何功率引脚；外设初始化应延迟到
+  `configure` / `start` 路径。
+- **原子更新与异常恢复**：`update`
+  必须先完成所有条目的合法性校验再触碰硬件。对于无法物理回滚的外部串行芯片，若提交中途发生总线错误，必须返回错误且不得更新软件缓存状态。
+- **故障安全与事件**：硬件故障关断必须由硬件/刹车路径直接完成，不可依赖
+  `mr_pwm_event_raise` 的 waiter 回调。`mr_pwm_event_raise` 在调用者上下文同步派发，
+  `data` 指针仅在派发期间有效。
+- **Shutdown 行为**：公共层 `pwm_deinit` 不会自动调用 `ops->stop`
+  ；若平台有特殊安全要求，应在平台文档中明确说明。
 
-补充说明：
+## HardTree 安装
 
-- `state` 虽然属于“基础成员”，但 `mr_pwm_state` 之外还有四个公共入口依赖它，因此它是事实上的必答项：返回的
-  `running_mask` 决定 configure 与 start 的 `-MR_EBUSY` 判定、channel_configure
-  的目标通道门控，以及 stop 的通道过滤。
-- `mr_pwm_event_attach` 不经过 ops：它把 waiter 接到 `mr_pwm_data_t.event` 上。因此没有
-  `event_control` 的 backend
-  仍然可以“挂接 waiter”，只是没有任何来源会触发它。
-- 可选成员缺失时的返回值必须是 `-MR_ENOSYS`，不要用逐通道写入模拟原子 `update`
-  ，也不要用软件模拟 fault 关断。
+使用 `<mrX/drivers/pwm/mr_pwm.h>` 提供的 `MR_HT_PWM_INSTALL(_id, _priv, _ops)`
+宏安装实例，该宏从节点读取以下标准属性：
 
-公共层在分发前完成的校验（顺序对可观察返回值有影响，需按上表实现）：
+| 属性           | 必需 | 默认值 | 说明                     |
+|----------------|------|--------|--------------------------|
+| `channel_mask` | 是   | -      | 物理存在的通道位掩码     |
+| `comp_mask`    | 否   | `0`    | 支持互补输出的通道位掩码 |
+| `fault_mask`   | 否   | `0`    | 已接线的故障输入位掩码   |
 
-| 入口                           | 校验顺序                                                                                                              |
-|--------------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| `mr_pwm_configure`             | 必需 ops 存在 → `period != 0` 且 `alignment` 合法 → 查询 `state` → `running_mask != 0` 判定 `-MR_EBUSY`               |
-| `mr_pwm_channel_configure`     | 必需 ops 存在 → 通道编号在 `channel_mask` 内 → `idle`/`comp_idle` 合法 → `comp` 需在 `comp_mask` 内 → 目标通道未运行  |
-| `mr_pwm_update`                | `update` 存在 → 空事务直接返回 0 → 逐个 `channel` 在 `channel_mask` 内                                                |
-| `mr_pwm_start`                 | 必需 ops 存在 → 掩码非零且 ⊆ `channel_mask` → 请求通道均未运行                                                        |
-| `mr_pwm_stop`                  | 必需 ops 存在 → 掩码非零且 ⊆ `channel_mask` → 与实际 `running_mask` 求交，交集为空时直接返回 0                        |
-| `mr_pwm_fault_configure/…`     | `fault_*` 存在 → fault 编号在 `fault_mask` 内（`fault_clear` 校验掩码非零且 ⊆ `fault_mask`）                          |
-| `mr_pwm_signal_configure/…`    | `signal_configure`/`signal_configuration` 存在 → signal 类型合法（`signal_configure` 另要求 PERIOD 的 `offset == 0`） |
-| `mr_pwm_signal_enable/disable` | signal 类型合法 → `signal_control` 存在                                                                               |
-| `mr_pwm_event_enable/disable`  | `event_control` 存在                                                                                                  |
+定时器基址、时钟、引脚复用与信号路由等平台私有属性由平台自行定义并填充 `_priv`。
 
-`start`/`stop` 的通道掩码是位掩码，`channel_configure`/`channel_configuration`/
-`update[].channel` 是 0–31 的编号；
-两种形式都不允许超出 `channel_mask`。
+## 验收要点
 
----
-
-## 3. 控制器、通道、fault 与 signal
-
-实现 `mr_pwm_ops_t` 所定义的控制器时基、通道配置、update、启停和状态读取。`channel_mask` 只标识实际可用资源，不能把某一芯片的通道数量当作通用限制。fault、互补输出、相位、死区、有限周期与 signal 的支持范围由 backend 声明，不支持的组合返回 `-MR_ENOSYS`。
-
-## 4. 状态与原子更新
-
-控制器与通道配置更改应考虑运行状态及硬件提交时机，确保多通道更新不会产生不受控的中间状态。`signal` 是向外设消费者提供硬件触发的独立能力，不等价于 wait event，也不自动启动定时器或 ADC/DAC。支持 `MR_PWM_SIGNAL_PERIOD` 或 `MR_PWM_SIGNAL_COMPARE` 的 backend 应说明该信号如何映射硬件。
-
-## 5. 中断与事件
-
-可选事件控制必须按公共事件位分发，关闭或销毁设备前先屏蔽中断来源。waiter 是同步通知，回调不能阻塞或在未明确允许的情况下重入配置路径。
-
-## 6. HardTree 与安装
-
-用 `MR_HT_PWM_INSTALL` 或驱动框架约定注册实例。定时器资源、硬件 channel、复用引脚、时钟、触发路由和中断向量是平台属性，应在平台文档定义，不可作为通用 PWM 配置字段。
-
-## 7. 移植验收
-
-- [ ] 通道掩码、时基、占空、相位与状态机符合公共接口。
-- [ ] start/stop/update 的并发及原子性可解释，资源冲突不误报为成功。
-- [ ] signal、fault、事件及可选功能均按本平台能力明确实现或拒绝。
+- [ ] `configure` 与 `channel_configure` 正确量化纳秒参数并在 `*_configuration`
+  返回实际生效值。
+- [ ] `start` / `stop` / `state` 状态一致，停止后输出严格进入配置的 `idle`
+  电平或高阻态。
+- [ ] `update` 保证全批校验与多通道同步提交语义，非法条目不产生部分写入。
+- [ ] 互补死区、故障锁存/清除、同步信号及事件开关按硬件能力准确实现或返回
+  `-MR_ENOSYS`。

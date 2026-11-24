@@ -287,6 +287,42 @@ extern "C" {
 #define MR_MACRO_IS_USED(_m)            MR_MACRO_IF(_m, (1), (0))
 
 /**
+ * @brief This macro function negates a macro boolean condition.
+ *
+ * @param _c The condition.
+ * @return 1 if the condition is not 1, 0 otherwise.
+ */
+#define MR_MACRO_NOT(_c)                MR_MACRO_IF(_c, (0), (1))
+
+/**
+ * @brief This macro function performs logical AND on two macro conditions.
+ *
+ * @param _a The first condition.
+ * @param _b The second condition.
+ * @return 1 if both conditions are 1, 0 otherwise.
+ */
+#define MR_MACRO_AND(_a, _b)                                                   \
+    MR_CAT(__MR_MACRO_AND_, MR_MACRO_IS_USED(_a), MR_MACRO_IS_USED(_b))
+#define __MR_MACRO_AND_00               0
+#define __MR_MACRO_AND_01               0
+#define __MR_MACRO_AND_10               0
+#define __MR_MACRO_AND_11               1
+
+/**
+ * @brief This macro function performs logical OR on two macro conditions.
+ *
+ * @param _a The first condition.
+ * @param _b The second condition.
+ * @return 1 if either condition is 1, 0 otherwise.
+ */
+#define MR_MACRO_OR(_a, _b)                                                    \
+    MR_CAT(__MR_MACRO_OR_, MR_MACRO_IS_USED(_a), MR_MACRO_IS_USED(_b))
+#define __MR_MACRO_OR_00                0
+#define __MR_MACRO_OR_01                1
+#define __MR_MACRO_OR_10                1
+#define __MR_MACRO_OR_11                1
+
+/**
  * @brief This function verifies the parity(even).
  *
  * @param src The source.

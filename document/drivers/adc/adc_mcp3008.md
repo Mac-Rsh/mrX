@@ -1,57 +1,65 @@
 # MCP3008 ADC
 
-复用 [ADC API](adc.md)
-，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
+SPI 接口的 8 通道 10 位外部 ADC 芯片，通过标准 ADC
+驱动接口对外提供采样能力（遵循[串行总线外扩驱动共同行为](../serial_peripheral.md)）。
 
-| 项目     | 说明                                              |
-|----------|---------------------------------------------------|
-| 功能宏   | `MR_USE_DRIVER_ADC`，及对应的 `MR_USE_DRIVER_SPI` |
-| 头文件   | `<mrX/drivers/adc/mr_adc.h>`                      |
-| 依赖模块 | SPI、Driver；仅 HardTree 有实例时编译             |
+| 项目     | 说明                                                                                                  |
+|----------|-------------------------------------------------------------------------------------------------------|
+| 启用方式 | 随 `MR_USE_DRIVER_ADC` 与 `MR_USE_DRIVER_SPI` 编译，由 HardTree `compatible = "adc_mcp3008"` 节点触发 |
+| 头文件   | 复用 `<mrX/drivers/adc/mr_adc.h>`                                                                     |
 
-## 用户指南
+## HardTree 属性
 
-### HardTree
+| 属性         | 必需 | 默认值 | 说明                              |
+|--------------|------|--------|-----------------------------------|
+| `spi`        | 是   | -      | SPI 从设备规格（`<&spi_bus cs>`） |
+| `exist_mask` | 否   | `0xff` | 通道存在掩码（按 8 位裁剪）       |
 
-```dts
-adc8: adc8 {
-    compatible = "adc_mcp3008";
-    status = "defer";
-    spi = <&spi0 0>;
-};
-```
-
-启用 ADC/SPI。`spi` 必需，`exist_mask` 缺省 0xff 并裁剪为 8 位。
-SPI 请求 1 MHz、mode 0、8 位、MSB first，每样本保持 CS 连续低电平传完 3 字节，
-样本之间释放 CS。VREF 由板级电路提供。
-
-### 配置与数据
-
-通道 0..7 默认单端；只支持 `MR_ADC_REF_EXTERNAL_0` 和 `MR_ADC_GAIN_1`。
-支持 `MR_ADC_DIFF_DIFF`，通道 n 对应 CHn 为正端、
-CH (n xor 1) 为负端，即 0/1、2/3、4/5、6/7 的两个方向。
-这是单极性伪差分转换，负差值饱和为 0，结果不是有符号 ADC 值。
-
-`resolution` 必须是 10，`oversample` 必须是 0。
-每样本存为本地字节序的 `mr_uint16_t`，范围 0..1023；
-多通道按位号升序交错。硬件返回帧的最后 10 位组成读数。
+## 快速上手
 
 ```c
-mr_adc_config_t config = {
-    .diff = MR_ADC_DIFF_SINGLE,
-    .ref = MR_ADC_REF_EXTERNAL_0,
-    .gain = MR_ADC_GAIN_1,
-};
-mr_adc_configure(drv, 0U, &config);
+#include <mrX/drivers/adc/mr_adc.h>
+
+mr_err_t mcp3008_read_ch0(mr_uint16_t *raw_out, mr_int64_t *mv_out) {
+    mr_driver_t *drv = mr_driver_find("adc8");
+    mr_adc_config_t cfg = {
+        .diff = MR_ADC_DIFF_SINGLE,
+        .ref = MR_ADC_REF_EXTERNAL_0,
+        .gain = MR_ADC_GAIN_1,
+    };
+    mr_adc_seq_t seq = {
+        .channels = 1U << 0,
+        .resolution = 10U,
+        .oversample = 0U,
+        .size = sizeof(*raw_out),
+        .buf = raw_out,
+    };
+
+    if ((drv == MR_NULL) || (mr_driver_setup(drv) != 0)) {
+        return -MR_ENODEV;
+    }
+    if (mr_adc_configure(drv, 0U, &cfg) != 0) {
+        return -MR_EIO;
+    }
+    if (mr_adc_read(drv, &seq) != (mr_ssize_t)sizeof(*raw_out)) {
+        return -MR_EIO;
+    }
+
+    *mv_out = mr_adc_raw2millivolt(3300, cfg.gain, seq.resolution, *raw_out);
+    return 0;
+}
 ```
 
-`ref_internal` 为 0，电压换算必须显式提供实测 VREF 的毫伏值；
-HardTree ADC consumer spec 的 `ref_voltage` 也必须填写该值。
-不能从供电电压或未连接的内部参考推测 VREF。
+## 运行语义与限制
 
-## 开发者指南
-
-源码：`drivers/adc/adc_mcp3008.c`。
-协议依据：[Microchip 数据手册](https://ww1.microchip.com/downloads/en/DeviceDoc/21295d.pdf)。
-本轮仅人工静态审查，未构建或测试。
-
+- **SPI 总线配置**：`mr_adc_configure` 会自动将 SPI 配置为 1 MHz、Mode 0、8 位、MSB
+  first、Master 模式，并回读校验配置是否生效。每次采样在单次 CS 片选期间传输 3 字节帧。
+- **通道与伪差分**：通道 0~7 默认单端模式；配置为 `MR_ADC_DIFF_DIFF` 时，通道 `n`
+  对应 `IN+ = CHn`、`IN- = CH(n ^ 1)`（即 0/1、2/3、4/5、6/7 成对）。MCP3008
+  为单极性伪差分转换，负差值会饱和为 `0`，输出始终为无符号 `0..1023`。
+- **固定参数与限制**：仅支持 `MR_ADC_REF_EXTERNAL_0` 与 `MR_ADC_GAIN_1`；
+  `seq->resolution` 必须为 `10`，`seq->oversample` 必须为 `0`。每样本以本地字节序写入
+  2 字节（`mr_uint16_t`），多通道按通道号升序交错存放。不支持流采样与异步事件。
+- **电压换算**：芯片无内部参考电压，驱动 `ref_internal` 为 `0`。调用
+  `mr_adc_raw2millivolt` 或填写 HardTree ADC spec 的 `ref_voltage` 时，必须显式传入板级实测
+  VREF 毫伏值。

@@ -59,7 +59,7 @@ typedef void(mr_ref_release_t)(mr_ref_t *ref);
  * @param _ref The ref.
  * @return The ref count.
  */
-#define MR_REF_COUNT(_ref)              ((_ref) & (~MR_REF_MAGIC))
+#define MR_REF_COUNT(_ref)              ((_ref) & (~MR_REF_MAGIC_MASK))
 
 /**
  * @brief This function initializes a ref.

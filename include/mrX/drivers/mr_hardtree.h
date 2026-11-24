@@ -152,6 +152,30 @@ extern "C" {
                 (MR_HT_NODE_PROP(_node, _prop)), (_default))
 
 /**
+ * @brief This macro function gets the length of an array or bytestring
+ * property.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @return The property length, or 0 if the property does not exist.
+ */
+#define MR_HT_NODE_PROP_LEN(_node, _prop)                                      \
+    MR_MACRO_IF(MR_HT_NODE_HAS_PROP(_node, _prop),                             \
+                (MR_CAT(_node, _P_, _prop, _LEN)), (0))
+
+/**
+ * @brief This macro function gets the number of grouped elements in an
+ * expanded property array.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @return The number of grouped elements, or 0 if the property does not exist.
+ */
+#define MR_HT_NODE_PROP_ELEM_NUM(_node, _prop)                                 \
+    MR_MACRO_IF(MR_HT_NODE_HAS_PROP(_node, _prop),                             \
+                (MR_CAT(_node, _P_, _prop, _E_NUM)), (0))
+
+/**
  * @brief This macro function checks if an indexed element of a property
  * array exists.
  *
@@ -193,6 +217,20 @@ extern "C" {
 
 /**
  * @brief This macro function iterates over all indexed elements of a property
+ * array with a custom separator.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @param _sep The separator wrapped in parentheses, e.g. `(, )` or `(;)`.
+ * @param _fn The function to be called, like: fn(i, node, prop, ...).
+ * @param ... The arguments to be passed to the function.
+ */
+#define MR_HT_NODE_PROP_ELEM_FOREACH_SEP(_node, _prop, _sep, _fn, ...)         \
+    MR_LISTIFY_NEST(MR_HT_NODE_PROP_ELEM_NUM(_node, _prop), _sep, _fn, _node,  \
+                    _prop, ##__VA_ARGS__)
+
+/**
+ * @brief This macro function iterates over all indexed elements of a property
  * array.
  *
  * @param _node The node.
@@ -201,8 +239,7 @@ extern "C" {
  * @param ... The arguments to be passed to the function.
  */
 #define MR_HT_NODE_PROP_ELEM_FOREACH(_node, _prop, _fn, ...)                   \
-    MR_LISTIFY_NEST(MR_CAT(_node, _P_, _prop, _E, _NUM), (, ), _fn, _node,     \
-                    _prop, ##__VA_ARGS__)
+    MR_HT_NODE_PROP_ELEM_FOREACH_SEP(_node, _prop, (, ), _fn, ##__VA_ARGS__)
 
 /**
  * @brief This macro function gets the node name.

@@ -12,6 +12,15 @@ config MR_USE_DRIVER
         reference counting, and lifecycle management.
         Required by all peripheral drivers.
 
+config MR_USE_DRIVER_TRACE
+    depends on MR_USE_DRIVER
+    depends on MR_USE_TRACE
+    bool "Use driver trace"
+    default n
+    help
+        Enable trace events for driver setup, shutdown, and release lifecycle
+        operations.
+
 # ==================================
 # RSOURCE
 # ==================================

@@ -1076,7 +1076,7 @@ MR_UNUSED static void dac_irq(dac_priv_t *priv) {
                                           __ST_HT_DAC_CHANNEL_IMPL)};          \
     static mr_dac_data_t MR_CAT(__dac_data_, _id) = MR_DAC_DATA_INIT(          \
         MR_HT_DRIVER_PROP_OR(_id, ref_internal, 3300),                         \
-        (1UL << MR_ARRAY_SIZE(MR_CAT(__dac_channel_, _id))) - 1U);             \
+        (1UL << MR_HT_DRIVER_PROP_ELEM_NUM(_id, st_channels)) - 1U);           \
     __ST_HT_DAC_DMA_INSTALL(_id)                                               \
     static dac_priv_t MR_CAT(__dac_priv_, _id) = {                             \
         .handle = {                                                            \
@@ -1084,7 +1084,7 @@ MR_UNUSED static void dac_irq(dac_priv_t *priv) {
         },                                                                     \
         .clk_enable = MR_CAT(__dac_clk_enable_, _id),                          \
         .channels = MR_CAT(__dac_channel_, _id),                               \
-        .channels_num = MR_ARRAY_SIZE(MR_CAT(__dac_channel_, _id)),            \
+        .channels_num = MR_HT_DRIVER_PROP_ELEM_NUM(_id, st_channels),          \
         .ref = MR_HT_DRIVER_PROP_OR(_id, st_ref, MR_DAC_REF_INTERNAL),         \
         __ST_HT_DAC_STREAM(_id)                                                \
     };                                                                         \
@@ -1114,8 +1114,8 @@ MR_UNUSED static void dac_irq(dac_priv_t *priv) {
     MR_MACRO_IF(__ST_HT_DAC_HAS_DMA(_id),                                      \
                 (.dma = &MR_CAT(__dac_dma_, _id),), ())
 #define __ST_HT_DAC_HAS_IRQ(_id)                                               \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_irqn),                           \
-                (MR_HT_DRIVER_HAS_PROP(_id, st_irq_handler)), (0))
+    MR_MACRO_AND(MR_HT_DRIVER_HAS_PROP(_id, st_irqn),                          \
+                 MR_HT_DRIVER_HAS_PROP(_id, st_irq_handler))
 #define __ST_HT_DAC_IRQ(_id)                                                   \
     MR_MACRO_IF(__ST_HT_DAC_HAS_IRQ(_id),                                      \
                 (void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {           \

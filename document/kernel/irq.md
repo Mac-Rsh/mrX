@@ -1,576 +1,128 @@
 # 中断管理（Irq）
 
-> 中断管理基于中断号描述符表提供跨平台的中断注册、分发与控制能力：中断控制器驱动以
-> 统一操作集接入，用户以中断号 + 回调 + 所有者的方式申请中断，框架负责触发类型、
-> 优先级、使能深度、共享中断与可选的下半部（defer）延迟执行。
+基于全局中断描述符表提供跨平台的中断控制器接入、动作申请、共享中断分发、使能深度控制与可选的下半部（defer）延迟执行。
 
-| 项       | 说明                                                                                 |
-|----------|--------------------------------------------------------------------------------------|
-| 功能宏   | `MR_USE_IRQ`（默认开启；`MR_USE_IRQ_DEFER` 默认开启并自动选中 `MR_USE_WORK`）        |
-| 头文件   | `<mrX/kernel/mr_irq.h>`                                                              |
-| 依赖模块 | [对象系统 Object](object.md)、[工作队列 Work](work.md)（启用 `MR_USE_IRQ_DEFER` 时） |
-| 参考测试 | `mrX/test/kernel/irq.c`                                                              |
+| 项目   | 说明                                                                                          |
+|--------|-----------------------------------------------------------------------------------------------|
+| 功能宏 | `MR_USE_IRQ`（默认开启）、`MR_USE_IRQ_DEFER`（默认开启）、`MR_USE_IRQ_DEFER_HOOK`（默认关闭） |
+| 头文件 | `<mrX/kernel/mr_irq.h>`                                                                       |
+| 依赖   | [对象系统（Object）](object.md)、[工作队列（Work）](work.md)（启用 `MR_USE_IRQ_DEFER` 时）    |
+| 测试   | `test/kernel/irq.c`、`test/kernel/irq_deep.c`                                                 |
 
----
+## 配置
 
-## 用户指南
+| 配置项                  | 类型 | 默认值 | 说明                                                                   |
+|-------------------------|------|--------|------------------------------------------------------------------------|
+| `MR_USE_IRQ`            | bool | y      | 启用中断管理模块                                                       |
+| `MR_CFG_IRQ_TABLE_SIZE` | int  | 16     | 全局中断描述符表大小（范围 2~1024；未定义时 `kernel/irq.c` 兜底为 32） |
+| `MR_USE_IRQ_DEFER`      | bool | y      | 启用中断下半部延迟执行（自动选中 `MR_USE_WORK`）                       |
+| `MR_USE_IRQ_DEFER_HOOK` | bool | n      | 启用下半部工作队列的挂起/唤醒钩子（自动选中 `MR_USE_WORKQUEUE_HOOK`）  |
 
-### 1. 模块概述
-
-中断管理解决的问题是： **把"某中断号发生时执行这段代码"这件事从具体中断控制器中抽象
-出来**
-，让驱动与应用面向中断号编程，控制器差异收敛到一组操作集回调中。
-
-特性：
-
-- 中断控制器抽象：控制器驱动注册一段连续中断号区间与 6
-  个硬件操作（使能/屏蔽、类型/优先级设置），框架在其上维护描述符表；核心调用这些回调时没有
-  `ENOSYS` 兜底。
-- 多动作注册与共享：同一中断号可由多个所有者分别注册回调；置 `MR_IRQ_SHARED` 后
-  可共享。
-- 使能嵌套：`enable`/`disable` 以深度计数实现，多层 disable 只在最外层操作硬件。
-- 中断分发：用户在中断服务程序入口调用 `mr_irq_handle`，框架按序分发到已注册回调，
-  并以返回值区分"已处理 / 未处理 /
-  转下半部"。
-- 下半部（defer）：回调返回 `MR_IRQ_DEFERRED` 时，可把后续处理投递到内部工作队列；真正执行发生在调用
-  `mr_irq_defer_execute()`
-  的上下文中（需 `MR_USE_IRQ_DEFER`）。
-- 生命周期安全：控制器与动作均有引用/pending 跟踪，删除不会使分发流程悬空。
-
-不适用于：直接操作具体外设的中断寄存器（属于控制器 `ops` 与 `priv` 的职责）、
-需要立即完成的硬实时处理（defer
-会延后到应用调用 `mr_irq_defer_execute()` 时执行，本身不创建线程或自动切换上下文）。
-
-### 2. 配置与依赖
-
-| 配置项                  | 类型 | 默认值 | 说明                                                                                 |
-|-------------------------|------|--------|--------------------------------------------------------------------------------------|
-| `MR_USE_IRQ`            | bool | y      | 启用中断管理模块（`mrX/include/mrX/kernel/Kconfig:184`）                             |
-| `MR_CFG_IRQ_TABLE_SIZE` | 整型 | 16     | 中断描述符表大小，即可管理的最大中断号 + 1，范围 2~1024（`Kconfig:191`）             |
-| `MR_USE_IRQ_DEFER`      | bool | y      | 启用下半部延迟执行，自动选中 `MR_USE_WORK`（`Kconfig:201`）                          |
-| `MR_USE_IRQ_DEFER_HOOK` | bool | n      | 启用下半部工作队列的挂起/唤醒钩子，自动选中 `MR_USE_WORKQUEUE_HOOK`（`Kconfig:210`） |
-
-> `MR_CFG_IRQ_TABLE_SIZE` 在 Kconfig 路径下默认是 16；`irq.c` 在宏未定义时另有 32
-> 的源码兜底值。
-
-启用 `MR_USE_IRQ` 并重新生成 `mr_config.h` 后，包含头文件即可使用（启用
-`MR_USE_IRQ_DEFER` 时会自动引入工作队列依赖）：
-
-```c
-#include <mrX/kernel/mr_irq.h>
-```
-
-### 3. 快速上手
-
-以一个 GPIO 控制器接入中断框架并在中断中分发为例（改编自
-`mrX/test/kernel/irq.c`）：
+## 快速上手
 
 ```c
 #include <mrX/kernel/mr_irq.h>
 
-/* 控制器硬件操作。核心直接解引用这六个回调。 */
-static const mr_irq_ops_t mock_ops = { /* 填入 mock_* 函数 */ };
+/* 控制器后端需实现全部 6 个硬件操作 */
+static const mr_irq_ops_t gpio_irq_ops = {
+    .priority_set = /* ... */,
+    .type_set     = /* ... */,
+    .enable       = /* ... */,
+    .unmask       = /* ... */,
+    .disable      = /* ... */,
+    .mask         = /* ... */,
+};
 
 static mr_irq_return_t button_handler(mr_uint32_t irq, void *owner) {
-    /* 在此处理按键按下 */
+    /* 顶半部：应答硬件并快速处理 */
     return MR_IRQ_HANDLED;
 }
 
-static int irq_setup(void) {
+int irq_demo(void) {
     static mr_irq_t gpio_irq;
-    mr_err_t ret;
 
-    /* 注册控制器：本控制器的 0 号中断线 */
-    ret = mr_irq_init(&gpio_irq, 0, 0, &mock_ops, MR_NULL);
-    if (ret != 0) {
-        return ret;
+    /* 注册接管 [0, 0] 号中断的控制器 */
+    if (mr_irq_init(&gpio_irq, 0, 0, &gpio_irq_ops, MR_NULL) != 0) {
+        return -1;
     }
-
-    /* 以上升沿处理器申请 0 号线 */
-    ret = mr_irq_request(0, button_handler, &gpio_irq, MR_IRQ_EDGE_RISING);
-    if (ret != 0) {
-        return ret;
-    }
-    return 0;
+    /* 申请 0 号中断，以上升沿触发 */
+    return mr_irq_request(0, button_handler, &gpio_irq, MR_IRQ_EDGE_RISING);
 }
 
-/* 在控制器的顶层 ISR 中 */
+/* 平台顶层 ISR 入口 */
 void gpio_isr(void) {
     mr_irq_handle(0);
 }
 ```
 
-要点：
-
-- `mr_irq_init` 的中断号区间必须落在 `MR_CFG_IRQ_TABLE_SIZE` 之内，且区间不能与
-  已注册控制器重叠。
-- `mr_irq_request` 的 `flags` 只在公共入口断言“非 0”；core 不校验低 4
-  位一定是五种公开触发类型，也不拒绝额外 flag bit。
-- `mr_irq_handle` 必须由用户在中断上下文中调用，框架本身不挂接向量表。
-
-### 4. 使用说明
-
-**控制器与中断号**
-
-- 控制器以 `mr_irq_init`（静态）或 `mr_irq_create`（动态）注册一段连续中断号
-  `[irq_start, irq_end]`，用完 `mr_irq_del` 删除。删除会自动释放其区间上所有动作
-  并关闭硬件。
-- 中断号是全局编址的：描述符表大小为 `MR_CFG_IRQ_TABLE_SIZE`，所有控制器共享。
-
-**申请与释放**
-
-- `mr_irq_request(irq, entry, owner, flags)` 以 `owner`（任意非空指针，通常是拥有
-  该中断的对象）为唯一标识申请动作；同一中断号上同一
-  `owner` 重复申请返回
-  `-MR_EEXIST`。
-- `mr_irq_free(irq, owner)` 按所有者释放动作；若该动作仍在顶半部执行或有已投递
-  defer，核心会先把 `owner` 清空并延迟回收，待
-  `pending` 归零后释放。
-- 第一个申请者决定触发类型与默认优先级（0）；后续申请者必须携带完全相同的 `flags`。
-
-**共享中断**：首个申请者携带 `MR_IRQ_SHARED` 后，其他所有者可继续申请；分发时按
-注册顺序依次调用，直到某回调返回
-`MR_IRQ_HANDLED` 为止。未置共享位的中断号再被 申请返回 `-MR_EBUSY`。
-
-**使能嵌套**：`mr_irq_enable` / `mr_irq_disable` 按深度计数；申请动作隐含一次
-enable，释放最后一个动作隐含一次 disable。重复
-enable/disable 在已使能/已关闭 状态下是安全的，不会重复操作硬件。
-
-**回调约定**
-
-| 事项                                                      | 约定                                                                                                    |
-|-----------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
-| 回调上下文                                                | `mr_irq_handle` 的调用者上下文，即中断上下文（或宿主模拟中调用它的线程）                                |
-| 返回值                                                    | `MR_IRQ_HANDLED` 已处理（停止分发）；`MR_IRQ_NONE` 未处理（继续下一个动作）；`MR_IRQ_DEFERRED` 转下半部 |
-| 回调内释放自己                                            | `mr_irq_free(irq, owner)` 被实现显式支持；`pending` 保证本轮回调结束前动作不会被释放                    |
-| 返回 `MR_IRQ_DEFERRED` 但未用 `mr_irq_defer_request` 申请 | 按已处理对待（需 `MR_USE_IRQ_DEFER`）                                                                   |
-
-**下半部（defer）**
-
-- 用 `mr_irq_defer_request` 申请动作并额外提供 `defer_entry`：顶半部回调返回
-  `MR_IRQ_DEFERRED` 后，`defer_entry`
-  被投递到框架内部工作队列；`mr_irq_defer_execute` 在其调用者当前上下文同步执行队列中的工作。
-- 宿主测试中直接调用 `mr_irq_defer_execute`；若目标系统希望把 defer 放到线程上下文，可配合
-  `mr_irq_defer_hook_set`
-  唤醒专用线程，再由该线程调用 `mr_irq_defer_execute`。核心本身不会创建执行线程。
-- 若在下半部执行前动作已被 `free` 或控制器被 `del`，下半部自动作废，不再执行。
-
-### 5. API 参考
-
-控制器生命周期：
-
-| API                         | 说明                                                       |
-|-----------------------------|------------------------------------------------------------|
-| `mr_irq_init`               | 初始化一个静态中断控制器，接管 `[irq_start, irq_end]` 区间 |
-| `mr_irq_create`             | 在堆上动态创建中断控制器                                   |
-| `mr_irq_del`                | 删除控制器（静态对象反初始化，动态对象释放内存）           |
-| `mr_irq_get` / `mr_irq_put` | 控制器引用计数加一 / 减一（对接对象系统）                  |
-
-中断动作：
-
-| API                    | 说明                                            |
-|------------------------|-------------------------------------------------|
-| `mr_irq_request`       | 申请中断动作                                    |
-| `mr_irq_defer_request` | 申请带下半部的中断动作（需 `MR_USE_IRQ_DEFER`） |
-| `mr_irq_free`          | 按所有者释放中断动作                            |
-
-控制与查询：
-
-| API                                | 说明                               |
-|------------------------------------|------------------------------------|
-| `mr_irq_enable` / `mr_irq_disable` | 使能 / 关闭中断（深度嵌套）        |
-| `mr_irq_type`                      | 读取中断触发类型                   |
-| `mr_irq_priority_set`              | 设置中断优先级（0 最高，255 最低） |
-| `mr_irq_priority`                  | 读取中断优先级                     |
-
-分发与下半部：
-
-| API                     | 说明                                                            |
-|-------------------------|-----------------------------------------------------------------|
-| `mr_irq_handle`         | 分发一次中断，返回处理结果                                      |
-| `mr_irq_defer_execute`  | 在进程上下文执行已投递的下半部（需 `MR_USE_IRQ_DEFER`）         |
-| `mr_irq_defer_hook_set` | 设置下半部工作队列的挂起/唤醒钩子（需 `MR_USE_IRQ_DEFER_HOOK`） |
-
-**`mr_irq_init` / `mr_irq_create` / `mr_irq_del`**
-
-```c
-mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end,
-                     const mr_irq_ops_t *ops, void *priv);
-mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end,
-                        const mr_irq_ops_t *ops, void *priv);
-mr_err_t mr_irq_del(mr_irq_t *irq);
-```
-
-- `irq_start` / `irq_end`：接管的连续中断号区间，均须小于 `MR_CFG_IRQ_TABLE_SIZE`
-  且 `irq_start <= irq_end`；区间冲突返回 `-MR_EEXIST`。
-- `ops`：控制器操作集（见下文），不可为 `MR_NULL`；`priv` 为透传给操作回调的 私有数据，可为
-  `MR_NULL`。
-- 返回：`mr_irq_init` 成功 `0`；`mr_irq_create` 成功返回控制器指针，失败返回
-  `MR_NULL`。
-- `mr_irq_del`：标记控制器为 dying 并删除对象，区间上全部动作被移除、每条中断线 被
-  disable +
-  mask；静态对象可复用，动态对象内存释放。分发中删除是安全的 （分发持有引用计数）。
-
-**`mr_irq_request` / `mr_irq_defer_request`**
-
-```c
-mr_err_t mr_irq_request(mr_uint32_t irq, mr_irq_entry_t *entry, void *owner,
-                        mr_uint16_t flags);
-mr_err_t mr_irq_defer_request(mr_uint32_t irq, mr_irq_entry_t *entry,
-                              void *owner, mr_uint16_t flags,
-                              mr_irq_entry_t *defer_entry);
-```
-
-- `entry`：顶半部回调，类型 `mr_irq_return_t (mr_uint32_t irq, void *owner)`。
-- `owner`：所有者标识，不可为 `MR_NULL`；同一中断号上必须唯一。
-- `flags`：公开宏提供五种触发编码与 `MR_IRQ_SHARED`；入口只断言 `flags != 0`，core
-  将低 4 位原样交给 `type_set`
-  ，不会进一步验证组合是否合法。
-- `defer_entry`：下半部回调，签名同 `entry`，仅 `mr_irq_defer_request` 需要。
-- 返回：成功 `0`；`-MR_ENOENT`（无控制器或控制器删除中）、`-MR_EBUSY`（非共享
-  中断号被二次申请）、`-MR_EINVAL`（flags 与已注册不一致）、
-  `-MR_EEXIST`
-  （所有者重复）、`-MR_ENOMEM`（内存不足）。
-
-**`mr_irq_free`**
-
-```c
-mr_err_t mr_irq_free(mr_uint32_t irq, void *owner);
-```
-
-按所有者删除动作；动作正在执行或已有下半部排队时延迟释放。成功 `0`，无匹配动作
-或控制器不存在返回 `-MR_ENOENT`。
-
-**`mr_irq_enable` / `mr_irq_disable` / `mr_irq_type` / `mr_irq_priority_set` /
-`mr_irq_priority`**
-
-```c
-mr_err_t mr_irq_enable(mr_uint32_t irq);
-mr_err_t mr_irq_disable(mr_uint32_t irq);
-int mr_irq_type(mr_uint32_t irq);
-mr_err_t mr_irq_priority_set(mr_uint32_t irq, mr_uint8_t priority);
-int mr_irq_priority(mr_uint32_t irq);
-```
-
-`enable`/`disable` 以 `depth` 控制：1→0 时硬件 `unmask + enable`，0→1 时硬件
-`disable + mask`；有动作存在时多次 disable
-可以继续增加 depth，需要相应次数的 enable 才回到 0。无动作时实现会把多余深度钳回
-1。
-`type` 返回申请时的类型位，`priority`
-返回当前优先级，`priority_set` 同步调用 `ops->priority_set`。控制器不存在时 返回
-`-MR_ENOENT`（查询 API 返回负数错误码）。
-
-**`mr_irq_handle`**
-
-```c
-mr_irq_return_t mr_irq_handle(mr_uint32_t irq);
-```
-
-分发一次中断：先 mask 硬件，按注册顺序调用各动作回调；某回调返回
-`MR_IRQ_HANDLED` 即停止，全部返回 `MR_IRQ_NONE` 则结果为未处理。分发结束时若中断
-仍处于使能状态则重新 unmask。中断号无控制器返回
-`MR_IRQ_NONE`。
-
-**`mr_irq_defer_hook_set`**（需 `MR_USE_IRQ_DEFER_HOOK`）
-
-```c
-mr_err_t mr_irq_defer_hook_set(const mr_irq_defer_hook_t *hook);
-```
-
-`hook` 含 `suspend` / `wakeup` 两个回调与 `param`，实际语义继承自 workqueue
-hook：提交工作时通过队列 depth 触发 `wakeup`
-，一次 execute 批次结束且没有下一批工作时触发 `suspend`。头文件注释建议用“初始值为
-0 的信号量”类机制唤醒专职执行
-`mr_irq_defer_execute` 的线程。
-
-**控制器操作集 `mr_irq_ops_t`**
-
-| 成员                                       | 职责                            |
-|--------------------------------------------|---------------------------------|
-| `type_set(irq, type, priv)`                | 设置触发类型                    |
-| `priority_set(irq, priority, priv)`        | 设置优先级                      |
-| `enable(irq, priv)` / `disable(irq, priv)` | 使能 / 关闭该中断号（控制器级） |
-| `unmask(irq, priv)` / `mask(irq, priv)`    | 解除 / 施加该中断号的屏蔽       |
-
-控制器后端应提供这六个成员：核心没有对单个 callback
-做空指针/可选能力判断，并会在对应路径中直接调用。它们通常在
-`__irq_lock` 持有期间执行，因此实现应短小且避免重入 Irq 管理接口。
-
-### 6. 完整示例
-
-示例 1：共享中断（改编自 `mrX/test/kernel/irq.c` 的 `shared` 用例）：
-
-```c
-static mr_irq_return_t handler_a(mr_uint32_t irq, void *owner) {
-    if (/* 不是本所有者的中断 */) {
-        return MR_IRQ_NONE;         /* 交给下一个处理器 */
-    }
-    return MR_IRQ_HANDLED;
-}
-
-static mr_irq_return_t handler_b(mr_uint32_t irq, void *owner) {
-    return MR_IRQ_HANDLED;
-}
-
-void shared_example(void) {
-    static mr_irq_t irq;
-
-    mr_irq_init(&irq, 3, 3, &mock_ops, MR_NULL);
-    /* 首个申请者决定 flags，必须携带 MR_IRQ_SHARED */
-    mr_irq_request(3, handler_a, handler_a, MR_IRQ_SHARED | MR_IRQ_EDGE_RISING);
-    mr_irq_request(3, handler_b, handler_b, MR_IRQ_SHARED | MR_IRQ_EDGE_RISING);
-
-    mr_irq_handle(3);               /* 依次分发 A、B */
-
-    mr_irq_free(3, handler_a);
-    mr_irq_free(3, handler_b);
-    mr_irq_del(&irq);
-}
-```
-
-示例 2：顶半部 + 下半部（需 `MR_USE_IRQ_DEFER`，改编自测试 `defer_request` 用例）：
-
-```c
-static volatile int work_done = 0;
-
-static mr_irq_return_t top_half(mr_uint32_t irq, void *owner) {
-    /* 应答硬件、取走数据，保持简短 */
-    return MR_IRQ_DEFERRED;         /* 交给下半部 */
-}
-
-static mr_irq_return_t bottom_half(mr_uint32_t irq, void *owner) {
-    work_done++;                    /* 耗时处理在这里执行 */
-    return MR_IRQ_HANDLED;
-}
-
-void defer_example(void) {
-    static mr_irq_t irq;
-
-    mr_irq_init(&irq, 4, 4, &mock_ops, MR_NULL);
-    mr_irq_defer_request(4, top_half, &irq, MR_IRQ_EDGE_RISING, bottom_half);
-    mr_irq_handle(4);               /* 在 ISR 中：只执行 top_half */
-    mr_irq_defer_execute();         /* 在线程中：执行 bottom_half */
-    mr_irq_free(4, &irq);
-    mr_irq_del(&irq);
-}
-```
-
-更多行为参考（共享冲突、pending 释放、深度嵌套边界）见 `mrX/test/kernel/irq.c`。
-
-### 7. 常见问题（FAQ）
-
-**Q：`mr_irq_request` 返回 `-MR_ENOENT`？**
-
-该中断号上没有已注册的控制器，或控制器正在被删除。先 `mr_irq_init`/`mr_irq_create`
-覆盖该中断号，再申请。
-
-**Q：第二个申请者返回 `-MR_EBUSY` 或 `-MR_EINVAL`？**
-
-`-MR_EBUSY`：中断号已被占用且首个申请者未携带 `MR_IRQ_SHARED`。`-MR_EINVAL`：
-中断号是共享的，但你的 `flags`
-与首个申请者不完全一致（共享要求所有申请者的 flags 逐位相同，包括类型位）。
-
-**Q：连续调用两次 `mr_irq_disable`，需要同样调用两次 `mr_irq_enable` 吗？**
-
-有动作存在时，连续 disable 会把 `depth` 继续加深；必须用相应次数的 enable 才能回到
-0。只有无动作状态下实现才把多余 disable
-钳回 depth=1；多余 enable 会钳回 0。硬件回调仍只发生在 0↔1 边界。
-
-**Q：回调返回 `MR_IRQ_DEFERRED` 但下半部没执行？**
-
-确认 `MR_USE_IRQ_DEFER` 已启用；确认动作是用 `mr_irq_defer_request`（而非
-`mr_irq_request`）申请的，否则框架按已处理对待；确认进程上下文中有人调用
-`mr_irq_defer_execute` 驱动执行。
-
-**Q：在中断回调里 `mr_irq_free` 自己安全吗？回调内能调 Irq API 吗？**
-
-`mr_irq_free` 自释放是实现明确支持的：框架用 `pending` 延迟回收，回调本身也在
-`__irq_lock` 之外执行。至于其他 Irq
-API，不能一概宣称适合 ISR：`request/create/free/del` 等路径可能涉及 malloc/free
-与对象生命周期，是否可在中断上下文使用还取决于这些底层能力。
-
-**Q：`mr_irq_handle` 会自动清中断吗？**
-
-不会。mask/unmask 由框架在分发前后调用，但中断 pending 清除属于控制器职责，应在
-顶半部回调或 `ops` 中完成。
-
----
-
-## 开发者指南
-
-### 8. 架构总览
-
-中断管理位于内核服务层，向下对接具体中断控制器驱动，向上为驱动与应用提供统一
-中断号语义：
-
-```
-        +---------------------------+
-        |  中断向量表 / 顶层 ISR     |  （用户或平台代码）
-        +------------+--------------+
-                     | mr_irq_handle(irq)
-        +------------v--------------+
-        |  中断管理 Irq              |----> 描述符表 + 动作链 + 回调分发
-        |  (mrX/kernel/irq.c)       |----> [MR_USE_IRQ_DEFER] 内部工作队列（下半部）
-        +------------+--------------+
-                     | ops->enable/mask/type_set/priority_set ...
-        +------------v--------------+
-        |  中断控制器驱动             |  （mr_irq_init/create 注册）
-        +---------------------------+
-             依赖：对象系统（引用计数/clazz）、自旋锁、原子操作、
-                   malloc（动作与动态控制器分配）、Work（仅 defer）
-```
-
-关键接线：内核初始化序列在 `mrX/kernel/initcall.c:64` 调用 `mr_kernel_irq_init()`
-（`mrX/kernel/irq.c:884`），仅完成内部 defer 工作队列的初始化与钩子挂接；描述符表
-为静态数组，无需初始化。控制器驱动在运行期通过
-`mr_irq_init`/`mr_irq_create`
-自行接入。
-
-### 9. 数据结构
-
-控制器对象（`mrX/include/mrX/kernel/mr_irq.h:67`）：`parent`（对象基类，提供类型
-检查与引用计数，`mr_irq_handle` 借此防止分发中删除）、
-`dying`（原子删除标记，所有 入口在锁内检查）、`istart`/`iend`（接管的中断号区间）、
-`ops`/`priv`（控制器操作集 与私有数据，初始化后只读）。
-
-中断动作（`mr_irq.h:77`）：
-
-| 字段                    | 说明                                                             |
-|-------------------------|------------------------------------------------------------------|
-| `next`                  | 单链表节点，挂在描述符的 `action` 链上                           |
-| `pending`               | 正在执行 / 已投递下半部的引用计数，延迟释放的依据                |
-| `irq`                   | 申请时的中断号（去掉最高位，见 `irq_action_alloc`，`irq.c:302`） |
-| `entry`                 | 顶半部回调                                                       |
-| `owner`                 | 所有者标识；`MR_NULL` 表示"已释放待回收"                         |
-| `defer` / `defer_entry` | 内嵌工作对象与下半部回调（仅 `MR_USE_IRQ_DEFER`）                |
-
-中断号描述符（`mr_irq.h:90`）：
-
-| 字段                 | 说明                                                         |
-|----------------------|--------------------------------------------------------------|
-| `action`             | 动作单链表头                                                 |
-| `priority` / `flags` | 首个动作设置的优先级与 flags（类型位占低 4 位，共享位 0x10） |
-| `depth`              | 使能深度，原子访问；1 = 关闭，0 = 使能                       |
-| `irq`                | 占用该中断号的控制器指针，`MR_NULL` 表示空闲                 |
-
-flags 编码：低 4 位为触发类型（`IRQ_FLAG_TYPE_MASK`，`irq.c:35`），bit4 为
-`MR_IRQ_SHARED`（`mr_irq.h:37`）；共享要求整个 `flags` 逐位一致。
-
-### 10. 核心流程
-
-**控制器注册**：`irq_init`（`mrX/kernel/irq.c:115`）在锁内调用 `irq_table_insert`
-（`irq.c:39`）逐号占用描述符：任一号冲突则回滚已占用项并返回 `-MR_EEXIST`；成功后
-每个描述符的 `depth` 初始化为
-1（关闭态）。对象初始化失败同样回滚。
-
-**申请动作**：`irq_request`（`irq.c:342`）在锁内完成：检查 dying（`-MR_ENOENT`）；
-首个动作调用 `ops->type_set` 与
-`ops->priority_set`（默认优先级 0）并记录
-`desc->flags`；非首个动作要求共享（否则 `-MR_EBUSY`）且 flags 逐位一致（否则
-`-MR_EINVAL`）；动作链按 `owner` 查重（重复 `-MR_EEXIST`）后尾插；最后
-`irq_depth_enable`（`irq.c:323`）在深度 1→0 时调用 `ops->unmask` + `ops->enable`。
-
-**深度嵌套的钳位**：`irq_depth_enable` 用 `fetch_sub` 检测 1→0 跃迁，非跃迁时若深度
-已非正则回写 0（`irq.c:327-333`）；
-`irq_depth_disable`（`irq.c:71`）对称地用
-`fetch_add` 检测 0→1 跃迁，非跃迁且无动作时回写 1。这保证了重复 enable/disable
-不重复操作硬件，且无动作时深度收敛到确定值
-（disable 钳回 1、enable 钳回 0，测试 `depth_saturation_without_action` 覆盖）。
-
-**分发**：`mr_irq_handle`（`irq.c:660`）：
-
-1. 锁内校验中断号有效性，`mr_irq_get` 增加控制器引用（防分发中删除），调用
-   `ops->mask` 屏蔽本中断。
-2. 遍历动作链：跳过 `owner` 为空（释放中）的动作；对其余动作 `pending++` 后
-   **解锁调用回调，再重新加锁**（`irq.c:708-714`
-   ），回调期间不持锁，因此回调内 可以调用任何 Irq API。
-3. 回调返回后 `pending--`；若动作已被释放（`owner == MR_NULL`）且 `pending` 归零，
-   在锁内就地摘链释放（用栈上副本 `action2`
-   维持遍历，`irq.c:719-739`）。
-4. 返回 `MR_IRQ_HANDLED` 停止分发；返回 `MR_IRQ_DEFERRED` 且动作带 `defer_entry`
-   时投递到内部工作队列并再 `pending++`（`irq.c:747-756`），不支持时按已处理。
-5. 结束时若 `depth == 0`（仍使能）调用 `ops->unmask`，释放引用并返回结果。
-
-**释放**：`mr_irq_free`（`irq.c:462`）按 `owner` 匹配动作：无 pending 直接摘链 释放；有
-pending 则仅置 `owner = MR_NULL`，交由第
-4 步或下半部完成路径 （`irq_action_defer_entry`，`irq.c:226`）回收。最后一个有效动作移除后
-`irq_depth_disable` 关闭硬件。
-
-**删除控制器**：`mr_irq_del` 先置 dying，再走对象删除通道 （`irq_statik_release` /
-`irq_dynamic_release`，`irq.c:869-882`）→
-`irq_del`
-（`irq.c:842`）在锁内 `irq_table_remove`（`irq.c:90`）逐线释放动作、关闭硬件、
-清空描述符。pending 中的动作同样延迟回收。
-
-### 11. 并发与中断安全
-
-- 全局自旋锁 `__irq_lock`（关中断自旋锁，`irq.c:23`）保护描述符表、动作链、
-  `pending` 与 `dying` 检查；临界区内只做链表与标志操作。
-- 顶半部与 defer 回调都在 `__irq_lock` 外执行；这避免了回调内 `mr_irq_free`
-  自身造成锁递归。控制器 `ops`
-  则在锁内被调用，应保持短小并避免重入 Irq 管理接口。
-- `mr_irq_handle` 是面向 ISR/顶层中断分发的路径，并通过控制器引用计数与动作
-  `pending` 处理“分发中删除 / 回调内释放”。其他
-  API 不提供统一的 ISR-safe 承诺，尤其动态分配/释放相关路径需结合 malloc
-  与对象系统约束判断。
-- `mr_irq_defer_hook_set` 仅写一个全局指针（`irq.c:832`），应在系统启动单线程阶段
-  调用。
-
-### 12. 扩展与派生
-
-中断管理的扩展面是 **控制器操作集**，而非对象派生：控制器驱动实现 `mr_irq_ops_t`
-的六个硬件操作（`mr_irq.h:47-54`），连同私有数据 `priv` 一起交给 `mr_irq_init` /
-`mr_irq_create`（`mr_irq.h:111-124`），框架只按中断号回调它们；测试中的 mock 集即
-最小样例（`mrX/test/kernel/irq.c:77`
-）。中断使用者经 `mr_irq_request` /
-`mr_irq_defer_request` + 唯一 `owner` 挂接（`mr_irq.h:143`、`mr_irq.h:157`）。
-
-`mr_irq_t` 虽带对象基类与静态/动态 clazz 对（`mr_irq.h:66`、`irq.c:17`），却没有
-`MR_IRQ_DERIVE_INIT` 一类宏，`mr_irq_init` 固定传入 `MR_CLAZZES_STATIK(irq)`
-（`irq.c:151`），因此不支持自定义 clazz 派生控制器，附加状态请走 `ops` + `priv`。
-
-下半部也不可整体替换：defer 由模块内部工作队列承担（`__irq_defer_queue`，
-`irq.c:31`）， 执行入口为 `mr_irq_defer_execute`（
-`irq.c:784`），平台只能用 `mr_irq_defer_hook_set`
-提供 suspend / wakeup 调度钩子（`irq.c:832`、`mr_irq.h:260`，推荐以初值 0 的信号量
-充当，`mr_irq.h:258`）；树内没有
-`irq_defer.c`。
-
-### 13. 源码导读
-
-| 位置                                 | 职责                                                 |
-|--------------------------------------|------------------------------------------------------|
-| `mrX/include/mrX/kernel/mr_irq.h:32` | 触发类型/共享标志、返回值枚举、操作集与结构体定义    |
-| `mrX/include/mrX/kernel/mr_irq.h:99` | 回调类型 `mr_irq_entry_t`                            |
-| `mrX/kernel/irq.c:23`                | 全局自旋锁与描述符表                                 |
-| `mrX/kernel/irq.c:39`                | 区间占用与冲突回滚                                   |
-| `mrX/kernel/irq.c:71` / `irq.c:323`  | 使能深度 disable/enable（含钳位）                    |
-| `mrX/kernel/irq.c:342`               | 动作申请（类型/优先级初始化、共享与查重）            |
-| `mrX/kernel/irq.c:462`               | 动作释放（含 pending 延迟释放）                      |
-| `mrX/kernel/irq.c:660`               | 中断分发主流程                                       |
-| `mrX/kernel/irq.c:784`               | 下半部执行入口 `mr_irq_defer_execute`                |
-| `mrX/kernel/irq.c:884`               | `mr_kernel_irq_init`：defer 工作队列初始化与钩子挂接 |
-| `mrX/kernel/initcall.c:64`           | 内核初始化序列中的调用点                             |
-| `mrX/test/kernel/irq.c`              | 全部用户可见行为的行为级测试（含 defer 与共享场景）  |
-
-### 14. 附录
-
-**配置宏**
-
-| 宏                                                                | 说明                                                              |
-|-------------------------------------------------------------------|-------------------------------------------------------------------|
-| `MR_USE_IRQ`                                                      | 模块开关，默认 y                                                  |
-| `MR_CFG_IRQ_TABLE_SIZE`                                           | 描述符表大小；Kconfig 默认 16、范围 2~1024，源码未定义宏时兜底 32 |
-| `MR_USE_IRQ_DEFER`                                                | 下半部开关，默认 y，自动选中 `MR_USE_WORK`                        |
-| `MR_USE_IRQ_DEFER_HOOK`                                           | 下半部工作队列钩子开关，默认 n                                    |
-| `MR_IRQ_EDGE_RISING` / `MR_IRQ_EDGE_FALLING` / `MR_IRQ_EDGE_BOTH` | 边沿触发类型                                                      |
-| `MR_IRQ_LEVEL_HIGH` / `MR_IRQ_LEVEL_LOW`                          | 电平触发类型                                                      |
-| `MR_IRQ_SHARED`                                                   | 共享中断标志（0x10）                                              |
-
-**错误码**：`-MR_EEXIST`（区间冲突 / 所有者重复）、`-MR_ENOENT`（无控制器或动作 不存在）、
-`-MR_EBUSY`（非共享中断号被二次申请）、
-`-MR_EINVAL`（共享 flags 不一致）、`-MR_ENOMEM`（动作或控制器分配失败）；见
-`mrX/include/mrX/libc/mr_errno.h`。参数越界、空回调/owner、
-`flags == 0` 等在断言开启时由 `MR_ASSERT` 拦截；core 不额外验证 flags 的触发位组合。
-`mr_irq_handle` 找不到可用控制器时返回
-`MR_IRQ_NONE`。
+## 核心机制与约束
+
+- **控制器区间与唯一性**：控制器通过 `mr_irq_init()` 或 `mr_irq_create()`
+  接管连续全局中断号 `[irq_start, irq_end]`，不可超出 `MR_CFG_IRQ_TABLE_SIZE`
+  且不可与已注册控制器重叠（冲突返回 `-MR_EEXIST`）。调用 `mr_irq_del()`
+  会自动关闭硬件并释放该区间上的所有动作。
+- **共享中断与 flags 约束**：首个申请者通过 `flags`（触发类型位 + 可选
+  `MR_IRQ_SHARED`）配置硬件触发类型和默认优先级（`0`）。若未携带 `MR_IRQ_SHARED`
+  ，后续申请返回 `-MR_EBUSY`；若已共享但后续申请的 `flags` 不完全一致，返回
+  `-MR_EINVAL`。同一中断号上同一 `owner` 重复申请返回 `-MR_EEXIST`。
+- **使能深度嵌套**：`mr_irq_enable()` / `mr_irq_disable()` 维护原子深度计数器
+  `depth`（初始为 `1` 关闭态）。仅在 `1 -> 0` 跃迁时调用硬件 `unmask + enable`，
+  `0 -> 1` 跃迁时调用 `disable + mask`。申请动作隐含一次 `enable`，释放最后一个动作隐含一次
+  `disable`；无动作时多余的 `disable` 会将 `depth` 钳回 `1`。
+- **中断分发与自释放**：`mr_irq_handle()` 先调用 `ops->mask`，再按注册顺序调用动作回调。返回
+  `MR_IRQ_HANDLED` 即停止分发；返回 `MR_IRQ_NONE` 则继续下一动作；分发结束时若
+  `depth == 0` 则 `ops->unmask`。动作回调在锁外执行，支持在回调内部调用
+  `mr_irq_free()` 释放自身（框架通过 `pending` 计数延迟回收内存）。
+- **下半部（defer）**：使用 `mr_irq_defer_request()` 注册 `defer_entry`，当顶半部返回
+  `MR_IRQ_DEFERRED` 时动作被投递到内部工作队列，并在调用 `mr_irq_defer_execute()`
+  的上下文中同步执行（框架不自动创建线程；可配合 `mr_irq_defer_hook_set()`
+  唤醒专用线程）。若用普通 `mr_irq_request()` 申请却返回 `MR_IRQ_DEFERRED`，将按
+  `MR_IRQ_HANDLED` 对待。
+- **后端 ops 契约**：`mr_irq_ops_t` 的 6 个回调均为必需成员（核心直接解引用，不做空指针检查），且通常在持有全局自旋锁
+  `__irq_lock` 期间调用，实现必须短小且避免重入 Irq 接口。
+
+## API 速查
+
+### 控制器管理
+
+| API                                                                                                                    | 说明                                              |
+|------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
+| `mr_err_t mr_irq_init(mr_irq_t *irq, mr_uint32_t irq_start, mr_uint32_t irq_end, const mr_irq_ops_t *ops, void *priv)` | 静态初始化中断控制器并接管 `[irq_start, irq_end]` |
+| `mr_irq_t *mr_irq_create(mr_uint32_t irq_start, mr_uint32_t irq_end, const mr_irq_ops_t *ops, void *priv)`             | 动态创建中断控制器（失败返回 `MR_NULL`）          |
+| `mr_err_t mr_irq_del(mr_irq_t *irq)`                                                                                   | 标记 `dying` 并删除控制器，释放区间内所有动作     |
+| `mr_irq_t *mr_irq_get(mr_irq_t *irq)` / `mr_bool_t mr_irq_put(mr_irq_t *irq)`                                          | 增加 / 减少控制器对象引用计数                     |
+
+### 动作申请、控制与分发
+
+| API                                                                                                                                  | 说明                                                                         |
+|--------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| `mr_err_t mr_irq_request(mr_uint32_t irq, mr_irq_entry_t *entry, void *owner, mr_uint16_t flags)`                                    | 申请中断动作（`owner` 不可为 `MR_NULL`，`flags` 不可为 `0`）                 |
+| `mr_err_t mr_irq_defer_request(mr_uint32_t irq, mr_irq_entry_t *entry, void *owner, mr_uint16_t flags, mr_irq_entry_t *defer_entry)` | 申请带下半部的中断动作（需 `MR_USE_IRQ_DEFER`）                              |
+| `mr_err_t mr_irq_free(mr_uint32_t irq, void *owner)`                                                                                 | 按 `owner` 释放中断动作（若有 `pending` 则延迟回收）                         |
+| `mr_err_t mr_irq_enable(mr_uint32_t irq)` / `mr_err_t mr_irq_disable(mr_uint32_t irq)`                                               | 使能 / 关闭指定中断（深度嵌套计数）                                          |
+| `int mr_irq_type(mr_uint32_t irq)`                                                                                                   | 读取触发类型位（低 4 位）；无控制器返回 `-MR_ENOENT`                         |
+| `mr_err_t mr_irq_priority_set(mr_uint32_t irq, mr_uint8_t priority)` / `int mr_irq_priority(mr_uint32_t irq)`                        | 设置 / 读取优先级（`0` 最高，`255` 最低）                                    |
+| `mr_irq_return_t mr_irq_handle(mr_uint32_t irq)`                                                                                     | 在 ISR 中分发指定中断，返回处理状态                                          |
+| `void mr_irq_defer_execute(void)`                                                                                                    | 执行内部工作队列中已投递的下半部（需 `MR_USE_IRQ_DEFER`）                    |
+| `mr_err_t mr_irq_defer_hook_set(const mr_irq_defer_hook_t *hook)`                                                                    | 设置下半部工作队列的 `wakeup` / `suspend` 钩子（需 `MR_USE_IRQ_DEFER_HOOK`） |
+
+### 标志位与返回值枚举
+
+- **触发类型与共享标志**：`MR_IRQ_EDGE_RISING`（`0x01`）、`MR_IRQ_EDGE_FALLING`（
+  `0x02`）、`MR_IRQ_EDGE_BOTH`（`0x03`）、`MR_IRQ_LEVEL_HIGH`（`0x04`）、
+  `MR_IRQ_LEVEL_LOW`（`0x08`）、`MR_IRQ_SHARED`（`0x10`）。
+- **回调返回值 `mr_irq_return_t`**：`MR_IRQ_NONE`（未处理）、`MR_IRQ_HANDLED`（已处理）、
+  `MR_IRQ_DEFERRED`（已转下半部）。
+
+## 内部实现
+
+核心实现位于 `kernel/irq.c`：
+
+- **描述符表与锁边界**：`__irq_table[MR_CFG_IRQ_TABLE_SIZE]` 保存每条中断线的
+  `action` 链表、`depth`、`flags`、`priority` 及所属控制器指针。全局关中断自旋锁
+  `__irq_lock` 保护描述符表与动作链修改；`mr_irq_handle()` 在持有控制器对象引用后释放
+  `__irq_lock` 再执行用户回调，确保回调内可重入 `mr_irq_free()` 等接口。
+- **延迟回收（`pending`）**：每次进入顶半部回调或投递 defer 工作队列时
+  `action->pending++`，退出时 `pending--`。若期间发生过 `mr_irq_free()` 或
+  `mr_irq_del()`，动作的 `owner` 会被置为 `MR_NULL` 并跳过后续分发，直到 `pending`
+  归零时才执行 `mr_work_del()` 与 `mr_free()`。

@@ -19,9 +19,46 @@
 #define SPRINTF_MOD_LARGE               (1U << 6)
 #define SPRINTF_MOD_NEGATIVE            (1U << 7)
 
-static char *sprintf_format_number(char *str, char *end, mr_uint32_t mod,
-                                   int width, int prec, int base,
-                                   mr_uint64_t num) {
+/* Sprintf stream type */
+typedef struct sprintf_stream {
+    mr_sprintf_out_t out;
+    void *ctx;
+    int count;
+} sprintf_stream_t;
+
+/* Sprintf buffer type */
+typedef struct sprintf_buf {
+    char *buf;
+    mr_size_t size;
+    mr_size_t pos;
+} sprintf_buf_t;
+
+static void sprintf_emit(sprintf_stream_t *s, char c) {
+    /* Emit character */
+    if (s->out) {
+        s->out(c, s->ctx);
+    }
+
+    /* Count formatted characters */
+    s->count++;
+}
+
+static void sprintf_buf_out(char c, void *ctx) {
+    sprintf_buf_t *b;
+
+    /* Get buffer */
+    b = (sprintf_buf_t *)ctx;
+
+    /* Reserve space for the terminating null character */
+    if (b->buf && (b->size > 1U) && (b->pos < (b->size - 1U))) {
+        b->buf[b->pos] = c;
+    }
+    b->pos++;
+}
+
+static void sprintf_format_number(sprintf_stream_t *s, mr_uint32_t mod,
+                                  int width, int prec, int base,
+                                  mr_uint64_t num) {
     const char sdigits[] = "0123456789abcdef";
     const char ldigits[] = "0123456789ABCDEF";
     char fill, sign, tmp[64];
@@ -89,60 +126,36 @@ static char *sprintf_format_number(char *str, char *end, mr_uint32_t mod,
     }
     fill = (mod & SPRINTF_MOD_ZEROPAD) ? '0' : ' ';
     if ((fill == '0') && sign) {
-        if (str < end) {
-            *str = sign;
-        }
-        str++;
+        sprintf_emit(s, sign);
         sign = 0;
     }
     if (!(mod & SPRINTF_MOD_LEFT)
         && ((fill == ' ') || !(mod & SPRINTF_MOD_SPECIAL))) {
         for (; width > 0; width--) {
-            if (str < end) {
-                *str = fill;
-            }
-            str++;
+            sprintf_emit(s, fill);
         }
     }
 
     /* Sign fill */
     if (sign) {
-        if (str < end) {
-            *str = sign;
-        }
-        str++;
+        sprintf_emit(s, sign);
     }
 
     /* Prefix fill */
     if (mod & SPRINTF_MOD_SPECIAL) {
         switch (base) {
             case 2: {
-                if (str < end) {
-                    *str = '0';
-                }
-                str++;
-                if (str < end) {
-                    *str = 'b';
-                }
-                str++;
+                sprintf_emit(s, '0');
+                sprintf_emit(s, 'b');
                 break;
             }
             case 8: {
-                if (str < end) {
-                    *str = '0';
-                }
-                str++;
+                sprintf_emit(s, '0');
                 break;
             }
             case 16: {
-                if (str < end) {
-                    *str = '0';
-                }
-                str++;
-                if (str < end) {
-                    *str = (mod & SPRINTF_MOD_LARGE) ? 'X' : 'x';
-                }
-                str++;
+                sprintf_emit(s, '0');
+                sprintf_emit(s, (mod & SPRINTF_MOD_LARGE) ? 'X' : 'x');
                 break;
             }
             default: {
@@ -153,73 +166,58 @@ static char *sprintf_format_number(char *str, char *end, mr_uint32_t mod,
         /* Zero fill after prefix */
         if (!(mod & SPRINTF_MOD_LEFT) && (fill == '0')) {
             for (; width > 0; width--) {
-                if (str < end) {
-                    *str = fill;
-                }
-                str++;
+                sprintf_emit(s, fill);
             }
         }
     }
 
     /* Precision fill */
     for (; i < prec; prec--) {
-        if (str < end) {
-            *str = '0';
-        }
-        str++;
+        sprintf_emit(s, '0');
     }
 
     /* Number fill */
     for (; i > 0; i--) {
-        if (str < end) {
-            *str = tmp[i - 1];
-        }
-        str++;
+        sprintf_emit(s, tmp[i - 1]);
     }
 
     /* Right fill */
     for (; width > 0; width--) {
-        if (str < end) {
-            *str = ' ';
-        }
-        str++;
+        sprintf_emit(s, ' ');
     }
-    return str;
 }
 
-int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
+int mr_vcbprintf(mr_sprintf_out_t out, void *ctx, const char *fmt,
+                 mr_va_list args) {
     int width, prec, len, i, base;
-    char *str, *end, *s;
-    mr_int64_t snum;
+    sprintf_stream_t stream;
     mr_uint32_t mod;
     mr_uint64_t num;
-    char eff, dummy;
+    mr_int64_t snum;
+    const char *s;
+    char eff;
 
     /* Check parameter */
     if (!fmt) {
         return 0;
     }
-    if (!buf) {
-        buf = &dummy;
-        size = 0;
-    }
 
-    for (str = buf, end = (str + size); *fmt; fmt++) {
+    /* Init output stream */
+    stream.out = out;
+    stream.ctx = ctx;
+    stream.count = 0;
+
+    /* Format the input string */
+    for (; *fmt; fmt++) {
         /* Common character */
         if (*fmt != '%') {
-            if (str < end) {
-                *str = *fmt;
-            }
-            str++;
+            sprintf_emit(&stream, *fmt);
             continue;
         }
 
         /* Literal percent */
         if (fmt[1] == '%') {
-            if (str < end) {
-                *str = '%';
-            }
-            str++;
+            sprintf_emit(&stream, '%');
             fmt++;
             continue;
         }
@@ -276,7 +274,8 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
 
         /* Get effector */
         eff = '\0';
-        if ((*fmt == 'l') || (*fmt == 'L') || (*fmt == 'z') || (*fmt == 'h')) {
+        if ((*fmt == 'l') || (*fmt == 'L') || (*fmt == 'z') || (*fmt == 'h')
+            || (*fmt == 'j') || (*fmt == 't')) {
             eff = *(fmt++);
             if ((*fmt == 'l') && (eff == 'l')) {
                 eff = 'L';
@@ -298,32 +297,23 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
                 /* Flush right */
                 if (!(mod & SPRINTF_MOD_LEFT)) {
                     while ((width--) > 1) {
-                        if (str < end) {
-                            *str = ' ';
-                        }
-                        str++;
+                        sprintf_emit(&stream, ' ');
                     }
                 }
 
                 /* Character */
-                if (str < end) {
-                    *str = (char)mr_va_arg(args, int);
-                }
-                str++;
+                sprintf_emit(&stream, (char)mr_va_arg(args, int));
 
                 /* Flush left */
                 while ((width--) > 1) {
-                    if (str < end) {
-                        *str = ' ';
-                    }
-                    str++;
+                    sprintf_emit(&stream, ' ');
                 }
                 continue;
             }
             /* String */
             case 's': {
                 /* String */
-                s = mr_va_arg(args, char *);
+                s = mr_va_arg(args, const char *);
                 if (!s) {
                     s = "(null)";
                 }
@@ -339,27 +329,18 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
                 /* Flush right */
                 if (!(mod & SPRINTF_MOD_LEFT)) {
                     while (len < (width--)) {
-                        if (str < end) {
-                            *str = ' ';
-                        }
-                        str++;
+                        sprintf_emit(&stream, ' ');
                     }
                 }
 
                 /* String */
                 for (i = 0; i < len; i++) {
-                    if (str < end) {
-                        *str = s[i];
-                    }
-                    str++;
+                    sprintf_emit(&stream, s[i]);
                 }
 
                 /* Flush left */
                 while (len < (width--)) {
-                    if (str < end) {
-                        *str = ' ';
-                    }
-                    str++;
+                    sprintf_emit(&stream, ' ');
                 }
                 continue;
             }
@@ -369,9 +350,8 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
                     width = (sizeof(void *) << 1) + 2;
                     mod |= (SPRINTF_MOD_SPECIAL | SPRINTF_MOD_ZEROPAD);
                 }
-                str = sprintf_format_number(
-                    str, end, mod, width, prec, 16,
-                    (mr_uintptr_t)mr_va_arg(args, void *));
+                sprintf_format_number(&stream, mod, width, prec, 16,
+                                      (mr_uintptr_t)mr_va_arg(args, void *));
                 continue;
             }
             /* Decimal */
@@ -412,22 +392,20 @@ int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
             case 'G':
             case 'E':
             case 'F': {
-                num = (mr_uint64_t)mr_va_arg(args, mr_f64_t);
-                (void)num;
+                /* Consume the argument to keep subsequent formats aligned */
+                if (eff == 'L') {
+                    (void)mr_va_arg(args, long double);
+                } else {
+                    (void)mr_va_arg(args, mr_f64_t);
+                }
                 goto _default;
             }
             default: {
 _default:
                 /* Not supported symbol */
-                if (str < end) {
-                    *str = '%';
-                }
-                str++;
+                sprintf_emit(&stream, '%');
                 if (*fmt != '\0') {
-                    if (str < end) {
-                        *str = *fmt;
-                    }
-                    str++;
+                    sprintf_emit(&stream, *fmt);
                 } else {
                     fmt--;
                 }
@@ -442,12 +420,17 @@ _default:
                     snum = (mr_int64_t)mr_va_arg(args, long);
                     break;
                 }
-                case 'L': {
+                case 'L':
+                case 'j': {
                     snum = (mr_int64_t)mr_va_arg(args, long long);
                     break;
                 }
                 case 'z': {
                     snum = (mr_int64_t)mr_va_arg(args, mr_ssize_t);
+                    break;
+                }
+                case 't': {
+                    snum = (mr_int64_t)mr_va_arg(args, mr_intptr_t);
                     break;
                 }
                 case 'h': {
@@ -477,12 +460,17 @@ _default:
                     num = (mr_uint64_t)mr_va_arg(args, unsigned long);
                     break;
                 }
-                case 'L': {
+                case 'L':
+                case 'j': {
                     num = (mr_uint64_t)mr_va_arg(args, unsigned long long);
                     break;
                 }
                 case 'z': {
                     num = (mr_uint64_t)mr_va_arg(args, mr_size_t);
+                    break;
+                }
+                case 't': {
+                    num = (mr_uint64_t)mr_va_arg(args, mr_uintptr_t);
                     break;
                 }
                 case 'h': {
@@ -502,23 +490,42 @@ _default:
         if (num == 0) {
             mod &= ~SPRINTF_MOD_SPECIAL;
         }
-        str = sprintf_format_number(str, end, mod, width, prec, base, num);
+        sprintf_format_number(&stream, mod, width, prec, base, num);
+    }
+    return stream.count;
+}
+
+int mr_vsnprintf(char *buf, mr_size_t size, const char *fmt, mr_va_list args) {
+    sprintf_buf_t buffer;
+    int ret;
+
+    /* Check parameter */
+    if (!fmt) {
+        return 0;
     }
 
-    /* Handle end */
-    if (size > 0) {
-        if (str < end) {
-            *str = '\0';
+    /* Init buffer */
+    buffer.buf = buf;
+    buffer.size = buf ? size : 0U;
+    buffer.pos = 0U;
+
+    /* Format the output */
+    ret = mr_vcbprintf(sprintf_buf_out, &buffer, fmt, args);
+
+    /* Null-terminate output buffer */
+    if (buffer.buf && (buffer.size > 0U)) {
+        if (buffer.pos < buffer.size) {
+            buffer.buf[buffer.pos] = '\0';
         } else {
-            end[-1] = '\0';
+            buffer.buf[buffer.size - 1U] = '\0';
         }
     }
-    return (int)(str - buf);
+    return ret;
 }
 
 int mr_vsprintf(char *buf, const char *fmt, mr_va_list args) {
     /* Format string no limit */
-    return mr_vsnprintf(buf, MR_SIZE_MAX - (mr_size_t)buf, fmt, args);
+    return mr_vsnprintf(buf, MR_SIZE_MAX, fmt, args);
 }
 
 int mr_snprintf(char *buf, mr_size_t size, const char *fmt, ...) {

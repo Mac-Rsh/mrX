@@ -815,6 +815,20 @@ MR_INLINE mr_int64_t mr_ht_dac_volt2raw(mr_ht_dac_spec_t *spec,
     }
 
 /**
+ * @brief This macro function creates a DAC specification structure from
+ * hardtree properties or returns a default initializer if the property does
+ * not exist.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @param ... The default initializer, e.g. `{0}`.
+ * @return The initialized mr_ht_dac_spec_t structure or default initializer.
+ */
+#define MR_HT_NODE_DAC_SPEC_OR(_node, _prop, ...)                              \
+    MR_MACRO_IF(MR_HT_NODE_HAS_PROP(_node, _prop),                             \
+                (MR_HT_NODE_DAC_SPEC(_node, _prop)), (__VA_ARGS__))
+
+/**
  * @brief This macro function iterates over all DAC specification elements
  * in a property array and creates corresponding structures.
  *
@@ -838,6 +852,19 @@ MR_INLINE mr_int64_t mr_ht_dac_volt2raw(mr_ht_dac_spec_t *spec,
  */
 #define MR_HT_DAC_SPEC(_id, _prop)                                             \
     MR_HT_NODE_DAC_SPEC(MR_HT_DRIVER(_id), _prop)
+
+/**
+ * @brief This macro function creates a DAC specification structure from
+ * hardtree driver properties or returns a default initializer if the property
+ * does not exist.
+ *
+ * @param _id The driver instance id.
+ * @param _prop The property name.
+ * @param ... The default initializer, e.g. `{0}`.
+ * @return The initialized mr_ht_dac_spec_t structure or default initializer.
+ */
+#define MR_HT_DAC_SPEC_OR(_id, _prop, ...)                                     \
+    MR_HT_NODE_DAC_SPEC_OR(MR_HT_DRIVER(_id), _prop, __VA_ARGS__)
 
 /**
  * @brief This macro function iterates over all DAC specification elements in a

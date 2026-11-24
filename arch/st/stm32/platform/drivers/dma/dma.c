@@ -1531,7 +1531,7 @@ static void dma_irq_handle(dma_channel_t *channels, mr_size_t channels_num,
         (void MR_HT_DRIVER_PROP(_id, MR_CAT(st_irq_handler_, _n))(void) {      \
             dma_irq_handle(                                                    \
                 MR_CAT(__dma_channels_, _id),                                  \
-                MR_ARRAY_SIZE(MR_CAT(__dma_channels_, _id)),                   \
+                MR_HT_DRIVER_PROP_ELEM_NUM(_id, st_requests),                  \
                 __ST_HT_DMA_IRQ_MASK(_id, _n));                                \
         }),                                                                    \
         ())
@@ -1571,19 +1571,19 @@ static void dma_irq_handle(dma_channel_t *channels, mr_size_t channels_num,
                                        __ST_HT_DMA_ROUTE_IMPL)                 \
     };                                                                         \
     static dma_channel_t MR_CAT(                                               \
-        __dma_channels_, _id)[MR_ARRAY_SIZE(MR_CAT(__dma_routes_, _id))];      \
+        __dma_channels_, _id)[MR_HT_DRIVER_PROP_ELEM_NUM(_id, st_requests)];   \
     static dma_priv_t MR_CAT(__dma_priv_, _id) = {                             \
         .instance = __ST_HT_DMA_INSTANCE(_id),                                 \
         .clk_enable = MR_CAT(__dma_clk_enable_, _id),                          \
         .routes = MR_CAT(__dma_routes_, _id),                                  \
-        .routes_num = MR_ARRAY_SIZE(MR_CAT(__dma_routes_, _id)),               \
+        .routes_num = MR_HT_DRIVER_PROP_ELEM_NUM(_id, st_requests),            \
         .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),               \
         .channels = MR_CAT(__dma_channels_, _id),                              \
     };                                                                         \
     static mr_dma_data_t MR_CAT(__mr_dma_data_, _id)                           \
         = MR_DMA_DATA_INIT(MR_HT_DRIVER_PROP_OR(                               \
             _id, exist_mask,                                                   \
-            ((1ULL << MR_ARRAY_SIZE(MR_CAT(__dma_routes_, _id))) - 1ULL)));    \
+            ((1ULL << MR_HT_DRIVER_PROP_ELEM_NUM(_id, st_requests)) - 1ULL))); \
     ST_HT_DMA_IRQ(_id, 0)                                                      \
     ST_HT_DMA_IRQ(_id, 1)                                                      \
     ST_HT_DMA_IRQ(_id, 2)                                                      \

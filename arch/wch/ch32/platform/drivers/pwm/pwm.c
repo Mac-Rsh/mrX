@@ -1059,17 +1059,17 @@ MR_UNUSED static void pwm_break_irq(mr_driver_t *drv) {
         .tim = MR_HT_DRIVER_PROP(_id, wch_timx),                               \
         .clk_enable = MR_HT_DRIVER_PROP(_id, wch_clken),                       \
         .pins = {                                                              \
-            __CH32_HT_PWM_PIN(_id, wch_ch1),                                   \
-            __CH32_HT_PWM_PIN(_id, wch_ch2),                                   \
-            __CH32_HT_PWM_PIN(_id, wch_ch3),                                   \
-            __CH32_HT_PWM_PIN(_id, wch_ch4),                                   \
+            MR_HT_GPIO_SPEC_OR(_id, wch_ch1, {0}),                             \
+            MR_HT_GPIO_SPEC_OR(_id, wch_ch2, {0}),                             \
+            MR_HT_GPIO_SPEC_OR(_id, wch_ch3, {0}),                             \
+            MR_HT_GPIO_SPEC_OR(_id, wch_ch4, {0}),                             \
         },                                                                     \
         .comp_pins = {                                                         \
-            __CH32_HT_PWM_PIN(_id, wch_ch1n),                                  \
-            __CH32_HT_PWM_PIN(_id, wch_ch2n),                                  \
-            __CH32_HT_PWM_PIN(_id, wch_ch3n),                                  \
+            MR_HT_GPIO_SPEC_OR(_id, wch_ch1n, {0}),                            \
+            MR_HT_GPIO_SPEC_OR(_id, wch_ch2n, {0}),                            \
+            MR_HT_GPIO_SPEC_OR(_id, wch_ch3n, {0}),                            \
         },                                                                     \
-        .bkin = __CH32_HT_PWM_PIN(_id, wch_bkin),                              \
+        .bkin = MR_HT_GPIO_SPEC_OR(_id, wch_bkin, {0}),                        \
         .fault = {                                                             \
             .mode = MR_PWM_FAULT_LATCHED,                                      \
         },                                                                     \
@@ -1082,9 +1082,6 @@ MR_UNUSED static void pwm_break_irq(mr_driver_t *drv) {
     MR_HT_PWM_INSTALL(_id, &MR_CAT(__pwm_priv_, _id),                          \
                       MR_HT_DRIVER_HAS_PROP(_id, wch_bkin)                     \
                           ? &__pwm_break_ops : (_ops))
-#define __CH32_HT_PWM_PIN(_id, _prop)                                          \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, _prop),                             \
-                (MR_HT_GPIO_SPEC(_id, _prop)), ({0}))
 #define __CH32_HT_PWM_IRQ(_id)                                                 \
     MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, wch_irq_handler),                   \
                 (MR_CH32_INTERRUPT void                                        \

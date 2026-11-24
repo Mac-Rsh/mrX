@@ -15,7 +15,7 @@ one conflict table.
 
 from ...htc.common import Diagnostics, ErrorCode, SourceSpan
 from ..semantic.model import Method, Schema, Service
-from .layout import Layout
+from .layout import Layout, bool_paths
 from .names import CNames
 from dataclasses import dataclass
 
@@ -37,15 +37,17 @@ class CSymbolChecker:
         self.diagnostics = diagnostics
         self._used: dict[str, CSymbol] = {}
 
-    def check(self, schema: Schema) -> None:
+    def check(self, schema: Schema,
+              layouts: dict[tuple[str, str, str], Layout] | None = None) -> None:
         """Register all generated C identifiers and report collisions."""
-        layouts = Layout.map_schema(schema)
+        if layouts is None:
+            layouts = Layout.map_schema(schema)
         self._register_variable_arrays(schema)
         self._register_enums(schema)
         self._register_structs(schema)
         for service in schema.services.values():
             for method in service.methods:
-                self._register_method(service, method, layouts)
+                self._register_method(service, method, schema, layouts)
         self._register_unions()
 
     def _register_variable_arrays(self, schema: Schema) -> None:
@@ -73,22 +75,33 @@ class CSymbolChecker:
             self._add(CNames.user_typedef(struct.name), origin, struct.span)
 
     def _register_method(self, service: Service, method: Method,
+                         schema: Schema,
                          layouts: dict[tuple[str, str, str], Layout]) -> None:
         """Register identifiers produced by one method."""
         origin = f"method {service.name}.{method.name}"
         span = method.span
+        request = layouts.get((service.name, method.name, "request"))
+        response = layouts.get((service.name, method.name, "response"))
         self._add(CNames.entry_fn(service.name, method.name), origin, span)
-        if method.request:
+        if not method.request:
+            self._add(CNames.empty_decode_fn(), "shared empty decode")
+        elif (request is not None and (not request.has_variable)
+              and (not bool_paths(method.request, schema))):
+            self._add(CNames.fixed_decode_fn(method.request_size),
+                      "shared fixed decode")
+        else:
             self._add(CNames.decode_fn(service.name, method.name), origin,
                       span)
-        else:
-            self._add(CNames.empty_decode_fn(), "shared empty decode")
         self._add(CNames.invoke_fn(service.name, method.name), origin, span)
-        if (not method.oneway) and method.response:
+        if method.oneway or (not method.response):
+            self._add(CNames.empty_encode_fn(), "shared empty encode")
+        elif (response is not None and (not response.has_variable)
+              and (not bool_paths(method.response, schema))):
+            self._add(CNames.fixed_encode_fn(method.response_size),
+                      "shared fixed encode")
+        else:
             self._add(CNames.encode_fn(service.name, method.name), origin,
                       span)
-        else:
-            self._add(CNames.empty_encode_fn(), "shared empty encode")
         self._add(CNames.handler_fn(service.name, method.name), origin, span)
         self._add(CNames.export_macro(service.name, method.name), origin,
                   span)
@@ -106,11 +119,9 @@ class CSymbolChecker:
             self._add(CNames.method_response_typedef(service.name,
                                                      method.name),
                       origin, span)
-        request = layouts.get((service.name, method.name, "request"))
         if request is not None and request.has_variable:
             self._add(CNames.unpack_fn(service.name, method.name, "request"),
                       origin, span)
-        response = layouts.get((service.name, method.name, "response"))
         if response is not None and response.has_variable:
             self._add(CNames.pack_fn(service.name, method.name, "response"),
                       origin, span)

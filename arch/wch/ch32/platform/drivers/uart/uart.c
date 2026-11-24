@@ -1058,10 +1058,10 @@ MR_UNUSED static void uart_irq_handle(mr_driver_t *drv) {
         .instance = MR_HT_DRIVER_PROP(_id, wch_uartx),                         \
         .clk_enable = MR_HT_DRIVER_PROP(_id, wch_clken),                       \
         .pins = {                                                              \
-            [UART_PIN_RX] = __CH32_HT_UART_PIN(_id, rx),                       \
-            [UART_PIN_TX] = __CH32_HT_UART_PIN(_id, tx),                       \
-            [UART_PIN_RTS] = __CH32_HT_UART_PIN(_id, rts),                     \
-            [UART_PIN_CTS] = __CH32_HT_UART_PIN(_id, cts),                     \
+            [UART_PIN_RX] = MR_HT_GPIO_SPEC_OR(_id, rx, {0}),                  \
+            [UART_PIN_TX] = MR_HT_GPIO_SPEC_OR(_id, tx, {0}),                  \
+            [UART_PIN_RTS] = MR_HT_GPIO_SPEC_OR(_id, rts, {0}),                \
+            [UART_PIN_CTS] = MR_HT_GPIO_SPEC_OR(_id, cts, {0}),                \
         },                                                                     \
         .irqn = __CH32_HT_UART_IRQ_NUMBER(_id),                                \
         .irq_priority = __CH32_HT_UART_IRQ_PRIORITY(_id),                      \
@@ -1069,9 +1069,6 @@ MR_UNUSED static void uart_irq_handle(mr_driver_t *drv) {
     };                                                                         \
     __CH32_HT_UART_IRQ(_id)                                                    \
     MR_HT_UART_INSTALL(_id, &MR_CAT(__uart_priv_, _id), _ops)
-#define __CH32_HT_UART_PIN(_id, _prop)                                         \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, _prop),                             \
-                (MR_HT_GPIO_SPEC(_id, _prop)), ({0}))
 #define __CH32_HT_UART_IRQ(_id)                                                \
     MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, wch_irq_handler),                   \
                 (MR_CH32_INTERRUPT void                                        \
@@ -1084,15 +1081,12 @@ MR_UNUSED static void uart_irq_handle(mr_driver_t *drv) {
 #define __CH32_HT_UART_IRQ_PRIORITY(_id)                                       \
     MR_HT_DRIVER_PROP_OR(_id, wch_irq_priority, 0U)
 #if defined(UART_USE_STREAM)
-#define __CH32_HT_UART_DMA_SPEC(_id, _prop)                                    \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, _prop),                             \
-                (MR_HT_DMA_SPEC(_id, _prop)), ({0}))
 #define __CH32_HT_UART_STREAM_INIT(_id)                                        \
     .rx_dma = {                                                                \
-        .dma = __CH32_HT_UART_DMA_SPEC(_id, rx_dma),                           \
+        .dma = MR_HT_DMA_SPEC_OR(_id, rx_dma, {0}),                            \
     },                                                                         \
     .tx_dma = {                                                                \
-        .dma = __CH32_HT_UART_DMA_SPEC(_id, tx_dma),                           \
+        .dma = MR_HT_DMA_SPEC_OR(_id, tx_dma, {0}),                            \
     },
 #else
 #define __CH32_HT_UART_STREAM_INIT(_id)

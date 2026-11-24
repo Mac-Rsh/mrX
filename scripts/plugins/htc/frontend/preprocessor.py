@@ -45,21 +45,31 @@ class Preprocessor:
         self.macro_expander = MacroExpander(diagnostics)
 
     def process(self, entry_file: str) -> CompilationUnit:
-        """Process an entry file and return its compilation unit."""
+        """Process an entry file and return its flattened compilation unit."""
         entry_path = str(Path(entry_file).resolve())
-        unit = CompilationUnit(entry_path=entry_path)
-        self._scan(entry_path, unit, active_stack=[], macros={})
-        return unit
+        output_lines: list[str] = []
+        line_map: list[tuple[str, int]] = []
+        seen_paths: set[str] = set()
+        self._scan(entry_path, output_lines, line_map, seen_paths,
+                   active_stack=[], macros={})
+        source_file = SourceFile(
+            path=entry_path,
+            text="".join(output_lines),
+            line_map=line_map,
+        )
+        return CompilationUnit(entry_path=entry_path, files=[source_file])
 
     def _scan(
             self,
             file_path: str,
-            unit: CompilationUnit,
+            output_lines: list[str],
+            line_map: list[tuple[str, int]],
+            seen_paths: set[str],
             active_stack: list[str],
             macros: dict[str, str],
             included_from: IncludeSite | None = None,
     ) -> None:
-        """Scan one file, apply directives, and append it to the unit."""
+        """Scan one file, apply directives, and inline it into the output."""
         # Resolve the input path first so all later bookkeeping uses one form
         resolved_path = self.resolver.require_file(file_path)
         if resolved_path is None:
@@ -72,50 +82,43 @@ class Preprocessor:
                                       resolved_path.name, included_from):
             return
 
-        if unit.contains(normalized_path):
+        if normalized_path in seen_paths:
             return
+        seen_paths.add(normalized_path)
 
         # Read source text before scanning physical lines
         raw_text = self._read_source_text(resolved_path, included_from)
         if raw_text is None:
             return
 
-        self._scan_text(normalized_path, resolved_path.parent, raw_text, unit,
-                        active_stack, macros, included_from)
+        # Register original source text for accurate diagnostic previews
+        self.diagnostics.register_source(normalized_path, raw_text)
+
+        self._scan_text(normalized_path, resolved_path.parent, raw_text,
+                        output_lines, line_map, seen_paths, active_stack,
+                        macros)
 
     def _scan_text(
             self,
             normalized_path: str,
             current_dir: Path,
             raw_text: str,
-            unit: CompilationUnit,
+            output_lines: list[str],
+            line_map: list[tuple[str, int]],
+            seen_paths: set[str],
             active_stack: list[str],
             macros: dict[str, str],
-            included_from: IncludeSite | None,
     ) -> None:
-        """Scan source text and append the filtered file to the unit."""
-        # Keep the file slot stable so include order is preserved in the unit
-        filtered_lines: list[str] = []
+        """Scan source text and inline expanded lines with line mapping."""
         conditional_stack = ConditionalState(self.diagnostics)
-        if not unit.append(SourceFile(path=normalized_path, text="",
-                                      included_from=included_from)):
-            return
-        source_index = len(unit.files) - 1
         next_stack = [*active_stack, normalized_path]
 
         for line_number, line in enumerate(raw_text.splitlines(keepends=True),
                                            start=1):
             self._scan_line(line, line_number, normalized_path, current_dir,
-                            filtered_lines, conditional_stack, next_stack,
-                            unit, macros)
+                            output_lines, line_map, seen_paths,
+                            conditional_stack, next_stack, macros)
 
-        unit.files[source_index] = SourceFile(
-            path=normalized_path,
-            text="".join(filtered_lines),
-            included_from=included_from,
-        )
-        self.diagnostics.register_source(normalized_path,
-                                         unit.files[source_index].text)
         conditional_stack.report_unterminated()
 
     def _scan_line(
@@ -124,10 +127,11 @@ class Preprocessor:
             line_number: int,
             file_path: str,
             current_dir: Path,
-            filtered_lines: list[str],
+            output_lines: list[str],
+            line_map: list[tuple[str, int]],
+            seen_paths: set[str],
             conditional_stack: ConditionalState,
             active_stack: list[str],
-            unit: CompilationUnit,
             macros: dict[str, str],
     ) -> None:
         """Process one physical source line during preprocessing."""
@@ -143,27 +147,23 @@ class Preprocessor:
                 line_number,
                 line,
             )
-            self._preserve_newline(filtered_lines, line)
             return
 
         # Skip normal work when the current branch is inactive
         if conditional_stack.is_skipping():
-            self._preserve_newline(filtered_lines, line)
             return
 
-        # Macro definitions mutate preprocessor state but preserve line layout
+        # Macro definitions mutate preprocessor state
         if isinstance(directive, DefineDirective):
             macros[directive.name] = directive.value
-            self._preserve_newline(filtered_lines, line)
             return
 
         # Undefinitions remove a name from the macro table
         if isinstance(directive, UndefDirective):
             macros.pop(directive.name, None)
-            self._preserve_newline(filtered_lines, line)
             return
 
-        # Unsupported directives still preserve original line endings
+        # Unsupported directives emit diagnostics
         if isinstance(directive, UnsupportedDirective):
             self._report_line_error(
                 ErrorCode.INCLUDE_ERROR,
@@ -172,20 +172,20 @@ class Preprocessor:
                 line_number,
                 self._column_of(line, directive.name),
             )
-            self._preserve_newline(filtered_lines, line)
             return
 
-        # Includes recurse into additional files and record graph edges
+        # Includes inline the target file at this exact point in the stream
         if isinstance(directive, IncludeDirective):
-            self._preserve_newline(filtered_lines, line)
             self._scan_include(directive, file_path, line_number, current_dir,
-                               unit, active_stack, macros, line)
+                               output_lines, line_map, seen_paths,
+                               active_stack, macros, line)
             return
 
-        # Ordinary source lines only participate in macro expansion
-        filtered_lines.append(
-            self.macro_expander.expand_line(line, macros, file_path=file_path,
-                                            line_number=line_number))
+        # Ordinary source lines participate in macro expansion and line mapping
+        expanded = self.macro_expander.expand_line(
+            line, macros, file_path=file_path, line_number=line_number)
+        output_lines.append(expanded.rstrip("\r\n") + "\n")
+        line_map.append((file_path, line_number))
 
     def _has_circular_include(self, normalized_path: str,
                               active_stack: list[str], file_name: str,
@@ -217,7 +217,9 @@ class Preprocessor:
             file_path: str,
             line_number: int,
             current_dir: Path,
-            unit: CompilationUnit,
+            output_lines: list[str],
+            line_map: list[tuple[str, int]],
+            seen_paths: set[str],
             active_stack: list[str],
             macros: dict[str, str],
             line: str,
@@ -257,7 +259,9 @@ class Preprocessor:
             return
         self._scan(
             str(child_path),
-            unit,
+            output_lines,
+            line_map,
+            seen_paths,
             active_stack=active_stack,
             macros=macros,
             included_from=IncludeSite(file_path=file_path, line=line_number,

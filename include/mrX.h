@@ -23,6 +23,7 @@
 #include <mrX/kernel/mr_initcall.h>
 #include <mrX/kernel/mr_irq.h>
 #include <mrX/kernel/mr_list.h>
+#include <mrX/kernel/mr_list_array.h>
 #include <mrX/kernel/mr_listify.h>
 #include <mrX/kernel/mr_log.h>
 #include <mrX/kernel/mr_object.h>
@@ -32,6 +33,7 @@
 #include <mrX/kernel/mr_slab.h>
 #include <mrX/kernel/mr_spinlock.h>
 #include <mrX/kernel/mr_timer.h>
+#include <mrX/kernel/mr_trace.h>
 #include <mrX/kernel/mr_version.h>
 #include <mrX/kernel/mr_wait.h>
 #include <mrX/kernel/mr_work.h>

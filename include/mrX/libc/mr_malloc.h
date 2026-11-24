@@ -13,6 +13,7 @@
 #if defined(MR_USE_MALLOC_STD)
 #include <stdlib.h>
 #else
+#include <mrX/libc/mr_compiler.h>
 #include <mrX/libc/mr_types.h>
 #endif /* defined(MR_USE_MALLOC_STD) */
 
@@ -36,8 +37,12 @@ extern "C" {
 /* Heap magic definition */
 #define MR_HEAP_MAGIC                   (0x6d725800U)
 
+/* Heap alignment definition(at least 8 bytes for 64-bit types) */
+#define MR_HEAP_ALIGN_SIZE                                                     \
+    ((MR_ALIGN_SIZE) < 8 ? 8 : (MR_ALIGN_SIZE))
+
 /* Heap block type */
-typedef struct mr_heap_block {
+typedef struct MR_ALIGN(8) mr_heap_block {
     volatile mr_uint32_t magic;
     struct mr_heap_block *next;
     mr_size_t size;

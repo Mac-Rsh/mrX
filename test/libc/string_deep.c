@@ -411,5 +411,30 @@ MR_TEST(string, strchr_positions) {
     MR_TEST_EXPECT_EQ_PTR(mr_strchr(text, 'z'), MR_NULL);
 }
 
+MR_TEST(string, strerror_negative_and_extended) {
+    MR_TEST_EXPECT_EQ_INT(mr_strcmp(mr_strerror(-MR_EINVAL), "Invalid argument"),
+                          0);
+    MR_TEST_EXPECT_EQ_INT(
+        mr_strcmp(mr_strerror(MR_EBADF), "Bad file descriptor"), 0);
+    MR_TEST_EXPECT_EQ_INT(
+        mr_strcmp(mr_strerror(-MR_ERANGE), "Result too large"), 0);
+}
+
+MR_TEST(string, memcpy_same_unaligned_offset) {
+    mr_uint8_t src[32], dst[32];
+    mr_size_t i;
+
+    for (i = 0; i < sizeof(src); i++) {
+        src[i] = (mr_uint8_t)(i + 1U);
+        dst[i] = 0U;
+    }
+    MR_TEST_ASSERT_EQ_PTR(mr_memcpy(dst + 1, src + 1, 25), dst + 1);
+    for (i = 1; i < 26; i++) {
+        MR_TEST_EXPECT_EQ_UINT(dst[i], src[i]);
+    }
+    MR_TEST_EXPECT_EQ_UINT(dst[0], 0U);
+    MR_TEST_EXPECT_EQ_UINT(dst[26], 0U);
+}
+
 #endif /* defined(MR_USE_STRING) */
 #endif /* defined(MR_USE_TEST) */

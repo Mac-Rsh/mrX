@@ -1,0 +1,46 @@
+# ==================================
+# PROTOCOL
+# ==================================
+choice
+    prompt "XTrace protocol"
+    depends on MR_USE_MODULE_XTRACE
+    default MR_USE_MODULE_XTRACE_PROTO_CTF
+
+    config MR_USE_MODULE_XTRACE_PROTO_NONE
+        bool "None"
+        help
+            Do not enable a built-in protocol encoder. Register a custom
+            protocol encoder via mr_xtrace_register().
+
+    config MR_USE_MODULE_XTRACE_PROTO_CTF
+        bool "CTF"
+        help
+            Enable the Common Trace Format (CTF) protocol encoder for XTrace.
+            Encodes generic trace events into self-contained binary packets for
+            host visualization and analysis.
+
+    config MR_USE_MODULE_XTRACE_PROTO_SYSVIEW
+        bool "SEGGER SystemView"
+        help
+            Enable the SEGGER SystemView protocol encoder for XTrace.
+            Encodes generic trace events into SystemView binary packets
+            compatible with SEGGER SystemView host tools.
+endchoice
+
+config MR_CFG_XTRACE_CTF_PACKET_SIZE
+    depends on MR_USE_MODULE_XTRACE_PROTO_CTF
+    int "XTrace CTF packet size"
+    default 256
+    range 256 4096
+    help
+        Maximum size in bytes of each CTF packet before committing to the
+        registered output adapter.
+
+config MR_CFG_SYSVIEW_MARKERS
+    depends on MR_USE_MODULE_XTRACE_PROTO_SYSVIEW
+    int "SystemView maximum markers"
+    default 32
+    range 8 256
+    help
+        Maximum number of distinct BEGIN/END marker names cached for SystemView
+        marker ID mapping.

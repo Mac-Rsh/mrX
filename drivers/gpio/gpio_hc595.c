@@ -233,10 +233,8 @@ static mr_err_t drv_port_read(const mr_driver_t *drv, mr_uint32_t *mask) {
 /* Instance install */
 #define GPIO_HC595_HT_GPIO_INSTALL(_id, _ops)                                  \
     static drv_gpio_hc595_priv_t MR_CAT(__drv_gpio_hc595_priv_, _id) = {       \
-        MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, oe),                            \
-                    (.oe = MR_HT_GPIO_SPEC(_id, oe)), (.oe = {0})),            \
-        MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, srclr),                         \
-                    (.srclr = MR_HT_GPIO_SPEC(_id, srclr)), (.srclr = {0})),   \
+        .oe = MR_HT_GPIO_SPEC_OR(_id, oe, {0}),                                \
+        .srclr = MR_HT_GPIO_SPEC_OR(_id, srclr, {0}),                          \
         .ser = MR_HT_GPIO_SPEC(_id, ser),                                      \
         .srclk = MR_HT_GPIO_SPEC(_id, srclk),                                  \
         .rclk = MR_HT_GPIO_SPEC(_id, rclk),                                    \

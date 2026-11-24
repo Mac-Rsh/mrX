@@ -1,66 +1,63 @@
-# MCP23017 / MCP23S17 GPIO
+# MCP23017 / MCP23S17 GPIO 扩展（GPIO-MCP23x17）
 
-复用 [GPIO API](gpio.md)
-，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
+通过 I2C（MCP23017）或 SPI（MCP23S17）总线驱动 16 位 GPIO 扩展芯片，将其 GPA0~7（引脚
+`0`~`7`）与 GPB0 ~7（引脚 `8`~`15`）呈现为标准 [GPIO 驱动](gpio.md) 端口。
 
-| 项目     | 说明                                                                     |
-|----------|--------------------------------------------------------------------------|
-| 功能宏   | `MR_USE_DRIVER_GPIO`，及对应的 `MR_USE_DRIVER_I2C` / `MR_USE_DRIVER_SPI` |
-| 头文件   | `<mrX/drivers/gpio/mr_gpio.h>`                                           |
-| 依赖模块 | I2C / SPI、Driver；仅 HardTree 有实例时编译                              |
+| 项目     | 说明                                                                                                                          |
+|----------|-------------------------------------------------------------------------------------------------------------------------------|
+| 启用方式 | 随 `MR_USE_DRIVER_GPIO` 与（`MR_USE_DRIVER_I2C` 或 `MR_USE_DRIVER_SPI`）编译，由 HardTree `compat = "gpio_mcp23x17"` 节点触发 |
+| 头文件   | 复用 `<mrX/drivers/gpio/mr_gpio.h>`                                                                                           |
 
-## 用户指南
+## HardTree 属性
 
-### HardTree
+| 属性          | 必需   | 默认值    | 说明                                                            |
+|---------------|--------|-----------|-----------------------------------------------------------------|
+| `i2c`         | 二选一 | 无        | I2C 总线驱动 phandle（MCP23017 使用）                           |
+| `spi`         | 二选一 | 无        | SPI 规格 `[phandle, cs]`（MCP23S17 使用）                       |
+| `addr`        | 是     | -         | I2C 7 位地址（`0x20`~`0x27`）或 SPI 硬件地址 `A2:A0`（`0`~`7`） |
+| `exist_mask`  | 否     | `0xffffU` | 存在掩码（强制裁剪为 16 位）                                    |
+| `invert_mask` | 否     | `0x0000U` | 低有效反相掩码                                                  |
 
-MCP23017：
+每实例必须且只能配置 `i2c` 或 `spi` 其中之一，同时配置或均未配置时配置阶段返回
+`-MR_EINVAL`。
 
-```dts
-io16: io16 {
-    compatible = "gpio_mcp23x17";
-    status = "defer";
-    i2c = &i2c0;
-    addr = <0x20>;
-};
-```
-
-MCP23S17 使用 `spi = <&spi0 0>;` 替代 `i2c`，`addr = <0>;`
-表示 A2:A0 的硬件地址，范围 0..7；I2C 地址范围 0x20..0x27。
-每实例必须且只能声明一种总线。启用 GPIO 和对应 I2C/SPI 类别开关。
-`exist_mask` 缺省 0xffff 并裁剪为 16 位；`invert_mask` 缺省 0。
-SPI 固定请求 1 MHz、mode 0、8 位、MSB first。
-
-### API 行为
-
-引脚 0..7 = GPA0..7，8..15 = GPB0..7。
-支持 INPUT、OUTPUT/PP，支持 PULL_NONE/PULL_UP；
-不支持 OD、下拉、alternate、analog、IRQ 模式及事件。
-输出配置先预装 OLAT，再切换 IODIR，避免把旧锁存值带入新输出。
-引脚写要求当前硬件方向为输出；端口写只更新 `exist_mask` 内的输出位，
-其余锁存位保持不变。读返回 GPIO 实际电平，配置查询读取 IODIR、OLAT、GPPU。
+## 快速上手
 
 ```c
-mr_gpio_input(drv, 0U, MR_GPIO_PULL_UP);
-mr_gpio_output(drv, 8U, MR_GPIO_OTYPE_PP, MR_GPIO_LEVEL_LOW);
-mr_gpio_write(drv, 8U, MR_GPIO_LEVEL_HIGH);
+#include <mrX/drivers/gpio/mr_gpio.h>
+
+void mcp23x17_example(void) {
+    mr_uint8_t level = 0;
+    mr_driver_t *drv = mr_driver_find("io16"); /* 名称取自 HardTree 节点名 */
+
+    if (drv == MR_NULL) {
+        return;
+    }
+    mr_driver_setup(drv);
+
+    /* 需先确保上游 I2C/SPI 控制器已完成 setup */
+    mr_gpio_input(drv, 0, MR_GPIO_PULL_UP);
+    mr_gpio_output(drv, 8, MR_GPIO_OTYPE_PP, MR_GPIO_LEVEL_LOW);
+    mr_gpio_write(drv, 8, MR_GPIO_LEVEL_HIGH);
+    mr_gpio_read(drv, 0, &level);
+
+    mr_driver_put(drv);
+}
 ```
 
-## 开发者指南
+## 运行语义与限制
 
-### 实现说明
-
-源码：`drivers/gpio/gpio_mcp23x17.c`。
-首次寄存器操作设置 IOCON 为 BANK=0、HAEN=1、SEQOP=0，关闭两组 GPINTEN 和
-IPOL；必须在芯片复位后的 BANK=0 状态接管。MCP23S17 复位后 HAEN=0，因此第一次 IOCON
-SPI 写固定使用硬件地址 0；该写成功后，后续事务才使用 HardTree `addr` 指定的 A2:A0
-地址。
-RESET 必须保持释放；驱动不控制它。
-每次读写一个端口寄存器，不依赖跨端口自动递增。
-一次端口写由多个事务构成，不提供 16 位原子更新或同时采样。
-
-不要把多个尚未启用 HAEN 的器件放在同一片选上由不同实例同时接管；
-建议每片芯片使用独立 CS。底层总线和芯片均需独占、串行调用。
-
-协议依据：[Microchip 数据手册](https://ww1.microchip.com/downloads/en/DeviceDoc/20001952C.pdf)。
-本轮仅人工静态审查，未构建或测试。
-
+- **模式与电气能力**：支持 `MR_GPIO_MODE_INPUT`（`MR_GPIO_PULL_NONE` /
+  `MR_GPIO_PULL_UP`）与 `MR_GPIO_MODE_OUTPUT`（仅 `MR_GPIO_OTYPE_PP`
+  ）。不支持开漏输出、下拉、复用功能、模拟模式及中断模式，传入返回 `-MR_ENOSYS`；未实现
+  `event_attach`/`event_control`（返回 `-MR_ENOSYS`）。
+- **首次初始化与 SPI 寻址**：首次调用 `mr_gpio_configure` 时，驱动将 `IOCON` 设为
+  `BANK=0`、`HAEN=1`，并清零 `GPINTEN` 与 `POLARITY` 寄存器（极性反相统一由 GPIO
+  公共层 `invert_mask` 处理）。由于 MCP23S17 复位后 `HAEN=0`，第一次写 `IOCON` 固定使用
+  SPI 地址 `0`，此后事务再使用 HardTree 的 `addr`；因此多片共用片选时切勿同时接管未启用
+  `HAEN` 的芯片，RESET 引脚需由外部保持释放。
+- **输出预装与端口写**：配置输出模式时先写 `OLAT` 再切换 `IODIR`，避免切换瞬间输出旧锁存值。
+  `mr_gpio_port_write` 仅更新当前配置为输出的引脚，输入引脚的锁存位保持不变；两字节端口操作分两次单字节总线事务完成，不保证
+  16 位原子性，且 SPI 模式固定配置为 1 MHz、Mode 0、8 位、MSB First。
+- **并发与上下文**：总线事务为同步阻塞操作，内部无互斥锁，多执行流并发访问同一实例需由调用方或总线层序列化，不可在
+  ISR 中调用。

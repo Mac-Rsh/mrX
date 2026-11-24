@@ -233,6 +233,9 @@ mr_uint32_t mr_fifo_write_finish(mr_fifo_t *fifo, mr_uint32_t num);
  * @param buf The buffer.
  * @param want The wanted buffer number.
  * @return The actual claimed element number.
+ *
+ * @note Overwrite operations advance the read cursor and require mutual
+ * exclusion with concurrent consumers.
  */
 mr_uint32_t mr_fifo_overwrite_claim(mr_fifo_t *fifo, mr_uint32_t off,
                                     void **buf, mr_uint32_t want);

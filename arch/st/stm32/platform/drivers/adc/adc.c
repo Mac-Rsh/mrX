@@ -1130,7 +1130,7 @@ MR_UNUSED static void adc_irq(adc_priv_t *priv) {
         },                                                                     \
         .clk_enable = MR_CAT(__adc_clk_enable_, _id),                          \
         .channels = MR_CAT(__adc_channel_, _id),                               \
-        .channels_num = MR_ARRAY_SIZE(MR_CAT(__adc_channel_, _id)),            \
+        .channels_num = MR_HT_DRIVER_PROP_ELEM_NUM(_id, st_channels),          \
         .ref = MR_HT_DRIVER_PROP(_id, st_ref),                                 \
         __ST_HT_ADC_STREAM(_id)                                                \
     };                                                                         \
@@ -1158,8 +1158,8 @@ MR_UNUSED static void adc_irq(adc_priv_t *priv) {
     MR_MACRO_IF(__ST_HT_ADC_HAS_DMA(_id),                                      \
                 (.dma = &MR_CAT(__adc_dma_, _id),), ())
 #define __ST_HT_ADC_HAS_IRQ(_id)                                               \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_irqn),                           \
-                (MR_HT_DRIVER_HAS_PROP(_id, st_irq_handler)), (0))
+    MR_MACRO_AND(MR_HT_DRIVER_HAS_PROP(_id, st_irqn),                          \
+                 MR_HT_DRIVER_HAS_PROP(_id, st_irq_handler))
 #define __ST_HT_ADC_IRQ(_id)                                                   \
     MR_MACRO_IF(__ST_HT_ADC_HAS_IRQ(_id),                                      \
                 (void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {           \

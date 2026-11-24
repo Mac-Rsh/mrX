@@ -7,11 +7,16 @@
  */
 
 #include <mrX/port/mr_port_clock.h>
+#include <mrX/port/mr_port_irq.h>
 #include <mrX/kernel/mr_service.h>
 #include <mrX/kernel/mr_clock.h>
 #include <mrX/kernel/mr_hook.h>
 #include <mrX/libc/mr_assert.h>
 #include <mrX/libc/mr_atomic.h>
+#if defined(MR_USE_CLOCK_TRACE)
+#define MR_TRACE_TAG                    "clock"
+#endif /* defined(MR_USE_CLOCK_TRACE) */
+#include <mrX/kernel/mr_trace.h>
 
 /* Clock hook entry */
 #if !defined(MR_CFG_CLOCK_HOOK_SIZE)
@@ -25,11 +30,9 @@ static mr_ptr_t __clock_entry[MR_CFG_CLOCK_HOOK_SIZE];
 static mr_hook_t __clock_hook
     = MR_HOOK_INIT(__clock_entry, MR_CFG_CLOCK_HOOK_SIZE);
 /* Clock uptime(coarse) */
-static mr_atomic_t __clock_uptime = MR_ATOMIC_INIT(0);
+static volatile mr_tick_t __clock_uptime = 0;
 /* Clock tick */
-static mr_atomic_t __clock_tick = MR_ATOMIC_INIT(0);
-/* Clock tick generation */
-static mr_atomic_t __clock_gen = MR_ATOMIC_INIT(0);
+static volatile mr_tick_t __clock_tick = 0;
 
 static mr_tick_t clock_hook(void) {
     mr_tick_t tickless, less;
@@ -53,33 +56,51 @@ static mr_tick_t clock_hook(void) {
 }
 
 void mr_clock_increase(mr_tick_t tick) {
-    mr_tick_t last;
+    mr_tick_t last, next;
+    int mask;
 
-    /* Clock generation increase */
-    mr_atomic_fetch_add(&__clock_gen, 1);
+    /* Disable interrupt */
+    mask = mr_port_irq_disable();
 
-    /* Clock tick increase */
-    last = (mr_tick_t)mr_atomic_fetch_add(&__clock_tick, (mr_atomic_t)tick);
-    if ((last + tick) < last) {
-        /* Clock uptime increase */
-        mr_atomic_fetch_add(&__clock_uptime, 1);
+    /* Update tick and uptime atomically */
+    last = __clock_tick;
+    next = last + tick;
+    __clock_tick = next;
+    if (next < last) {
+        __clock_uptime++;
     }
 
-    /* Clock generation increase */
-    mr_atomic_fetch_add(&__clock_gen, 1);
+    /* Enable interrupt */
+    mr_port_irq_enable(mask);
 
     /* Call clock hooks */
     clock_hook();
 }
 
 mr_tick_t mr_clock_tick(void) {
+    mr_tick_t tick;
+    int mask;
+
+    /* Disable interrupt */
+    mask = mr_port_irq_disable();
+
     /* Get clock tick */
-    return (mr_tick_t)mr_atomic_load(&__clock_tick);
+    tick = __clock_tick;
+
+    /* Enable interrupt */
+    mr_port_irq_enable(mask);
+    return tick;
 }
 
 mr_tick_t mr_clock_tickless(void) {
+    mr_tick_t tickless;
+
     /* Get clock tickless */
-    return clock_hook();
+    tickless = clock_hook();
+
+    /* Trace clock tickless */
+    MR_TRACE_COUNTER("tickless", tickless);
+    return tickless;
 }
 
 mr_err_t mr_clock_hook_add(mr_clock_hook_t *entry) {
@@ -183,26 +204,19 @@ mr_hires_timestamp_t mr_hires_tick2timestamp(mr_hires_tick_t tick,
 #endif /* defined(MR_USE_CLOCK_HIRES) */
 
 mr_uptime_t mr_clock_uptime(void) {
-    mr_tick_t gen, gen2, coarse;
+    mr_tick_t coarse, thin;
     mr_uint64_t tick;
-    mr_tick_t thin;
+    int mask;
+
+    /* Disable interrupt */
+    mask = mr_port_irq_disable();
 
     /* Read a consistent clock snapshot */
-    do {
-        do {
-            /* Get start clock generation */
-            gen = (mr_tick_t)mr_atomic_load(&__clock_gen);
+    coarse = __clock_uptime;
+    thin = __clock_tick;
 
-            /* An odd number of accesses will be invalid */
-        } while (gen & 1);
-
-        /* Get clock uptime and tick */
-        coarse = (mr_tick_t)mr_atomic_load(&__clock_uptime);
-        thin = (mr_tick_t)mr_atomic_load(&__clock_tick);
-
-        /* Get end clock generation */
-        gen2 = (mr_tick_t)mr_atomic_load(&__clock_gen);
-    } while (gen != gen2);
+    /* Enable interrupt */
+    mr_port_irq_enable(mask);
 
     /* Combine 32-bit coarse and thin ticks */
     tick = ((mr_uint64_t)coarse * ((mr_uint64_t)MR_TICK_MAX + 1ULL)) + thin;
@@ -212,5 +226,7 @@ mr_uptime_t mr_clock_uptime(void) {
 
 void mr_clock_busy_wait(mr_uint32_t us) {
     /* Don't give up the CPU */
+    MR_TRACE_BEGIN("busy_wait", us);
     mr_port_clock_busy_wait(us);
+    MR_TRACE_END("busy_wait", us);
 }

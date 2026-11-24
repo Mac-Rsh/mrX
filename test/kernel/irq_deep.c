@@ -276,13 +276,13 @@ MR_TEST(irq, deep_priority_default_and_persist) {
     MR_TEST_ASSERT_EQ_INT(mr_irq_priority_set(11, 5), 0);
     MR_TEST_ASSERT_EQ_INT(mr_irq_priority(11), 5);
 
-    /* The first request installs the default priority again */
+    /* The first request preserves the priority configured before request */
     MR_TEST_ASSERT_EQ_INT(mr_irq_request(11, deep_irq_handler_none,
                                          deep_irq_owner(0),
                                          MR_IRQ_SHARED | MR_IRQ_LEVEL_HIGH),
                           0);
-    MR_TEST_ASSERT_EQ_INT(mr_irq_priority(11), 0);
-    MR_TEST_ASSERT_EQ_INT(deep_irq_last_priority, 0);
+    MR_TEST_ASSERT_EQ_INT(mr_irq_priority(11), 5);
+    MR_TEST_ASSERT_EQ_INT(deep_irq_last_priority, 5);
 
     /* A custom priority survives a further shared request */
     MR_TEST_ASSERT_EQ_INT(mr_irq_priority_set(11, 7), 0);
@@ -345,11 +345,12 @@ MR_TEST(irq, deep_handle_shared_shortcut) {
                                          MR_IRQ_SHARED | MR_IRQ_EDGE_RISING),
                           0);
 
-    /* The handled action stops the chain before the third owner */
+    /* Shared IRQ runs all actions even after one returns MR_IRQ_HANDLED */
     MR_TEST_ASSERT_EQ_INT(mr_irq_handle(13), MR_IRQ_HANDLED);
-    MR_TEST_ASSERT_EQ_INT(deep_irq_handler_order_n, 2);
+    MR_TEST_ASSERT_EQ_INT(deep_irq_handler_order_n, 3);
     MR_TEST_ASSERT_EQ_INT(deep_irq_handler_order[0], 0);
     MR_TEST_ASSERT_EQ_INT(deep_irq_handler_order[1], 1);
+    MR_TEST_ASSERT_EQ_INT(deep_irq_handler_order[2], 2);
 
     /* Free the shortcut owner so the remaining chain runs to the end */
     deep_irq_reset_handlers();

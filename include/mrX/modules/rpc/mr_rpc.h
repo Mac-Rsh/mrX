@@ -89,7 +89,7 @@ typedef struct mr_rpc_frame {
     mr_uint8_t version;
     mr_uint8_t type;
     mr_uint16_t flags;
-    mr_uint16_t hdr_crc16;
+    mr_uint16_t hdr_checksum;
     mr_uint32_t session;
     mr_uint16_t service;
     mr_uint16_t method;
@@ -119,7 +119,7 @@ typedef struct mr_rpc_response {
     mr_rpc_frame_t frame;
     mr_rpc_idl_response_t payload;
     mr_uint8_t trailer[sizeof(mr_uint16_t)];
-} MR_PACKED mr_rpc_response_t;
+} mr_rpc_response_t;
 
 /* RPC session operations */
 typedef struct mr_rpc_session_ops {

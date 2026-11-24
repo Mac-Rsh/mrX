@@ -15,4 +15,13 @@ config MR_USE_MODULE_XVM_RISCV32
             - XVM syscall and exception delivery
             - MMIO-based external interrupt injection
 
+config MR_USE_MODULE_XVM_RISCV32_C
+    depends on MR_USE_MODULE_XVM_RISCV32
+    bool "Use RISC-V32 C extension"
+    default n
+    help
+        Enable the RV32C compressed instruction-set extension. Allows 16-bit
+        compressed instructions mixed with 32-bit instructions on 2-byte
+        aligned program counters and advertises the C extension in MISA.
+
 endmenu

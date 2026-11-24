@@ -570,6 +570,28 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
     MR_HT_NODE_PROP_OR(MR_HT_DRIVER(_id), _prop, _default)
 
 /**
+ * @brief This macro function gets the length of an array or bytestring
+ * property from the driver instance.
+ *
+ * @param _id The instance id.
+ * @param _prop The property name.
+ * @return The property length, or 0 if the property does not exist.
+ */
+#define MR_HT_DRIVER_PROP_LEN(_id, _prop)                                      \
+    MR_HT_NODE_PROP_LEN(MR_HT_DRIVER(_id), _prop)
+
+/**
+ * @brief This macro function gets the number of grouped elements in an
+ * expanded driver property array.
+ *
+ * @param _id The instance id.
+ * @param _prop The property name.
+ * @return The number of grouped elements, or 0 if the property does not exist.
+ */
+#define MR_HT_DRIVER_PROP_ELEM_NUM(_id, _prop)                                 \
+    MR_HT_NODE_PROP_ELEM_NUM(MR_HT_DRIVER(_id), _prop)
+
+/**
  * @brief This macro function checks if an indexed element of a driver property
  * array exists.
  *
@@ -608,6 +630,20 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
  */
 #define MR_HT_DRIVER_PROP_ELEM_OR(_id, _prop, _elem, _idx, _default)           \
     MR_HT_NODE_PROP_ELEM_OR(MR_HT_DRIVER(_id), _prop, _elem, _idx, _default)
+
+/**
+ * @brief This macro function iterates over all indexed elements of a driver
+ * property array with a custom separator.
+ *
+ * @param _id The instance id.
+ * @param _prop The property name.
+ * @param _sep The separator wrapped in parentheses, e.g. `(, )` or `(;)`.
+ * @param _fn The function to be called, like: fn(i, node, prop, ...).
+ * @param ... The arguments to be passed to the function.
+ */
+#define MR_HT_DRIVER_PROP_ELEM_FOREACH_SEP(_id, _prop, _sep, _fn, ...)         \
+    MR_HT_NODE_PROP_ELEM_FOREACH_SEP(MR_HT_DRIVER(_id), _prop, _sep, _fn,      \
+                                     ##__VA_ARGS__)
 
 /**
  * @brief This macro function iterates over all indexed elements of a driver

@@ -648,6 +648,19 @@ MR_INLINE mr_err_t mr_ht_dma_event_disable(mr_ht_dma_spec_t *spec,
     }
 
 /**
+ * @brief This macro function creates a DMA specification from HardTree
+ * properties or returns a default initializer if the property does not exist.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @param ... The default initializer, e.g. `{0}`.
+ * @return The initialized DMA specification or default initializer.
+ */
+#define MR_HT_NODE_DMA_SPEC_OR(_node, _prop, ...)                              \
+    MR_MACRO_IF(MR_HT_NODE_HAS_PROP(_node, _prop),                             \
+                (MR_HT_NODE_DMA_SPEC(_node, _prop)), (__VA_ARGS__))
+
+/**
  * @brief This macro function creates DMA specifications from a HardTree
  * property array.
  *
@@ -671,6 +684,18 @@ MR_INLINE mr_err_t mr_ht_dma_event_disable(mr_ht_dma_spec_t *spec,
  */
 #define MR_HT_DMA_SPEC(_id, _prop)                                             \
     MR_HT_NODE_DMA_SPEC(MR_HT_DRIVER(_id), _prop)
+
+/**
+ * @brief This macro function creates a DMA specification from HardTree driver
+ * properties or returns a default initializer if the property does not exist.
+ *
+ * @param _id The driver instance id.
+ * @param _prop The property name.
+ * @param ... The default initializer, e.g. `{0}`.
+ * @return The initialized DMA specification or default initializer.
+ */
+#define MR_HT_DMA_SPEC_OR(_id, _prop, ...)                                     \
+    MR_HT_NODE_DMA_SPEC_OR(MR_HT_DRIVER(_id), _prop, __VA_ARGS__)
 
 /**
  * @brief This macro function creates DMA specifications from a HardTree driver

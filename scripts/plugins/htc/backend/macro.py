@@ -17,6 +17,7 @@ from ..common import (
     ArrayValue,
     ByteStringValue,
     EmptyValue,
+    ExpressionValue,
     FloatValue,
     IdentifierValue,
     NumberValue,
@@ -97,11 +98,13 @@ class MacroBuilder:
     def _emit_expanded_array(self, lines: list[str], tree: HardTree,
                              base: str, value: ArrayValue) -> None:
         """Emit grouped array macros following HTC backend conventions."""
+        if not value.elements:
+            self._define(lines, f"{base}_E_NUM", "0")
+            return
         # Nested expanded arrays: each sub-array forms one E group
         # e.g. <<a b c> <d e f>> → E_0={a,b,c}, E_1={d,e,f}, E_NUM=2
-        if value.elements and all(
-                isinstance(e, ArrayValue) and e.mode == ArrayMode.EXPANDED
-                for e in value.elements):
+        if all(isinstance(e, ArrayValue) and e.mode == ArrayMode.EXPANDED
+               for e in value.elements):
             for outer_index, sub in enumerate(value.elements):
                 for inner_index, element in enumerate(sub.elements):
                     self._emit_array_element(lines, tree, base,
@@ -286,10 +289,12 @@ class MacroBuilder:
                                                            value.elements[0]))
             return
 
-        # Inline arrays: one aggregate macro plus a scalar length macro
+        # Inline arrays: one aggregate macro plus scalar length and group count
         if isinstance(value, ArrayValue) and value.mode == ArrayMode.INLINE:
             self._define(lines, base, self._format_value(tree, value))
             self._define(lines, f"{base}_LEN", str(len(value.elements)))
+            self._define(lines, f"{base}_E_NUM",
+                         "1" if value.elements else "0")
             for index, element in enumerate(value.elements):
                 element_macro = f"{base}_E_0_I_{index}"
                 self._define_exist(lines, element_macro)
@@ -306,6 +311,7 @@ class MacroBuilder:
         rendered = ", ".join(f"0x{byte:02x}" for byte in value.values)
         self._define(lines, base, "{" + rendered + "}")
         self._define(lines, f"{base}_LEN", str(len(value.values)))
+        self._define(lines, f"{base}_E_NUM", "1" if value.values else "0")
         for index, byte in enumerate(value.values):
             element_macro = f"{base}_E_0_I_{index}"
             self._define_exist(lines, element_macro)
@@ -321,13 +327,15 @@ class MacroBuilder:
         if isinstance(value, StringValue):
             return f'"{self._escape_c_string(value.value)}"'
 
-        # Numeric and identifier values are emitted as written
+        # Numeric, identifier, and parenthesized C expression values
         if isinstance(value, NumberValue):
             return value.original
         if isinstance(value, FloatValue):
             return value.original
         if isinstance(value, IdentifierValue):
             return value.name
+        if isinstance(value, ExpressionValue):
+            return value.text
 
         # References are resolved through label, path, then name
         if isinstance(value, ReferenceValue):

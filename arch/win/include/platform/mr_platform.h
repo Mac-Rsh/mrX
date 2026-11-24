@@ -10,6 +10,7 @@
 #define __MR_PLATFORM_H__
 
 #include <mrX/mr_config.h>
+#include <mrX/libc/mr_errno.h>
 #include <windows.h>
 
 #ifdef __cplusplus
@@ -20,6 +21,17 @@ extern "C" {
  * @addtogroup Platform
  * @{
  */
+
+#if defined(MR_USE_MODULE_XTRACE)
+/**
+ * @brief Register the Windows file transport for xtrace.
+ *
+ * @param[in] path Output file path, or MR_NULL to use the default path.
+ *
+ * @return 0 on success, otherwise an error code.
+ */
+extern mr_err_t mr_win_xtrace_file_register(const char *path);
+#endif /* defined(MR_USE_MODULE_XTRACE) */
 
 /** @} */
 

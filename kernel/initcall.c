@@ -8,6 +8,10 @@
 
 #include <mrX/kernel/mr_initcall.h>
 #include <mrX/libc/mr_assert.h>
+#if defined(MR_USE_INITCALL_TRACE)
+#define MR_TRACE_TAG                    "initcall"
+#endif /* defined(MR_USE_INITCALL_TRACE) */
+#include <mrX/kernel/mr_trace.h>
 
 /* Kernel and user init status(atomics may be soft-implemented and not yet
  * initialize) */
@@ -94,6 +98,8 @@ void mr_user_init(void) {
         MR_ASSERT(call->entry != MR_NULL);
 
         /* Call init call entry */
+        MR_TRACE_BEGIN("exec", call->entry);
         call->entry();
+        MR_TRACE_END("exec", call->entry);
     }
 }

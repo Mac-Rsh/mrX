@@ -225,15 +225,23 @@ static mr_err_t gdb_reply_packet(mr_xvm_gdb_t *gdb, const char *payload,
 static mr_err_t gdb_reply_kick(mr_xvm_gdb_t *gdb) {
     mr_ssize_t sent;
     mr_size_t left;
+    char *buf;
 
     /* Send pending reply */
     while (gdb->reply.off < gdb->reply.len) {
+        buf = gdb->reply.buf + gdb->reply.off;
         left = gdb->reply.len - gdb->reply.off;
-        sent = gdb->ops->send(gdb->priv, gdb->reply.buf + gdb->reply.off, left);
+        sent = gdb->ops->send(gdb->priv, buf, left);
         if (sent < 0) {
             return -MR_EIO;
         }
         if (sent == 0) {
+            /* Compact remaining bytes to reclaim buffer room */
+            if (gdb->reply.off != 0) {
+                mr_memmove(gdb->reply.buf, buf, left);
+                gdb->reply.len = left;
+                gdb->reply.off = 0;
+            }
             return 0;
         }
         gdb->reply.off += (mr_size_t)sent;

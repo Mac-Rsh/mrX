@@ -213,5 +213,50 @@ MR_TEST(sprintf, pointer_explicit_width) {
     MR_TEST_ASSERT_EQ_INT(ret, 12);
 }
 
+typedef struct test_cb_buf {
+    char data[64];
+    mr_size_t len;
+} test_cb_buf_t;
+
+static void test_cb_out(char c, void *ctx) {
+    test_cb_buf_t *b = (test_cb_buf_t *)ctx;
+
+    if (b->len + 1U < sizeof(b->data)) {
+        b->data[b->len++] = c;
+        b->data[b->len] = '\0';
+    }
+}
+
+static int test_vcb_helper(test_cb_buf_t *b, const char *fmt, ...) {
+    mr_va_list args;
+    int ret;
+
+    b->len = 0U;
+    b->data[0] = '\0';
+    mr_va_start(args, fmt);
+    ret = mr_vcbprintf(test_cb_out, b, fmt, args);
+    mr_va_end(args);
+    return ret;
+}
+
+MR_TEST(sprintf, j_t_modifiers_long_double_and_vcbprintf) {
+    test_cb_buf_t cb;
+    char buf[64];
+    int ret;
+
+    ret = mr_snprintf(buf, sizeof(buf), "%jd|%td", (long long)-42,
+                      (mr_intptr_t)123);
+    MR_TEST_EXPECT_EQ_INT(ret, 7);
+    MR_TEST_EXPECT_EQ_INT(mr_strcmp(buf, "-42|123"), 0);
+
+    ret = mr_snprintf(buf, sizeof(buf), "%Lf|%d", (long double)1.5, 99);
+    MR_TEST_EXPECT_EQ_INT(ret, 5);
+    MR_TEST_EXPECT_EQ_INT(mr_strcmp(buf, "%f|99"), 0);
+
+    ret = test_vcb_helper(&cb, "cb:%s=%u", "ok", 7U);
+    MR_TEST_EXPECT_EQ_INT(ret, 7);
+    MR_TEST_EXPECT_EQ_INT(mr_strcmp(cb.data, "cb:ok=7"), 0);
+}
+
 #endif /* defined(MR_USE_SPRINTF) */
 #endif /* defined(MR_USE_TEST) */

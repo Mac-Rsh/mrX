@@ -11,6 +11,10 @@
 #include <mrX/kernel/mr_initcall.h>
 #include <mrX/libc/mr_malloc.h>
 #include <mrX/libc/mr_string.h>
+#if defined(MR_USE_DRIVER_TRACE)
+#define MR_TRACE_TAG                    "driver"
+#endif /* defined(MR_USE_DRIVER_TRACE) */
+#include <mrX/kernel/mr_trace.h>
 
 /* Driver clazzes(static & dynamic) */
 static void driver_release(mr_object_t *obj);
@@ -142,7 +146,9 @@ mr_err_t mr_driver_setup(mr_driver_t *drv) {
     }
 
     /* Setup driver */
+    MR_TRACE_BEGIN("setup", drv, drv->type, drv->clazz->init);
     ret = drv->clazz->init(drv);
+    MR_TRACE_END("setup", drv, drv->type, ret);
     if (ret == 0) {
 _set:
         /* Mark driver as setup */
@@ -204,7 +210,9 @@ mr_err_t mr_driver_shutdown(mr_driver_t *drv) {
     }
 
     /* Shutdown driver */
+    MR_TRACE_BEGIN("shutdown", drv, drv->type, drv->clazz->deinit);
     ret = drv->clazz->deinit(drv);
+    MR_TRACE_END("shutdown", drv, drv->type, ret);
     if (ret == 0) {
 _unset:
         /* Mark driver as shutdown */
@@ -262,7 +270,9 @@ static void driver_del(mr_driver_t *drv) {
     }
 
     /* Deinit driver */
+    MR_TRACE_BEGIN("shutdown", drv, drv->type, drv->clazz->deinit);
     drv->clazz->deinit(drv);
+    MR_TRACE_END("shutdown", drv, drv->type);
 }
 
 static mr_driver_t *driver_obj_release(mr_object_t *obj) {
@@ -276,7 +286,9 @@ static mr_driver_t *driver_obj_release(mr_object_t *obj) {
 
     /* Release driver resources */
     if ((drv->clazz) && (drv->clazz->release)) {
+        MR_TRACE_BEGIN("release", drv, drv->type, drv->clazz->release);
         drv->clazz->release(drv);
+        MR_TRACE_END("release", drv, drv->type);
     }
     return drv;
 }

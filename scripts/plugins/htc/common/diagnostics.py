@@ -184,16 +184,33 @@ class Diagnostics:
                                                     sources)
         if source_line is None:
             return []
+        line_str = str(span.line)
+        gutter_width = max(4, len(line_str))
+        gutter_pad = " " * (gutter_width + 1)
         return [
-            "     |",
-            f"{span.line:4} | {source_line}",
-            f"     | {Diagnostics._pointer_line(span.column)}",
+            f"{gutter_pad}|",
+            f"{span.line:>{gutter_width}} | {source_line}",
+            f"{gutter_pad}| {Diagnostics._pointer_line(source_line, span)}",
         ]
 
     @staticmethod
-    def _pointer_line(column: int) -> str:
-        """Build the source pointer line for one highlighted column."""
-        return " " * max(column - 1, 0) + Diagnostics.POINTER_MARKER
+    def _pointer_line(source_line: str, span: SourceSpan) -> str:
+        """Build the source pointer line preserving tabs and token width."""
+        start_col = max(span.column, 1)
+        prefix_len = start_col - 1
+        prefix_chars: list[str] = []
+        for idx in range(prefix_len):
+            if idx < len(source_line) and source_line[idx] == "\t":
+                prefix_chars.append("\t")
+            else:
+                prefix_chars.append(" ")
+        width = 1
+        if (span.end is not None
+                and span.end.file_path == span.file_path
+                and span.end.line == span.line
+                and span.end.column > start_col):
+            width = span.end.column - start_col
+        return "".join(prefix_chars) + Diagnostics.POINTER_MARKER * width
 
     @staticmethod
     def _load_source_line(file_path: str, line_number: int,

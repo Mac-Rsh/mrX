@@ -13,6 +13,11 @@ static mr_uint32_t hashmap_hash(mr_uint32_t key) {
 }
 
 static mr_list_t *hashmap_bucket(mr_hashmap_t *map, mr_uint32_t hash) {
+    /* Use bitmask when bucket_num is a power of two */
+    if ((map->bucket_num & (map->bucket_num - 1U)) == 0U) {
+        return &map->buckets[hash & (map->bucket_num - 1U)];
+    }
+
     /* Get bucket */
     return &map->buckets[hash % map->bucket_num];
 }

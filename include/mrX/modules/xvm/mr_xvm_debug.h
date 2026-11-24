@@ -35,7 +35,7 @@ struct mr_xvm;
 
 /* XVM probe type */
 typedef struct mr_xvm_debug_probe {
-    mr_uint32_t step_gate;
+    mr_atomic_t step_gate;
     mr_ptr_t entry;
     mr_ptr_t priv;
 } mr_xvm_debug_probe_t;

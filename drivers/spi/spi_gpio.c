@@ -406,14 +406,13 @@ _exit:
         = {MR_HT_GPIO_SPEC_FOREACH(_id, cs)};                                  \
     static mr_spi_config_t MR_CAT(                                             \
         __drv_spi_gpio_configs_,                                               \
-        _id)[MR_ARRAY_SIZE(MR_CAT(__drv_spi_gpio_cs_, _id))];                  \
+        _id)[MR_HT_DRIVER_PROP_ELEM_NUM(_id, cs)];                             \
     static drv_spi_gpio_priv_t MR_CAT(__drv_spi_gpio_priv_, _id) = {           \
         .sck = MR_HT_GPIO_SPEC(_id, sck),                                      \
         .mosi = MR_HT_GPIO_SPEC(_id, mosi),                                    \
-        MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, miso),                          \
-                    (.miso = MR_HT_GPIO_SPEC(_id, miso)), (.miso = {0})),      \
+        .miso = MR_HT_GPIO_SPEC_OR(_id, miso, {0}),                            \
         .cs = MR_CAT(__drv_spi_gpio_cs_, _id),                                 \
-        .cs_num = MR_ARRAY_SIZE(MR_CAT(__drv_spi_gpio_cs_, _id)),              \
+        .cs_num = MR_HT_DRIVER_PROP_ELEM_NUM(_id, cs),                         \
         .configs = MR_CAT(__drv_spi_gpio_configs_, _id),                       \
     };                                                                         \
     MR_HT_SPI_INSTALL(_id, &MR_CAT(__drv_spi_gpio_priv_, _id), _ops)

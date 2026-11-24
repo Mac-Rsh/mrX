@@ -47,7 +47,7 @@ typedef int                             mr_int32_t;
 typedef long long                       mr_int64_t;
 #define MR_INT8_MIN                     (-128)
 #define MR_INT16_MIN                    (-32768)
-#define MR_INT32_MIN                    (-2147483648)
+#define MR_INT32_MIN                    (-2147483647 - 1)
 #define MR_INT64_MIN                    (-9223372036854775807LL - 1)
 #define MR_INT8_MAX                     (127)
 #define MR_INT16_MAX                    (32767)
@@ -109,6 +109,8 @@ typedef int                             mr_bool_t;
 #define MR_FALSE                        ((mr_bool_t)0)
 #define MR_TRUE                         ((mr_bool_t)1)
 #endif /* defined(MR_USE_TYPES_STD) */
+#define MR_ENABLE                       MR_TRUE
+#define MR_DISABLE                      MR_FALSE
 
 /* Pointer type */
 #if defined(MR_USE_TYPES_STD)

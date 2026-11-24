@@ -10,6 +10,9 @@
 #if defined(MR_USE_STRING)
 #include <mrX/libc/mr_errno.h>
 
+/* String word type */
+typedef mr_uintptr_t MR_MAY_ALIAS       string_word_t;
+
 void *mr_memccpy(void *dst, const void *src, int c, mr_size_t size) {
     const char *s;
     char *d;
@@ -57,7 +60,7 @@ int mr_memcmp(const void *m1, const void *m2, mr_size_t size) {
 }
 
 void *mr_memcpy(void *dst, const void *src, mr_size_t size) {
-    const mr_uint8_t align = sizeof(mr_uintptr_t) - 1;
+    const mr_uintptr_t align = sizeof(mr_uintptr_t) - 1U;
     const char *s;
     char *d;
 
@@ -68,25 +71,29 @@ void *mr_memcpy(void *dst, const void *src, mr_size_t size) {
     }
 #endif /* defined(MR_USE_STRING_SAFE) */
 
-    /* Check dst and src alignment */
-    if (((mr_uintptr_t)dst & align) || ((mr_uintptr_t)src & align)) {
-        /* It is expected to be replaced with 'build in' */
-        for (d = dst, s = src; size > 0; size--) {
+    /* Init copy pointers */
+    d = dst;
+    s = src;
+
+    /* Check whether dst and src share the same alignment offset */
+    if ((((mr_uintptr_t)dst ^ (mr_uintptr_t)src) & align) == 0U) {
+        /* Copy leading unaligned bytes */
+        while ((size > 0U) && (((mr_uintptr_t)d & align) != 0U)) {
             (*d++) = (*s++);
+            size--;
         }
-    } else {
-        /* Copy aligned bytes */
-        for (d = dst, s = src; size >= sizeof(mr_uintptr_t);
-             size -= sizeof(mr_uintptr_t)) {
-            *(mr_uintptr_t *)d = *(mr_uintptr_t *)s;
+
+        /* Copy aligned machine words */
+        for (; size >= sizeof(mr_uintptr_t); size -= sizeof(mr_uintptr_t)) {
+            *(string_word_t *)d = *(const string_word_t *)s;
             d += sizeof(mr_uintptr_t);
             s += sizeof(mr_uintptr_t);
         }
+    }
 
-        /* Copy unaligned bytes */
-        while (size--) {
-            (*d++) = (*s++);
-        }
+    /* Copy remaining bytes */
+    while (size--) {
+        (*d++) = (*s++);
     }
     return dst;
 }
@@ -129,7 +136,7 @@ void *mr_memmove(void *dst, const void *src, mr_size_t size) {
             while (size >= sizeof(mr_uintptr_t)) {
                 d -= sizeof(mr_uintptr_t);
                 s -= sizeof(mr_uintptr_t);
-                *(mr_uintptr_t *)d = *(mr_uintptr_t *)s;
+                *(string_word_t *)d = *(const string_word_t *)s;
                 size -= sizeof(mr_uintptr_t);
             }
         }
@@ -146,7 +153,7 @@ void *mr_memmove(void *dst, const void *src, mr_size_t size) {
                 size--;
             }
             while (size >= sizeof(mr_uintptr_t)) {
-                *(mr_uintptr_t *)d = *(mr_uintptr_t *)s;
+                *(string_word_t *)d = *(const string_word_t *)s;
                 d += sizeof(mr_uintptr_t);
                 s += sizeof(mr_uintptr_t);
                 size -= sizeof(mr_uintptr_t);
@@ -192,7 +199,7 @@ void *mr_memset(void *dst, int c, mr_size_t size) {
 
     /* Copy aligned bytes */
     while (size >= sizeof(mr_uintptr_t)) {
-        *(mr_uintptr_t *)d = pat;
+        *(string_word_t *)d = pat;
         d += sizeof(mr_uintptr_t);
         size -= sizeof(mr_uintptr_t);
     }
@@ -265,8 +272,11 @@ char *mr_strcpy(char *dst, const char *src) {
 
 char *mr_strerror(int errnum) {
     char *error;
+    int code;
 
-    switch (errnum) {
+    /* Convert negative error number to positive */
+    code = (errnum < 0) ? -errnum : errnum;
+    switch (code) {
         case 0: {
             error = "Success";
             break;
@@ -283,8 +293,8 @@ char *mr_strerror(int errnum) {
             error = "I/O error";
             break;
         }
-        case MR_ENODEV: {
-            error = "No such device";
+        case MR_EBADF: {
+            error = "Bad file descriptor";
             break;
         }
         case MR_EAGAIN: {
@@ -303,12 +313,52 @@ char *mr_strerror(int errnum) {
             error = "File exists";
             break;
         }
+        case MR_EXDEV: {
+            error = "Cross-device link";
+            break;
+        }
+        case MR_ENODEV: {
+            error = "No such device";
+            break;
+        }
+        case MR_ENOTDIR: {
+            error = "Not a directory";
+            break;
+        }
+        case MR_EISDIR: {
+            error = "Is a directory";
+            break;
+        }
         case MR_EINVAL: {
             error = "Invalid argument";
             break;
         }
+        case MR_EMFILE: {
+            error = "Too many open files";
+            break;
+        }
+        case MR_ESPIPE: {
+            error = "Illegal seek";
+            break;
+        }
+        case MR_ERANGE: {
+            error = "Result too large";
+            break;
+        }
+        case MR_ENAMETOOLONG: {
+            error = "File name too long";
+            break;
+        }
+        case MR_ENOTEMPTY: {
+            error = "Directory not empty";
+            break;
+        }
         case MR_ENOSYS: {
             error = "Function not implemented";
+            break;
+        }
+        case MR_ELOOP: {
+            error = "Too many levels of symbolic links";
             break;
         }
         case MR_ETIMEDOUT: {
@@ -317,10 +367,6 @@ char *mr_strerror(int errnum) {
         }
         case MR_ECANCELED: {
             error = "Operation canceled";
-            break;
-        }
-        case MR_ELOOP: {
-            error = "Too many levels of symbolic links";
             break;
         }
         default: {

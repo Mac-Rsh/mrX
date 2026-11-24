@@ -675,5 +675,56 @@ MR_TEST(work, deep_concurrent_submit) {
 }
 #endif /* defined(MR_USE_TEST_PTHREAD) */
 
+static void work_dummy_entry(mr_work_t *work, void *param) {
+    MR_IGNORE(work);
+    MR_IGNORE(param);
+}
+
+MR_TEST(work, schedule_after_queue_del_returns_enoent) {
+    mr_workqueue_t *queue;
+    mr_work_t work;
+    mr_err_t ret;
+
+    queue = mr_workqueue_create();
+    MR_TEST_ASSERT_NE_PTR(queue, MR_NULL);
+    MR_TEST_ASSERT_EQ_INT(mr_work_init(&work, work_dummy_entry, MR_NULL), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_workqueue_work(queue, &work), 0);
+
+    /* Deleting the queue must clear work->queue so rescheduling fails cleanly */
+    MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(queue), 0);
+    ret = mr_work_schedule(&work);
+    MR_TEST_EXPECT_EQ_INT(ret, -MR_ENOENT);
+    MR_TEST_ASSERT_EQ_INT(mr_work_del(&work), 0);
+}
+
+static int work_self_del_ran = 0;
+static mr_err_t work_self_del_ret = -1;
+
+static void work_self_del_entry(mr_work_t *work, void *param) {
+    int *flag = (int *)param;
+
+    /* Deleting dynamic work inside its own callback must not UAF */
+    work_self_del_ret = mr_work_del(work);
+    *flag = 1;
+}
+
+MR_TEST(work, dynamic_self_del_in_callback) {
+    mr_workqueue_t *queue;
+    mr_work_t *work;
+
+    work_self_del_ran = 0;
+    work_self_del_ret = -1;
+    queue = mr_workqueue_create();
+    MR_TEST_ASSERT_NE_PTR(queue, MR_NULL);
+    work = mr_work_create(work_self_del_entry, &work_self_del_ran);
+    MR_TEST_ASSERT_NE_PTR(work, MR_NULL);
+
+    MR_TEST_ASSERT_EQ_INT(mr_workqueue_work(queue, work), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_workqueue_execute(queue), 0);
+    MR_TEST_EXPECT_EQ_INT(work_self_del_ret, 0);
+    MR_TEST_EXPECT_EQ_INT(work_self_del_ran, 1);
+    MR_TEST_ASSERT_EQ_INT(mr_workqueue_del(queue), 0);
+}
+
 #endif /* defined(MR_USE_WORK) */
 #endif /* defined(MR_USE_TEST) */

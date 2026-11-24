@@ -572,14 +572,11 @@ static mr_err_t dac_event_control(const mr_driver_t *drv, mr_uint32_t events,
     };                                                                         \
     MR_HT_DAC_INSTALL(_id, &MR_CAT(__dac_priv_, _id), _ops)
 #if defined(DAC_USE_STREAM)
-#define __CH32_HT_DAC_DMA_SPEC(_id, _prop)                                     \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, _prop),                             \
-                (MR_HT_DMA_SPEC(_id, _prop)), ({0}))
 #define __CH32_HT_DAC_REQUEST_DECL(_id, _prop)                                 \
     extern void MR_HT_DRIVER_PROP(_id, _prop)(mr_bool_t enable);
 #define __CH32_HT_DAC_STREAM(_id)                                              \
     .stream = {                                                                \
-        .dma = __CH32_HT_DAC_DMA_SPEC(_id, tx_dma),                            \
+        .dma = MR_HT_DMA_SPEC_OR(_id, tx_dma, {0}),                            \
     },                                                                         \
     .dma_request = MR_HT_DRIVER_PROP_OR(_id, wch_dma_request, MR_NULL),        \
     .software_request = MR_HT_DRIVER_PROP_OR(                                  \

@@ -47,6 +47,8 @@ class FixedSlot:
     """A contiguous run of fixed-width bytes in the packed struct."""
 
     path: str
+    size: int
+    scatter_offset: int
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,7 @@ class VarSlot:
     prefix_size: int
     element_size: int
     path: str
+    scatter_offset: int
 
 
 Slot = FixedSlot | VarSlot
@@ -86,6 +89,23 @@ class Layout:
             isinstance(slot, VarSlot) for slot in self.slots)
 
     @property
+    def min_size(self) -> int:
+        """Return the minimum compact byte size when all variable arrays are empty."""
+        return sum(
+            slot.size if isinstance(slot, FixedSlot) else slot.prefix_size
+            for slot in self.slots
+        )
+
+    @property
+    def max_size(self) -> int:
+        """Return the maximum (scattered) byte size when all variable arrays are full."""
+        return sum(
+            slot.size if isinstance(slot, FixedSlot)
+            else (slot.prefix_size + slot.max_count * slot.element_size)
+            for slot in self.slots
+        )
+
+    @property
     def moving_slots(self) -> tuple[Slot, ...]:
         """Return slots that sit after a variable field and must be moved."""
         moving: list[Slot] = []
@@ -99,23 +119,52 @@ class Layout:
 
     @classmethod
     def from_fields(cls, fields: list[Field], schema: Schema) -> "Layout":
-        """Flatten one payload into scatter slots."""
+        """Flatten one payload into coalesced scatter slots."""
         raw: list[Slot] = []
         variables = 0
         moving = 0
+        scatter_offset = 0
         for field in fields:
             for slot in _flatten_type(field.type, field.name, schema):
+                if isinstance(slot, FixedSlot):
+                    if raw and isinstance(raw[-1], FixedSlot):
+                        prev = raw[-1]
+                        raw[-1] = FixedSlot(
+                            prev.path,
+                            prev.size + slot.size,
+                            prev.scatter_offset,
+                        )
+                    else:
+                        if variables:
+                            moving += 1
+                            if moving > MOVING_SLOT_MAX:
+                                raise LayoutLimitError(
+                                    f"requires more than {MOVING_SLOT_MAX} "
+                                    "moving slots")
+                        raw.append(FixedSlot(slot.path, slot.size,
+                                             scatter_offset))
+                    scatter_offset += slot.size
+                    continue
                 if variables:
                     moving += 1
-                if isinstance(slot, VarSlot):
-                    variables += 1
+                    if moving > MOVING_SLOT_MAX:
+                        raise LayoutLimitError(
+                            f"requires more than {MOVING_SLOT_MAX} "
+                            "moving slots")
+                variables += 1
                 if variables > VAR_SLOT_MAX:
                     raise LayoutLimitError(
                         f"requires more than {VAR_SLOT_MAX} variable slots")
-                if moving > MOVING_SLOT_MAX:
-                    raise LayoutLimitError(
-                        f"requires more than {MOVING_SLOT_MAX} moving slots")
-                raw.append(slot)
+                raw.append(VarSlot(
+                    slot.max_count,
+                    slot.size_type,
+                    slot.prefix_size,
+                    slot.element_size,
+                    slot.path,
+                    scatter_offset,
+                ))
+                scatter_offset += (slot.prefix_size
+                                   + slot.max_count * slot.element_size)
         return cls(tuple(raw))
 
     @classmethod
@@ -192,7 +241,7 @@ def _flatten_type(resolved: ResolvedType, path: str,
                   schema: Schema) -> Iterator[Slot]:
     """Yield slots lazily so limits stop oversized array expansion early."""
     if _is_fixed(resolved, schema):
-        yield FixedSlot(path)
+        yield FixedSlot(path, resolved.packed_size, 0)
         return
     if isinstance(resolved, ArrayTypeRef):
         for index in range(resolved.length):
@@ -206,6 +255,7 @@ def _flatten_type(resolved: ResolvedType, path: str,
             PREFIX_WIDTH[resolved.size_type],
             resolved.element.packed_size,
             path,
+            0,
         )
         return
     if isinstance(resolved, StructTypeRef):
@@ -214,4 +264,4 @@ def _flatten_type(resolved: ResolvedType, path: str,
             child = f"{path}.{field.name}" if path else field.name
             yield from _flatten_type(field.type, child, schema)
         return
-    yield FixedSlot(path)
+    yield FixedSlot(path, resolved.packed_size, 0)

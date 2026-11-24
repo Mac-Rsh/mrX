@@ -1,281 +1,89 @@
-# RAM 设备（RAM）
+# RAM 驱动（RAM）
 
-> RAM 驱动统一描述 CPU 可直接映射的 SRAM/SDRAM/PSRAM，以及只能通过控制器
-> 间接访问的 RAM。设备几何在 setup 阶段通过 `probe` 获取；直接映射区域通过
-> `region` 查询，间接 RAM 可以没有任何直接映射区域。
+RAM 驱动统一抽象 CPU 可直接寻址的片内 SRAM/SDRAM/PSRAM 以及需通过控制器间接访问的外部
+RAM（如 SPI/QSPI PSRAM），在 `setup` 阶段通过 `probe`
+发现设备容量与直接映射区域，并提供无整数溢出的按偏移读写接口。
 
-| 项       | 说明                                                                                 |
-|----------|--------------------------------------------------------------------------------------|
-| 功能宏   | `MR_USE_DRIVER_RAM`（默认关闭）                                                      |
-| 头文件   | `<mrX/drivers/ram/mr_ram.h>`                                                         |
-| 依赖模块 | [驱动框架 Driver](../driver.md)；[动态内存 Malloc](../../libc/malloc.md)（动态创建） |
-| 参考测试 | `mrX/test/drivers/ram/ram.c`                                                         |
+| 项目   | 说明                                                                   |
+|--------|------------------------------------------------------------------------|
+| 功能宏 | `MR_USE_DRIVER_RAM`                                                    |
+| 头文件 | `<mrX/drivers/ram/mr_ram.h>`                                           |
+| 依赖   | [驱动框架](../driver.md)、[动态内存](../../libc/malloc.md)（动态创建） |
+| 测试   | `test/drivers/ram/ram.c`                                               |
 
----
+## 配置
 
-## 用户指南
+| 配置项              | 类型 | 默认值 | 说明                                  |
+|---------------------|------|--------|---------------------------------------|
+| `MR_USE_DRIVER_RAM` | bool | n      | 启用 RAM 驱动（依赖 `MR_USE_DRIVER`） |
 
-### 1. 模块概述
-
-RAM 驱动把“RAM 是什么”与“RAM 怎么连接”分开。公共层只描述容量、CPU 可直接
-寻址区域以及按偏移读写能力；具体设备可以是片内
-SRAM、FMC/EMC SDRAM、memory- mapped PSRAM，也可以是 SPI/QSPI 等控制器后面的间接访问
-RAM。
-
-两类设备都使用同一个模型：
-
-```text
-CPU direct mapped RAM             Indirect RAM
-SRAM / SDRAM / PSRAM              SPI/QSPI PSRAM
-        |                                |
-        +---- probe / info --------------+
-        |                                |
-      region                           no region
-        |                                |
-  CPU direct access                 read / write
-```
-
-公共层的主要规则：
-
-- `probe` 为必需回调，setup 时发现并缓存 `mr_ram_info_t`。
-- `info.size` 必须非 0。
-- `regions_num == 0` 表示没有 CPU 可直接寻址区域，是合法的间接 RAM。
-- `regions_num > 0` 时 `region` 回调必须存在。
-- `read`/`write` 均为可选能力，未实现时返回 `-MR_ENOSYS`。
-- 读写 offset 使用 `mr_uint64_t`；公共层根据 `info.size` 做溢出安全的范围检查。
-- RAM 没有 erase、掉电保持或块设备语义；这些属于 Flash/存储层。
-
-### 2. 几何信息
+## 快速上手
 
 ```c
-mr_ram_info_t info;
-mr_ram_region_t region;
+#include <mrX/drivers/ram/mr_ram.h>
 
-mr_ram_info(ram, &info);
-mr_ram_region(ram, 0U, &region);
-```
+mr_err_t ram_rw_example(const char *name) {
+    mr_driver_t *ram = mr_driver_find(name);
+    mr_ram_info_t info;
+    mr_uint8_t tx[4] = {0x11U, 0x22U, 0x33U, 0x44U};
+    mr_uint8_t rx[4] = {0};
 
-数据结构：
+    if ((ram == MR_NULL) || (mr_driver_setup(ram) != 0)) {
+        return -MR_ENODEV;
+    }
 
-```c
-typedef struct mr_ram_info {
-    mr_uint64_t size;
-    mr_uint32_t regions_num;
-} mr_ram_info_t;
+    mr_ram_info(ram, &info);
+    if (info.size < sizeof(tx)) {
+        return -MR_ENOSPC;
+    }
 
-typedef struct mr_ram_region {
-    void *address;
-    mr_size_t size;
-} mr_ram_region_t;
-```
-
-`info.size` 是整个 RAM 设备的逻辑容量。`region` 只描述 CPU 可以直接解引用的
-memory-mapped 区域，因此它不是读写接口的分片表，也不要求所有
-RAM 都存在。
-
-典型情况：
-
-| 设备                | `size`       | `regions_num` | `region`                      |
-|---------------------|--------------|---------------|-------------------------------|
-| MCU SRAM            | 总 SRAM 容量 | 1 或多个 bank | 每个 bank 的地址与大小        |
-| FMC SDRAM           | SDRAM 总容量 | 通常 1        | SDRAM 映射地址与大小          |
-| memory-mapped PSRAM | PSRAM 总容量 | 1 或多个      | 映射窗口                      |
-| SPI PSRAM           | PSRAM 总容量 | 0             | 不支持，访问走 `read`/`write` |
-
-### 3. 生命周期与 probe
-
-RAM setup 时公共层调用：
-
-```c
-ops->probe(drv, &info);
-```
-
-`probe` 可以只返回固定几何，也可以完成外部 RAM 控制器初始化、读取器件 ID、确定
-容量等工作。成功后公共层校验 `size` 和 region
-能力，并把信息缓存到
-`mr_ram_data_t.info`。
-
-shutdown 时只清空公共层缓存；第一版没有 teardown/remove 回调。再次 setup 会重新 执行
-`probe`。
-
-### 4. 读写
-
-```c
-mr_ram_read(ram, offset, buf, size);
-mr_ram_write(ram, offset, buf, size);
-```
-
-公共层先检查：
-
-```text
-offset <= info.size
-size   <= info.size - offset
-```
-
-因此不会通过 `offset + size` 产生整数溢出。`offset == info.size && size == 0` 合法；
-任何真正越过设备末尾的访问返回
-`-MR_EINVAL`，不会进入 backend。
-
-具体的数据搬运由 backend 完成。memory-mapped RAM 可以直接 memcpy；SPI/QSPI PSRAM
-可以在 `read`/`write` 中发送控制器命令。
-
-### 5. 后端接口
-
-```c
-typedef struct mr_ram_ops {
-    mr_err_t (*probe)(const mr_driver_t *drv, mr_ram_info_t *info);
-    mr_err_t (*region)(const mr_driver_t *drv, mr_uint32_t index,
-                       mr_ram_region_t *region);
-    mr_ssize_t (*read)(const mr_driver_t *drv, mr_uint64_t offset,
-                       mr_uint8_t *buf, mr_size_t size);
-    mr_ssize_t (*write)(const mr_driver_t *drv, mr_uint64_t offset,
-                        const mr_uint8_t *buf, mr_size_t size);
-} mr_ram_ops_t;
-```
-
-`probe` 必需；其余回调按能力实现。若 `probe` 报告 `regions_num > 0`，则 `region`
-也必须实现，否则 setup 返回 `-MR_EINVAL`。
-
-### 6. 示例：间接访问 RAM
-
-```c
-static mr_uint8_t backing[4096];
-
-static mr_err_t ram0_probe(const mr_driver_t *drv, mr_ram_info_t *info) {
-    MR_IGNORE(drv);
-    info->size = sizeof(backing);
-    info->regions_num = 0U;       /* 无 CPU 直接映射 */
+    if (mr_ram_write(ram, 0ULL, tx, sizeof(tx)) != (mr_ssize_t)sizeof(tx)) {
+        return -MR_EIO;
+    }
+    if (mr_ram_read(ram, 0ULL, rx, sizeof(rx)) != (mr_ssize_t)sizeof(rx)) {
+        return -MR_EIO;
+    }
     return 0;
 }
-
-static mr_ssize_t ram0_read(const mr_driver_t *drv, mr_uint64_t offset,
-                            mr_uint8_t *buf, mr_size_t size) {
-    MR_IGNORE(drv);
-    mr_memcpy(buf, &backing[(mr_size_t)offset], size);
-    return (mr_ssize_t)size;
-}
-
-static mr_ssize_t ram0_write(const mr_driver_t *drv, mr_uint64_t offset,
-                             const mr_uint8_t *buf, mr_size_t size) {
-    MR_IGNORE(drv);
-    mr_memcpy(&backing[(mr_size_t)offset], buf, size);
-    return (mr_ssize_t)size;
-}
-
-static mr_ram_data_t ram0_data;
-static const mr_ram_ops_t ram0_ops = {
-    .probe = ram0_probe,
-    .read = ram0_read,
-    .write = ram0_write,
-};
-
-MR_RAM_INSTALL(ram0, &ram0_data, MR_NULL, &ram0_ops,
-               MR_DRIVER_LEVEL_NORMAL);
 ```
 
-由于公共层已经按 `info.size` 做范围检查，backend 不需要重复实现同一层的总容量
-边界检查；backend 仍负责控制器自身的事务限制、对齐、缓存等约束。
+## 核心机制与约束
 
-### 7. HardTree
+- **直接映射与间接访问**：`mr_ram_info_t` 包含设备总容量 `size`（不可为
+  0）与可直接寻址区域数 `regions_num`。`regions_num > 0` 时可通过 `mr_ram_region`
+  获取 CPU 可直接解引用的物理/虚拟地址窗口；`regions_num == 0` 表示纯间接访问
+  RAM（如 SPI PSRAM），此时仅通过 `mr_ram_read` / `mr_ram_write` 访问。
+- **生命周期**：`mr_driver_setup` 时框架调用必需的 `ops->probe` 获取几何信息并缓存到
+  `mr_ram_data_t.info`（若 `info.size == 0` 或 `regions_num > 0` 但未提供
+  `ops->region`，`setup` 返回 `-MR_EINVAL`）。`shutdown` 时清空缓存，再次 `setup`
+  会重新执行 `probe`。
+- **边界检查**：`mr_ram_read` 与 `mr_ram_write` 先检查对应 `ops` 是否存在（缺失返回
+  `-MR_ENOSYS`），再使用 `offset <= info.size && size <= info.size - offset`
+  做溢出安全检查，越界返回 `-MR_EINVAL`（`offset == info.size && size == 0` 合法）。
+  `buf == MR_NULL && size != 0` 由 `MR_ASSERT` 拦截。
+- **能力边界**：RAM 驱动不提供擦除、掉电保持、Cache/MPU 属性控制或 ECC
+  状态上报。公共层无内部锁，多任务并发访问需由应用或后端保证。
 
-通用安装宏：
+## API 速查
 
-```c
-MR_HT_RAM_INSTALL(id, priv, ops)
-```
+| API                                            | 说明                                                                         |
+|------------------------------------------------|------------------------------------------------------------------------------|
+| `MR_RAM_DEFINE` / `MR_RAM_INSTALL`             | 编译期静态定义 / 安装 RAM 驱动                                               |
+| `MR_HT_RAM_INSTALL`                            | HardTree 实例安装（创建零初始化的 `mr_ram_data_t`）                          |
+| `mr_ram_init` / `mr_ram_create` / `mr_ram_del` | 初始化静态实例 / 动态创建 / 删除 RAM 驱动                                    |
+| `mr_ram_get` / `mr_ram_put`                    | 驱动引用计数加一 / 减一                                                      |
+| `mr_ram_info`                                  | 读取 `setup` 时缓存的 `size` 与 `regions_num`                                |
+| `mr_ram_region`                                | 查询索引 `index` 对应的直接映射区域（`address`、`size`）                     |
+| `mr_ram_read`                                  | 从逻辑偏移 `offset` 读取 `size` 字节到 `buf`，返回实际读取字节数或负数错误码 |
+| `mr_ram_write`                                 | 向逻辑偏移 `offset` 写入 `size` 字节，返回实际写入字节数或负数错误码         |
 
-只创建零初始化的 `mr_ram_data_t` 并注册实例，不再假定几何一定在 HardTree 中静态
-可知。具体 backend 自己决定从寄存器、器件
-ID、固定参数或 HardTree 属性得到容量和 region。
-
-### 8. API 参考
-
-| API                                | 说明                                  |
-|------------------------------------|---------------------------------------|
-| `mr_ram_init` / `mr_ram_create`    | 初始化或动态创建 RAM 驱动             |
-| `mr_ram_del`                       | 删除 RAM 驱动                         |
-| `mr_ram_info`                      | 获取 setup 时缓存的容量和 region 数量 |
-| `mr_ram_region`                    | 获取一个 CPU 可直接寻址区域           |
-| `mr_ram_read`                      | 按逻辑 offset 读取                    |
-| `mr_ram_write`                     | 按逻辑 offset 写入                    |
-| `mr_ram_get` / `mr_ram_put`        | 驱动引用计数                          |
-| `MR_RAM_DEFINE` / `MR_RAM_INSTALL` | 静态定义/安装                         |
-| `MR_HT_RAM_INSTALL`                | HardTree 实例安装                     |
-
-### 9. 设计边界
-
-当前 RAM 公共层故意不加入以下内容：
-
-- cache policy / MPU memory attribute；
-- ECC 状态与错误事件；
-- DMA 专用接口；
-- heap allocation/free；
-- erase、sector、block 等非易失存储语义；
-- teardown/remove。
-
-这些能力有明确需求时应按各自层次增加，而不是把 `mr_ram` 重新变成一个混合抽象。
-
----
-
-## 开发者指南
-
-### 10. 核心流程
+## 内部实现
 
 ```text
-                 mr_driver_setup
-                        |
-                     probe()
-                        |
-                 cache ram_data.info
-                        |
-        +---------------+----------------+
-        |                                |
-   mr_ram_region                    mr_ram_read/write
-        |                                |
-   ops->region                     range check
-                                         |
-                                  ops->read/write
+mr_driver_setup() ──▶ ops->probe() ──▶ 校验 size != 0 且 (regions_num == 0 || ops->region) ──▶ 缓存 ram_data.info
+                                                                                                   │
+mr_ram_region() / mr_ram_read() / mr_ram_write() ◀── 能力检查 (-MR_ENOSYS) + 范围检查 (-MR_EINVAL) ◀┘
 ```
 
-`ram.c` 的 init 要求 `probe` 非空。probe 成功后：
-
-- `info.size == 0` -> `-MR_EINVAL`；
-- `regions_num > 0 && ops->region == NULL` -> `-MR_EINVAL`；
-- 其余信息缓存到 `mr_ram_data_t.info`。
-
-`ram_deinit` 只清空缓存信息。
-
-### 11. 与 FLASH 的关系
-
-RAM 与 FLASH 现在使用同一代几何发现模型：
-
-| RAM      | FLASH     |
-|----------|-----------|
-| `probe`  | `probe`   |
-| `info`   | `info`    |
-| `region` | `region`  |
-| `read`   | `read`    |
-| `write`  | `program` |
-| 无       | `erase`   |
-
-二者区别在于 region 的意义：RAM region 表示 CPU 直接映射区；FLASH region 表示擦除
-几何区域。
-
-平台 RAM backend 的 probe/region、memory-map、cache 与 HardTree
-接入见 [RAM 驱动移植指南](porting.md)。
-
-### 12. 源码导读
-
-| 位置                                   | 职责                                      |
-|----------------------------------------|-------------------------------------------|
-| `mrX/include/mrX/drivers/ram/mr_ram.h` | info/region、ops、公共 API、HardTree 安装 |
-| `mrX/drivers/ram/ram.c`                | setup probe、信息缓存与 driver 生命周期   |
-| `mrX/test/drivers/ram/ram.c`           | probe、region、范围检查、可选 IO 测试     |
-
-### 13. 错误语义
-
-- `-MR_EINVAL`：probe 几何非法、region index 越界或读写范围越界。
-- `-MR_ENOSYS`：可选的 `region`/`read`/`write` 回调未实现。
-- 其他 backend 错误码原样透传。
-
-空指针和 `buf == MR_NULL && size != 0` 等编程错误由 `MR_ASSERT` 保护。
+`drivers/ram/ram.c` 中 `ram_init` 校验 `probe` 结果并缓存几何信息；`ram_deinit`
+清零 `ram_data->info`；`ram_release` 释放动态创建的 `mr_ram_data_t`。

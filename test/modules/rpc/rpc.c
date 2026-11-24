@@ -298,7 +298,7 @@ static mr_uint32_t test_rpc_packet_build(
     frame.service = service;
     frame.method = method;
     frame.payload_size = payload_size;
-    frame.hdr_crc16 = test_rpc_fletcher16(&frame, sizeof(frame));
+    frame.hdr_checksum = test_rpc_fletcher16(&frame, sizeof(frame));
 
     mr_memcpy(packet->data, &frame, sizeof(frame));
     if (payload_size != 0U) {
@@ -324,8 +324,8 @@ static mr_bool_t test_rpc_response_read(const test_rpc_io_t *io,
         return MR_FALSE;
     }
     mr_memcpy(&frame, io->output, sizeof(frame));
-    actual_crc = frame.hdr_crc16;
-    frame.hdr_crc16 = 0U;
+    actual_crc = frame.hdr_checksum;
+    frame.hdr_checksum = 0U;
     if (test_rpc_fletcher16(&frame, sizeof(frame)) != actual_crc) {
         return MR_FALSE;
     }
@@ -345,7 +345,7 @@ static mr_bool_t test_rpc_response_read(const test_rpc_io_t *io,
             return MR_FALSE;
         }
     }
-    frame.hdr_crc16 = actual_crc;
+    frame.hdr_checksum = actual_crc;
     *response = frame;
     *payload = io->output + sizeof(frame);
     return MR_TRUE;
@@ -657,7 +657,7 @@ MR_TEST(rpc, stream_resync_and_checksum_errors) {
     test_rpc_packet_build(&packet, MR_RPC_MSG_REQUEST, 0U, 203U, 1U, 3U,
                           MR_NULL, 0U);
     frame = (mr_rpc_frame_t *)packet.data;
-    frame->hdr_crc16 ^= 1U;
+    frame->hdr_checksum ^= 1U;
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);
@@ -1051,8 +1051,8 @@ static mr_uint32_t test_rpc_subscribe_packet_build(test_rpc_packet_t *packet,
         = test_rpc_packet_build(packet, type, 0U, session, 1U, 3U, MR_NULL, 0U);
     frame = (mr_rpc_frame_t *)packet->data;
     frame->value.subscribe = subscribe;
-    frame->hdr_crc16 = 0U;
-    frame->hdr_crc16 = test_rpc_fletcher16(frame, sizeof(*frame));
+    frame->hdr_checksum = 0U;
+    frame->hdr_checksum = test_rpc_fletcher16(frame, sizeof(*frame));
     return size;
 }
 
@@ -1716,8 +1716,11 @@ MR_TEST(rpc, local_dispatch_after_partial_send_failure) {
     MR_TEST_EXPECT_EQ_UINT(rpc.send.session->send.off, io.error_after);
     MR_TEST_EXPECT_EQ_UINT(io.size, io.error_after);
 
-    /* The newly queued local request runs despite the mid-batch failure. */
+    /* The newly queued local request is deferred to the next batch and still
+     * runs despite the ongoing transport failure. */
     MR_TEST_EXPECT_EQ_INT(io.submit_result, 0);
+    MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 0U);
+    MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), -MR_EIO);
     MR_TEST_EXPECT_EQ_UINT(owner.complete_count, 1U);
     MR_TEST_EXPECT_EQ_INT(owner.result, 10);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_session_consume(&owner.session), 0);
@@ -1860,8 +1863,8 @@ MR_TEST(rpc, frame_header_rejections_and_resync) {
                           MR_NULL, 0U);
     frame = (mr_rpc_frame_t *)packet.data;
     frame->version = 2U;
-    frame->hdr_crc16 = 0U;
-    frame->hdr_crc16 = test_rpc_fletcher16(frame, sizeof(*frame));
+    frame->hdr_checksum = 0U;
+    frame->hdr_checksum = test_rpc_fletcher16(frame, sizeof(*frame));
     MR_TEST_ASSERT_EQ_INT(mr_rpc_input(&rpc, packet.data, packet.size),
                           packet.size);
     MR_TEST_EXPECT_EQ_INT(mr_rpc_execute(&rpc), 0);

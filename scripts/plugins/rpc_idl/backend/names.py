@@ -116,20 +116,36 @@ class CNames:
         return f"{cls.CODEC_PREFIX}encode_empty"
 
     @classmethod
+    def fixed_decode_fn(cls, size: int) -> str:
+        """Return the shared fixed-size request decode function name."""
+        return f"{cls.CODEC_PREFIX}decode_fixed_{size}"
+
+    @classmethod
+    def fixed_encode_fn(cls, size: int) -> str:
+        """Return the shared fixed-size response encode function name."""
+        return f"{cls.CODEC_PREFIX}encode_fixed_{size}"
+
+    @classmethod
     def stage_decode_fn(cls, service: str, method: str,
-                        has_request: bool) -> str:
+                        has_request: bool,
+                        fixed_size: int | None = None) -> str:
         """Return the decode symbol used by one method export."""
-        if has_request:
-            return cls.decode_fn(service, method)
-        return cls.empty_decode_fn()
+        if not has_request:
+            return cls.empty_decode_fn()
+        if fixed_size is not None:
+            return cls.fixed_decode_fn(fixed_size)
+        return cls.decode_fn(service, method)
 
     @classmethod
     def stage_encode_fn(cls, service: str, method: str, oneway: bool,
-                        has_response: bool) -> str:
+                        has_response: bool,
+                        fixed_size: int | None = None) -> str:
         """Return the encode symbol used by one method export."""
-        if (not oneway) and has_response:
-            return cls.encode_fn(service, method)
-        return cls.empty_encode_fn()
+        if oneway or (not has_response):
+            return cls.empty_encode_fn()
+        if fixed_size is not None:
+            return cls.fixed_encode_fn(fixed_size)
+        return cls.encode_fn(service, method)
 
     @classmethod
     def handler_fn(cls, service: str, method: str) -> str:

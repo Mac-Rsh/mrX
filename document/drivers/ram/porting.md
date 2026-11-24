@@ -1,70 +1,56 @@
 # RAM 驱动移植指南
 
-> 本文面向 backend 开发者，说明如何实现 RAM backend 的几何发现、region
-> 与读写契约，并明确公共层已经承担的部分。
-> 公共 API 与用户语义见 [RAM 设备](ram.md)。
+本文面向平台与外设驱动开发者，说明如何实现 `mr_ram_ops_t` 并接入 RAM 驱动框架。公共
+API 与使用方式见 [RAM 驱动](ram.md)。
 
-## 1. 移植边界
+## 移植边界
 
-公共层在 `mr_driver_setup()` 阶段调用一次 `probe`，把返回的 `mr_ram_info_t` 缓存进
-`mr_ram_data_t.info`，此后按这份缓存做
-总容量范围检查；读写只负责转发。RAM 没有 erase、掉电保持、块设备或 teardown 语义。
+| 职责                                                                                 | 归属       |
+|--------------------------------------------------------------------------------------|------------|
+| `setup` 时调用 `probe`、校验几何合法性并缓存 `mr_ram_info_t`                         | RAM 公共层 |
+| `mr_ram_info` 读取缓存、`shutdown` 时清空缓存                                        | RAM 公共层 |
+| `mr_ram_region` 索引越界检查（`index >= regions_num` 返回 `-MR_EINVAL`）             | RAM 公共层 |
+| `mr_ram_read` / `write` 能力检查（`-MR_ENOSYS`）与总容量溢出安全检查（`-MR_EINVAL`） | RAM 公共层 |
+| 硬件控制器初始化、ID 读取与稳定几何信息填充（`probe`）                               | Backend    |
+| 直接映射地址窗口计算（`region`）与地址对齐/总线宽度限制检查                          | Backend    |
+| 实际数据搬运（`memcpy` 或 SPI/QSPI 控制器事务）与 Cache 一致性维护                   | Backend    |
 
-| 职责                           | 公共层（`mrX/drivers/ram/ram.c` + `mr_ram.h` 内联包装）                                    | backend                                                             |
-|--------------------------------|--------------------------------------------------------------------------------------------|---------------------------------------------------------------------|
-| 几何发现                       | setup 时调用一次 `probe`；要求 `size != 0`；`regions_num != 0` 时要求 `region` 存在        | 填充 `mr_ram_info_t` 的两个字段，值必须稳定且可重复                 |
-| 几何缓存                       | 缓存 `mr_ram_info_t`；`mr_ram_info()` 回读缓存；shutdown 清零缓存，再次 setup 重新 `probe` | 不依赖公共层保存 region 表；`region` 每次调用自行计算或返回静态表项 |
-| region 查询                    | 检查 callback 是否存在、`index < info.regions_num`                                         | 返回 CPU 可直接解引用的 `address`/`size`，保证不越过总容量          |
-| 总容量边界                     | 用 `offset > size \|\| size > info.size - offset` 的形式拒绝越界请求，不进入 backend       | 不需要重复实现同一层的总容量检查                                    |
-| 地址换算                       | 不参与；`offset` 以 `mr_uint64_t` 传给 backend                                             | `base + offset` 的安全换算、溢出与粒度限制由 backend 负责           |
-| 总线宽度、未对齐访问           | 完全不检查                                                                                 | 由 backend 决定并返回明确错误码                                     |
-| cache / coherency / MPU 属性   | 不处理                                                                                     | 由 backend 或平台内存属性配置负责                                   |
-| ECC、错误状态、访问受限 region | 不处理                                                                                     | 由 backend 负责并可返回器件相关错误码                               |
-| 并发                           | 不加锁；同一实例的并发由调用方或硬件保证                                                   | 需要时在私有数据中自行串行化                                        |
-| 生命周期                       | `ram_deinit` 只清零缓存；没有 teardown/remove 回调                                         | 控制器初始化与关闭不通过公共生命周期完成                            |
+## 操作表（ops）
 
-建议实现位置：
+Backend 需实现 `mr_ram_ops_t`：
 
-```text
-mrX/arch/<vendor>/<target>/platform/drivers/ram/ram.c
-```
+| 成员     | 原型要点                                                                         | 必需性                   | 公共层行为                                                                                 |
+|----------|----------------------------------------------------------------------------------|--------------------------|--------------------------------------------------------------------------------------------|
+| `probe`  | `(drv, mr_ram_info_t *info) -> mr_err_t`                                         | 必需                     | `setup` 时通过 `MR_ASSERT` 检查非空并调用；返回非 0 则 `setup` 失败                        |
+| `region` | `(drv, mr_uint32_t index, mr_ram_region_t *region) -> mr_err_t`                  | `regions_num > 0` 时必需 | `regions_num > 0` 但为 `MR_NULL` 时 `setup` 返回 `-MR_EINVAL`；运行期缺失返回 `-MR_ENOSYS` |
+| `read`   | `(drv, mr_uint64_t offset, mr_uint8_t *buf, mr_size_t size) -> mr_ssize_t`       | 可选                     | 为 `MR_NULL` 时 `mr_ram_read` 返回 `-MR_ENOSYS`                                            |
+| `write`  | `(drv, mr_uint64_t offset, const mr_uint8_t *buf, mr_size_t size) -> mr_ssize_t` | 可选                     | 为 `MR_NULL` 时 `mr_ram_write` 返回 `-MR_ENOSYS`                                           |
 
-## 2. 操作表
+## 关键契约
 
-`mr_ram_ops_t` 的 4 个成员（签名取自 `mrX/include/mrX/drivers/ram/mr_ram.h`）：
+- **几何稳定性**：`probe` 填充的 `info->size` 必须非 0 且可重复；`region` 返回的
+  `address` 与 `size` 必须是 CPU 可直接解引用的有效映射区，且不超出总容量。
+- **校验顺序**：公共层在 `mr_ram_read` / `mr_ram_write`
+  中先检查回调是否为空，再检查范围，因此未实现对应回调时越界请求也会返回
+  `-MR_ENOSYS`。
+- **底层限制与并发**：公共层不检查对齐、总线宽度、Cache
+  一致性或并发安全。控制器对传输长度、地址对齐有要求时，由 backend
+  自行校验并返回明确负错误码；需互斥访问的外部总线 RAM 由 backend 自行加锁。
+- **生命周期**：公共层没有 `teardown` / `remove` 回调，`shutdown`
+  仅清零缓存信息；硬件电源或控制器复位如需管理应由平台自行处理。
 
-| 成员     | 签名要点                                                                                            | 必需性                                              | 公共层行为                                                  |
-|----------|-----------------------------------------------------------------------------------------------------|-----------------------------------------------------|-------------------------------------------------------------|
-| `probe`  | `mr_err_t (*)(const mr_driver_t *drv, mr_ram_info_t *info)`                                         | setup 必需（`MR_ASSERT(rm_ops->probe != MR_NULL)`） | 直接调用；返回非 0 则 setup 失败并原样返回该错误码          |
-| `region` | `mr_err_t (*)(const mr_driver_t *drv, mr_uint32_t index, mr_ram_region_t *region)`                  | `regions_num != 0` 时必需                           | 缺失时 setup 返回 `-MR_EINVAL`；运行期调用返回 `-MR_ENOSYS` |
-| `read`   | `mr_ssize_t (*)(const mr_driver_t *drv, mr_uint64_t offset, mr_uint8_t *buf, mr_size_t size)`       | 可选                                                | 为 `MR_NULL` 时 `mr_ram_read()` 返回 `-MR_ENOSYS`           |
-| `write`  | `mr_ssize_t (*)(const mr_driver_t *drv, mr_uint64_t offset, const mr_uint8_t *buf, mr_size_t size)` | 可选                                                | 为 `MR_NULL` 时 `mr_ram_write()` 返回 `-MR_ENOSYS`          |
+## HardTree 安装
 
-`region` 的“必需”由 `ram_init` 显式检查：`probe` 成功后若 `regions_num != 0` 且
-`rm_ops->region == MR_NULL`，setup 返回
-`-MR_EINVAL` 并不缓存几何。因此 `regions_num > 0` 的 backend 必须提供 `region`
-；只有纯间接访问 RAM 可以用
-`regions_num = 0` 配上仅有 `probe`/`read`/`write` 的 ops 表。运行期的
-`-MR_ENOSYS` 只在 `regions_num == 0` 时通过
-`mr_ram_region(0, ...)` 出现（`index` 越界检查在能力检查之后）。
+使用 `<mrX/drivers/ram/mr_ram.h>` 提供的 `MR_HT_RAM_INSTALL(_id, _priv, _ops)`
+宏安装静态实例。该宏仅创建零初始化的 `mr_ram_data_t`，不从 HardTree
+读取标准容量属性；物理地址、总线控制器、片选与时序参数由平台在 HardTree 节点中自行定义并填充
+`_priv`。
 
-公共层在 `mr_ram_read/write` 中先做能力检查再做范围检查，因此越界请求在 callback
-缺失时返回的是 `-MR_ENOSYS` 而不是
-`-MR_EINVAL`。
+## 验收要点
 
-## 3. 存储区域与访问
-
-backend 负责把公共 RAM 设备的读写操作映射到真实存储区域，按公共接口验证边界、容量与返回长度。内存映射、总线寻址、对齐及缓存需求由平台决定；公共 RAM 层不保证特定芯片上存在此设备。
-
-## 4. 配置与生命周期
-
-初始化时确认实际容量与读写能力。动态创建、设备 setup/shutdown 与私有资源释放遵循通用驱动生命周期；必要时拒绝未就绪或不支持的请求，不得返回伪成功。
-
-## 5. HardTree 与安装
-
-将静态地址、总线、片选及控制器属性留给平台，使用公共 RAM 驱动注册接口连接操作表。平台实现是否存在不构成公共 API 的能力保证。
-
-## 6. 移植验收
-
-- [ ] 读写长度、偏移、越界和错误码按公共接口实现。
-- [ ] 访问期间的缓存、总线和设备生命周期安全。
+- [ ] `mr_driver_setup` 后 `mr_ram_info` 返回正确容量与 `regions_num`，`shutdown`
+  后再次 `setup` 可正常重新 `probe`。
+- [ ] 直接映射 RAM 的 `mr_ram_region` 返回地址可直接读写且与 `size` 匹配；间接
+  RAM 返回 `regions_num == 0`。
+- [ ] `mr_ram_read` / `mr_ram_write` 在边界偏移（含
+  `offset == info.size, size == 0` 与越界访问）下返回值符合预期。

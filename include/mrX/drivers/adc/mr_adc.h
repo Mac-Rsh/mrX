@@ -869,6 +869,20 @@ MR_INLINE mr_f32_t mr_ht_adc_raw2volt(mr_ht_adc_spec_t *spec, mr_int64_t raw) {
     }
 
 /**
+ * @brief This macro function creates an ADC specification structure from
+ * hardtree properties or returns a default initializer if the property does
+ * not exist.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @param ... The default initializer, e.g. `{0}`.
+ * @return The initialized mr_ht_adc_spec_t structure or default initializer.
+ */
+#define MR_HT_NODE_ADC_SPEC_OR(_node, _prop, ...)                              \
+    MR_MACRO_IF(MR_HT_NODE_HAS_PROP(_node, _prop),                             \
+                (MR_HT_NODE_ADC_SPEC(_node, _prop)), (__VA_ARGS__))
+
+/**
  * @brief This macro function iterates over all ADC specification elements
  * in a property array and creates corresponding structures.
  *
@@ -894,6 +908,19 @@ MR_INLINE mr_f32_t mr_ht_adc_raw2volt(mr_ht_adc_spec_t *spec, mr_int64_t raw) {
  */
 #define MR_HT_ADC_SPEC(_id, _prop)                                             \
     MR_HT_NODE_ADC_SPEC(MR_HT_DRIVER(_id), _prop)
+
+/**
+ * @brief This macro function creates an ADC specification structure from
+ * hardtree driver properties or returns a default initializer if the property
+ * does not exist.
+ *
+ * @param _id The driver instance id.
+ * @param _prop The property name.
+ * @param ... The default initializer, e.g. `{0}`.
+ * @return The initialized mr_ht_adc_spec_t structure or default initializer.
+ */
+#define MR_HT_ADC_SPEC_OR(_id, _prop, ...)                                     \
+    MR_HT_NODE_ADC_SPEC_OR(MR_HT_DRIVER(_id), _prop, __VA_ARGS__)
 
 /**
  * @brief This macro function iterates over all ADC specification elements in a

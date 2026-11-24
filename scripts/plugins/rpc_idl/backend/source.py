@@ -33,20 +33,32 @@ class SourceBuilder:
         self._codec = CodecBuilder()
         self._schema = SchemaSourceBuilder()
 
-    def build(self, schema: Schema) -> str:
+    def build(self, schema: Schema,
+              layouts: dict[tuple[str, str, str], Layout] | None = None) -> str:
         """Render and wrap one generated source file."""
-        return self.wrap(self.render(schema))
+        return self.wrap(self.render(schema, layouts))
 
-    def render(self, schema: Schema) -> str:
+    def render(
+            self, schema: Schema,
+            layouts: dict[tuple[str, str, str], Layout] | None = None) -> str:
         """Render the source body for one schema."""
         lines: list[str] = self._schema.render(schema)
         lines.append("")
-        layouts = Layout.map_schema(schema)
+        if layouts is None:
+            layouts = Layout.map_schema(schema)
         if self._need_empty_decode(schema):
             lines.extend(self._empty_decode_lines())
             lines.append("")
         if self._need_empty_encode(schema):
             lines.extend(self._empty_encode_lines())
+            lines.append("")
+        fixed_decodes, fixed_encodes = self._collect_fixed_helpers(
+            schema, layouts)
+        for size in sorted(fixed_decodes):
+            lines.extend(self._fixed_decode_lines(size))
+            lines.append("")
+        for size in sorted(fixed_encodes):
+            lines.extend(self._fixed_encode_lines(size))
             lines.append("")
         for service in schema.services.values():
             for method in service.methods:
@@ -54,6 +66,8 @@ class SourceBuilder:
                 request = layouts.get((service.name, method.name, "request"))
                 response = layouts.get((service.name, method.name, "response"))
                 request_var = request is not None and request.has_variable
+                req_fixed = self._fixed_request_size(method, request, schema)
+                res_fixed = self._fixed_response_size(method, response, schema)
                 if request is not None and request.has_variable:
                     lines.extend(self._codec.unpack_lines(
                         service, method, "request", request))
@@ -62,20 +76,23 @@ class SourceBuilder:
                     lines.extend(self._codec.pack_lines(
                         service, method, "response", response))
                     lines.append("")
-                decode = self._decode_lines(
-                    service, method, request_var, schema)
-                if decode:
-                    lines.extend(decode)
-                    lines.append("")
+                if req_fixed is None:
+                    decode = self._decode_lines(
+                        service, method, request_var, schema)
+                    if decode:
+                        lines.extend(decode)
+                        lines.append("")
                 lines.extend(self._invoke_lines(
                     service, method, response))
                 lines.append("")
-                encode = self._encode_lines(
-                    service, method, response, schema)
-                if encode:
-                    lines.extend(encode)
-                    lines.append("")
-                lines.extend(self._export_lines(service, method))
+                if res_fixed is None:
+                    encode = self._encode_lines(
+                        service, method, response, schema)
+                    if encode:
+                        lines.extend(encode)
+                        lines.append("")
+                lines.extend(self._export_lines(
+                    service, method, req_fixed, res_fixed))
                 lines.append("")
         return "\n".join(lines).rstrip() + "\n"
 
@@ -223,14 +240,17 @@ class SourceBuilder:
         return lines
 
     @staticmethod
-    def _export_lines(service: Service, method: Method) -> list[str]:
+    def _export_lines(service: Service, method: Method,
+                      req_fixed: int | None = None,
+                      res_fixed: int | None = None) -> list[str]:
         """Emit one RPC call descriptor export."""
         entry = CNames.entry_fn(service.name, method.name)
         decode = CNames.stage_decode_fn(service.name, method.name,
-                                        bool(method.request))
+                                        bool(method.request), req_fixed)
         invoke = CNames.invoke_fn(service.name, method.name)
         encode = CNames.stage_encode_fn(service.name, method.name,
-                                        method.oneway, bool(method.response))
+                                        method.oneway, bool(method.response),
+                                        res_fixed)
         return [
             f"MR_RPC_EXPORT({entry},",
             f"              {decode},",
@@ -238,6 +258,73 @@ class SourceBuilder:
             f"              {encode},",
             f"              {service.service_id},",
             f"              {method.method_id});",
+        ]
+
+    @staticmethod
+    def _fixed_request_size(method: Method, request: Layout | None,
+                            schema: Schema) -> int | None:
+        """Return shared fixed size when request needs only a size check."""
+        if (not method.request) or request is None or request.has_variable:
+            return None
+        if bool_paths(method.request, schema):
+            return None
+        return method.request_size
+
+    @staticmethod
+    def _fixed_response_size(method: Method, response: Layout | None,
+                             schema: Schema) -> int | None:
+        """Return shared fixed size when response needs only a constant size."""
+        if (method.oneway or (not method.response) or response is None
+                or response.has_variable):
+            return None
+        if bool_paths(method.response, schema):
+            return None
+        return method.response_size
+
+    @classmethod
+    def _collect_fixed_helpers(
+            cls, schema: Schema,
+            layouts: dict[tuple[str, str, str], Layout],
+    ) -> tuple[set[int], set[int]]:
+        """Collect distinct fixed payload sizes for shared decode/encode."""
+        decodes: set[int] = set()
+        encodes: set[int] = set()
+        for service in schema.services.values():
+            for method in service.methods:
+                request = layouts.get((service.name, method.name, "request"))
+                response = layouts.get((service.name, method.name, "response"))
+                req_size = cls._fixed_request_size(method, request, schema)
+                if req_size is not None:
+                    decodes.add(req_size)
+                res_size = cls._fixed_response_size(method, response, schema)
+                if res_size is not None:
+                    encodes.add(res_size)
+        return decodes, encodes
+
+    @staticmethod
+    def _fixed_decode_lines(size: int) -> list[str]:
+        """Emit one shared fixed-size request decode helper."""
+        name = CNames.fixed_decode_fn(size)
+        indent = CEmit.INDENT
+        return [
+            f"static mr_err_t {name}(mr_rpc_session_t *session) {{",
+            f"{indent}if (session->recv.size != {size}U) {{",
+            f"{indent * 2}return -MR_EINVAL;",
+            f"{indent}}}",
+            f"{indent}return 0;",
+            "}",
+        ]
+
+    @staticmethod
+    def _fixed_encode_lines(size: int) -> list[str]:
+        """Emit one shared fixed-size response encode helper."""
+        name = CNames.fixed_encode_fn(size)
+        indent = CEmit.INDENT
+        return [
+            f"static mr_err_t {name}(mr_rpc_session_t *session) {{",
+            f"{indent}MR_IGNORE(session);",
+            f"{indent}return {size};",
+            "}",
         ]
 
     @staticmethod

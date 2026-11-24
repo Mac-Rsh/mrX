@@ -37,6 +37,10 @@ static mr_err_t xvm_init(mr_xvm_t *xvm, const mr_clazz_t *clazz,
     xvm->bin.entry = 0x0;
     xvm->bin.size = 0;
     xvm->isa = isa;
+#if defined(MR_USE_MODULE_XVM_MMIO)
+    /* Init XVM MMIO */
+    mr_memset(&xvm->mmio, 0, sizeof(xvm->mmio));
+#endif /* defined(MR_USE_MODULE_XVM_MMIO) */
 #if defined(MR_USE_MODULE_XVM_DEBUG)
     /* Init XVM debug */
     mr_xvm_debug_init(xvm);
@@ -161,6 +165,10 @@ mr_err_t mr_xvm_load(mr_xvm_t *xvm, const void *image, mr_size_t image_size,
     xvm->bin.entry = entry;
     ret = xvm->isa->ops->load(xvm);
     if (ret != 0) {
+        xvm->bin.image = MR_NULL;
+        xvm->bin.entry = 0x0;
+        xvm->bin.size = 0;
+        mr_atomic_store(&xvm->status, MR_XVM_STATUS_INIT);
         goto _exit;
     }
 
@@ -252,6 +260,11 @@ mr_ssize_t mr_xvm_datamem_load(mr_xvm_t *xvm, mr_uint64_t addr, void *datamem,
     MR_ASSERT(xvm->isa->ops->mem_map != MR_NULL);
     MR_ASSERT((datamem != MR_NULL) || (size == 0));
 
+    /* Reject access before an image is loaded */
+    if (mr_atomic_load(&xvm->status) == MR_XVM_STATUS_INIT) {
+        return -MR_EPERM;
+    }
+
     /* Map data memory */
     ret = xvm->isa->ops->mem_map(xvm, addr, &memory, &writable);
     if (ret < 0) {
@@ -275,6 +288,11 @@ mr_ssize_t mr_xvm_datamem_store(mr_xvm_t *xvm, mr_uint64_t addr,
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
     MR_ASSERT(xvm->isa->ops->mem_map != MR_NULL);
     MR_ASSERT((datamem != MR_NULL) || (size == 0));
+
+    /* Reject access before an image is loaded */
+    if (mr_atomic_load(&xvm->status) == MR_XVM_STATUS_INIT) {
+        return -MR_EPERM;
+    }
 
     /* Map data memory */
     ret = xvm->isa->ops->mem_map(xvm, addr, &memory, &writable);
@@ -302,9 +320,176 @@ mr_ssize_t mr_xvm_datamem_map(mr_xvm_t *xvm, mr_uint64_t addr, void **datamem,
     MR_ASSERT(writable != MR_NULL);
     MR_ASSERT(datamem != MR_NULL);
 
+    /* Reject access before an image is loaded */
+    if (mr_atomic_load(&xvm->status) == MR_XVM_STATUS_INIT) {
+        return -MR_EPERM;
+    }
+
     /* Map data memory */
     return xvm->isa->ops->mem_map(xvm, addr, datamem, writable);
 }
+
+#if defined(MR_USE_MODULE_XVM_MMIO)
+static mr_xvm_mmio_region_t *xvm_mmio_find(mr_xvm_t *xvm, mr_uint64_t addr,
+                                           mr_size_t size) {
+    mr_xvm_mmio_region_t *region;
+    mr_uint64_t offset;
+    mr_size_t i;
+
+    /* Find MMIO region */
+    for (i = 0; i < xvm->mmio.num; i++) {
+        region = &xvm->mmio.regions[i];
+        if (addr < region->base) {
+            continue;
+        }
+
+        /* Check address range */
+        offset = addr - region->base;
+        if ((offset < region->size) && (size <= (region->size - offset))) {
+            return region;
+        }
+    }
+    return MR_NULL;
+}
+
+mr_err_t mr_xvm_mmio_register(mr_xvm_t *xvm, mr_uint64_t base, mr_uint64_t size,
+                              const mr_xvm_mmio_ops_t *ops, void *user) {
+    mr_xvm_mmio_region_t *region;
+    mr_uint64_t end;
+    mr_uint64_t r_end;
+    mr_err_t ret;
+    mr_size_t i;
+
+    /* Check parameter */
+    MR_ASSERT((xvm != MR_NULL) && MR_OBJECT_IS_INITED(xvm));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
+    MR_ASSERT(ops != MR_NULL);
+
+    /* Validate region bounds */
+    if ((size == 0U) || (base > (MR_UINT64_MAX - size))) {
+        return -MR_EINVAL;
+    }
+    end = base + size;
+
+    /* Lock */
+    ret = xvm_lock(xvm);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Check capacity */
+    if (xvm->mmio.num >= MR_CFG_XVM_MMIO_NUM) {
+        xvm_unlock(xvm);
+        return -MR_ENOMEM;
+    }
+
+    /* Reject overlapping regions */
+    for (i = 0; i < xvm->mmio.num; i++) {
+        region = &xvm->mmio.regions[i];
+        r_end = region->base + region->size;
+        if ((base < r_end) && (end > region->base)) {
+            xvm_unlock(xvm);
+            return -MR_EEXIST;
+        }
+    }
+
+    /* Register MMIO region */
+    region = &xvm->mmio.regions[xvm->mmio.num];
+    region->base = base;
+    region->size = size;
+    region->ops = ops;
+    region->user = user;
+    xvm->mmio.num++;
+
+    /* Unlock */
+    xvm_unlock(xvm);
+    return 0;
+}
+
+mr_err_t mr_xvm_mmio_unregister(mr_xvm_t *xvm, mr_uint64_t base) {
+    mr_err_t ret;
+    mr_size_t i;
+
+    /* Check parameter */
+    MR_ASSERT((xvm != MR_NULL) && MR_OBJECT_IS_INITED(xvm));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
+
+    /* Lock */
+    ret = xvm_lock(xvm);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Find and remove MMIO region */
+    for (i = 0; i < xvm->mmio.num; i++) {
+        if (xvm->mmio.regions[i].base == base) {
+            xvm->mmio.num--;
+            if (i < xvm->mmio.num) {
+                xvm->mmio.regions[i] = xvm->mmio.regions[xvm->mmio.num];
+            }
+            xvm_unlock(xvm);
+            return 0;
+        }
+    }
+
+    /* Unlock */
+    xvm_unlock(xvm);
+    return -MR_ENOENT;
+}
+
+mr_err_t mr_xvm_mmio_load(mr_xvm_t *xvm, mr_uint64_t addr, mr_size_t size,
+                          mr_uint64_t *val) {
+    mr_xvm_mmio_region_t *region;
+
+    /* Check parameter */
+    MR_ASSERT((xvm != MR_NULL) && MR_OBJECT_IS_INITED(xvm));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
+    MR_ASSERT(val != MR_NULL);
+
+    /* Check access size */
+    if (size == 0U) {
+        return -MR_EINVAL;
+    }
+
+    /* Find MMIO region */
+    region = xvm_mmio_find(xvm, addr, size);
+    if (!region) {
+        return -MR_ENOENT;
+    }
+    if (!region->ops->load) {
+        return -MR_EPERM;
+    }
+
+    /* Load from MMIO region */
+    return region->ops->load(region->user, addr - region->base, size, val);
+}
+
+mr_err_t mr_xvm_mmio_store(mr_xvm_t *xvm, mr_uint64_t addr, mr_size_t size,
+                           mr_uint64_t val) {
+    mr_xvm_mmio_region_t *region;
+
+    /* Check parameter */
+    MR_ASSERT((xvm != MR_NULL) && MR_OBJECT_IS_INITED(xvm));
+    MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
+
+    /* Check access size */
+    if (size == 0U) {
+        return -MR_EINVAL;
+    }
+
+    /* Find MMIO region */
+    region = xvm_mmio_find(xvm, addr, size);
+    if (!region) {
+        return -MR_ENOENT;
+    }
+    if (!region->ops->store) {
+        return -MR_EPERM;
+    }
+
+    /* Store to MMIO region */
+    return region->ops->store(region->user, addr - region->base, size, val);
+}
+#endif /* defined(MR_USE_MODULE_XVM_MMIO) */
 
 static mr_xvm_t *xvm_obj_release(mr_object_t *obj) {
     mr_xvm_t *xvm;

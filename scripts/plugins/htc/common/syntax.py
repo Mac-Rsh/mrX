@@ -65,6 +65,14 @@ class IdentifierValue(ValueExpr):
 
 
 @dataclass(frozen=True)
+class ExpressionValue(ValueExpr):
+    """Represents a parenthesized C/DTS constant or macro expression."""
+
+    text: str
+    span: SourceSpan | None = None
+
+
+@dataclass(frozen=True)
 class ReferenceValue(ValueExpr):
     """Represents a label or absolute-path reference value."""
 
@@ -152,6 +160,14 @@ class NodeDecl:
     deleted_properties: list[DeletePropertyDecl] = field(default_factory=list)
     span: SourceSpan | None = None
     deleted_nodes: list[DeleteNodeDecl] = field(default_factory=list)
+    labels: tuple[str, ...] = ()
+
+    @property
+    def all_labels(self) -> list[str]:
+        """Return all labels attached to this node in declaration order."""
+        if self.labels:
+            return list(self.labels)
+        return [self.label] if self.label else []
 
     def get_property(self, name: str) -> PropertyDecl | None:
         """Return a property declaration by name.

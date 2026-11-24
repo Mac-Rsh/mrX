@@ -10,6 +10,10 @@
 #if defined(MR_USE_WORK)
 #include <mrX/kernel/mr_spinlock.h>
 #include <mrX/libc/mr_malloc.h>
+#if defined(MR_USE_WORK_TRACE)
+#define MR_TRACE_TAG                    "work"
+#endif /* defined(MR_USE_WORK_TRACE) */
+#include <mrX/kernel/mr_trace.h>
 
 /* Workqueue clazzes(static & dynamic) */
 static void queue_dynamic_release(mr_object_t *obj);
@@ -35,6 +39,9 @@ static void queue_wakeup(mr_workqueue_t *queue) {
         /* No need to wakeup */
         return;
     }
+
+    /* Trace workqueue wakeup */
+    MR_TRACE_EVENT("wakeup", queue);
 
     /* Wakeup workqueue */
     if (queue->hook && queue->hook->wakeup) {
@@ -182,6 +189,9 @@ static void queue_suspend(mr_workqueue_t *queue) {
         return;
     }
 
+    /* Trace workqueue suspend */
+    MR_TRACE_EVENT("suspend", queue);
+
     /* Suspend workqueue */
     if (queue->hook && queue->hook->suspend) {
         queue->hook->suspend(queue, queue->hook->param);
@@ -234,6 +244,11 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
         /* Remove work from running list */
         mr_list_del(&work->list);
 
+        /* Get work run-time */
+        if (!mr_work_get(work)) {
+            continue;
+        }
+
         /* Save work entry and param */
         entry = (mr_work_entry_t *)work->entry;
         param = (void *)work->param;
@@ -242,7 +257,12 @@ mr_err_t mr_workqueue_execute(mr_workqueue_t *queue) {
         mr_spinlock_unlock_irqrestore(&__work_lock, mask);
 
         /* Call work entry */
+        MR_TRACE_BEGIN("exec", queue, work, entry);
         entry(work, param);
+        MR_TRACE_END("exec", queue, work, entry);
+
+        /* Put work run-time */
+        mr_work_put(work);
 
         /* Lock */
         mask = mr_spinlock_lock_irqsave(&__work_lock);
@@ -277,6 +297,7 @@ mr_err_t mr_workqueue_work(mr_workqueue_t *queue, mr_work_t *work) {
 
     /* Check whether workqueue is dying */
     if (mr_atomic_load(&queue->dying)) {
+        MR_TRACE_EVENT("queue_fail", queue, work, -MR_ENOENT);
         return -MR_ENOENT;
     }
 
@@ -300,10 +321,16 @@ mr_err_t mr_workqueue_work(mr_workqueue_t *queue, mr_work_t *work) {
     /* Wakeup workqueue */
     queue_wakeup(queue);
 #endif /* defined(MR_USE_WORKQUEUE_HOOK) */
+
+    /* Trace work queue */
+    MR_TRACE_EVENT("queue", queue, work);
     return 0;
 _exit:
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__work_lock, mask);
+
+    /* Trace work queue failure */
+    MR_TRACE_EVENT("queue_fail", queue, work, ret);
     return ret;
 }
 
@@ -329,6 +356,7 @@ mr_err_t mr_workqueue_delayed_work(mr_workqueue_t *queue, mr_work_t *work,
 
     /* Check whether workqueue is dying */
     if (mr_atomic_load(&queue->dying)) {
+        MR_TRACE_EVENT("delay_fail", queue, work, -MR_ENOENT);
         return -MR_ENOENT;
     }
 
@@ -365,8 +393,8 @@ _set:
     /* Check whether work is first */
     if (&work->list == queue->tlist.next) {
         /* Set to optimal tick */
-        tick = work->tick - mr_clock_tick();
-        mr_timer_tick_set(&queue->timer, tick | MR_TIMER_PERIODIC);
+        mr_timer_tick_set(&queue->timer,
+                          (work->tick - mr_clock_tick()) | MR_TIMER_PERIODIC);
         mr_timer_start(&queue->timer);
     }
 
@@ -376,6 +404,13 @@ _set:
 _exit:
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__work_lock, mask);
+
+    /* Trace delayed work queue */
+    if (ret == 0) {
+        MR_TRACE_EVENT("delay", queue, work, tick);
+    } else {
+        MR_TRACE_EVENT("delay_fail", queue, work, ret);
+    }
     return ret;
 }
 
@@ -396,12 +431,14 @@ static void queue_del(mr_workqueue_t *queue) {
     while (!mr_list_is_empty(&queue->tlist)) {
         work = MR_LIST_ENTRY(queue->tlist.next, mr_work_t, list);
         mr_list_del(&work->list);
+        work->queue = MR_NULL;
     }
 
     /* Remove work from workqueue running list */
     while (!mr_list_is_empty(&queue->list)) {
         work = MR_LIST_ENTRY(queue->list.next, mr_work_t, list);
         mr_list_del(&work->list);
+        work->queue = MR_NULL;
     }
 
     /* Unlock */
@@ -558,6 +595,9 @@ mr_err_t mr_work_cancel(mr_work_t *work) {
 
     /* Remove work */
     work_remove(work);
+
+    /* Trace work cancel */
+    MR_TRACE_EVENT("cancel", work);
     return 0;
 }
 

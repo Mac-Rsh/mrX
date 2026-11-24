@@ -32,6 +32,21 @@ extern "C" {
 #define mr_snprintf(_b, _s, _f, ...)    snprintf(_b, _s, _f, ##__VA_ARGS__)
 #define mr_sprintf(_b, _f, ...)         sprintf(_b, _f, ##__VA_ARGS__)
 #else
+/* Stream output callback type */
+typedef void (*mr_sprintf_out_t)(char c, void *ctx);
+
+/**
+ * @brief This function formats a string and emits each character via callback.
+ *
+ * @param out The output character callback.
+ * @param ctx The callback context.
+ * @param fmt The format string.
+ * @param args The arguments.
+ * @return The characters printed number.
+ */
+int mr_vcbprintf(mr_sprintf_out_t out, void *ctx, const char *fmt,
+                 mr_va_list args);
+
 /**
  * @brief This function prints a formatted string to a buffer.
  *

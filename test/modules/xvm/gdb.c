@@ -756,6 +756,34 @@ MR_TEST(xvm_gdb, query_edges_and_errors) {
     MR_TEST_ASSERT_EQ_INT(mr_xvm_gdb_del(&gdb), 0);
 }
 
+MR_TEST(xvm_gdb, reply_compaction_on_partial_send) {
+    mr_uint8_t data[TEST_GDB_DATA_SIZE];
+    mr_uint8_t image[8] = {0};
+    test_gdb_io_t io;
+    mr_xvm_gdb_t gdb;
+    mr_xvm_t xvm;
+
+    test_gdb_put_word(image, 0, TEST_GDB_ADDI_X1);
+    test_gdb_put_word(image, 1, TEST_GDB_ECALL);
+    MR_TEST_ASSERT_EQ_INT(
+        test_gdb_open(&gdb, &io, &xvm, data, image, sizeof(image)), 0);
+
+    /* Partial send stalls mid-reply; remaining bytes must compact to offset 0 */
+    io.len = 0;
+    io.limit = 3;
+    MR_TEST_ASSERT_GT_INT(test_gdb_xfer(&gdb, &io, "qC"), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_gdb_want_send(&gdb), MR_TRUE);
+    MR_TEST_ASSERT_EQ_UINT(gdb.reply.off, 0U);
+    MR_TEST_ASSERT_GT_UINT(gdb.reply.len, 0U);
+
+    /* Resume transport and verify full packet arrives intact */
+    io.stall = MR_FALSE;
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_gdb_flush(&gdb), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_xvm_gdb_want_send(&gdb), MR_FALSE);
+    MR_TEST_ASSERT_EQ_INT(test_gdb_has_packet(&io, "QC1"), MR_TRUE);
+    test_gdb_close(&gdb, &xvm);
+}
+
 #endif /* defined(MR_USE_MODULE_XVM_RISCV32) */
 #endif /* defined(MR_USE_MODULE_XVM_GDB) */
 #endif /* defined(MR_USE_TEST) */

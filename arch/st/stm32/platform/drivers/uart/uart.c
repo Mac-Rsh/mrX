@@ -1006,27 +1006,18 @@ static void uart_irq_handle(uart_priv_t *priv) {
     }                                                                          \
     MR_HT_UART_INSTALL(_id, &MR_CAT(__uart_priv_, _id), _ops)
 #define __ST_HT_UART_PIN(_id, _prop, _af_prop)                                 \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, _prop),                             \
-                ({                                                             \
-                    .spec = MR_HT_GPIO_SPEC(_id, _prop),                       \
-                    .alternate = MR_HT_DRIVER_PROP_OR(_id, _af_prop, 0),       \
-                }),                                                            \
-                ({                                                             \
-                    .spec = {0},                                               \
-                    .alternate = 0,                                            \
-                }))
+    {                                                                          \
+        .spec = MR_HT_GPIO_SPEC_OR(_id, _prop, {0}),                           \
+        .alternate = MR_HT_DRIVER_PROP_OR(_id, _af_prop, 0),                   \
+    }
 #if defined(UART_USE_STREAM)
 #define __ST_HT_UART_STREAM_INIT(_id)                                          \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_rx_dma),                         \
-                (.rx_stream = {                                                \
-                    .dma = MR_HT_DMA_SPEC(_id, st_rx_dma),                     \
-                }),                                                            \
-                (.rx_stream = {0})),                                           \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_tx_dma),                         \
-                (.tx_stream = {                                                \
-                    .dma = MR_HT_DMA_SPEC(_id, st_tx_dma),                     \
-                }),                                                            \
-                (.tx_stream = {0})),
+    .rx_stream = {                                                             \
+        .dma = MR_HT_DMA_SPEC_OR(_id, st_rx_dma, {0}),                         \
+    },                                                                         \
+    .tx_stream = {                                                             \
+        .dma = MR_HT_DMA_SPEC_OR(_id, st_tx_dma, {0}),                         \
+    },
 #else
 #define __ST_HT_UART_STREAM_INIT(_id)
 #endif /* defined(UART_USE_STREAM) */

@@ -1,99 +1,76 @@
 # ADS1015 / ADS1115 ADC
 
-复用 [ADC API](adc.md)
-，并遵守[串行总线外扩驱动共同行为](../serial_peripheral.md)。
+I2C 接口的 4 通道 12 位（ADS1015）或 16 位（ADS1115）外部 ADC 芯片，通过标准 ADC
+驱动接口对外提供采样能力（遵循[串行总线外扩驱动共同行为](../serial_peripheral.md)）。
 
-| 项目     | 说明                                              |
-|----------|---------------------------------------------------|
-| 功能宏   | `MR_USE_DRIVER_ADC`，及对应的 `MR_USE_DRIVER_I2C` |
-| 头文件   | `<mrX/drivers/adc/mr_adc.h>`                      |
-| 依赖模块 | I2C、Driver；仅 HardTree 有实例时编译             |
+| 项目     | 说明                                                                                                  |
+|----------|-------------------------------------------------------------------------------------------------------|
+| 启用方式 | 随 `MR_USE_DRIVER_ADC` 与 `MR_USE_DRIVER_I2C` 编译，由 HardTree `compatible = "adc_ads1x15"` 节点触发 |
+| 头文件   | 复用 `<mrX/drivers/adc/mr_adc.h>`                                                                     |
 
-## 用户指南
+## HardTree 属性
 
-### HardTree
+| 属性         | 必需 | 默认值 | 说明                                            |
+|--------------|------|--------|-------------------------------------------------|
+| `i2c`        | 是   | -      | 挂载的 I2C 总线控制器 phandle                   |
+| `addr`       | 是   | -      | 7 位 I2C 从机地址（`0x48`~`0x4b`）              |
+| `resolution` | 是   | -      | 采样分辨率：ADS1015 填 `12`，ADS1115 填 `16`    |
+| `data_rate`  | 否   | `4`    | 配置寄存器 DR 编码（`0`~`7`），对应采样率见下表 |
+| `exist_mask` | 否   | `0x0f` | 通道存在掩码（按 4 位裁剪）                     |
 
-```dts
-ads: ads {
-    compatible = "adc_ads1x15";
-    status = "defer";
-    i2c = &i2c0;
-    addr = <0x48>;
-    resolution = <16>;
-    data_rate = <4>;
-};
-```
+`data_rate` 编码对应采样率（SPS）：
 
-启用 ADC/I2C。`i2c`、`addr`、`resolution` 必需；
-地址 0x48..0x4b；ADS1015 必须指定 12，ADS1115 必须指定 16。
-`exist_mask` 缺省 0x0f 并裁剪为 4 位。
-不包含 ADS1013/1014/1113/1114 的变体支持。
+| 编码          | 0   | 1   | 2   | 3   | 4    | 5    | 6    | 7    |
+|---------------|-----|-----|-----|-----|------|------|------|------|
+| ADS1115 (SPS) | 8   | 16  | 32  | 64  | 128  | 250  | 475  | 860  |
+| ADS1015 (SPS) | 128 | 250 | 490 | 920 | 1600 | 2400 | 3300 | 3300 |
 
-`data_rate` 是配置寄存器 DR 编码（0..7），缺省 4：
-
-| 编码 | ADS1115 SPS | ADS1015 SPS |
-|------|------------:|------------:|
-| 0    |           8 |         128 |
-| 1    |          16 |         250 |
-| 2    |          32 |         490 |
-| 3    |          64 |         920 |
-| 4    |         128 |        1600 |
-| 5    |         250 |        2400 |
-| 6    |         475 |        3300 |
-| 7    |         860 |        3300 |
-
-### 配置与码值
-
-每个逻辑通道独立缓存配置，缺省单端、INTERNAL、GAIN_1。
-单端通道 0..3 对应 AIN0..3；差分通道 0..3
-分别对应 AIN0-AIN1、AIN0-AIN3、AIN1-AIN3、AIN2-AIN3。
-配置差分只改变对应逻辑通道的 MUX 解释，不增加额外通道号。
-
-只接受 INTERNAL 参考源：
-
-| 公共 gain | 正向满量程 mV |
-|-----------|--------------:|
-| GAIN_1_3  |          6144 |
-| GAIN_1_2  |          4096 |
-| GAIN_1    |          2048 |
-| GAIN_2    |          1024 |
-| GAIN_4    |           512 |
-| GAIN_8    |           256 |
-
-每次采样启动 single-shot，关闭 comparator，按 1 ms 间隔轮询 OS，
-在约两倍转换周期加余量后返回 `-MR_ETIMEDOUT`。
-每样本 2 字节；ADS1015 右对齐到 12 位并符号扩展到 16 位；
-ADS1115 保持 16 位。差分值应通过 `mr_int16_t` 读取后再提升到 64 位做电压换算。
-单端负偏移码夹为 0，正值最大分别为 2047/32767。
-
-为了兼容公共换算函数的 `2^resolution` 分母，
-本 backend 的 `ref_internal` 固定为 **4096 mV 的双极性等效跨度**，
-不是声称芯片有 4.096 V 物理参考。使用表中 gain、原生 resolution 和有符号 raw
-即可得到正确电压；HardTree ADC spec 的 `ref_voltage` 应设 0，
-或者显式设 4096。不要用 2048 替代，否则结果减半。
-
-### 使用片段
+## 快速上手
 
 ```c
-mr_adc_config_t config = {
-    .diff = MR_ADC_DIFF_SINGLE,
-    .ref = MR_ADC_REF_INTERNAL,
-    .gain = MR_ADC_GAIN_1,
-};
-mr_uint16_t raw;
-mr_adc_seq_t seq = {
-    .channels = 1U, .resolution = 16U, .oversample = 0U,
-    .size = sizeof(raw), .buf = &raw,
-};
-/* Check configure/read return values in application code */
-mr_adc_configure(drv, 0U, &config);
-mr_adc_read(drv, &seq);
+#include <mrX/drivers/adc/mr_adc.h>
+
+mr_err_t ads1x15_read_ch0(mr_int16_t *raw_out) {
+    mr_driver_t *drv = mr_driver_find("ads");
+    mr_adc_config_t cfg = {
+        .diff = MR_ADC_DIFF_SINGLE,
+        .ref = MR_ADC_REF_INTERNAL,
+        .gain = MR_ADC_GAIN_1,
+    };
+    mr_adc_seq_t seq = {
+        .channels = 1U << 0,
+        .resolution = 16U,          /* ADS1015 需改为 12U */
+        .oversample = 0U,
+        .size = sizeof(*raw_out),
+        .buf = raw_out,
+    };
+
+    if ((drv == MR_NULL) || (mr_driver_setup(drv) != 0)) {
+        return -MR_ENODEV;
+    }
+    if (mr_adc_configure(drv, 0U, &cfg) != 0) {
+        return -MR_EIO;
+    }
+    return (mr_adc_read(drv, &seq) == (mr_ssize_t)sizeof(*raw_out)) ? 0 : -MR_EIO;
+}
 ```
 
-## 开发者指南
+## 运行语义与限制
 
-源码：`drivers/adc/adc_ads1x15.c`。
-协议依据：[ADS1115](https://www.ti.com/lit/ds/symlink/ads1115.pdf)、
-[ADS1015](https://www.ti.com/lit/ds/symlink/ads1015.pdf) 数据手册。
-本轮仅人工静态审查，未构建或测试。
+- **通道与差分映射**：逻辑通道 0 ~3 独立缓存配置（默认单端、`MR_ADC_REF_INTERNAL`、
+  `MR_ADC_GAIN_1`）。单端模式对应 `AIN0`~`AIN3`；差分模式 0~3 分别对应 `AIN0-AIN1`、
+  `AIN0-AIN3`、`AIN1-AIN3`、`AIN2-AIN3`。不支持 ADS1013/1014/1113/1114。
+- **参考源与增益**：仅支持 `MR_ADC_REF_INTERNAL`；支持的增益档位与满量程如下：
 
+| 增益        | `MR_ADC_GAIN_1_3` | `MR_ADC_GAIN_1_2` | `MR_ADC_GAIN_1` | `MR_ADC_GAIN_2` | `MR_ADC_GAIN_4` | `MR_ADC_GAIN_8` |
+|-------------|-------------------|-------------------|-----------------|-----------------|-----------------|-----------------|
+| 满量程 (mV) | ±6144             | ±4096             | ±2048           | ±1024           | ±512            | ±256            |
+
+- **阻塞采样与输出格式**：每次采样触发 single-shot 转换，按 1 ms 间隔轮询 OS
+  位（约两倍转换周期超时后返回 `-MR_ETIMEDOUT`）。不支持过采样（`oversample != 0` 返回
+  `-MR_ENOSYS`）、流采样和异步事件。每样本固定占 2 字节（ADS1015 右对齐 12 位并符号扩展到
+  16 位）；单端负偏移码会被钳位为 `0`，差分结果需先强转为 `mr_int16_t` 再做电压换算。
+- **电压换算等效参考**：为适配公共层 `2^resolution` 分母，驱动将 `ref_internal`
+  固定设为 `4096`（双极性等效跨度 mV），配合原生 `resolution` 与有符号 `raw` 即可由
+  `mr_adc_raw2millivolt` 得到正确电压；HardTree ADC spec 中 `ref_voltage` 应填
+  `0` 或 `4096`（切勿填 `2048`，否则换算结果减半）。

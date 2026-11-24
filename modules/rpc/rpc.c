@@ -126,6 +126,9 @@ static void rpc_suspend(mr_rpc_t *rpc, mr_rpc_event_t event) {
 static void rpc_subs_timer_entry(mr_timer_t *timer, void *param) {
     mr_tick_t tickless, tick, timer_tick;
     mr_rpc_session_t *session;
+#if defined(MR_USE_MODULE_RPC_HOOK)
+    mr_bool_t ready;
+#endif /* defined(MR_USE_MODULE_RPC_HOOK) */
     mr_rpc_t *rpc;
     int mask;
 
@@ -142,6 +145,9 @@ static void rpc_subs_timer_entry(mr_timer_t *timer, void *param) {
 
     /* Check timeout subscription */
     tickless = 0U;
+#if defined(MR_USE_MODULE_RPC_HOOK)
+    ready = MR_FALSE;
+#endif /* defined(MR_USE_MODULE_RPC_HOOK) */
     for (tick = mr_clock_tick(); !mr_list_is_empty(&rpc->subs.tlist);) {
         session = MR_CONTAINER_OF(rpc->subs.tlist.next, mr_rpc_session_t, list);
 
@@ -154,6 +160,9 @@ static void rpc_subs_timer_entry(mr_timer_t *timer, void *param) {
 
         /* Move subscription to ready list */
         mr_list_move(&session->list, &rpc->subs.list);
+#if defined(MR_USE_MODULE_RPC_HOOK)
+        ready = MR_TRUE;
+#endif /* defined(MR_USE_MODULE_RPC_HOOK) */
     }
 
     /* Check whether subscription timer needs a new tick */
@@ -174,7 +183,9 @@ static void rpc_subs_timer_entry(mr_timer_t *timer, void *param) {
 
 #if defined(MR_USE_MODULE_RPC_HOOK)
     /* Wakeup subscription poll */
-    rpc_wakeup(rpc, MR_RPC_EVENT_POLL);
+    if (ready) {
+        rpc_wakeup(rpc, MR_RPC_EVENT_POLL);
+    }
 #endif /* defined(MR_USE_MODULE_RPC_HOOK) */
 
     /* Put RPC */
@@ -763,8 +774,8 @@ static void rpc_frame_header_parse(mr_rpc_t *rpc) {
         }
 
         /* Check header checksum */
-        checksum = frame.hdr_crc16;
-        frame.hdr_crc16 = 0;
+        checksum = frame.hdr_checksum;
+        frame.hdr_checksum = 0;
         if (rpc_fletcher16(&frame, sizeof(frame)) != checksum) {
             mr_fifo_skip(&rpc->recv.fifo, 2U);
             continue;
@@ -883,16 +894,11 @@ static mr_bool_t rpc_frame_payload_discard(mr_rpc_t *rpc) {
     return MR_TRUE;
 }
 
-static mr_rpc_session_t *rpc_frame_complete(mr_rpc_t *rpc, mr_err_t *error) {
+static mr_rpc_session_t *rpc_frame_complete(mr_rpc_t *rpc) {
     mr_rpc_session_t *session;
 
     /* Get receive session */
     session = rpc->recv.session;
-
-    /* Check frame type */
-    if ((*error == 0) && (session->request.type == MR_RPC_MSG_STREAM)) {
-        *error = -MR_EINVAL;
-    }
 
     /* Complete frame */
     rpc->recv.state = MR_RPC_RECV_STATE_SYNC;
@@ -917,14 +923,14 @@ static mr_rpc_session_t *rpc_frame_parse(mr_rpc_t *rpc, mr_err_t *error) {
                 /* Parse payload */
                 if (rpc_frame_payload_parse(rpc)) {
                     *error = 0;
-                    return rpc_frame_complete(rpc, error);
+                    return rpc_frame_complete(rpc);
                 }
                 break;
             }
             case MR_RPC_RECV_STATE_CHECKSUM: {
                 /* Check payload trailer */
                 if (rpc_frame_checksum_parse(rpc, error)) {
-                    return rpc_frame_complete(rpc, error);
+                    return rpc_frame_complete(rpc);
                 }
                 break;
             }
@@ -932,7 +938,7 @@ static mr_rpc_session_t *rpc_frame_parse(mr_rpc_t *rpc, mr_err_t *error) {
                 /* Report overflow */
                 if (rpc_frame_payload_discard(rpc)) {
                     *error = -MR_ENOMEM;
-                    return rpc_frame_complete(rpc, error);
+                    return rpc_frame_complete(rpc);
                 }
                 break;
             }
@@ -943,38 +949,10 @@ static mr_rpc_session_t *rpc_frame_parse(mr_rpc_t *rpc, mr_err_t *error) {
     return MR_NULL;
 }
 
-static mr_rpc_session_t *rpc_session_next(mr_rpc_t *rpc, mr_err_t *error) {
-    mr_rpc_session_t *session;
-    mr_list_t *l;
-    int mask;
-
-    /* Lock */
-    mask = mr_spinlock_lock_irqsave(&__rpc_lock);
-
-    /* Get pending session */
-    session = MR_NULL;
-    *error = 0;
-    if (!mr_list_is_empty(&rpc->session_pending)) {
-        l = rpc->session_pending.next;
-        session = MR_LIST_ENTRY(l, mr_rpc_session_t, list);
-        mr_list_del(&session->list);
-        session->state = MR_RPC_SESSION_STATE_DISPATCHING;
-    }
-
-    /* Unlock */
-    mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
-
-    /* Parse frame */
-    if (!session) {
-        session = rpc_frame_parse(rpc, error);
-    }
-    return session;
-}
-
 static mr_err_t rpc_subs_add(mr_rpc_t *rpc, mr_rpc_session_t *session) {
     mr_rpc_session_t **free_slot;
     mr_rpc_session_t *current;
-    mr_uint32_t i;
+    mr_uint32_t count, i;
     mr_err_t ret;
     int mask;
 
@@ -989,6 +967,7 @@ static mr_err_t rpc_subs_add(mr_rpc_t *rpc, mr_rpc_session_t *session) {
 
     /* Find subscription slot */
     free_slot = MR_NULL;
+    count = 0U;
     for (i = 0; i < MR_ARRAY_SIZE(rpc->subs.sessions); i++) {
         current = rpc->subs.sessions[i];
         if (!current) {
@@ -1001,10 +980,11 @@ static mr_err_t rpc_subs_add(mr_rpc_t *rpc, mr_rpc_session_t *session) {
             ret = -MR_EEXIST;
             goto _exit;
         }
+        count++;
     }
 
-    /* Check session pool */
-    if ((!free_slot) || mr_list_is_empty(&rpc->session_free)) {
+    /* Reserve at least one session for unsubscribe and normal requests */
+    if ((!free_slot) || ((count + 1U) >= MR_ARRAY_SIZE(rpc->sessions))) {
         ret = -MR_ENOMEM;
         goto _exit;
     }
@@ -1084,8 +1064,8 @@ static void rpc_session_encode_frame(mr_rpc_session_t *session,
     frame->session = session->request.session;
     frame->service = session->request.service;
     frame->method = session->request.method;
-    frame->hdr_crc16 = 0;
-    frame->hdr_crc16 = rpc_fletcher16(frame, sizeof(*frame));
+    frame->hdr_checksum = 0;
+    frame->hdr_checksum = rpc_fletcher16(frame, sizeof(*frame));
 
     /* Set send buffer */
     buf = (mr_uint8_t *)&session->response;
@@ -1420,14 +1400,40 @@ static mr_err_t rpc_send_execute(mr_rpc_t *rpc, mr_bool_t flush) {
         }
     }
 
+    /* Lock */
+    mask = mr_spinlock_lock_irqsave(&__rpc_lock);
+
+    /* Release active send session if RPC became dying during send */
+    if (mr_atomic_load(&rpc->dying) && rpc->send.session) {
+        finished = rpc->send.session;
+        rpc->send.session = MR_NULL;
+        finished->state = MR_RPC_SESSION_STATE_DONE;
+        ret = -MR_ENOENT;
+    } else {
+        finished = MR_NULL;
+    }
+
     /* Release sender */
     mr_atomic_store(&rpc->send.running, MR_FALSE);
+
+    /* Unlock */
+    mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
+
+    /* Finish session */
+    if (finished) {
+        rpc_session_finish(finished);
+    }
     return ret;
 }
 
 mr_err_t mr_rpc_execute(mr_rpc_t *rpc) {
     mr_rpc_session_t *session;
     mr_err_t error, ret;
+#if defined(MR_USE_MODULE_RPC_HOOK)
+    mr_bool_t pending;
+#endif /* defined(MR_USE_MODULE_RPC_HOOK) */
+    mr_list_t oplist;
+    int mask;
 
     /* Check parameter */
     MR_ASSERT((rpc != MR_NULL) && MR_OBJECT_IS_INITED(rpc));
@@ -1438,17 +1444,45 @@ mr_err_t mr_rpc_execute(mr_rpc_t *rpc) {
         return -MR_ENOENT;
     }
 
+    /* Send pending responses */
+    ret = rpc_send_execute(rpc, MR_FALSE);
+
+    /* Init operation list */
+    mr_list_init(&oplist);
+
+    /* Lock */
+    mask = mr_spinlock_lock_irqsave(&__rpc_lock);
+
+    /* Snapshot pending external sessions for this batch */
+    mr_list_replace(&oplist, &rpc->session_pending);
+
 #if defined(MR_USE_MODULE_RPC_HOOK)
     /* Set execute running */
     mr_atomic_store(&rpc->depth[MR_RPC_EVENT_EXECUTE], 1);
 #endif /* defined(MR_USE_MODULE_RPC_HOOK) */
 
-    /* Send pending responses */
-    ret = rpc_send_execute(rpc, MR_FALSE);
+    /* Dispatch snapshotted external sessions */
+    while (!mr_list_is_empty(&oplist)) {
+        session = MR_LIST_ENTRY(oplist.next, mr_rpc_session_t, list);
+        session->state = MR_RPC_SESSION_STATE_DISPATCHING;
+        mr_list_del(&session->list);
 
-    /* Execute sessions */
+        /* Unlock */
+        mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
+
+        /* Dispatch session */
+        rpc_session_dispatch(session, 0);
+
+        /* Lock */
+        mask = mr_spinlock_lock_irqsave(&__rpc_lock);
+    }
+
+    /* Unlock */
+    mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
+
+    /* Parse and dispatch remote frames */
     while (1) {
-        session = rpc_session_next(rpc, &error);
+        session = rpc_frame_parse(rpc, &error);
         if (!session) {
             break;
         }
@@ -1459,14 +1493,22 @@ mr_err_t mr_rpc_execute(mr_rpc_t *rpc) {
             ret = rpc_send_execute(rpc, MR_FALSE);
         }
     }
+
     /* Flush responses */
     if ((ret == 0) || (ret == -MR_EAGAIN)) {
         ret = rpc_send_execute(rpc, MR_TRUE);
     }
 
 #if defined(MR_USE_MODULE_RPC_HOOK)
+    /* Check whether callbacks committed the next batch */
+    mask = mr_spinlock_lock_irqsave(&__rpc_lock);
+    pending = !mr_list_is_empty(&rpc->session_pending);
+    mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
+
     /* Suspend execute */
-    rpc_suspend(rpc, MR_RPC_EVENT_EXECUTE);
+    if (!pending) {
+        rpc_suspend(rpc, MR_RPC_EVENT_EXECUTE);
+    }
 #endif /* defined(MR_USE_MODULE_RPC_HOOK) */
     return ret;
 }
@@ -1482,6 +1524,9 @@ mr_err_t mr_rpc_flush(mr_rpc_t *rpc) {
 
 mr_err_t mr_rpc_poll(mr_rpc_t *rpc) {
     mr_rpc_session_t *session;
+#if defined(MR_USE_MODULE_RPC_HOOK)
+    mr_bool_t pending;
+#endif /* defined(MR_USE_MODULE_RPC_HOOK) */
     mr_list_t oplist;
     mr_err_t ret;
     int mask;
@@ -1501,13 +1546,14 @@ mr_err_t mr_rpc_poll(mr_rpc_t *rpc) {
     /* Lock */
     mask = mr_spinlock_lock_irqsave(&__rpc_lock);
 
+    /* Get subscriptions */
+    mr_list_replace(&oplist, &rpc->subs.list);
+
 #if defined(MR_USE_MODULE_RPC_HOOK)
     /* Set poll running */
     mr_atomic_store(&rpc->depth[MR_RPC_EVENT_POLL], 1);
 #endif /* defined(MR_USE_MODULE_RPC_HOOK) */
 
-    /* Get subscriptions */
-    mr_list_replace(&oplist, &rpc->subs.list);
     while (!mr_list_is_empty(&oplist)) {
         session = MR_LIST_ENTRY(oplist.next, mr_rpc_session_t, list);
         session->state = MR_RPC_SESSION_STATE_DISPATCHING;
@@ -1530,8 +1576,19 @@ mr_err_t mr_rpc_poll(mr_rpc_t *rpc) {
     ret = rpc_send_execute(rpc, MR_TRUE);
 
 #if defined(MR_USE_MODULE_RPC_HOOK)
+    /* Lock */
+    mask = mr_spinlock_lock_irqsave(&__rpc_lock);
+
+    /* Check for the next pending batch */
+    pending = !mr_list_is_empty(&rpc->subs.list);
+
+    /* Unlock */
+    mr_spinlock_unlock_irqrestore(&__rpc_lock, mask);
+
     /* Suspend poll */
-    rpc_suspend(rpc, MR_RPC_EVENT_POLL);
+    if (!pending) {
+        rpc_suspend(rpc, MR_RPC_EVENT_POLL);
+    }
 #endif /* defined(MR_USE_MODULE_RPC_HOOK) */
     return ret;
 }

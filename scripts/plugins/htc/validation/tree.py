@@ -13,9 +13,10 @@ completed, including alias resolution and reference validation.
 """
 
 from ..common import ArrayMode, ArrayValue, Diagnostics, ErrorCode, \
-    ReferenceValue, SourceSpan, STATUS_DISABLED, StringValue, ValueExpr, \
-    NumberValue, FloatValue
+    ExpressionValue, ReferenceValue, SourceSpan, STATUS_DISABLED, \
+    StringValue, ValueExpr, NumberValue, FloatValue
 from ..semantic import HardTree, ReferenceResolver
+from ..semantic.paths import normalize_node_path
 from ..backend.names import MacroNames
 
 
@@ -102,14 +103,21 @@ class TreeValidator:
                                 reference.span)
                         continue
 
-                    # Disabled targets are still resolvable but worth warning on
+                    # Disabled targets are omitted from generated C headers
                     target = tree.nodes_by_path[target_path]
-                    if target.effective_status == self.STATUS_DISABLED:
-                        self._warn_at(
+                    if (node.effective_status != self.STATUS_DISABLED
+                            and target.effective_status == self.STATUS_DISABLED):
+                        diagnostic = self.diagnostics.error(
                             ErrorCode.REFERENCE_TO_DISABLED,
-                            f"reference points to disabled node: {target_path}",
-                            reference.span,
+                            f"enabled node '{node.path}' references disabled "
+                            f"node '{target_path}'",
                         )
+                        if reference.span is not None:
+                            diagnostic.with_source_span(reference.span)
+                        diagnostic.add_note(
+                            "disabled nodes are omitted from generated C "
+                            "headers; enable the target node or disable the "
+                            "referencing node")
 
     def _verify_array_modes(self, tree: HardTree) -> None:
         """Verify allowed nesting combinations for array render modes."""
@@ -120,9 +128,31 @@ class TreeValidator:
     def _verify_macro_name_collisions(self, tree: HardTree) -> None:
         """Report distinct DTS names that collide after macro normalization."""
         self._verify_node_name_collisions(tree)
+        self._verify_driver_name_collisions(tree)
         self._verify_label_name_collisions(tree)
         self._verify_property_name_collisions(tree)
         self._verify_compatible_name_collisions(tree)
+
+    def _verify_driver_name_collisions(self, tree: HardTree) -> None:
+        """Report enabled driver nodes that produce the same C identifier."""
+        seen: dict[str, str] = {}
+        for node in tree.nodes:
+            if (node.path == self.NODE_ALIASES_PATH
+                    or node.effective_status == self.STATUS_DISABLED
+                    or not node.compatible):
+                continue
+            ident = MacroNames.node_identifier(node.name, node.address)
+            existing = seen.get(ident)
+            if existing is not None and existing != node.path:
+                self._error_at(
+                    ErrorCode.DUPLICATE_NODE,
+                    f"driver nodes '{existing}' and '{node.path}' both "
+                    f"produce C identifier '{ident}' (MR_HT_NODE_NAME); "
+                    "add distinct unit addresses or rename one node",
+                    node.span,
+                )
+                continue
+            seen[ident] = node.path
 
     def _verify_node_name_collisions(self, tree: HardTree) -> None:
         """Report node paths that normalize to the same backend macro name."""
@@ -230,6 +260,9 @@ class TreeValidator:
         """Resolve a DTS alias path string to a canonical node path."""
         if not path.startswith("/"):
             path = f"/{path}"
+        if len(path) > 1:
+            path = path.rstrip("/")
+        path = normalize_node_path(path)
         return path if path in tree.nodes_by_path else None
 
     def _iter_references(self, value: ValueExpr):
@@ -244,10 +277,11 @@ class TreeValidator:
     def _check_array_modes(self, value: ValueExpr, prop_name: str,
                            node_path: str, inline_parent: bool = False) -> None:
         """Validate that inline arrays contain only numeric scalar elements."""
-        # Inline arrays may contain numbers, floats, or nested inline arrays
+        # Inline arrays may contain numbers, floats, expressions, or nested
+        # inline arrays
         if inline_parent and not isinstance(value,
                                             (ArrayValue, NumberValue,
-                                             FloatValue)):
+                                             FloatValue, ExpressionValue)):
             self._error_at(
                 ErrorCode.INVALID_INLINE_ARRAY,
                 f"property '{prop_name}' in '{node_path}' can only contain "

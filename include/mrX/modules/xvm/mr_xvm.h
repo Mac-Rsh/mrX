@@ -12,6 +12,9 @@
 #include <mrX/mr_config.h>
 #if defined(MR_USE_MODULE_XVM)
 #include <mrX/modules/xvm/mr_xvm_isa.h>
+#if defined(MR_USE_MODULE_XVM_MMIO)
+#include <mrX/modules/xvm/mr_xvm_mmio.h>
+#endif /* defined(MR_USE_MODULE_XVM_MMIO) */
 #if defined(MR_USE_MODULE_XVM_DEBUG)
 #include <mrX/modules/xvm/mr_xvm_debug.h>
 #endif /* defined(MR_USE_MODULE_XVM_DEBUG) */
@@ -107,6 +110,9 @@ typedef struct mr_xvm {
     mr_xvm_binary_t bin;
     mr_atomic_t status;
     mr_atomic_t flags;
+#if defined(MR_USE_MODULE_XVM_MMIO)
+    mr_xvm_mmio_t mmio;
+#endif /* defined(MR_USE_MODULE_XVM_MMIO) */
 #if defined(MR_USE_MODULE_XVM_DEBUG)
     mr_xvm_debug_t debug;
 #endif /* defined(MR_USE_MODULE_XVM_DEBUG) */
@@ -284,6 +290,11 @@ MR_INLINE mr_err_t mr_xvm_reg_load(mr_xvm_t *xvm, mr_uint32_t nr,
     MR_ASSERT(xvm->isa->ops->reg_load != MR_NULL);
     MR_ASSERT(val != MR_NULL);
 
+    /* Reject access before an image is loaded */
+    if (mr_atomic_load(&xvm->status) == MR_XVM_STATUS_INIT) {
+        return -MR_EPERM;
+    }
+
     /* Load register to user */
     return xvm->isa->ops->reg_load(xvm, nr, val);
 }
@@ -302,6 +313,11 @@ MR_INLINE mr_err_t mr_xvm_reg_store(mr_xvm_t *xvm, mr_uint32_t nr,
     MR_ASSERT((xvm != MR_NULL) && MR_OBJECT_IS_INITED(xvm));
     MR_ASSERT(MR_OBJECT_IS_CLAZZES(xvm, xvm));
     MR_ASSERT(xvm->isa->ops->reg_store != MR_NULL);
+
+    /* Reject access before an image is loaded */
+    if (mr_atomic_load(&xvm->status) == MR_XVM_STATUS_INIT) {
+        return -MR_EPERM;
+    }
 
     /* Store register from user */
     return xvm->isa->ops->reg_store(xvm, nr, val);

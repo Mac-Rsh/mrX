@@ -135,11 +135,19 @@ MR_TEST(printf, precision_zero_zero_value) {
 MR_TEST(printf, truncation_boundary) {
     const int limit = MR_CFG_PRINTF_BUF_SIZE - 1;
 
+#if defined(MR_USE_SPRINTF)
+    /* Streaming printf flushes in chunks without truncating at buffer size */
+    MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit - 1, "A"), limit - 1);
+    MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit, "A"), limit);
+    MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit + 1, "A"), limit + 1);
+    MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit + 100, "A"), limit + 100);
+#else
     /* The terminator occupies the last byte of the configured buffer. */
     MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit - 1, "A"), limit - 1);
     MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit, "A"), limit);
     MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit + 1, "A"), limit);
     MR_TEST_ASSERT_EQ_INT(mr_printf("%*s", limit + 100, "A"), limit);
+#endif /* defined(MR_USE_SPRINTF) */
 }
 
 MR_TEST(printf, pointer_format) {
@@ -184,8 +192,13 @@ MR_TEST(printf, length_modifiers) {
 MR_TEST(printf, vprintf_truncation_boundary) {
     const int limit = MR_CFG_PRINTF_BUF_SIZE - 1;
 
+#if defined(MR_USE_SPRINTF)
+    MR_TEST_ASSERT_EQ_INT(vprintf_wrapper("%*s|", limit - 1, "A"), limit);
+    MR_TEST_ASSERT_EQ_INT(vprintf_wrapper("%*s|", limit, "A"), limit + 1);
+#else
     MR_TEST_ASSERT_EQ_INT(vprintf_wrapper("%*s|", limit - 1, "A"), limit);
     MR_TEST_ASSERT_EQ_INT(vprintf_wrapper("%*s|", limit, "A"), limit);
+#endif /* defined(MR_USE_SPRINTF) */
 }
 
 #endif /* defined(MR_USE_PRINTF) */

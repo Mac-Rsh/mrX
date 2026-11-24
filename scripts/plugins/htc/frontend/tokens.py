@@ -21,6 +21,7 @@ class TokenType(Enum):
 
     IDENTIFIER = "IDENTIFIER"
     STRING = "STRING"
+    CHAR = "CHAR"
     NUMBER = "NUMBER"
     FLOAT = "FLOAT"
     ASSIGN = "="
@@ -35,7 +36,18 @@ class TokenType(Enum):
     RBRACE = "}"
     LBRACKET = "["
     RBRACKET = "]"
+    LPAREN = "("
+    RPAREN = ")"
     COMMA = ","
+    PLUS = "+"
+    MINUS = "-"
+    STAR = "*"
+    PERCENT = "%"
+    PIPE = "|"
+    CARET = "^"
+    TILDE = "~"
+    BANG = "!"
+    QUESTION = "?"
     EOF = "EOF"
 
 

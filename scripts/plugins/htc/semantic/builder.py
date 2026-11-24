@@ -153,32 +153,38 @@ class SemanticBuilder:
         self._pending_deleted_properties.clear()
         self._pending_deleted_nodes.clear()
         tree = HardTree()
-        for root in document.roots:
-            self._merge_root(root, tree)
 
-        root_status = tree.nodes_by_path["/"].effective_status \
-            if "/" in tree.nodes_by_path else self.STATUS_OKAY
-        for root in document.roots:
-            for child in root.children:
-                self._add_node(child, tree, parent_path="/",
-                               parent_status=root_status)
-
-        self._apply_pending_deletions(tree)
-        self._apply_document_operations(tree, document)
-        return tree
-
-    def _apply_document_operations(self, tree: HardTree,
-                                   document: Document) -> None:
-        """Apply ordered top-level modifications after base registration."""
-        operations = document.operations or [*document.delete_nodes,
-                                             *document.overrides]
+        operations = document.operations or [
+            *document.roots,
+            *document.delete_nodes,
+            *document.overrides,
+        ]
         for operation in operations:
+            if isinstance(operation, RootNode):
+                self._apply_root(tree, operation)
+                self._apply_pending_deletions(tree)
+                continue
             if isinstance(operation, DeleteNodeDecl):
                 self._apply_delete_node(tree, operation)
                 continue
             if isinstance(operation, NodeOverrideDecl):
                 self._apply_override(tree, operation)
                 self._apply_pending_deletions(tree)
+
+        return tree
+
+    def _apply_root(self, tree: HardTree, root: RootNode) -> None:
+        """Merge one `/ { ... };` root block and its children in order."""
+        self._merge_root(root, tree)
+        root_status = tree.nodes_by_path["/"].effective_status \
+            if "/" in tree.nodes_by_path else self.STATUS_OKAY
+        for child in root.children:
+            path = child_path("/", node_segment(child.name, child.address))
+            if path in tree.nodes_by_path:
+                self._merge_existing_node(tree, path, child)
+                continue
+            self._add_node(child, tree, parent_path="/",
+                           parent_status=root_status)
 
     def _merge_root(self, root: RootNode, tree: HardTree) -> None:
         """Add or merge the logical root node into the semantic tree."""
@@ -201,12 +207,14 @@ class SemanticBuilder:
             )
         else:
             hard_node = tree.nodes_by_path["/"]
-            self._verify_merge_properties(hard_node, root.properties)
-            hard_node.properties.extend(self._copy_properties(root.properties))
-            hard_node.compatible.extend(self._extract_compatible("/", node))
-            if hard_node.declared_status == self.STATUS_OKAY:
-                hard_node.declared_status = declared_status
-                hard_node.effective_status = declared_status
+            for prop in root.properties:
+                hard_node.properties = [
+                    existing for existing in hard_node.properties
+                    if existing.name != prop.name
+                ]
+                hard_node.properties.append(
+                    NodeProperty(prop.name, prop.value, prop.span))
+            self._refresh_node_metadata(tree, "/")
 
         self._queue_deletions("/", root)
 
@@ -257,13 +265,13 @@ class SemanticBuilder:
         if parent_path is not None and parent_path in tree.nodes_by_path:
             tree.nodes_by_path[parent_path].children.append(path)
 
-        if node.label:
-            existing = tree.labels.get(node.label)
-            if existing is not None:
+        for label in node.all_labels:
+            existing = tree.labels.get(label)
+            if existing is not None and existing != path:
                 self._error_at(ErrorCode.DUPLICATE_LABEL,
-                               f"duplicate label: {node.label}", node.span)
+                               f"duplicate label: {label}", node.span)
             else:
-                tree.labels[node.label] = path
+                tree.labels[label] = path
 
         self._queue_deletions(path, node)
 
@@ -413,15 +421,17 @@ class SemanticBuilder:
     def _merge_existing_node(self, tree: HardTree, path: str,
                              node: NodeDecl) -> None:
         """Merge a child declaration into an existing semantic node."""
+        self._verify_unique_properties(node)
         existing = tree.nodes_by_path[path]
-        if node.label:
-            label_path = tree.labels.get(node.label)
+        for label in node.all_labels:
+            label_path = tree.labels.get(label)
             if label_path is not None and label_path != path:
                 self._error_at(ErrorCode.DUPLICATE_LABEL,
-                               f"duplicate label: {node.label}", node.span)
+                               f"duplicate label: {label}", node.span)
             else:
-                tree.labels[node.label] = path
-                existing.label = node.label
+                tree.labels[label] = path
+                if existing.label is None:
+                    existing.label = label
         self._merge_node_contents(
             tree,
             path,

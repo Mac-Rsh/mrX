@@ -1135,9 +1135,9 @@ MR_UNUSED static void spi_irq(mr_driver_t *drv) {
     MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, wch_slave),                         \
                 (static spi_slave_t MR_CAT(__spi_slave_, _id);), ())           \
     static mr_spi_config_t MR_CAT(__spi_configs_, _id)                         \
-        [MR_ARRAY_SIZE(MR_CAT(__spi_cs_, _id))];                               \
+        [MR_HT_DRIVER_PROP_ELEM_NUM(_id, cs)];                                 \
     static mr_uint16_t MR_CAT(__spi_dividers_, _id)                            \
-        [MR_ARRAY_SIZE(MR_CAT(__spi_cs_, _id))];                               \
+        [MR_HT_DRIVER_PROP_ELEM_NUM(_id, cs)];                                 \
     __CH32_HT_SPI_STREAM_DEFINE(_id)                                           \
     static spi_priv_t MR_CAT(__spi_priv_, _id) = {                             \
         .instance = MR_HT_DRIVER_PROP(_id, wch_spix),                          \
@@ -1145,7 +1145,7 @@ MR_UNUSED static void spi_irq(mr_driver_t *drv) {
         .selects = MR_CAT(__spi_cs_, _id),                                     \
         .configs = MR_CAT(__spi_configs_, _id),                                \
         .dividers = MR_CAT(__spi_dividers_, _id),                              \
-        .count = MR_ARRAY_SIZE(MR_CAT(__spi_cs_, _id)),                        \
+        .count = MR_HT_DRIVER_PROP_ELEM_NUM(_id, cs),                          \
         .timeout = MR_HT_DRIVER_PROP_OR(_id, wch_timeout_us, 1000U),           \
         .busy = MR_ATOMIC_INIT(0),                                             \
         .slave = MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, wch_slave),            \
@@ -1159,7 +1159,7 @@ MR_UNUSED static void spi_irq(mr_driver_t *drv) {
 #if defined(SPI_USE_STREAM)
 #define __CH32_HT_SPI_STREAM_DEFINE(_id)                                       \
     static mr_uint16_t MR_CAT(__spi_events_, _id)                              \
-        [MR_ARRAY_SIZE(MR_CAT(__spi_cs_, _id))];
+        [MR_HT_DRIVER_PROP_ELEM_NUM(_id, cs)];
 #define __CH32_HT_SPI_STREAM_INIT(_id)                                         \
     .events = MR_CAT(__spi_events_, _id),
 #else

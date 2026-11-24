@@ -1,0 +1,53 @@
+menu "XTrace: System tracing and profiling"
+
+# ==================================
+# XTRACE
+# ==================================
+config MR_USE_MODULE_XTRACE
+    depends on MR_USE_MODULE
+    select MR_USE_TRACE
+    bool "Use XTrace"
+    default n
+    help
+        Enable the extensible tracing and profiling module (XTrace). Consumes
+        generic kernel trace events through the trace port interface and
+        provides pluggable protocol encoders and output adapters.
+
+config MR_USE_MODULE_XTRACE_AUTO_START
+    depends on MR_USE_MODULE_XTRACE
+    bool "Use XTrace auto-start"
+    default y
+    help
+        Automatically start trace recording during module initialization. Events
+        emitted before an output adapter is registered are buffered in the
+        internal FIFO.
+
+config MR_CFG_XTRACE_BUF_SIZE
+    depends on MR_USE_MODULE_XTRACE
+    int "XTrace FIFO buffer size"
+    default 4096
+    range 256 65536
+    help
+        Size in bytes of the internal asynchronous trace FIFO buffer shared
+        between protocol encoders and output adapters.
+
+config MR_CFG_XTRACE_APP_NAME
+    depends on MR_USE_MODULE_XTRACE
+    string "XTrace application name"
+    default "mrX"
+    help
+        Default application name reported in trace system metadata.
+
+config MR_CFG_XTRACE_DEVICE_NAME
+    depends on MR_USE_MODULE_XTRACE
+    string "XTrace device name"
+    default ""
+    help
+        Default device or target name reported in trace system metadata.
+
+# ==================================
+# RSOURCE
+# ==================================
+rsource 'proto/Kconfig'
+
+endmenu

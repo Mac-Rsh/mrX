@@ -113,8 +113,14 @@ class HTCCommand(Command):
             header_text: str,
             diagnostics: Diagnostics,
     ) -> bool:
-        """Write compiled header text to the requested output path."""
+        """Write compiled header text only when content actually changed."""
         try:
+            if output_path.is_file():
+                try:
+                    if output_path.read_text(encoding="utf-8") == header_text:
+                        return True
+                except OSError:
+                    pass
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(header_text, encoding="utf-8")
         except OSError as exc:

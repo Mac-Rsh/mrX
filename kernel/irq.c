@@ -10,6 +10,10 @@
 #if defined(MR_USE_IRQ)
 #include <mrX/kernel/mr_spinlock.h>
 #include <mrX/libc/mr_malloc.h>
+#if defined(MR_USE_IRQ_TRACE)
+#define MR_TRACE_TAG                    "irq"
+#endif /* defined(MR_USE_IRQ_TRACE) */
+#include <mrX/kernel/mr_trace.h>
 
 /* Irq clazzes(static & dynamic) */
 static void irq_dynamic_release(mr_object_t *obj);
@@ -53,6 +57,7 @@ static mr_err_t irq_table_insert(mr_irq_t *irq, mr_uint32_t irq_start,
 
         /* Init irq descriptor */
         mr_atomic_init(&__irq_table[i].depth, 1);
+        __irq_table[i].priority = IRQ_PRIORITY_DEFAULT;
         __irq_table[i].irq = irq;
     }
     return 0;
@@ -85,6 +90,9 @@ static void irq_depth_disable(mr_uint32_t irq, mr_irq_desc_t *desc) {
     /* Disable irq */
     desc->irq->ops->disable(irq, desc->irq->priv);
     desc->irq->ops->mask(irq, desc->irq->priv);
+
+    /* Trace irq disable */
+    MR_TRACE_EVENT("disable", irq);
 }
 
 static void irq_table_remove(mr_irq_t *irq) {
@@ -249,7 +257,9 @@ static void irq_action_defer_entry(mr_work_t *work, void *param) {
 
     /* Call irq action defer entry */
     if (owner) {
+        MR_TRACE_BEGIN("defer", irq, entry, owner);
         entry(irq, owner);
+        MR_TRACE_END("defer", irq, entry);
     }
 
     /* Lock */
@@ -337,6 +347,9 @@ static void irq_depth_enable(mr_uint32_t irq, mr_irq_desc_t *desc) {
     /* Enable irq */
     desc->irq->ops->unmask(irq, desc->irq->priv);
     desc->irq->ops->enable(irq, desc->irq->priv);
+
+    /* Trace irq enable */
+    MR_TRACE_EVENT("enable", irq);
 }
 
 static mr_err_t irq_request(mr_uint32_t irq, mr_uint16_t flags,
@@ -361,8 +374,8 @@ static mr_err_t irq_request(mr_uint32_t irq, mr_uint16_t flags,
         /* Set irq type */
         irq_type_set(irq, desc, flags & IRQ_FLAG_TYPE_MASK);
 
-        /* Set irq default priority */
-        irq_priority_set(irq, desc, IRQ_PRIORITY_DEFAULT);
+        /* Apply configured irq priority (defaults to IRQ_PRIORITY_DEFAULT) */
+        irq_priority_set(irq, desc, desc->priority);
 
         /* Set irq descriptor flags */
         desc->flags = flags;
@@ -659,10 +672,10 @@ _exit:
 
 mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
     mr_irq_action_t **a, *action, action2;
-    mr_irq_return_t irq_ret;
+    mr_irq_return_t irq_ret, ret;
     mr_irq_entry_t *entry;
     mr_irq_desc_t *desc;
-    mr_err_t ret;
+    mr_irq_t *irq_obj;
     void *owner;
     int mask;
 
@@ -675,22 +688,22 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
     /* Check whether irq is dying */
     desc = &__irq_table[irq];
     if ((!desc->irq) || mr_atomic_load(&desc->irq->dying)) {
-        irq_ret = MR_IRQ_NONE;
+        ret = MR_IRQ_NONE;
         goto _exit;
     }
 
     /* Get irq run-time */
-    desc->irq = mr_irq_get(desc->irq);
-    if (!desc->irq) {
-        irq_ret = MR_IRQ_NONE;
+    irq_obj = mr_irq_get(desc->irq);
+    if (!irq_obj) {
+        ret = MR_IRQ_NONE;
         goto _exit;
     }
 
     /* Mask irq */
-    desc->irq->ops->mask(irq, desc->irq->priv);
+    irq_obj->ops->mask(irq, irq_obj->priv);
 
     /* Handle irq action */
-    for (irq_ret = MR_IRQ_NONE, action = desc->action; action;
+    for (ret = MR_IRQ_NONE, action = desc->action; action;
          action = action->next) {
         /* Check whether irq action is being freed */
         if (!action->owner) {
@@ -708,7 +721,9 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
         mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
 
         /* Call irq action entry */
+        MR_TRACE_BEGIN("handle", irq, entry, owner);
         irq_ret = entry(irq, owner);
+        MR_TRACE_END("handle", irq, entry, irq_ret);
 
         /* Lock */
         mask = mr_spinlock_lock_irqsave(&__irq_lock);
@@ -740,7 +755,11 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
 
         /* Check whether irq action is handled */
         if (irq_ret == MR_IRQ_HANDLED) {
-            break;
+            ret = MR_IRQ_HANDLED;
+            if (!(desc->flags & MR_IRQ_SHARED)) {
+                break;
+            }
+            continue;
         }
 
         /* Check whether irq action is deferred */
@@ -752,6 +771,9 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
                 ret = mr_workqueue_work(&__irq_defer_queue, &action->defer);
                 if (ret == 0) {
                     action->pending++;
+                    MR_TRACE_EVENT("defer_queue", irq, action->defer_entry);
+                } else {
+                    MR_TRACE_EVENT("defer_busy", irq, action->defer_entry, ret);
                 }
             } else
 #endif /* defined(MR_USE_IRQ_DEFER) */
@@ -759,25 +781,40 @@ mr_irq_return_t mr_irq_handle(mr_uint32_t irq) {
                 /* Not support deferring */
                 irq_ret = MR_IRQ_HANDLED;
             }
-            break;
+            if (ret != MR_IRQ_HANDLED) {
+                ret = irq_ret;
+            }
+            if (!(desc->flags & MR_IRQ_SHARED)) {
+                break;
+            }
         }
     }
 
     /* Unmask irq if irq action is enabled */
     if (mr_atomic_load(&desc->depth) == 0) {
-        desc->irq->ops->unmask(irq, desc->irq->priv);
+        irq_obj->ops->unmask(irq, irq_obj->priv);
     }
 
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
 
     /* Put irq run-time */
-    mr_irq_put(desc->irq);
-    return irq_ret;
+    mr_irq_put(irq_obj);
+
+    /* Trace spurious irq */
+    if (ret == MR_IRQ_NONE) {
+        MR_TRACE_EVENT("spurious", irq);
+    }
+    return ret;
 _exit:
     /* Unlock */
     mr_spinlock_unlock_irqrestore(&__irq_lock, mask);
-    return irq_ret;
+
+    /* Trace spurious irq */
+    if (ret == MR_IRQ_NONE) {
+        MR_TRACE_EVENT("spurious", irq);
+    }
+    return ret;
 }
 
 #if defined(MR_USE_IRQ_DEFER)

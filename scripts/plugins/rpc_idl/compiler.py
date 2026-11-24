@@ -84,13 +84,13 @@ class RpcIdlCompiler:
                                  document=document, schema=schema)
 
         # Bound expansion before any backend builds the payload layouts
-        RpcIdlCompiler._check_codec_limits(schema, diagnostics)
+        layouts = RpcIdlCompiler._check_codec_limits(schema, diagnostics)
         if diagnostics.has_errors():
             return CompileResult(diagnostics=diagnostics, unit=unit,
                                  document=document, schema=schema)
 
         # Check generated C identifiers after the schema is complete
-        CSymbolChecker(diagnostics).check(schema)
+        CSymbolChecker(diagnostics).check(schema, layouts)
         if diagnostics.has_errors():
             return CompileResult(diagnostics=diagnostics, unit=unit,
                                  document=document, schema=schema)
@@ -98,7 +98,7 @@ class RpcIdlCompiler:
         # Render the generated header and source
         output_path = options.output_path or Path("mr_rpc_idl.h")
         header_text = HeaderBuilder().build(schema, output_path)
-        source_text = SourceBuilder().build(schema)
+        source_text = SourceBuilder().build(schema, layouts)
         return CompileResult(diagnostics=diagnostics, header_text=header_text,
                              source_text=source_text, unit=unit,
                              document=document, schema=schema)
@@ -122,16 +122,23 @@ class RpcIdlCompiler:
         return document
 
     @staticmethod
-    def _check_codec_limits(schema: Schema, diagnostics: Diagnostics) -> None:
-        """Reject oversized layouts before symbol checking or C emission."""
+    def _check_codec_limits(
+            schema: Schema,
+            diagnostics: Diagnostics,
+    ) -> dict[tuple[str, str, str], Layout]:
+        """Reject oversized layouts and return validated payload layouts."""
+        layouts: dict[tuple[str, str, str], Layout] = {}
         for service in schema.services.values():
             for method in service.methods:
                 payloads = [("request", method.request)]
                 if not method.oneway:
                     payloads.append(("response", method.response))
                 for which, fields in payloads:
+                    if not fields:
+                        continue
                     try:
-                        Layout.from_fields(fields, schema)
+                        layouts[(service.name, method.name, which)] = (
+                            Layout.from_fields(fields, schema))
                     except LayoutLimitError as exc:
                         diagnostic = diagnostics.error(
                             ErrorCode.INVALID_ARRAY,
@@ -142,6 +149,7 @@ class RpcIdlCompiler:
                         diagnostic.add_note(
                             "fixed arrays containing variable-length fields "
                             "are expanded only up to the codec slot limit")
+        return layouts
 
     @staticmethod
     def _declaration_order(files: list[SourceFile]) -> list[SourceFile]:

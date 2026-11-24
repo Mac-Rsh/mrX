@@ -9,6 +9,7 @@
 #include <mrX/libc/mr_malloc.h>
 #if defined(MR_USE_MALLOC)
 #include <mrX/port/mr_port_irq.h>
+#include <mrX/libc/mr_assert.h>
 #include <mrX/libc/mr_string.h>
 
 /* Heap memory */
@@ -18,7 +19,7 @@
 #if (MR_CFG_HEAP_SIZE < 32)
 #error "Heap size is too small(must >= 32)"
 #endif /* (MR_CFG_HEAP_SIZE < 32) */
-static mr_uint8_t MR_ALIGN(MR_ALIGN_SIZE) __heap[MR_CFG_HEAP_SIZE];
+static mr_uint8_t MR_ALIGN(MR_HEAP_ALIGN_SIZE) __heap[MR_CFG_HEAP_SIZE];
 /* Heap block head */
 static mr_heap_block_t __heap_blk_head = {.next = MR_NULL};
 /* Heap information */
@@ -104,7 +105,7 @@ void *mr_malloc(mr_size_t size) {
     }
 
     /* Align the size */
-    size = HEAP_ALIGN(size, MR_ALIGN_SIZE);
+    size = HEAP_ALIGN(size, MR_HEAP_ALIGN_SIZE);
     if (size == 0) {
         /* Overflow */
         mem = MR_NULL;
@@ -173,6 +174,7 @@ void mr_free(void *mem) {
 
     /* Check the block */
     blk = (mr_heap_block_t *)((mr_uint8_t *)mem - sizeof(mr_heap_block_t));
+    MR_ASSERT(blk->magic == MR_HEAP_MAGIC);
     if (blk->magic == MR_HEAP_MAGIC) {
         /* Update used & free bytes */
         __heap_info.used_bytes -= blk->size;
@@ -232,19 +234,72 @@ void *mr_calloc(mr_size_t num, mr_size_t size) {
 }
 
 void *mr_realloc(void *mem, mr_size_t size) {
-    mr_size_t old_size;
+    mr_size_t old_size, aligned, res;
+    mr_heap_block_t *blk, *tail;
     void *new;
+    int mask;
 
-    /* Get the old size */
-    if (mem) {
-        old_size = mr_malloc_usable_size(mem);
-    } else {
-        old_size = 0;
+    /* Free when target size is zero */
+    if (size == 0) {
+        mr_free(mem);
+        return MR_NULL;
     }
+
+    /* Allocate when source pointer is null */
+    if (!mem) {
+        return mr_malloc(size);
+    }
+
+    /* Align the size */
+    aligned = HEAP_ALIGN(size, MR_HEAP_ALIGN_SIZE);
+    if (aligned == 0) {
+        return MR_NULL;
+    }
+
+    /* Disable interrupt */
+    mask = mr_port_irq_disable();
+
+    /* Check the block */
+    blk = (mr_heap_block_t *)((mr_uint8_t *)mem - sizeof(mr_heap_block_t));
+    if (blk->magic != MR_HEAP_MAGIC) {
+        /* Enable interrupt */
+        mr_port_irq_enable(mask);
+        return MR_NULL;
+    }
+
+    /* Try shrinking in-place */
+    old_size = blk->size;
+    if (aligned <= old_size) {
+        res = old_size - aligned;
+        if (res > HEAP_SPLIT_THRESHOLD) {
+            /* Shrink the old block */
+            blk->size = aligned;
+
+            /* Set the new block information */
+            tail = (mr_heap_block_t *)((mr_uint8_t *)mem + aligned);
+            tail->size = res - sizeof(mr_heap_block_t);
+            tail->next = MR_NULL;
+            tail->magic = ~MR_HEAP_MAGIC;
+
+            /* Update used & free bytes */
+            __heap_info.used_bytes -= (res);
+            __heap_info.free_bytes += (res);
+
+            /* Insert the new block */
+            heap_insert_block(tail);
+        }
+
+        /* Enable interrupt */
+        mr_port_irq_enable(mask);
+        return mem;
+    }
+
+    /* Enable interrupt */
+    mr_port_irq_enable(mask);
 
     /* Reallocate memory */
     new = mr_malloc(size);
-    if ((!new) && (size > 0)) {
+    if (!new) {
         /* Not enough memory */
         return MR_NULL;
     }
@@ -262,7 +317,7 @@ static mr_heap_block_t *heap_block_make(mr_ptr_t mem, mr_size_t size) {
     mr_uintptr_t offset;
 
     /* Set the block information */
-    blk = (mr_heap_block_t *)HEAP_ALIGN((mr_uintptr_t)mem, MR_ALIGN_SIZE);
+    blk = (mr_heap_block_t *)HEAP_ALIGN((mr_uintptr_t)mem, MR_HEAP_ALIGN_SIZE);
     offset = (mr_uintptr_t)blk - (mr_uintptr_t)mem;
     size = size - sizeof(mr_heap_block_t);
     blk->size = size - offset;
@@ -278,15 +333,15 @@ void mr_heap_region_add(const mr_heap_region_t *regions) {
 
     for (rgn = regions; rgn->address && (rgn->size > 0); rgn++) {
         /* Check whether the block is too small */
-        if (rgn->size < ((HEAP_SPLIT_THRESHOLD * 2) + MR_ALIGN_SIZE)) {
+        if (rgn->size < ((HEAP_SPLIT_THRESHOLD * 2) + MR_HEAP_ALIGN_SIZE)) {
             continue;
         }
 
         /* Make a head block and an isolation belt */
         blk_head = heap_block_make(rgn->address, rgn->size);
         mem = (mr_uint8_t *)blk_head + sizeof(mr_heap_block_t);
-        mem = (mr_uint8_t *)mem + MR_ALIGN_SIZE;
-        blk_head->size -= MR_ALIGN_SIZE;
+        mem = (mr_uint8_t *)mem + MR_HEAP_ALIGN_SIZE;
+        blk_head->size -= MR_HEAP_ALIGN_SIZE;
 
         /* Make a new block */
         blk = heap_block_make(mem, blk_head->size);

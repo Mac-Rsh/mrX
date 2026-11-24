@@ -1068,12 +1068,9 @@ MR_UNUSED static const mr_adc_ops_t __adc_injected_ops = {
     MR_HT_ADC_INSTALL(_id, &MR_CAT(__adc_priv_, _id),                          \
                       __CH32_HT_ADC_OPS(_id, _ops))
 #if defined(ADC_USE_STREAM)
-#define __CH32_HT_ADC_DMA_SPEC(_id, _prop)                                     \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, _prop),                             \
-                (MR_HT_DMA_SPEC(_id, _prop)), ({0}))
 #define __CH32_HT_ADC_STREAM(_id)                                              \
     .stream = {                                                                \
-        .dma = __CH32_HT_ADC_DMA_SPEC(_id, rx_dma),                            \
+        .dma = MR_HT_DMA_SPEC_OR(_id, rx_dma, {0}),                            \
     },                                                                         \
     .trigger = MR_HT_DRIVER_PROP_OR(_id, wch_trigger, ADC_SOFTWARE_TRIGGER),
 #else

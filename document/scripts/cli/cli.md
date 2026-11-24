@@ -1,207 +1,126 @@
 # CLI（scripts/cli.py）
 
-> mrX 命令行工具：无参数进入常驻交互 Shell，带命令时单次执行并退出。用于生成
-> `mr_config.h`、`mr_hardgen.h` 等构建前文件，以及平台、链接脚本、MDK、RPC IDL 等维护命令。
+`scripts/cli.py` 是 mrX 的主机端统一命令行入口，支持交互式
+Shell（无参数启动）与单次执行（带子命令启动），用于生成 `mr_config.h`、`mr_hardgen.h`
+等构建前文件以及执行工程维护任务。
 
-本页说明 CLI 的共同行为和交互 Shell。各命令的完整输入格式、操作步骤和故障排查见：
+工具依赖 Python 3.11+，首次使用前在仓库根目录 `mrX/` 下安装依赖：
 
-| 命令       | 详细教程                                          |
-|------------|---------------------------------------------------|
-| `kconfig`  | [Kconfig 配置与头文件生成](../kconfig/kconfig.md) |
-| `htc`      | [HTC 硬件描述编译](../htc/htc.md)                 |
-| `rpc-idl`  | [RPC IDL 编译](../rpc-idl/rpc-idl.md)             |
-| `platform` | [平台文件安装与卸载](../platform/platform.md)     |
-| `sections` | [GNU ld 注册段处理](../sections/sections.md)      |
-| `mdk`      | [Keil MDK 工程维护](../mdk/mdk.md)                |
-| `echo`     | [echo 最小插件示例](../echo/echo.md)              |
-
-| 项       | 说明                                            |
-|----------|-------------------------------------------------|
-| 功能宏   | 无（主机 Python 工具，不进入固件编译）          |
-| 入口     | `mrX/scripts/cli.py`                            |
-| 依赖     | Python 3.11+，见 `mrX/scripts/requirements.txt` |
-| 工作目录 | 建议在 `mrX/` 下运行，以便复制粘贴下文命令      |
-
-安装依赖：
-
-```text
+```bash
 pip install -r ./scripts/requirements.txt
 ```
 
----
+## 用途
 
-## 用户指南
+CLI 将各构建与维护工具整合到同一入口下，所有子命令共用路径解析、参数补全、诊断输出和退出码规范：
 
-### 1. 交互模式
+| 命令       | 说明                                          | 详细文档                                     |
+|------------|-----------------------------------------------|----------------------------------------------|
+| `kconfig`  | 读取 Kconfig 与 `.config` 生成 `mr_config.h`  | [Kconfig 配置脚本](../kconfig/kconfig.md)    |
+| `htc`      | 编译 `.hts`/`.htsi` 硬件描述为 `mr_hardgen.h` | [HTC 硬件描述编译](../htc/htc.md)            |
+| `rpc-idl`  | 编译 `.idl` 接口文件为 RPC C 代码             | [RPC IDL 编译](../rpc-idl/rpc-idl.md)        |
+| `platform` | 安装、卸载或检查平台适配文件                  | [平台文件管理](../platform/platform.md)      |
+| `sections` | 向 GNU ld 链接脚本注入托管段规则              | [GNU ld 注册段处理](../sections/sections.md) |
+| `mdk`      | 增删、同步或重命名 Keil MDK 工程文件          | [Keil MDK 工程维护](../mdk/mdk.md)           |
+| `echo`     | 原样打印参数，最小插件示例                    | [echo 插件示例](../echo/echo.md)             |
 
-在 TTY 中不带命令启动即可进入常驻交互 Shell：
+## 常用命令
 
-```text
+### 交互模式
+
+在 TTY 终端中不带参数（或显式传入 `shell`）即可进入常驻交互模式，提示符为 `mrX>`：
+
+```bash
 python ./scripts/cli.py
 ```
 
-`python ./scripts/cli.py shell` 也可以进入交互模式，但 `shell` 不是注册命令：它由顶层分派
-单独识别（
-`scripts/framework/application.py:73`），不出现在 `list` 中，`help shell` 会以退出码
-2 报未知命令。需要查看命令清单时用不带参数的启动方式或
-`list`。
+若标准输入或输出不是 TTY（如管道、CI 重定向），无参数或 `shell`
+启动不会等待输入，而是直接打印总帮助并以退出码 `0` 退出。注意 `shell` 由顶层分派器（
+`scripts/framework/application.py`）单独识别，不在 `list` 列表中，`help shell`
+会返回未知命令错误。
 
-提示符为 `mrX>`。输入与单次执行相同的命令行，例如 `kconfig`。
+交互模式内置命令包括 `help`（别名 `h`）、`list`（别名 `ls`）、`history`、`clear`、`pwd`、
+`cd <目录>`、`exit`、`quit`（别名 `q`）。其中 `cd` 仅修改当前会话工作目录，不影响外部进程。
 
-若 stdin/stdout 不是 TTY（管道、重定向），无参数或 `shell` 启动不会等待输入，而是打印总帮助并以退出码
-0 结束。
+### 单次执行
 
-### 2. 单次执行
+在命令后直接附带子命令和参数即可单次执行并退出，退出码回传给系统：
 
-带命令时解析 `sys.argv`、执行一次并退出，退出码回传给操作系统：
-
-```text
-python ./scripts/cli.py kconfig
-python ./scripts/cli.py htc -i board.hts
-python ./scripts/cli.py rpc-idl -i file.idl
+```bash
 python ./scripts/cli.py list
 python ./scripts/cli.py help kconfig
+python ./scripts/cli.py kconfig --no-ui
+python ./scripts/cli.py htc -i board.hts
+python ./scripts/cli.py rpc-idl -i service.idl
 ```
 
-全局选项必须写在命令名之前：`--no-color`、`--verbose`、`--help`（`-h`）、`--version`。
-`python ./scripts/cli.py -h` 与 `--help` 等价，打印总帮助。命令名之后的 `-h` /
-`--help` 由该命令 自己的参数解析器处理，显示的是子命令帮助，例如
-`kconfig --help`。
+## 参数说明
 
-### 3. 配置与生成命令
+### 全局选项
 
-从 `mrX/` 目录运行：
+全局选项 **必须放在子命令名之前**；放在子命令之后的 `-h`/`--help` 由对应子命令自己解析：
 
-```text
-python ./scripts/cli.py kconfig
-python ./scripts/cli.py htc -i <硬件模板>.hts
-```
+| 选项           | 说明               |
+|----------------|--------------------|
+| `-h`, `--help` | 打印总帮助并退出   |
+| `--version`    | 打印项目版本并退出 |
+| `--verbose`    | 开启详细输出模式   |
+| `--no-color`   | 禁用终端彩色输出   |
 
-默认 `Kconfig`、`.config` 和生成头 `include/mrX/mr_config.h`、
-`include/mrX/mr_hardgen.h`
-相对于仓库根目录。用户显式给出的相对路径相对于当前会话目录（交互里是 `cd` 后的目录，
-单次执行是进程当前目录）。
+### 路径解析规则
 
-`kconfig` 选项：
+- 未显式指定的默认路径（如 `Kconfig`、`.config`、`include/mrX/mr_config.h`、
+  `include/mrX/mr_hardgen.h`）始终相对于仓库根目录 `mrX/` 解析。
+- 用户显式传入的相对路径相对于 **当前会话目录**解析（单次执行为进程当前目录，交互模式为
+  `cd` 后的目录）。
 
-- `-k/--kconfig`：Kconfig 文件路径（默认 `Kconfig`）。
-- `-c/--config`：`.config` 文件路径（默认 `.config`）。
-- `-o/--output`：生成头文件路径（默认 `include/mrX/mr_config.h`）。
-- `--no-ui`：跳过 menuconfig 界面；缺省时先启动 `menuconfig`（需要已安装）再生成。
+### 交互快捷键与补全
 
-`htc` 选项：
+交互模式内置命令名、别名、选项、枚举值和文件路径的 `Tab` 补全（不提供操作系统级别的
+Bash/PowerShell 补全脚本）：
 
-- `-i/--input`：必填，输入 `.hts` / `.htsi` 文件。
-- `-o/--output`：输出头文件路径（默认 `include/mrX/mr_hardgen.h`）。
-- `-I`：附加包含搜索目录，可重复。
-- `--no-cpp`：使用内置预处理器代替外部 C 预处理器。
-- `--strict`：对不属于 Linux DTS 的 HTC 扩展语法给出告警。
+- `Tab`：补全命令、选项或路径（Windows 路径保留反斜杠，含空格路径可用引号）。
+- `↑` / `↓`、`Ctrl-R`：浏览或搜索历史命令，按 `→` 或 `End`
+  接受灰色历史建议。历史记录保存在用户状态目录（Windows 下通常为
+  `%LOCALAPPDATA%\MacRsh\mrX\cli.history`），不写入 Git 仓库。
+- `Ctrl-C`：在提示符下清空当前输入；在命令执行中中断当前命令（返回码 `130`），不退出
+  Shell。
+- `Ctrl-D`（Windows 下也可用 `Ctrl-Z`）或 `exit` / `quit`：退出交互模式，并返回最近一次命令的退出码。
 
-### 4. 维护命令
+## 输出与排错
 
-- `rpc-idl`：编译 RPC `.idl` 为 C 头文件与源文件。`-i/--input` 必填；`-o/--output`
-  为输出目录 或头文件路径（默认
-  `include/mrX/modules/rpc/mr_rpc_idl.h`，只允许改目录，头文件名 固定为
-  `mr_rpc_idl.h`）；`-c/--source` 为输出 `.c` 路径（默认
-  `modules/rpc/idl.c`）；
-  `-I` 附加包含搜索目录，可重复；`--no-cpp` 使用内置预处理器代替外部 C 预处理器。
-  两个输出以临时文件原子替换写入，失败时回滚。
-- `platform`：安装、卸载或查看平台文件。操作为位置参数 `install`（默认）、`uninstall`、
-  `status`；`-i/--input` 为平台 `.toml` 文件；`--dry-run` 只打印计划不写文件；
-  `--force`
-  允许卸载安装后已被修改的文件。安装状态保存在输出目录的 `.platform/` 中。
-- `sections`：向 GNU ld 风格链接脚本的 `SECTIONS` 块插入托管段收集规则。
-  `-i/--input` 必填，为目标 `.ld` 文件；`-c/--config` 为段描述 TOML 文件 （默认
-  `sections.toml`）。
-- `mdk`：维护 Keil MDK 工程。操作为位置参数 `add`、`del`、`sync`、`rename`；
-  `-p/--project` 必填；`-s/--source` 用于 add / del / sync；`-n/--name` 用于
-  rename；
-  `-t/--target` 指定目标名；`-g/--group` 指定根分组（目录源省略时自动分组）；
-  `--keep-empty-groups` 在删除文件后保留空分组。
-- `echo`：原样打印参数，作为最小插件示例。
+| 退出码 | 含义                                   |
+|--------|----------------------------------------|
+| `0`    | 命令执行成功、打印帮助或版本           |
+| `1`    | 命令运行失败或 I/O 错误                |
+| `2`    | 未知命令或参数解析错误                 |
+| `130`  | 用户通过 `Ctrl-C` 中断了正在执行的命令 |
 
-### 5. 补全与历史
+若某个插件在启动时加载失败，CLI 会输出诊断提示，但不会阻断 `help`、`list`
+或其他正常插件的运行。
 
-仅交互模式提供补全，不安装 PowerShell / Bash / Zsh 等操作系统 Shell 补全，也没有
-`--install-completion`。
+### 新增插件约定
 
-- Tab：补全命令名、别名、子命令/`choices`、选项和路径。
-- `htc -` 可补全 `-i`、`-o`、`-I`、`--no-cpp`、`--strict`。
-- `platform ` 可补全 `install`、`uninstall`、`status`。
-- 路径补全保留 Windows 反斜杠，带空格的目录可用引号。
-- 输入时按历史显示灰色建议，按 End 或右方向键接受。
-- 上/下方向键浏览历史；Ctrl-R 搜索历史。
-- 历史文件在操作系统用户状态目录中（Windows 一般为
-  `%LOCALAPPDATA%\MacRsh\mrX\cli.history`），不写入 Git 仓库。重启 CLI
-  后历史仍可用。
-
-### 6. 中断与退出
-
-- 提示符下 Ctrl-C：清空当前输入，不退出 Shell。
-- 命令执行中 Ctrl-C：该次命令退出码 130，交互 Shell 继续运行。
-- Ctrl-D 退出交互模式；Windows 下也可用 Ctrl-Z。
-- `exit` / `quit`（或 `q`）退出，返回最近一次命令的退出码。
-- 交互里命令失败只更新 `last_exit_code`，不终止 Shell。
-
-其它交互命令：`help [command ...]`、`list`、`history`、`clear`、`pwd`、
-`cd <directory>`。 其中 `list` 可写作 `ls`，`help` 可写作
-`h`（`scripts/framework/builtins.py:33,63`）。
-`cd` 只改会话目录，不调用进程级 `os.chdir()`。
-
-### 7. 退出码
-
-| 码  | 含义                                                                   |
-|-----|------------------------------------------------------------------------|
-| 0   | 成功、帮助、版本                                                       |
-| 1   | 命令运行错误（插件加载失败只留下诊断，不改变退出码，也不阻止其它命令） |
-| 2   | 未知命令或参数错误                                                     |
-| 130 | 用户中断正在执行的命令                                                 |
-
----
-
-## 开发者指南
-
-### 8. 架构
-
-`cli.py` 只是薄入口。`framework/` 负责调度、注册、argparse、输出、交互和补全。 第一方插件在
-`plugins/catalog.py` 显式列出，每个包只导出：
+`scripts/cli.py` 本身只是薄入口，调度、参数解析、输出和补全由 `scripts/framework/`
+提供。新增命令只需在 `scripts/plugins/` 下实现 `Command` 子类并在
+`scripts/plugins/catalog.py` 的 `BUILTIN_PLUGINS` 中注册包名：
 
 ```python
-def create_plugin(services: ApplicationServices) -> Plugin:
-    ...
-```
-
-命令参数只定义一次：`Command.configure()` / `create_parser()`。帮助、解析和 Tab 补全
-都从同一个 argparse parser 读取。HTC、RPC
-IDL 的 frontend / semantic / backend 不因 CLI 而改写。
-
-单个插件加载失败会留下诊断，但 `help` 和其它插件仍可用。
-
-### 9. 插件入口示例
-
-在 `plugins/catalog.py` 的 `BUILTIN_PLUGINS` 中加入包名，并在包的 `__init__.py`
-中：
-
-```python
-from framework.plugin import ApplicationServices, Plugin
+from argparse import ArgumentParser, Namespace
 from framework.command import Command, CommandResult, CommandSpec
 from framework.completion import FILE_COMPLETION, attach_path_completion
-from argparse import ArgumentParser, Namespace
 from framework.context import CommandContext
+from framework.plugin import ApplicationServices, Plugin
 
 
 class ExampleCommand(Command):
-    spec = CommandSpec(
-        name="example",
-        description="Example command",
-    )
+    spec = CommandSpec(name="example", description="Example command")
 
     def configure(self, parser: ArgumentParser) -> None:
         action = parser.add_argument("-i", "--input", required=True, help="Input file")
         attach_path_completion(action, FILE_COMPLETION)
 
-    def execute(self, context: CommandContext,
-                arguments: Namespace) -> CommandResult:
+    def execute(self, context: CommandContext, arguments: Namespace) -> CommandResult:
         path = context.resolve_path(arguments.input)
         context.console.write(str(path))
         return CommandResult.success()
@@ -217,7 +136,6 @@ def create_plugin(services: ApplicationServices) -> Plugin:
     )
 ```
 
-业务代码通过 `CommandContext.console` 输出，不要直接依赖 Rich，也不要使用
-`print()`。 相对路径一律走
-`context.resolve_path()`；项目默认文件用
-`context.resolve_optional_path(user_value, default)`。
+开发插件时需注意：命令参数只在 `configure()` 中定义一次（帮助、解析与补全共用）；输出统一走
+`context.console`，不要直接使用 `print()`；路径解析统一使用
+`context.resolve_path()` 或 `context.resolve_optional_path()`。

@@ -11,11 +11,21 @@ config MR_USE_ENTRY
         startup routines for the system.
 
 # ==================================
+# INITCALL
+# ==================================
+config MR_USE_INITCALL_TRACE
+    depends on MR_USE_TRACE
+    bool "Use initcall trace"
+    default n
+    help
+        Enable trace events for user initcall execution during startup.
+
+# ==================================
 # REF
 # ==================================
 config MR_USE_REF_LONG_COUNT
     bool "Use ref long count"
-    default n
+    default y
     help
         Enable 16-bit reference counting instead of 8-bit. Use this when an
         object may have more than 255 concurrent references.
@@ -62,6 +72,14 @@ config MR_CFG_HIRES_TICK_PER_SECOND
         high-resolution clock.
         Common value:
             - 1000000: Microsecond resolution (1us tick)
+
+config MR_USE_CLOCK_TRACE
+    depends on MR_USE_TRACE
+    bool "Use clock trace"
+    default n
+    help
+        Enable trace events for clock busy-wait spans and tickless idle
+        duration sampling.
 
 # ==================================
 # PRINTF
@@ -154,6 +172,15 @@ config MR_USE_TIMER
         Timer callbacks run at interrupt level with minimal latency.
         Suitable for time-critical operations but callbacks must be fast and non-blocking.
 
+config MR_USE_TIMER_TRACE
+    depends on MR_USE_TIMER
+    depends on MR_USE_TRACE
+    bool "Use timer trace"
+    default n
+    help
+        Enable trace events for software timer start, stop, and timeout callback
+        execution.
+
 # ==================================
 # WORK
 # ==================================
@@ -177,6 +204,15 @@ config MR_USE_WORKQUEUE_HOOK
         wakeup: Called when workqueue transitions from idle to running.
         suspend: Called when workqueue transitions from running to idle.
         Useful for custom scheduling, power management, or runtime monitoring.
+
+config MR_USE_WORK_TRACE
+    depends on MR_USE_WORK
+    depends on MR_USE_TRACE
+    bool "Use work trace"
+    default n
+    help
+        Enable trace events for workqueue submission, cancellation, and work
+        callback execution.
 
 # ==================================
 # IRQ
@@ -218,6 +254,15 @@ config MR_USE_IRQ_DEFER_HOOK
         when deferred IRQ handlers become active or idle.
         Useful for tracking interrupt processing activity and system observability.
 
+config MR_USE_IRQ_TRACE
+    depends on MR_USE_IRQ
+    depends on MR_USE_TRACE
+    bool "Use irq trace"
+    default n
+    help
+        Enable trace events for interrupt handling, deferred execution, and
+        enable/disable state changes.
+
 # ==================================
 # WAIT
 # ==================================
@@ -227,5 +272,33 @@ config MR_USE_WAIT
     help
         Enable wait/synchronization primitives. Provides mechanisms for tasks
         to wait for events, conditions, or resources with timeout support.
+
+config MR_USE_WAIT_TRACE
+    depends on MR_USE_WAIT
+    depends on MR_USE_TRACE
+    bool "Use wait trace"
+    default n
+    help
+        Enable trace events for waitable event raises, waiter notifications,
+        registration, and cancellation.
+
+# ==================================
+# TRACE
+# ==================================
+config MR_USE_TRACE
+    bool "Use trace"
+    default n
+    help
+        Enable lightweight kernel tracing. Expands to zero overhead when
+        disabled; when enabled, trace events are forwarded through the trace
+        port interface.
+
+config MR_CFG_TRACE_ARGS_MAX
+    depends on MR_USE_TRACE
+    int "Trace maximum arguments"
+    default 8
+    range 4 8
+    help
+        Maximum number of arguments accepted by a single trace event.
 
 endmenu

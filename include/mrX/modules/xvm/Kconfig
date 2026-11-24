@@ -26,6 +26,26 @@ config MR_CFG_XVM_SYSCALL_PARAM_NUM
         needs to pass more arguments in a single syscall event.
 
 # ==================================
+# MMIO
+# ==================================
+config MR_USE_MODULE_XVM_MMIO
+    depends on MR_USE_MODULE_XVM
+    bool "Use XVM MMIO"
+    default n
+    help
+        Enable the extensible MMIO region table for XVM. Host code can register
+        custom memory-mapped peripheral callbacks on an XVM instance, and ISA
+        backends forward unmatched MMIO accesses to the registered handlers.
+
+config MR_CFG_XVM_MMIO_NUM
+    depends on MR_USE_MODULE_XVM_MMIO
+    int "MMIO region table size"
+    default 8
+    range 1 64
+    help
+        Maximum number of user MMIO regions that can be registered on an XVM.
+
+# ==================================
 # DEBUG
 # ==================================
 config MR_USE_MODULE_XVM_DEBUG

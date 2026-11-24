@@ -18,7 +18,6 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 
 from ..common import Diagnostics, ErrorCode, SourceFile
 
@@ -78,7 +77,7 @@ class CppPreprocessor:
             return None
 
         try:
-            source_text = entry_path.read_text(encoding="utf-8")
+            raw_source_text = entry_path.read_text(encoding="utf-8")
         except OSError as exc:
             self.diagnostics.error(
                 ErrorCode.FILE_READ_ERROR,
@@ -86,34 +85,30 @@ class CppPreprocessor:
             )
             return None
 
-        source_text = self._preprocess_dts_constructs(source_text)
+        self.diagnostics.register_source(str(entry_path), raw_source_text)
+        source_text = self._preprocess_dts_constructs(raw_source_text)
 
-        # Write the transformed source to a temporary file in the entry
-        # directory so cpp linemarkers can be mapped back to the real file.
-        fd, tmp_name = tempfile.mkstemp(
-            prefix=".htc_", suffix=".hts", dir=entry_path.parent)
-        tmp_path = Path(tmp_name)
-        os.close(fd)
+        # Feed transformed source via stdin with an explicit linemarker so we
+        # never create temporary files in potentially read-only source dirs.
+        escaped_entry = str(entry_path).replace("\\", "\\\\").replace('"', '\\"')
+        stdin_payload = f'# 1 "{escaped_entry}"\n{source_text}'
+        command = self._build_command(cpp, entry_path.parent, options)
         try:
-            tmp_path.write_text(source_text, encoding="utf-8")
-            command = self._build_command(cpp, tmp_path, options)
-            try:
-                completed = subprocess.run(
-                    command,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    encoding="utf-8",
-                    errors="replace",
-                    check=False,
-                )
-            except OSError as exc:
-                self.diagnostics.error(
-                    ErrorCode.INCLUDE_ERROR,
-                    f"failed to launch C preprocessor '{cpp}': {exc}",
-                )
-                return None
-        finally:
-            tmp_path.unlink(missing_ok=True)
+            completed = subprocess.run(
+                command,
+                input=stdin_payload,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
+        except OSError as exc:
+            self.diagnostics.error(
+                ErrorCode.INCLUDE_ERROR,
+                f"failed to launch C preprocessor '{cpp}': {exc}",
+            )
+            return None
 
         if completed.returncode != 0:
             self.diagnostics.error(
@@ -123,14 +118,24 @@ class CppPreprocessor:
             return None
 
         text, line_map = self._parse_linemarkers(completed.stdout,
-                                                 str(entry_path),
-                                                 str(tmp_path))
+                                                 str(entry_path))
         if not text.strip():
             self.diagnostics.error(
                 ErrorCode.INCLUDE_ERROR,
                 "C preprocessor produced empty output",
             )
             return None
+
+        # Cache original text of all included files for accurate previews
+        for mapped_file, _ in line_map:
+            if mapped_file not in self.diagnostics.sources:
+                try:
+                    self.diagnostics.register_source(
+                        mapped_file,
+                        Path(mapped_file).read_text(encoding="utf-8"),
+                    )
+                except OSError:
+                    pass
 
         return PreprocessedUnit(
             text=text,
@@ -147,9 +152,9 @@ class CppPreprocessor:
         return None
 
     @staticmethod
-    def _build_command(cpp: str, input_path: Path,
+    def _build_command(cpp: str, entry_dir: Path,
                        options: CppOptions) -> list[str]:
-        """Build the external preprocessor command line."""
+        """Build the external preprocessor command line reading from stdin."""
         command = [
             cpp,
             "-E",
@@ -157,8 +162,8 @@ class CppPreprocessor:
             "assembler-with-cpp",
             "-undef",
             "-D__DTS__",
-            f"-I{input_path.parent}",
-            str(input_path),
+            f"-I{entry_dir}",
+            "-",
         ]
         for include_dir in options.include_dirs:
             command.insert(-1, f"-I{include_dir}")
@@ -201,7 +206,13 @@ class CppPreprocessor:
             marker = CppPreprocessor._LINE_MARKER_PATTERN.match(line)
             if marker is not None:
                 current_line = int(marker.group(1))
-                current_file = marker.group(2)
+                raw_file = CppPreprocessor._unescape_linemarker_path(
+                    marker.group(2))
+                if raw_file in {"<stdin>", "<built-in>", "<command-line>",
+                                "<command line>"}:
+                    current_file = fallback_path
+                else:
+                    current_file = raw_file
                 if alias_key is not None \
                         and CppPreprocessor._path_key(
                     current_file) == alias_key:
@@ -229,6 +240,11 @@ class CppPreprocessor:
             current_line += 1
 
         return "\n".join(clean_lines) + "\n", line_map
+
+    @staticmethod
+    def _unescape_linemarker_path(path: str) -> str:
+        """Unescape C string escapes inside GNU cpp linemarker filenames."""
+        return path.replace('\\"', '"').replace("\\\\", "\\")
 
     @staticmethod
     def _path_key(path: str) -> str:

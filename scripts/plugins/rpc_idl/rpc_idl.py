@@ -194,7 +194,34 @@ class RpcIdlCommand(Command):
             source_path: Path,
             source_text: str,
     ) -> str | None:
-        """Write both outputs atomically and restore the header on failure."""
+        """Write changed outputs atomically and restore the header on failure."""
+        header_changed = not cls._content_matches(header_path, header_text)
+        source_changed = not cls._content_matches(source_path, source_text)
+        if not header_changed and not source_changed:
+            return None
+
+        if not header_changed:
+            source_tmp, error = cls._write_temp(source_path, source_text)
+            if error is not None:
+                return error
+            try:
+                os.replace(source_tmp, source_path)
+            except OSError as exc:
+                cls._unlink(source_tmp)
+                return str(exc)
+            return None
+
+        if not source_changed:
+            header_tmp, error = cls._write_temp(header_path, header_text)
+            if error is not None:
+                return error
+            try:
+                os.replace(header_tmp, header_path)
+            except OSError as exc:
+                cls._unlink(header_tmp)
+                return str(exc)
+            return None
+
         header_tmp, error = cls._write_temp(header_path, header_text)
         if error is not None:
             return error
@@ -236,6 +263,14 @@ class RpcIdlCommand(Command):
 
         cls._unlink(header_bak)
         return None
+
+    @staticmethod
+    def _content_matches(path: Path, text: str) -> bool:
+        """Return True when `path` exists and already contains `text`."""
+        try:
+            return path.exists() and path.read_text(encoding="utf-8") == text
+        except OSError:
+            return False
 
     @classmethod
     def _write_temp(

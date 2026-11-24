@@ -27,6 +27,7 @@ extern "C" {
 #define MR_WEAK                         __attribute__((weak))
 #define MR_INLINE                       static __inline
 #define MR_PACKED                       __attribute__((packed))
+#define MR_MAY_ALIAS                    __attribute__((may_alias))
 #else
 #error "Compiler not supported"
 #endif /* defined(__GNUC__) || defined(__clang__) || defined(__ARMCC_VERSION) */

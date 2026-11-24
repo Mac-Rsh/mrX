@@ -1,391 +1,107 @@
 # 字符串（String）
 
-> 字符串模块提供面向嵌入式的内存与字符串操作原语（`mr_memcpy` / `mr_memset` /
-> `mr_strcmp` 等）以及 De Bruijn 位操作（`mr_ffs32` / `mr_fls64` 等），是整个
-> mrX 的基础工具层。
+提供嵌入式友好的内存操作、字符串处理与错误码描述原语（`mr_memcpy`、`mr_memset`、
+`mr_strcmp`、`mr_strerror` 等），以及始终可用的 De Bruijn 位查找内联函数（
+`mr_ffs32` / `mr_fls64` 等）。
 
-| 项       | 说明                                                                                                                                                                     |
-|----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 功能宏   | `MR_USE_STRING`（默认内置实现）；`MR_USE_STRING_STD` 转发标准库；`MR_USE_STRING_3RD` 当前仅为预留项；`MR_USE_STRING_SAFE` 为内置实现增加 NULL 检查                       |
-| 头文件   | `<mrX/libc/mr_string.h>`                                                                                                                                                 |
-| 依赖模块 | 头文件工具集（`mr_compiler.h` / `mr_types.h` / `mr_errno.h`，见附录 14）；[内存分配 Malloc](malloc.md) 与本模块为上下游关系（malloc 内部使用 `mr_memcpy` / `mr_memset`） |
-| 参考测试 | `mrX/test/libc/string.c`                                                                                                                                                 |
+| 项目   | 说明                                                                                                                                                  |
+|--------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 功能宏 | `MR_USE_STRING`（内置实现）；`MR_USE_STRING_STD`（转发标准库）；`MR_USE_STRING_3RD`（Kconfig 预留项，当前无实现）；`MR_USE_STRING_SAFE`（空指针保护） |
+| 头文件 | `<mrX/libc/mr_string.h>`                                                                                                                              |
+| 依赖   | `<mrX/libc/mr_compiler.h>`、`<mrX/libc/mr_types.h>`、`<mrX/libc/mr_errno.h>`                                                                          |
+| 测试   | `test/libc/string.c`                                                                                                                                  |
 
----
+## 配置
 
-## 用户指南
+| 配置项               | 类型           | 默认值 | 说明                                                         |
+|----------------------|----------------|--------|--------------------------------------------------------------|
+| `MR_USE_STRING`      | bool（choice） | y      | 使用内置内存与字符串实现                                     |
+| `MR_USE_STRING_STD`  | bool（choice） | n      | 宏转发标准库 `<string.h>` 同名函数（位查找原语仍为内置实现） |
+| `MR_USE_STRING_3RD`  | bool（choice） | n      | 第三方字符串库预留项，当前头文件与源码无对应实现分支         |
+| `MR_USE_STRING_SAFE` | bool           | n      | 依赖 `MR_USE_STRING`；为内置实现增加 `MR_NULL` 入口检查      |
 
-### 1. 模块概述
-
-字符串模块解决的问题是： **为目标板提供一套可控、可裁剪、行为明确的内存与字符串
-原语，避免不同工具链 C 库实现的差异**。
-
-特性：
-
-- 覆盖常用内存操作：`memccpy`、`memcmp`、`memcpy`、`memmove`、`memset`、`memchr`。
-- 覆盖常用字符串操作：`strcmp`、`strcpy`、`strerror`、`strlen`、`strnlen`、
-  `strncmp`、`strncpy`、`strchr`。
-- `memcpy` / `memmove` / `memset` 按机器字长做对齐字访问加速，对齐不匹配时
-  自动退化为逐字节。
-- `mr_strerror` 将 `MR_E*` 错误码映射为固定英文描述字符串。
-- 头文件内置 `mr_ffs32` / `mr_ffs64` / `mr_fls32` / `mr_fls64` 位查找原语 （
-  `MR_INLINE`，始终编译，不受 `MR_USE_STRING`
-  控制）。
-- 可选 `MR_USE_STRING_SAFE`：只对部分 API 的 `MR_NULL`
-  参数做提前返回。它不是通用内存安全检查，不能识别悬空、越界或其他非空非法指针。
-
-### 2. 配置与依赖
-
-| 配置项               | 类型           | 默认值 | 说明                                                                           |
-|----------------------|----------------|--------|--------------------------------------------------------------------------------|
-| `MR_USE_STRING`      | bool（choice） | y      | 使用内置实现（`mrX/include/mrX/libc/Kconfig:150`）                             |
-| `MR_USE_STRING_STD`  | bool（choice） | n      | 宏转发标准库 `string.h` 同名函数                                               |
-| `MR_USE_STRING_3RD`  | bool（choice） | n      | 第三方字符串库预留选项；当前头文件/源码没有对应实现                            |
-| `MR_USE_STRING_SAFE` | bool           | n      | 空指针安全检查开关，依赖 `MR_USE_STRING`（`mrX/include/mrX/libc/Kconfig:157`） |
-
-选择 `MR_USE_STRING` 并重新生成 `mr_config.h` 后，包含头文件即可使用：
-
-```c
-#include <mrX/libc/mr_string.h>
-```
-
-选择 `MR_USE_STRING_STD` 时内存/字符串 API 宏转发标准库（位查找原语仍为 mrX
-头文件实现），`MR_USE_STRING_SAFE` 不作用于 STD
-后端。内置 SAFE 模式只检查 NULL，并按各函数既定返回类型提前返回；详细行为见第 4 节。
-
-### 3. 快速上手
-
-```c
-#include <mrX/libc/mr_string.h>
-
-void example(void) {
-    char src[16];
-    char dst[16];
-    mr_size_t len;
-
-    mr_strcpy(src, "hello");
-    mr_memcpy(dst, src, mr_strlen(src) + 1);
-
-    len = mr_strlen(dst);           /* len == 5 */
-    if (mr_strcmp(dst, "hello") == 0) {
-        /* 匹配成功 */
-    }
-}
-```
-
-### 4. 使用说明
-
-**内存函数语义**
-
-| API          | 行为要点                                                                                                                                            |
-|--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| `mr_memcpy`  | 区间不得重叠（重叠请用 `mr_memmove`）；按字长对齐加速                                                                                               |
-| `mr_memmove` | 支持任意重叠区间，结果与"先拷到临时区"一致                                                                                                          |
-| `mr_memset`  | 以字节值填充，区间任意对齐                                                                                                                          |
-| `mr_memcmp`  | 无符号字节序比较（`0x80 > 0x7F`），返回首个差异字节的差值                                                                                           |
-| `mr_memchr`  | 在 `size` 字节内查找字节值，找不到返回 `MR_NULL`                                                                                                    |
-| `mr_memccpy` | 拷贝至遇到 `c`（含该字节）为止，返回其后继指针；未遇到返回 `MR_NULL`                                                                                |
-| 零长度       | 对有效非空指针：`memcpy/memmove/memset` 返回 `dst`，`memcmp` 返回 0，`memchr/memccpy` 返回 `MR_NULL`；SAFE 模式的 NULL 检查会先于这些零长度语义执行 |
-
-**字符串函数语义**
-
-| API                        | 行为要点                                                               |
-|----------------------------|------------------------------------------------------------------------|
-| `mr_strcmp` / `mr_strncmp` | 无符号字节序比较；`strncmp` 在 `\0` 处或 `size` 用尽即停               |
-| `mr_strcpy`                | 连 `\0` 一起拷贝，返回 `dst` 起始指针（非拷贝终点）                    |
-| `mr_strncpy`               | 最多拷贝 `size` 字节；源串较短时剩余空间补 `\0`；源串超长时不补 `\0`   |
-| `mr_strlen` / `mr_strnlen` | 前者数到 `\0`，后者上限 `size`                                         |
-| `mr_strchr`                | 查找范围为串长 + 1（可查找 `\0` 终结符），返回首个匹配指针或 `MR_NULL` |
-| `mr_strerror`              | 返回静态字符串，仅识别 `MR_E*` 错误码，未知码返回 `"Unknown error"`    |
-
-**`MR_USE_STRING_SAFE` 开启后的空指针行为**
-
-| 函数                                                                  | `MR_NULL` 输入时返回                                          |
-|-----------------------------------------------------------------------|---------------------------------------------------------------|
-| `mr_memcpy` / `mr_memmove` / `mr_memset` / `mr_memccpy` / `mr_memchr` | `MR_NULL`                                                     |
-| `mr_strcmp` / `mr_memcmp` / `mr_strncmp`                              | `0`（会把 NULL 输入表现成“相等”，调用者不可据此判断输入合法） |
-| `mr_strcpy`                                                           | `MR_NULL`                                                     |
-| `mr_strlen` / `mr_strnlen`                                            | `0`                                                           |
-
-`mr_strncpy` / `mr_strchr` 自身没有入口检查，而是间接依赖被保护的 helper：SAFE 下
-`mr_strncpy(dst, MR_NULL, size)` 会原样返回
-`dst` 且不复制，`mr_strchr(MR_NULL, c)` 返回 `MR_NULL`。这些只是 NULL
-特例，不能推广成对任意错误指针“安全”。
-
-### 5. API 参考
-
-内存操作：
-
-| API          | 说明                                                       |
-|--------------|------------------------------------------------------------|
-| `mr_memcpy`  | 拷贝 `size` 字节（区间不可重叠），返回 `dst`               |
-| `mr_memmove` | 拷贝 `size` 字节（区间可重叠），返回 `dst`                 |
-| `mr_memset`  | 将 `dst` 起 `size` 字节设为 `c`（取低字节），返回 `dst`    |
-| `mr_memcmp`  | 比较 `size` 字节，返回首个差异字节的无符号差值，相等为 `0` |
-| `mr_memchr`  | 在 `size` 字节内查找 `c`，返回匹配指针或 `MR_NULL`         |
-| `mr_memccpy` | 拷贝直到写入字节 `c`，返回其后继指针，未遇到返回 `MR_NULL` |
-
-字符串操作：
-
-| API           | 说明                                                   |
-|---------------|--------------------------------------------------------|
-| `mr_strcmp`   | 比较两串，返回首个差异字节的无符号差值，相等为 `0`     |
-| `mr_strncmp`  | 最多比较 `size` 字节                                   |
-| `mr_strcpy`   | 拷贝含终结符的字符串，返回 `dst`                       |
-| `mr_strncpy`  | 至多拷贝 `size` 字节并补 `\0` 填充，返回 `dst`         |
-| `mr_strlen`   | 返回串长（不含 `\0`）                                  |
-| `mr_strnlen`  | 返回串长，上限 `size`                                  |
-| `mr_strchr`   | 查找首个匹配字符（含终结符位置），返回指针或 `MR_NULL` |
-| `mr_strerror` | 错误码转静态描述字符串                                 |
-
-位操作（`MR_INLINE`，始终编译）：
-
-| API                     | 说明                                            |
-|-------------------------|-------------------------------------------------|
-| `mr_ffs32` / `mr_ffs64` | 首个置位位的序号（1 起计），入参为 0 返回 0     |
-| `mr_fls32` / `mr_fls64` | 最后一个置位位的序号（1 起计），入参为 0 返回 0 |
-
-**典型原型**
-
-```c
-void *mr_memcpy(void *dst, const void *src, mr_size_t size);
-void *mr_memmove(void *dst, const void *src, mr_size_t size);
-void *mr_memset(void *dst, int c, mr_size_t size);
-int mr_memcmp(const void *m1, const void *m2, mr_size_t size);
-void *mr_memchr(const void *s, int c, mr_size_t size);
-void *mr_memccpy(void *dst, const void *src, int c, mr_size_t size);
-int mr_strcmp(const char *s1, const char *s2);
-char *mr_strcpy(char *dst, const char *src);
-char *mr_strerror(int errnum);
-mr_size_t mr_strlen(const char *s);
-```
-
-返回值约定：拷贝/填充类成功返回 `dst`，安全模式空指针失败返回 `MR_NULL`； 比较类相等返回
-`0`，不等返回非 0 差值；查找类未命中返回
-`MR_NULL`。
-
-字符串拷贝 API 与标准 C 一样要求目标空间足够，`strcpy/strncpy` 的源与目标也不应依赖重叠语义；
-`MR_USE_STRING_SAFE` 不提供容量检查。
-
-### 6. 完整示例
-
-示例 1：重叠区间安全搬运（取材自 `mrX/test/libc/string.c` 的 memmove 用例）：
-
-```c
-void move_example(void) {
-    mr_uint8_t buf[16];
-    /* buf 已填入数据 ... */
-
-    /* 左移 5 字节：区间重叠 */
-    mr_memmove(buf, buf + 5, 8);
-}
-```
-
-示例 2：`strncpy` 的截断与补零（取材自 `mrX/test/libc/string.c`）：
-
-```c
-void copy_example(void) {
-    char buf[8];
-
-    mr_strncpy(buf, "hi", sizeof(buf));
-    /* buf == "hi" 后跟 6 个 '\0' */
-
-    mr_strncpy(buf, "long_string", sizeof(buf));
-    /* buf == "long_st"，未追加终结符 */
-    buf[sizeof(buf) - 1] = '\0';
-}
-```
-
-示例 3：错误码转文本输出：
+## 快速上手
 
 ```c
 #include <mrX/libc/mr_string.h>
 #include <mrX/libc/mr_errno.h>
 
-void strerror_example(int err) {
-    if (err == -MR_ENOMEM) {
-        /* "Out of memory" */
-        (void)mr_strerror(MR_ENOMEM);
+void example(void) {
+    char src[16], dst[16];
+
+    mr_strcpy(src, "hello");
+    mr_memcpy(dst, src, mr_strlen(src) + 1);
+
+    if (mr_strcmp(dst, "hello") == 0) {
+        const char *msg = mr_strerror(MR_ENOMEM);   /* "Out of memory" */
+        (void)msg;
     }
-    /* 未知错误码：返回 "Unknown error" */
-    (void)mr_strerror(-99999);
 }
 ```
 
-更多行为（对齐矩阵、高位字节比较、位查找全位遍历）见
-`mrX/test/libc/string.c`。
+## 核心机制与约束
 
-### 7. 常见问题（FAQ）
+- **对齐加速与区间重叠**：`mr_memcpy`、`mr_memmove` 与 `mr_memset` 在指针按
+  `sizeof(mr_uintptr_t)` 对齐匹配时按机器字整块搬运或填充，不匹配时自动退化为逐字节操作。
+  `mr_memcpy` 要求源与目的区间不得重叠，重叠场景必须使用 `mr_memmove`。
+- **无符号比较与边界语义**：`mr_memcmp`、`mr_strcmp` 与 `mr_strncmp` 均按无符号字节序比较（
+  `0x80 > 0x7F`）。`mr_strncpy` 最多拷贝 `size` 字节，源串较短时剩余空间补 `\0`
+  ，源串达到或超过 `size` 时 **不追加 `\0`**。`mr_strchr` 的搜索范围包含结尾 `\0`。
+- **`mr_strerror` 取值**：内置错误表仅识别 `0` 及正的 `MR_E*` 常量（如 `MR_ENOMEM`
+  ），未知码返回 `"Unknown error"`；若某 API 返回 `-MR_ENOMEM`
+  ，传入前需取反。返回指针指向静态只读字符串，无需释放。
+- **`MR_USE_STRING_SAFE` 空指针保护**：仅对 `MR_USE_STRING` 生效。开启后传入
+  `MR_NULL` 不会解引用崩溃：拷贝/查找类（`memcpy`/`memmove`/`memset`/`memccpy`/
+  `memchr`/`strcpy`/`strchr`）返回 `MR_NULL`（`strncpy` 原样返回 `dst`），长度类（
+  `strlen`/`strnlen`）返回 `0`，比较类（`memcmp`/`strcmp`/`strncmp`）返回 `0`
+  （注意这与“相等”返回值相同）。该模式不检查缓冲区容量或悬空指针。
+- **并发与中断安全**：内置实现无全局可变状态与锁，可重入；不同缓冲区可并发操作。
 
-**Q：`mr_memcpy` 拷贝重叠区间会怎样？**
+## API 速查
 
-结果未定义（对齐字加速会放大覆盖）。任何可能重叠的场景一律使用 `mr_memmove`。
+**内存操作**：
 
-**Q：为什么 `mr_memcmp(0x80, 0x01)` 返回"大于"？**
+| API                                                                   | 说明                                                               |
+|-----------------------------------------------------------------------|--------------------------------------------------------------------|
+| `void *mr_memcpy(void *dst, const void *src, mr_size_t size)`         | 拷贝 `size` 字节（不可重叠），返回 `dst`                           |
+| `void *mr_memmove(void *dst, const void *src, mr_size_t size)`        | 拷贝 `size` 字节（支持重叠），返回 `dst`                           |
+| `void *mr_memset(void *dst, int c, mr_size_t size)`                   | 将 `dst` 起 `size` 字节设为 `(unsigned char)c`，返回 `dst`         |
+| `int mr_memcmp(const void *m1, const void *m2, mr_size_t size)`       | 比较 `size` 字节，返回首个差异字节的无符号差值                     |
+| `void *mr_memchr(const void *s, int c, mr_size_t size)`               | 在 `size` 字节内查找字节 `c`，未找到返回 `MR_NULL`                 |
+| `void *mr_memccpy(void *dst, const void *src, int c, mr_size_t size)` | 拷贝至遇到字节 `c`（含）为止，返回其后继指针，未遇到返回 `MR_NULL` |
 
-比较按无符号字节进行：`0x80`（128）大于 `0x01`（1），与 `char` 的符号性无关， 已由
-`mrX/test/libc/string.c` 的
-`memcmp_high_bit_order` 固定。
+**字符串操作**：
 
-**Q：`mr_strncpy` 源串比 `size` 长时，目标串有 `\0` 吗？**
+| API                                                              | 说明                                                  |
+|------------------------------------------------------------------|-------------------------------------------------------|
+| `int mr_strcmp(const char *s1, const char *s2)`                  | 比较字符串，返回首个差异字节的无符号差值              |
+| `int mr_strncmp(const char *s1, const char *s2, mr_size_t size)` | 最多比较 `size` 字节                                  |
+| `char *mr_strcpy(char *dst, const char *src)`                    | 拷贝含 `\0` 的字符串，返回 `dst`                      |
+| `char *mr_strncpy(char *dst, const char *src, mr_size_t size)`   | 最多拷贝 `size` 字节并补 `\0`（超长不补），返回 `dst` |
+| `mr_size_t mr_strlen(const char *s)`                             | 返回串长（不含 `\0`）                                 |
+| `mr_size_t mr_strnlen(const char *s, mr_size_t size)`            | 返回串长，上限为 `size`                               |
+| `char *mr_strchr(const char *s, int c)`                          | 查找首个匹配字符（可匹配 `\0`），未找到返回 `MR_NULL` |
+| `char *mr_strerror(int errnum)`                                  | 将 `MR_E*` 错误码映射为静态英文描述字符串             |
 
-没有，行为与标准 `strncpy` 一致：只拷贝前 `size` 字节、不追加终结符。 调用方应自行保证终结（如
-`buf[size - 1] = '\0'`）。
+**位查找原语**（`MR_INLINE`，定义于头文件，始终编译）：
 
-**Q：`mr_strerror` 的返回值需要释放吗？**
+| API                                                           | 说明                                                     |
+|---------------------------------------------------------------|----------------------------------------------------------|
+| `int mr_ffs32(mr_uint32_t x)` / `int mr_ffs64(mr_uint64_t x)` | 返回最低置位位的序号（`1 ~ 32/64`），入参为 `0` 返回 `0` |
+| `int mr_fls32(mr_uint32_t x)` / `int mr_fls64(mr_uint64_t x)` | 返回最高置位位的序号（`1 ~ 32/64`），入参为 `0` 返回 `0` |
 
-不需要。内置实现返回字符串字面量，应按只读内容使用，生命周期贯穿程序全程。STD
-后端则直接继承工具链 `strerror` 的返回缓冲语义。
+`include/mrX/libc/` 下还提供 `mr_assert.h`（断言与 panic）、`mr_atomic.h`（原子操作原语）、
+`mr_compiler.h`（编译器属性宏）、`mr_errno.h`（`MR_E*` 错误码定义）与 `mr_types.h`
+（基础类型与 `mr_va_list`）纯头文件工具，详见各头文件注释。
 
-**Q：`mr_ffs32` 与 `mr_fls32` 的序号从几开始？**
+## 内部实现
 
-从 1 开始：bit0 置位返回 1，bit31 置位返回 32；入参为 0 返回 0（无置位位）。
-内核位图（如 [内核 Slab](../kernel/slab.md)
-的空闲位查找）即使用该原语。
-
-**Q：`mr_strerror` 应该传 `-MR_ENOMEM` 还是 `MR_ENOMEM`？**
-
-内置错误表按正的 `MR_E*` 常量匹配。若某个 API 返回 `-MR_ENOMEM`，转换文本时应传
-`MR_ENOMEM`（或对负返回值取相反数）；直接传负值会落入
-`"Unknown error"`。
-
----
-
-## 开发者指南
-
-### 8. 架构总览
-
-字符串模块位于最底层，被 libc 与内核普遍依赖，自身只依赖头文件工具集：
-
-```
-        +------------------------------------------+
-        | libc 各模块（malloc 用 memcpy/memset）      |
-        | 内核各模块（slab 位图、对象名、hashmap 等）  |
-        +---------------------+--------------------+
-                              | mr_memcpy() / mr_strcmp() / ...
-        +---------------------v--------------------+
-        | 字符串 String                              |
-        |  内存原语 | 字符串原语 | strerror | 位查找  |
-        +---------------------+--------------------+
-             依赖：mr_compiler.h（MR_INLINE）、mr_types.h、
-                   mr_errno.h（strerror 错误码表）
-```
-
-关键接线：[内存分配 Malloc](malloc.md) 的 `mr_calloc` / `mr_realloc` 直接调用
-`mr_memset` / `mr_memcpy`（`mrX/libc/malloc.c:230`、`malloc.c:253`）；内核 slab
-的空闲位查找使用 `mr_ffs64`（
-`mrX/kernel/slab.c:32`）。模块不含任何 平台相关代码，唯一的可移植性开关是
-`MR_USE_ARCH_64B`（影响 `mr_memset`
-的填充模式宽度，`mrX/libc/string.c:181`）。
-
-### 9. 数据结构
-
-本模块不定义持久数据结构。实现要点分布在函数内部：
-
-- **字长访问模式**（`mrX/libc/string.c:59-92`）：`memcpy` / `memmove` 先检测
-  `dst` / `src` 按 `sizeof(mr_uintptr_t)` 的对齐位（
-  `align = sizeof(mr_uintptr_t) - 1`）， 对齐匹配时按机器字整块搬运、余量逐字节；不匹配则整段逐字节。
-- **`memset` 填充模式**（`string.c:164`）：把字节值扩展为机器字宽的模式字 （32 位扩展
-  4 次，`MR_USE_ARCH_64B` 时再扩展 4 次到
-  64 位），先处理头部 非对齐字节，再整字写入，尾部逐字节。
-- **De Bruijn 表**（`mrX/include/mrX/libc/mr_string.h:188`、`mr_string.h:209`）：
-  `mr_ffs32` / `mr_ffs64` 以 `x & (-x)`
-  分离最低置位位后查表得序号；`mr_fls*` 先折叠高位再复用 `ffs`。函数以 `MR_INLINE`
-  声明，但是否真正内联、局部 const
-  查表数组如何落栈/只读区由编译器优化决定，文档不假定零调用或零栈开销。
-
-### 10. 核心流程
-
-**memmove 的重叠处理**（`mrX/libc/string.c:94`）：
-
-1. 空区间或同址直接返回。
-2. `dst` 高于 `src` 且距离小于 `size`（前向重叠）→ 从尾部向前倒序搬运；
-   否则正向搬运。两个方向内部都先做对齐字搬运、再处理余量。
-3. 倒序分支同样要求 `(dst_addr ^ src_addr) & align == 0` 才走字访问 （
-   `string.c:124`），保证对齐假设成立。
-
-**strncpy 的实现**（`string.c:386`）：以 `mr_memccpy(dst, src, '\0', size)`
-完成"拷到终结符为止"，命中则用 `mr_memset` 把剩余空间补 `\0`；未命中
-（源串超长）则原样返回，不补 `\0`、不越界。`strchr`（
-`string.c:398`）以
-`mr_memchr(s, c, mr_strlen(s) + 1)` 实现，`+1` 使查找覆盖终结符位置。
-
-**strerror 的错误码表**（`string.c:266`）：`switch` 映射 `0` 与
-`MR_EPERM`、`MR_ENOENT`、`MR_EIO`、`MR_ENODEV`、`MR_EAGAIN`、`MR_ENOMEM`、`MR_EBUSY`、`MR_EEXIST`、`MR_EINVAL`、`MR_ENOSYS`、`MR_ETIMEDOUT`、`MR_ECANCELED`、`MR_ELOOP` 与 `0` 共 14 个码值映射为静态字符串，默认分支
-`"Unknown error"`
-；无格式化、无缓冲，返回指针即查表结果。
-
-### 11. 并发与中断安全
-
-- **内置实现**没有可变全局状态、堆分配或锁；不同且互不冲突的缓冲可并发处理。同一存储存在并发读写时仍由调用者负责同步。
-- 内存/字符串扫描和搬运耗时随处理长度增长；位查找虽是固定步数，但其具体代码/栈布局受编译器影响。是否放进
-  ISR
-  应由目标延迟预算决定，而不是仅凭“无锁”判断。
-- STD 后端直接继承工具链 libc 的实现与并发/上下文属性，mrX 不额外保证。
-
-### 12. 扩展与派生
-
-扩展面是 **编译期后端 choice + 一个可选安全检查开关**；本模块没有 clazz 与派生机制：
-
-- `MR_USE_STRING_STD` 时头文件把内存/字符串函数整体宏转发标准库（
-  `mrX/include/mrX/libc/mr_string.h:30-44`），
-  `MR_USE_STRING` 时使用内置实现（`mr_string.h:45-179`，实现见
-  `mrX/libc/string.c:10` 起）。
-- `MR_USE_STRING_3RD` 已在 choice 中定义（`mrX/include/mrX/libc/Kconfig:145`
-  ），但头文件只有上述两个分支，代码中没有任何
-  `MR_USE_STRING_3RD` 分支——第三方字符串库的接入点当前并不存在，属于预留选项。
-- `MR_USE_STRING_SAFE`（`Kconfig:157`，依赖 `MR_USE_STRING`）在各内置实现函数入口追加
-  `MR_NULL` 检查（如
-  `mrX/libc/string.c:64`、`string.c:100`），把"崩溃"换成返回 `MR_NULL` / `0`；STD
-  后端不受该开关影响。
-- 位查找原语 `mr_ffs32` / `mr_ffs64` / `mr_fls32` / `mr_fls64` 固定内联在头文件、始终可用且不受
-  choice 控制（
-  `mr_string.h:187` 起），需要位扫描的内核模块直接继承该实现而非依赖所选后端（用例见
-  `mrX/kernel/slab.c:32`）。
-
-两种扩展开关都有行为测试固定：`mrX/test/libc/string.c:488`（`MR_USE_STRING_SAFE`
-下的空指针拒绝）、`string.c:431`（位查找序号语义）。
-
-### 13. 源码导读
-
-| 位置                                   | 职责                                                     |
-|----------------------------------------|----------------------------------------------------------|
-| `mrX/include/mrX/libc/mr_string.h:30`  | STD 后端宏转发与内置 API 声明                            |
-| `mrX/include/mrX/libc/mr_string.h:187` | `mr_ffs32` / `mr_ffs64` / `mr_fls32` / `mr_fls64` 位查找 |
-| `mrX/libc/string.c:13`                 | `mr_memccpy`（`strncpy` 的底层）                         |
-| `mrX/libc/string.c:59`                 | `mr_memcpy`（对齐检测 + 字访问加速）                     |
-| `mrX/libc/string.c:94`                 | `mr_memmove`（重叠区间的双向搬运）                       |
-| `mrX/libc/string.c:164`                | `mr_memset`（模式字填充）                                |
-| `mrX/libc/string.c:266`                | `mr_strerror`（错误码表）                                |
-| `mrX/libc/string.c:386`                | `mr_strncpy`（memccpy + memset 组合）                    |
-| `mrX/test/libc/string.c`               | 内存/字符串/位查找/安全模式的行为级测试                  |
-
-### 14. 附录
-
-**配置宏**
-
-| 宏                                    | 说明                                           |
-|---------------------------------------|------------------------------------------------|
-| `MR_USE_STRING`                       | 内置实现开关（choice，默认）                   |
-| `MR_USE_STRING_STD`                   | 转发标准库 string.h（choice）                  |
-| `MR_USE_STRING_3RD`                   | 第三方字符串库预留 choice；当前无实现          |
-| `MR_USE_STRING_SAFE`                  | 空指针安全检查，默认 n（依赖 `MR_USE_STRING`） |
-| `MR_USE_ARCH_32B` / `MR_USE_ARCH_64B` | 架构字长选择，影响 `mr_memset` 模式字宽度      |
-
-**错误码**：比较类函数以返回值差值表达比较结果，无负数错误码路径；
-`mr_strerror` 识别的错误码定义于 `mrX/include/mrX/libc/mr_errno.h`
-（`MR_EPERM`、`MR_ENOMEM`、`MR_EINVAL` 等，见下表工具集一节）。
-
-**头文件工具集**
-
-`mrX/include/mrX/libc` 下还有若干无独立源文件的纯头文件工具，本文档不单独
-成篇，此处列其用途；详细 API 以各头文件的 Doxygen
-注释为准。
-
-| 头文件          | 用途                                                                                                                                                    |
-|-----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `mr_assert.h`   | 断言宏 `MR_ASSERT` / `MR_PANIC`（含静态断言），支持 STD / 3RD / 内置 / 关闭四种后端，内置后端经由平台断言接口停机                                       |
-| `mr_atomic.h`   | 原子操作原语（`mr_atomic_load` / `mr_atomic_compare_exchange` / `fetch_add` 等），内置后端基于关中断实现，供无锁结构（如内核 slab 位图）使用            |
-| `mr_compiler.h` | 编译器属性封装（`MR_ALIGN` / `MR_SECTION` / `MR_WEAK` / `MR_INLINE` / `MR_PACKED` 等）与 `MR_ALIGN_SIZE`、`MR_IGNORE`                                   |
-| `mr_errno.h`    | 错误码类型 `mr_err_t` 与 `MR_E*` 错误码定义（POSIX 兼容取值），全模块 API 失败返回值的取值来源                                                          |
-| `mr_types.h`    | 定宽类型别名（`mr_int32_t` / `mr_uint32_t` / `mr_size_t` / `mr_ssize_t` / `mr_ptr_t` / `mr_va_list` 等）与 `MR_TRUE` / `MR_FALSE`、`MR_SIZE_MAX` 等常量 |
+- **字长搬运与填充**：`libc/string.c` 中 `mr_memcpy` / `mr_memmove` 检查
+  `(dst_addr ^ src_addr) & (sizeof(mr_uintptr_t) - 1)` 判断对齐兼容性；
+  `mr_memset` 将填充字节扩展为机器字宽模式字（`MR_USE_ARCH_64B` 下扩展至 64
+  位）后分头、中、尾三段写入。
+- **组合实现**：`mr_strncpy` 通过 `mr_memccpy(dst, src, '\0', size)` 拷贝并在命中后用
+  `mr_memset` 补零；`mr_strchr` 通过 `mr_memchr(s, c, mr_strlen(s) + 1)` 实现。
+- **De Bruijn 位查表**：`mr_ffs32` / `mr_ffs64` 通过 `x & (-x)` 分离最低置位位后乘以
+  De Bruijn 常数查表；`mr_fls32` / `mr_fls64` 将最高位以下全部置 `1` 并分离最高位后复用
+  `mr_ffs*`。

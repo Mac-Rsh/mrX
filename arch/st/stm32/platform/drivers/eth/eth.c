@@ -1703,7 +1703,7 @@ static void eth_irq_handle(const mr_driver_t *drv) {
         .rx_allocate = MR_CAT(__eth_rx_allocate_, _id),                        \
         .clk_enable = MR_CAT(__eth_clk_enable_, _id),                          \
         .pins = MR_CAT(__eth_pins_, _id),                                      \
-        .pin_count = MR_ARRAY_SIZE(MR_CAT(__eth_pins_, _id)),                  \
+        .pin_count = MR_HT_DRIVER_PROP_ELEM_NUM(_id, st_pins),                 \
         .instance = MR_HT_DRIVER_PROP(_id, st_ethx),                           \
         .dma = &MR_CAT(__eth_dma_, _id),                                       \
         .phy_addr =                                                            \

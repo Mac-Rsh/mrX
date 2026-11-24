@@ -914,6 +914,19 @@ MR_INLINE mr_err_t mr_ht_pwm_signal_disable(mr_ht_pwm_spec_t *spec,
     }
 
 /**
+ * @brief This macro function creates a PWM specification from HardTree
+ * properties or returns a default initializer if the property does not exist.
+ *
+ * @param _node The node.
+ * @param _prop The property name.
+ * @param ... The default initializer, e.g. `{0}`.
+ * @return The initialized mr_ht_pwm_spec_t structure or default initializer.
+ */
+#define MR_HT_NODE_PWM_SPEC_OR(_node, _prop, ...)                              \
+    MR_MACRO_IF(MR_HT_NODE_HAS_PROP(_node, _prop),                             \
+                (MR_HT_NODE_PWM_SPEC(_node, _prop)), (__VA_ARGS__))
+
+/**
  * @brief This macro function creates PWM specifications from a HardTree
  * property array.
  *
@@ -937,6 +950,18 @@ MR_INLINE mr_err_t mr_ht_pwm_signal_disable(mr_ht_pwm_spec_t *spec,
  */
 #define MR_HT_PWM_SPEC(_id, _prop)                                             \
     MR_HT_NODE_PWM_SPEC(MR_HT_DRIVER(_id), _prop)
+
+/**
+ * @brief This macro function creates a PWM specification from HardTree driver
+ * properties or returns a default initializer if the property does not exist.
+ *
+ * @param _id The driver instance id.
+ * @param _prop The property name.
+ * @param ... The default initializer, e.g. `{0}`.
+ * @return The initialized mr_ht_pwm_spec_t structure or default initializer.
+ */
+#define MR_HT_PWM_SPEC_OR(_id, _prop, ...)                                     \
+    MR_HT_NODE_PWM_SPEC_OR(MR_HT_DRIVER(_id), _prop, __VA_ARGS__)
 
 /**
  * @brief This macro function creates PWM specifications from a HardTree driver

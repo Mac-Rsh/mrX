@@ -185,7 +185,7 @@ char *mr_strchr(const char *s, int c);
  * @return The first set bit index.
  */
 MR_INLINE int mr_ffs32(mr_uint32_t x) {
-    const int debruijn32[32] = {
+    static const int debruijn32[32] = {
         1,  2,  29, 3,  30, 15, 25, 4, 31, 23, 21, 16, 26, 18, 5,  9,
         32, 28, 14, 24, 22, 20, 17, 8, 27, 13, 19, 7,  12, 6,  11, 10,
     };
@@ -206,7 +206,7 @@ MR_INLINE int mr_ffs32(mr_uint32_t x) {
  * @return The first set bit index.
  */
 MR_INLINE int mr_ffs64(mr_uint64_t x) {
-    const int debruijn64[64] = {
+    static const int debruijn64[64] = {
         1,  2,  49, 3,  58, 50, 29, 4,  62, 59, 51, 43, 39, 30, 18, 5,
         63, 56, 60, 37, 54, 52, 44, 23, 46, 40, 34, 31, 25, 19, 13, 6,
         64, 48, 57, 28, 61, 42, 38, 17, 55, 36, 53, 22, 45, 33, 24, 12,

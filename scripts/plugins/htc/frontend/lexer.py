@@ -22,8 +22,8 @@ class Lexer:
 
     _EOF_CHAR = "\0"
     _PREFIXED_NUMBER_PATTERN = re.compile(r"0[bBoOxX][A-Za-z0-9_]*")
-    _FLOAT_PATTERN = re.compile(r"\d+\.\d+")
-    _DECIMAL_PATTERN = re.compile(r"\d+")
+    _FLOAT_PATTERN = re.compile(r"\d+\.\d+(?:[eE][+-]?\d+)?[fFlL]?")
+    _DECIMAL_PATTERN = re.compile(r"\d+(?:[uUlL]{1,3})?")
     _IDENTIFIER_PATTERN = re.compile(
         r"#?[A-Za-z_][A-Za-z0-9_.+-]*(?:,[A-Za-z0-9_.+-]+)*")
     _OPERATORS = {
@@ -39,7 +39,18 @@ class Lexer:
         "}": TokenType.RBRACE,
         "[": TokenType.LBRACKET,
         "]": TokenType.RBRACKET,
+        "(": TokenType.LPAREN,
+        ")": TokenType.RPAREN,
         ",": TokenType.COMMA,
+        "+": TokenType.PLUS,
+        "-": TokenType.MINUS,
+        "*": TokenType.STAR,
+        "%": TokenType.PERCENT,
+        "|": TokenType.PIPE,
+        "^": TokenType.CARET,
+        "~": TokenType.TILDE,
+        "!": TokenType.BANG,
+        "?": TokenType.QUESTION,
     }
 
     def __init__(self, source: str, file_path: str,
@@ -77,6 +88,13 @@ class Lexer:
             # String
             if char == '"':
                 self.tokens.append(self._read_string())
+                continue
+
+            # Character literal
+            if char == "'":
+                token = self._read_char()
+                if token is not None:
+                    self.tokens.append(token)
                 continue
 
             # Number
@@ -128,6 +146,12 @@ class Lexer:
                 if escaped is not None:
                     chars.append(escaped)
                 continue
+            if char == "\r" and self._peek(1) == "\n":
+                self._error(ErrorCode.UNTERMINATED_STRING,
+                            "newline in string literal", SourceSpan(start))
+                self._advance()
+                self._newline()
+                continue
             if char == "\n":
                 self._error(ErrorCode.UNTERMINATED_STRING,
                             "newline in string literal", SourceSpan(start))
@@ -141,8 +165,33 @@ class Lexer:
         return Token(TokenType.STRING, "".join(chars),
                      SourceSpan(start, self._location()))
 
+    def _read_char(self) -> Token | None:
+        """Read a single-quoted C/DTS character literal."""
+        start = self._location()
+        self._advance()
+        if self.pos >= len(self.source) or self._peek() in {"\n", "\r"}:
+            self._error(ErrorCode.UNTERMINATED_STRING,
+                        "unterminated character literal", SourceSpan(start))
+            return None
+        if self._peek() == "\\":
+            raw_start = self.pos
+            decoded = self._read_escape(start)
+            raw_body = self.source[raw_start:self.pos]
+            if decoded is None:
+                return None
+        else:
+            raw_body = self._peek()
+            self._advance()
+        if self._peek() != "'":
+            self._error(ErrorCode.UNTERMINATED_STRING,
+                        "unterminated character literal", SourceSpan(start))
+            return None
+        self._advance()
+        return Token(TokenType.CHAR, f"'{raw_body}'",
+                     SourceSpan(start, self._location()))
+
     def _read_escape(self, start: SourceLocation) -> str | None:
-        """Read and decode one backslash escape in a string literal."""
+        """Read and decode one backslash escape in a string or char literal."""
         escape_start = self._location()
         self._advance()
         if self.pos >= len(self.source):
@@ -152,11 +201,29 @@ class Lexer:
         char = self._peek()
         escapes = {
             '"': '"',
+            "'": "'",
             "\\": "\\",
             "n": "\n",
             "r": "\r",
             "t": "\t",
+            "0": "\0",
+            "a": "\a",
+            "b": "\b",
+            "f": "\f",
+            "v": "\v",
         }
+        if char == "x":
+            self._advance()
+            hex_digits: list[str] = []
+            while len(hex_digits) < 2 and self._peek() in "0123456789abcdefABCDEF":
+                hex_digits.append(self._peek())
+                self._advance()
+            if not hex_digits:
+                self._error(ErrorCode.INVALID_ESCAPE,
+                            "invalid hex escape sequence: \\x",
+                            SourceSpan(escape_start))
+                return "x"
+            return chr(int("".join(hex_digits), 16))
         if char not in escapes:
             self._error(ErrorCode.INVALID_ESCAPE,
                         f"invalid escape sequence: \\{char}",
@@ -173,13 +240,12 @@ class Lexer:
         if self._peek() == "-":
             negative = "-"
             self._advance()
-        chunk = self.source[self.pos:]
 
         for pattern, token_type in (
                 (self._PREFIXED_NUMBER_PATTERN, TokenType.NUMBER),
                 (self._FLOAT_PATTERN, TokenType.FLOAT),
                 (self._DECIMAL_PATTERN, TokenType.NUMBER)):
-            match = pattern.match(chunk)
+            match = pattern.match(self.source, self.pos)
             if match is not None:
                 raw = negative + match.group(0)
                 self._advance(len(match.group(0)))
@@ -193,7 +259,7 @@ class Lexer:
     def _read_identifier(self) -> Token:
         """Read an identifier token."""
         start = self._location()
-        match = self._IDENTIFIER_PATTERN.match(self.source[self.pos:])
+        match = self._IDENTIFIER_PATTERN.match(self.source, self.pos)
         assert match is not None
         value = match.group(0)
         self._advance(len(value))

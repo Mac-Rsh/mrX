@@ -20,19 +20,38 @@ class ConditionEvaluator:
 
     OP_OR = "||"
     OP_AND = "&&"
+    OP_BITOR = "|"
+    OP_BITXOR = "^"
+    OP_BITAND = "&"
     OP_EQ = "=="
     OP_NE = "!="
+    OP_LE = "<="
+    OP_GE = ">="
+    OP_LT = "<"
+    OP_GT = ">"
+    OP_LSHIFT = "<<"
+    OP_RSHIFT = ">>"
+    OP_ADD = "+"
+    OP_SUB = "-"
+    OP_MUL = "*"
+    OP_DIV = "/"
+    OP_MOD = "%"
     OP_NOT = "!"
+    OP_BITNOT = "~"
     OP_LPAREN = "("
     OP_RPAREN = ")"
     KEYWORD_DEFINED = "defined"
     DEFAULT_EXPR = "0"
 
     IDENTIFIER_PATTERN = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
+    INT_SUFFIX_PATTERN = re.compile(r'[uUlL]{1,3}$')
     TOKEN_PATTERN = re.compile(
         r"\s*("
-        r"\|\||&&|==|!=|\(|\)|!|defined|"
-        r"0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+|"
+        r"\|\||&&|==|!=|<=|>=|<<|>>|[|&^<>+\-*/%!~()]|defined|"
+        r"0[xX][0-9a-fA-F]+[uUlL]{0,3}|"
+        r"0[bB][01]+[uUlL]{0,3}|"
+        r"0[oO][0-7]+[uUlL]{0,3}|"
+        r"\d+[uUlL]{0,3}|"
         r"[A-Za-z_][A-Za-z0-9_]*"
         r")"
     )
@@ -103,27 +122,117 @@ class _ConditionParser:
 
     def _parse_and(self) -> int:
         """Parse logical AND expressions."""
-        value = self._parse_equality()
+        value = self._parse_bitor()
         while self._match(self.evaluator.OP_AND):
-            value = int(bool(value) and bool(self._parse_equality()))
+            value = int(bool(value) and bool(self._parse_bitor()))
         return value
 
-    def _parse_equality(self) -> int | None:
+    def _parse_bitor(self) -> int:
+        """Parse bitwise OR expressions."""
+        value = self._parse_bitxor()
+        while self._match(self.evaluator.OP_BITOR):
+            value = value | self._parse_bitxor()
+        return value
+
+    def _parse_bitxor(self) -> int:
+        """Parse bitwise XOR expressions."""
+        value = self._parse_bitand()
+        while self._match(self.evaluator.OP_BITXOR):
+            value = value ^ self._parse_bitand()
+        return value
+
+    def _parse_bitand(self) -> int:
+        """Parse bitwise AND expressions."""
+        value = self._parse_equality()
+        while self._match(self.evaluator.OP_BITAND):
+            value = value & self._parse_equality()
+        return value
+
+    def _parse_equality(self) -> int:
         """Parse equality and inequality expressions."""
-        value = self._parse_unary()
+        value = self._parse_relational()
         while True:
             if self._match(self.evaluator.OP_EQ):
-                value = int(value == self._parse_unary())
+                value = int(value == self._parse_relational())
                 continue
             if self._match(self.evaluator.OP_NE):
-                value = int(value != self._parse_unary())
+                value = int(value != self._parse_relational())
+                continue
+            return value
+
+    def _parse_relational(self) -> int:
+        """Parse relational comparison expressions."""
+        value = self._parse_shift()
+        while True:
+            if self._match(self.evaluator.OP_LE):
+                value = int(value <= self._parse_shift())
+                continue
+            if self._match(self.evaluator.OP_GE):
+                value = int(value >= self._parse_shift())
+                continue
+            if self._match(self.evaluator.OP_LT):
+                value = int(value < self._parse_shift())
+                continue
+            if self._match(self.evaluator.OP_GT):
+                value = int(value > self._parse_shift())
+                continue
+            return value
+
+    def _parse_shift(self) -> int:
+        """Parse bitwise shift expressions."""
+        value = self._parse_additive()
+        while True:
+            if self._match(self.evaluator.OP_LSHIFT):
+                value = value << self._parse_additive()
+                continue
+            if self._match(self.evaluator.OP_RSHIFT):
+                value = value >> self._parse_additive()
+                continue
+            return value
+
+    def _parse_additive(self) -> int:
+        """Parse addition and subtraction expressions."""
+        value = self._parse_multiplicative()
+        while True:
+            if self._match(self.evaluator.OP_ADD):
+                value = value + self._parse_multiplicative()
+                continue
+            if self._match(self.evaluator.OP_SUB):
+                value = value - self._parse_multiplicative()
+                continue
+            return value
+
+    def _parse_multiplicative(self) -> int:
+        """Parse multiplication, division, and modulo expressions."""
+        value = self._parse_unary()
+        while True:
+            if self._match(self.evaluator.OP_MUL):
+                value = value * self._parse_unary()
+                continue
+            if self._match(self.evaluator.OP_DIV):
+                rhs = self._parse_unary()
+                if rhs == 0:
+                    raise ValueError("division by zero in condition")
+                value = int(value / rhs)
+                continue
+            if self._match(self.evaluator.OP_MOD):
+                rhs = self._parse_unary()
+                if rhs == 0:
+                    raise ValueError("modulo by zero in condition")
+                value = value % rhs
                 continue
             return value
 
     def _parse_unary(self) -> int:
-        """Parse unary logical expressions."""
+        """Parse unary logical, bitwise, and sign expressions."""
         if self._match(self.evaluator.OP_NOT):
             return int(not bool(self._parse_unary()))
+        if self._match(self.evaluator.OP_BITNOT):
+            return ~self._parse_unary()
+        if self._match(self.evaluator.OP_ADD):
+            return +self._parse_unary()
+        if self._match(self.evaluator.OP_SUB):
+            return -self._parse_unary()
         return self._parse_primary()
 
     def _parse_primary(self) -> int:
@@ -147,7 +256,8 @@ class _ConditionParser:
             return self.evaluator.resolve_macro(token, self.macros,
                                                 set(self.seen))
         self._advance()
-        return int(token, 0)
+        cleaned = self.evaluator.INT_SUFFIX_PATTERN.sub("", token)
+        return int(cleaned, 0)
 
     def _expect(self, expected: str) -> None:
         """Require a specific token or raise a parse error."""

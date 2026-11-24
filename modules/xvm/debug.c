@@ -17,7 +17,8 @@ void mr_xvm_debug_init(mr_xvm_t *xvm) {
 
     /* Init XVM debug */
     xvm->debug.target = mr_xvm_isa_target(xvm->isa);
-    xvm->debug.probe.step_gate = MR_XVM_DEBUG_GATE_OPEN;
+    mr_atomic_init(&xvm->debug.probe.step_gate,
+                   (mr_atomic_t)MR_XVM_DEBUG_GATE_OPEN);
     xvm->debug.probe.entry = MR_NULL;
     xvm->debug.probe.priv = MR_NULL;
     xvm->debug.breaktable.skip = MR_FALSE;
@@ -49,7 +50,7 @@ mr_err_t mr_xvm_debug_probe_attach(mr_xvm_t *xvm,
     }
 
     /* Implant the probe and hold the target */
-    probe->step_gate = MR_XVM_DEBUG_GATE_HOLD;
+    mr_atomic_store(&probe->step_gate, (mr_atomic_t)MR_XVM_DEBUG_GATE_HOLD);
     probe->entry = (mr_ptr_t)entry;
     probe->priv = priv;
     return 0;
@@ -64,7 +65,7 @@ void mr_xvm_debug_probe_detach(mr_xvm_t *xvm) {
 
     /* Pull the probe out and open the gate */
     probe = &xvm->debug.probe;
-    probe->step_gate = MR_XVM_DEBUG_GATE_OPEN;
+    mr_atomic_store(&probe->step_gate, (mr_atomic_t)MR_XVM_DEBUG_GATE_OPEN);
     probe->entry = MR_NULL;
     probe->priv = MR_NULL;
     mr_xvm_debug_break_clear(xvm);
@@ -79,7 +80,7 @@ void mr_xvm_debug_probe_set_gate(mr_xvm_t *xvm, mr_uint32_t gate) {
 
     /* Update the execute step gate */
     probe = &xvm->debug.probe;
-    probe->step_gate = gate;
+    mr_atomic_store(&probe->step_gate, (mr_atomic_t)gate);
 }
 
 mr_bool_t mr_xvm_debug_probe_enter(mr_xvm_t *xvm, mr_uint32_t *step,
@@ -99,7 +100,7 @@ mr_bool_t mr_xvm_debug_probe_enter(mr_xvm_t *xvm, mr_uint32_t *step,
     }
 
     /* Clamp the step to the probe gate */
-    gate = xvm->debug.probe.step_gate;
+    gate = (mr_uint32_t)mr_atomic_load(&probe->step_gate);
     if (gate < (*step)) {
         *step = gate;
     }
@@ -116,7 +117,9 @@ mr_xvm_return_t mr_xvm_debug_probe_leave(mr_xvm_t *xvm, mr_xvm_return_t exec_ret
                                       mr_xvm_event_t *event) {
     mr_xvm_debug_probe_entry_t *entry;
     mr_xvm_debug_probe_t *probe;
+    mr_atomic_t expected;
     mr_bool_t step_stop;
+    mr_uint32_t gate;
     void *priv;
 
     /* Check parameter */
@@ -131,11 +134,16 @@ mr_xvm_return_t mr_xvm_debug_probe_leave(mr_xvm_t *xvm, mr_xvm_return_t exec_ret
     }
 
     /* Step stop: exception, or a completed single-step */
-    step_stop = (probe->step_gate == MR_XVM_DEBUG_GATE_STEP)
-             && (exec_ret == MR_XVM_NONE);
+    gate = (mr_uint32_t)mr_atomic_load(&probe->step_gate);
+    step_stop = (gate == MR_XVM_DEBUG_GATE_STEP) && (exec_ret == MR_XVM_NONE);
     if ((exec_ret != MR_XVM_EXCEPT) && (!step_stop)) {
         return exec_ret;
     }
+
+    /* Hold target and restore EXCEPT -> RUNNING without clobbering PAUSED */
+    mr_atomic_store(&probe->step_gate, (mr_atomic_t)MR_XVM_DEBUG_GATE_HOLD);
+    expected = MR_XVM_STATUS_EXCEPT;
+    mr_atomic_compare_exchange(&xvm->status, &expected, MR_XVM_STATUS_RUNNING);
 
     /* Save probe entry and priv */
     entry = (mr_xvm_debug_probe_entry_t *)probe->entry;
@@ -146,10 +154,6 @@ mr_xvm_return_t mr_xvm_debug_probe_leave(mr_xvm_t *xvm, mr_xvm_return_t exec_ret
     if (exec_ret != MR_XVM_NONE) {
         event->none.step = 0;
     }
-
-    /* Hold the target and hide the stop from the runtime */
-    mr_atomic_store(&xvm->status, MR_XVM_STATUS_RUNNING);
-    probe->step_gate = MR_XVM_DEBUG_GATE_HOLD;
     return MR_XVM_NONE;
 }
 
