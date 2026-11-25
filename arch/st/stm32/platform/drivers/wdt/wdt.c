@@ -76,6 +76,7 @@ typedef struct wdt_priv {
     mr_uint32_t ticks;
 #if defined(STM32_WDT_HAS_EWI)
     mr_uint32_t ewit;
+    mr_uint8_t irq_valid: 1;
     mr_uint8_t event_enabled: 1;
 #endif /* defined(STM32_WDT_HAS_EWI) */
     volatile mr_bool_t running;
@@ -180,6 +181,9 @@ static mr_err_t wdt_configure(const mr_driver_t *drv,
     /* Quantize pretimeout */
     pre_ticks = 0ULL;
     if (config->pretimeout != 0ULL) {
+        if (!priv->irq_valid) {
+            return -MR_ENODEV;
+        }
         if ((config->pretimeout >= config->feed_max)
             || (config->pretimeout
                 > (MR_UINT64_MAX / (mr_uint64_t)LSI_VALUE))) {
@@ -351,13 +355,19 @@ void HAL_IWDG_EarlyWakeupCallback(IWDG_HandleTypeDef *hiwdg) {
     __ST_HT_WDT_IRQ_INSTALL(_id)                                               \
     MR_HT_WDT_INSTALL(_id, &MR_CAT(__wdt_priv_, _id), _ops)
 #if defined(STM32_WDT_HAS_EWI)
+#define __ST_HT_WDT_HAS_IRQ(_id)                                               \
+    MR_MACRO_AND(MR_HT_DRIVER_HAS_PROP(_id, st_irqn),                          \
+                 MR_HT_DRIVER_HAS_PROP(_id, st_irq_handler))
 #define __ST_HT_WDT_IRQ_INIT(_id)                                              \
-    .irqn = MR_HT_DRIVER_PROP(_id, st_irqn),                                   \
-    .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),
+    .irqn = MR_HT_DRIVER_PROP_OR(_id, st_irqn, (IRQn_Type)0),                  \
+    .irq_priority = MR_HT_DRIVER_PROP_OR(_id, st_irq_priority, 0U),            \
+    .irq_valid = __ST_HT_WDT_HAS_IRQ(_id),
 #define __ST_HT_WDT_IRQ_INSTALL(_id)                                           \
-    void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {                        \
-        HAL_IWDG_IRQHandler(&MR_CAT(__wdt_priv_, _id).handle);                 \
-    }
+    MR_MACRO_IF(__ST_HT_WDT_HAS_IRQ(_id),                                      \
+                (void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {           \
+                    HAL_IWDG_IRQHandler(&MR_CAT(__wdt_priv_, _id).handle);     \
+                }),                                                            \
+                ())
 #else
 #define __ST_HT_WDT_IRQ_INIT(_id)
 #define __ST_HT_WDT_IRQ_INSTALL(_id)

@@ -10,6 +10,7 @@
 #if defined(MR_USE_DRIVER_UART)
 #include <mrX/drivers/uart/mr_uart.h>
 #include <mrX/drivers/gpio/mr_gpio.h>
+#include <mrX/port/mr_port_irq.h>
 #if defined(MR_USE_DRIVER_UART_STREAM) && defined(MR_USE_DRIVER_DMA)
 #include <mrX/drivers/dma/mr_dma.h>
 #define UART_USE_STREAM
@@ -287,6 +288,10 @@ static mr_err_t uart_make_init(const mr_uart_config_t *config,
 
 static void uart_interrupts_update(uart_priv_t *priv) {
     mr_bool_t rx_ready_enable, tc_enable;
+    int mask;
+
+    /* Lock */
+    mask = mr_port_irq_disable();
 
     /* Update RX ready interrupt */
     rx_ready_enable = ((priv->event_mask & MR_UART_WAIT_RX_READY) != 0U);
@@ -331,6 +336,9 @@ static void uart_interrupts_update(uart_priv_t *priv) {
         __HAL_UART_DISABLE_IT(&priv->handle, UART_IT_PE);
         __HAL_UART_DISABLE_IT(&priv->handle, UART_IT_ERR);
     }
+
+    /* Unlock */
+    mr_port_irq_enable(mask);
 }
 static mr_err_t uart_pin_check(const uart_pin_t *pin) {
     /* Check pin */
@@ -499,6 +507,9 @@ static mr_ssize_t uart_read(const mr_driver_t *drv, void *buf, mr_size_t size) {
     uart_priv_t *priv = MR_DRIVER_PRIV(drv);
     mr_size_t completed;
     mr_uint8_t *dst;
+#if !defined(STM32_UART_HAS_ICR)
+    int mask;
+#endif /* !defined(STM32_UART_HAS_ICR) */
 
     /* Check RX state */
     if (!priv->initialized) {
@@ -514,10 +525,14 @@ static mr_ssize_t uart_read(const mr_driver_t *drv, void *buf, mr_size_t size) {
     dst = (mr_uint8_t *)buf;
     completed = 0U;
 #if !defined(STM32_UART_HAS_ICR)
-    if (priv->rx_pending && (size != 0U)) {
-        *dst++ = priv->rx_byte;
-        priv->rx_pending = MR_FALSE;
-        completed++;
+    if (size != 0U) {
+        mask = mr_port_irq_disable();
+        if (priv->rx_pending) {
+            *dst++ = priv->rx_byte;
+            priv->rx_pending = MR_FALSE;
+            completed++;
+        }
+        mr_port_irq_enable(mask);
     }
 #endif /* !defined(STM32_UART_HAS_ICR) */
     while ((completed < size)
@@ -558,7 +573,9 @@ static mr_ssize_t uart_write(const mr_driver_t *drv, const void *buf,
 
     /* Update TX complete interrupt */
     if ((completed != 0U) && (priv->event_mask & MR_UART_WAIT_TX_DONE)) {
+        int mask = mr_port_irq_disable();
         __HAL_UART_ENABLE_IT(&priv->handle, UART_IT_TC);
+        mr_port_irq_enable(mask);
     }
     return (mr_ssize_t)completed;
 }
@@ -652,7 +669,11 @@ static mr_err_t uart_stream_stop(uart_priv_t *priv, uart_stream_t *stream,
     }
 
     /* Stop UART DMA request */
-    CLEAR_BIT(priv->handle.Instance->CR3, dma_mask);
+    {
+        int mask = mr_port_irq_disable();
+        CLEAR_BIT(priv->handle.Instance->CR3, dma_mask);
+        mr_port_irq_enable(mask);
+    }
 
     /* Stop DMA */
     ret = mr_ht_dma_stop(&stream->dma);
@@ -678,7 +699,9 @@ static mr_err_t uart_stream_stop(uart_priv_t *priv, uart_stream_t *stream,
     /* Update UART interrupt */
     if ((dma_mask == USART_CR3_DMAT)
         && ((priv->event_mask & MR_UART_WAIT_TX_DONE) == 0U)) {
+        int mask = mr_port_irq_disable();
         __HAL_UART_DISABLE_IT(&priv->handle, UART_IT_TC);
+        mr_port_irq_enable(mask);
     }
     if (dma_mask == USART_CR3_DMAR) {
         uart_interrupts_update(priv);
@@ -796,10 +819,14 @@ static mr_err_t uart_stream_start(const mr_driver_t *drv, uart_stream_t *stream,
     uart_interrupts_update(priv);
 
     /* Start UART DMA request */
-    if (!receive) {
-        uart_clear_tc(priv);
+    {
+        int mask = mr_port_irq_disable();
+        if (!receive) {
+            uart_clear_tc(priv);
+        }
+        SET_BIT(priv->handle.Instance->CR3, dma_mask);
+        mr_port_irq_enable(mask);
     }
-    SET_BIT(priv->handle.Instance->CR3, dma_mask);
     return 0;
 
 _release_waiter:
@@ -908,10 +935,14 @@ static mr_err_t uart_event_control(const mr_driver_t *drv, mr_uint32_t events,
 #endif /* defined(UART_USE_STREAM) */
 
     /* Update event mask */
-    if (enable) {
-        priv->event_mask |= events;
-    } else {
-        priv->event_mask &= ~events;
+    {
+        int mask = mr_port_irq_disable();
+        if (enable) {
+            priv->event_mask |= events;
+        } else {
+            priv->event_mask &= ~events;
+        }
+        mr_port_irq_enable(mask);
     }
 
     /* Update UART interrupt */
@@ -998,7 +1029,7 @@ static void uart_irq_handle(uart_priv_t *priv) {
         .tx = __ST_HT_UART_PIN(_id, st_tx, st_tx_af),                          \
         .rx = __ST_HT_UART_PIN(_id, st_rx, st_rx_af),                          \
         .irqn = MR_HT_DRIVER_PROP(_id, st_irqn),                               \
-        .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),               \
+        .irq_priority = MR_HT_DRIVER_PROP_OR(_id, st_irq_priority, 0U),        \
         __ST_HT_UART_STREAM_INIT(_id)                                          \
     };                                                                         \
     void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {                        \

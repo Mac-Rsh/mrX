@@ -135,14 +135,14 @@ mrX 是一套可嵌入现有应用工程的轻量级嵌入式内核与组件集�
 
 ### 上层组件
 
-| 模块                                        | 说明                                      |
-|---------------------------------------------|-------------------------------------------|
-| [启动与升级 Boot](modules/boot/boot.md)     | A/B 分区启动、镜像校验、回退与 Recovery   |
-| [远程过程调用 RPC](modules/rpc/rpc.md)      | 二进制帧协议、会话管理与 IDL 代码生成     |
-| [虚拟机 XVM](modules/xvm/xvm.md)            | 嵌入式字节码虚拟机与系统调用接口          |
-| [XVM 调试器 Dbg](modules/xvm/dbg.md)        | XVM 单步、断点与探针调试接口              |
-| [XVM GDB 桩](modules/xvm/gdb.md)            | 基于 RSP 协议的远程 GDB 调试服务端        |
-| [密码算法 Crypto](modules/crypto/crypto.md) | SHA-256、HMAC-SHA-256 与 ECDSA P-256 验签 |
+| 模块                                          | 说明                                             |
+|-----------------------------------------------|--------------------------------------------------|
+| [启动与升级 Boot](modules/boot/boot.md)       | A/B 分区启动、镜像校验、回退与 Recovery          |
+| [远程过程调用 RPC](modules/rpc/rpc.md)        | 二进制帧协议、会话管理与 IDL 代码生成            |
+| [虚拟机 XVM](modules/xvm/xvm.md)              | 嵌入式字节码虚拟机与系统调用接口                 |
+| [XVM 调试器 Dbg](modules/xvm/dbg.md)          | XVM 单步、断点与探针调试接口                     |
+| [XVM GDB 桩](modules/xvm/gdb.md)              | 基于 RSP 协议的远程 GDB 调试服务端               |
+| [密码算法 Crypto](modules/crypto/crypto.md)   | SHA-256、HMAC-SHA-256 与 ECDSA P-256 验签        |
 | [可扩展跟踪 XTrace](modules/xtrace/xtrace.md) | 可插拔协议编码（CTF / SystemView）与异步输出缓冲 |
 
 ---

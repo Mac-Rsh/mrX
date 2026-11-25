@@ -74,6 +74,12 @@ def adopt_parser(parser: ArgumentParser) -> ArgumentParser:
     parser._print_message = _print_message  # type: ignore[method-assign]
     parser.exit = exit_parser  # type: ignore[method-assign]
     parser.error = error  # type: ignore[method-assign]
+    for action in parser._actions:
+        choices = getattr(action, "choices", None)
+        if isinstance(choices, dict):
+            for subparser in choices.values():
+                if isinstance(subparser, ArgumentParser):
+                    adopt_parser(subparser)
     return parser
 
 
@@ -87,6 +93,24 @@ class CommandParser:
     def build(self, node: CommandNode) -> ArgumentParser:
         """Build a non-exiting parser from one command definition."""
         parser = node.command.create_parser(self.program_for(node))
+        visible_children = sorted(
+            (child for child in node.children.values()
+             if not child.command.spec.hidden),
+            key=lambda child: child.command.spec.name,
+        )
+        if visible_children:
+            width = max(len(child.command.spec.name)
+                        for child in visible_children)
+            lines = ["subcommands:"]
+            for child in visible_children:
+                spec = child.command.spec
+                lines.append(
+                    f"  {spec.name.ljust(width)}  {spec.description}")
+            subcommand_text = "\n".join(lines)
+            parser.epilog = (
+                f"{subcommand_text}\n\n{parser.epilog}"
+                if parser.epilog else subcommand_text
+            )
         return adopt_parser(parser)
 
     def parse(self, node: CommandNode, arguments: list[str]) -> ParseOutcome:
@@ -117,12 +141,10 @@ def option_actions(parser: ArgumentParser) -> list[Action]:
 
 
 def positional_actions(parser: ArgumentParser) -> list[Action]:
-    """Return positional actions declared on one parser, excluding help."""
+    """Return positional actions declared on one parser."""
     actions: list[Action] = []
     for action in parser._actions:
         if action.option_strings:
-            continue
-        if action.dest in {"help"}:
             continue
         actions.append(action)
     return actions
@@ -147,6 +169,11 @@ def action_takes_value(action: Action) -> bool:
 def action_is_repeatable(action: Action) -> bool:
     """Return whether an option may be supplied more than once."""
     name = type(action).__name__
-    if name in {"_AppendAction", "_AppendConstAction", "_CountAction"}:
+    if name in {
+        "_AppendAction",
+        "_AppendConstAction",
+        "_CountAction",
+        "_ExtendAction",
+    }:
         return True
     return action.nargs in {"*", "+"}

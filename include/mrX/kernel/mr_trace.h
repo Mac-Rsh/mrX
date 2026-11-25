@@ -88,11 +88,16 @@ mr_uint32_t mr_trace_mask(void);
     , (mr_uintptr_t)(_a0) __MR_TRACE_ARGS_6(__VA_ARGS__)
 #define __MR_TRACE_ARGS_8(_a0, ...)                                            \
     , (mr_uintptr_t)(_a0) __MR_TRACE_ARGS_7(__VA_ARGS__)
-#define __MR_TRACE(_type, _name, ...)                                          \
+#define __MR_TRACE_0(_type, _name)                                             \
+    mr_trace((_type), MR_TRACE_TAG, (_name), 0U)
+#define __MR_TRACE_1(_type, _name, ...)                                        \
     mr_trace((_type), MR_TRACE_TAG, (_name),                                   \
              (mr_size_t)MR_VA_ARGS_NUM(__VA_ARGS__)                            \
                  MR_CAT(__MR_TRACE_ARGS_,                                      \
                         MR_VA_ARGS_NUM(__VA_ARGS__))(__VA_ARGS__))
+#define __MR_TRACE(_type, ...)                                                 \
+    __MR_CAT(__MR_TRACE_, __MR_VA_ARGS_HAS_COMMA(__VA_ARGS__))(                \
+        (_type), __VA_ARGS__)
 
 /**
  * @brief This macro traces the beginning of a span.
@@ -100,8 +105,7 @@ mr_uint32_t mr_trace_mask(void);
  * @param _name The event name.
  * @param ... Optional arguments (0 to 8).
  */
-#define MR_TRACE_BEGIN(_name, ...)                                             \
-    __MR_TRACE(MR_TRACE_TYPE_BEGIN, (_name), ##__VA_ARGS__)
+#define MR_TRACE_BEGIN(...)             __MR_TRACE(MR_TRACE_TYPE_BEGIN, __VA_ARGS__)
 
 /**
  * @brief This macro traces the end of a span.
@@ -109,8 +113,7 @@ mr_uint32_t mr_trace_mask(void);
  * @param _name The event name.
  * @param ... Optional arguments (0 to 8).
  */
-#define MR_TRACE_END(_name, ...)                                               \
-    __MR_TRACE(MR_TRACE_TYPE_END, (_name), ##__VA_ARGS__)
+#define MR_TRACE_END(...)               __MR_TRACE(MR_TRACE_TYPE_END, __VA_ARGS__)
 
 /**
  * @brief This macro traces an instant event.
@@ -118,8 +121,7 @@ mr_uint32_t mr_trace_mask(void);
  * @param _name The event name.
  * @param ... Optional arguments (0 to 8).
  */
-#define MR_TRACE_EVENT(_name, ...)                                             \
-    __MR_TRACE(MR_TRACE_TYPE_EVENT, (_name), ##__VA_ARGS__)
+#define MR_TRACE_EVENT(...)             __MR_TRACE(MR_TRACE_TYPE_EVENT, __VA_ARGS__)
 
 /**
  * @brief This macro traces a counter value sample.
@@ -131,9 +133,9 @@ mr_uint32_t mr_trace_mask(void);
     mr_trace(MR_TRACE_TYPE_COUNTER, MR_TRACE_TAG, (_name), 1U,                 \
              (mr_uintptr_t)(mr_intptr_t)(_val))
 #else
-#define MR_TRACE_BEGIN(_name, ...)      ((void)0)
-#define MR_TRACE_END(_name, ...)        ((void)0)
-#define MR_TRACE_EVENT(_name, ...)      ((void)0)
+#define MR_TRACE_BEGIN(...)             ((void)0)
+#define MR_TRACE_END(...)               ((void)0)
+#define MR_TRACE_EVENT(...)             ((void)0)
 #define MR_TRACE_COUNTER(_name, _val)   ((void)0)
 #endif /* defined(MR_USE_TRACE) && defined(MR_TRACE_TAG) */
 

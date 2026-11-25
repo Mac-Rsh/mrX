@@ -4,15 +4,20 @@
 选择板级工程提供的 HAL 伞头文件，实际芯片型号、封装、启动文件、链接脚本和引脚由板级工程决定。各系列差异
 由 HAL 头文件中的宏在编译期自动探测（如 GPIO MODER/AFR、UART RDR/TDR、DMA GPDMA/Stream/Channel）。
 
-当前平台提供 SysTick 低分辨率时钟、DWT 高分辨率时钟、中断临界区、ITM 诊断输出、断言和可选
+当前平台提供 SysTick 低分辨率时钟、DWT 高分辨率时钟、中断临界区、ITM 诊断输出、RTT 跟踪输出、断言和可选
 D/I-cache 端口。片上驱动按 mrX 已有驱动类别接入，实际实例由芯片型号、封装和板级 HardTree 决定。
+其中 GPIO/UART/SPI/I2C/TMR/PWM/DMA/WDT 面向主流 Cortex-M STM32 系列；Flash（128 位 quadword 扇区）、
+ADC stream（需 `ADSTART` IP）与 ETH（描述符式 HAL）主要覆盖 STM32H5/U5/G4/L4/H7 等较新系列，
+传统 F1 的 CRL/CRH GPIO 不支持复用接管与配置查询。
 
 | Kconfig | 说明 |
 | --- | --- |
 | `MR_USE_STM32` | 固定启用 |
 | `MR_CFG_STM32_HAL_HEADER` | HAL 伞头文件，如 `stm32f4xx_hal.h`、`stm32g4xx_hal.h` 或 `stm32h5xx_hal.h`；默认占位符 `stm32xxxx_hal.h` 必须由板级配置替换 |
 | `MR_USE_DCACHE` / `MR_USE_ICACHE` | 启用数据/指令缓存端口 |
-| `MR_CFG_STM32_CLOCK_IRQ_PRIORITY` | SysTick 中断优先级，0 最高，默认 15 |
+| `MR_CFG_STM32_CLOCK_IRQ_PRIORITY` | SysTick 中断优先级，0 最高，默认 15（自动钳位到芯片 `__NVIC_PRIO_BITS` 支持的最大值） |
+| `MR_CFG_STM32_XTRACE_RTT_UP_SIZE` | XTrace RTT 上行缓冲区大小（字节），默认 1024，范围 64–16384 |
+| `MR_CFG_STM32_XTRACE_RTT_DOWN_SIZE` | XTrace RTT 下行缓冲区大小（字节），默认 32，范围 16–1024 |
 
 ## 接入 Cube 工程
 
@@ -42,10 +47,19 @@ D/I-cache 端口。片上驱动按 mrX 已有驱动类别接入，实际实例�
 tick 频率不同。`uwTickFreq` 为 0 或 SysTick 未运行时，忙等接口直接返回。启用
 `MR_USE_CLOCK_HIRES` 时使用 DWT `CYCCNT`；不支持 DWT 的内核（如 Cortex-M0/M0+）必须关闭
 该配置，否则编译报错。主频变更后应重新调用 `mr_stm32_platform_clock_init()`，使高分辨率
-时钟的周期折算与新主频一致。
+时钟的周期折算与新主频一致（已初始化的高分辨率时钟会保持单调连续，不会归零）。
 
 诊断输出 `mr_port_output` 通过 ITM（SWO）发送；未定义 `ITM` 的芯片输出不可用并返回
 -1。断言失败时输出文件、行号和表达式，随后关中断死循环，现场可用调试器读取。
+
+启用 `MR_USE_TRACE` 与 `MR_USE_MODULE_XTRACE` 时，平台在 `MR_INIT_LEVEL_MODULE` 阶段自动通过
+`mr_stm32_xtrace_rtt_register()` 注册内置轻量 SEGGER RTT 输出适配器（导出标准 `_SEGGER_RTT` 控制块，
+兼容 J-Link 以及基于 OpenOCD / probe-rs / pyOCD 的 ST-Link 与 CMSIS-DAP，覆盖 Cortex-M0/M0+ 在内的
+全系列内核）。`MR_USE_MODULE_XTRACE_PROTO_SYSVIEW` 模式下使用通道 1（`"SysView"`，通道 0 仅作
+`"Terminal"` 占位，无额外 RAM 开销），其余协议（如 CTF）使用通道 0（`"XTrace"`）；后台通过
+`mr_clock_hook_add()` 占用 1 个时钟钩子槽位按节拍自动排空 FIFO（如额外挂载更多钩子可调高
+`MR_CFG_CLOCK_HOOK_SIZE`），也可在休眠或异常前调用 `mr_stm32_xtrace_rtt_poll()` 主动刷新。启用
+`MR_USE_DCACHE` 时自动执行 D-cache 维护。
 
 启用缓存端口时，缓存变体从所选芯片的能力自动选择：存在 HAL DCACHE/ICACHE 外设时使用外设
 （HAL DCACHE 实例由缓存端口惰性初始化），否则使用 CMSIS SCB 核心缓存。板级不要用并行的
@@ -99,6 +113,29 @@ USART 时钟的板级回调。成对的 `st,irqn` 和 `st,irq-handler` 必须提
 `<&dma节点 channel>`。RX stream 需要 8 位数据帧；7 位数据带校验的 RX stream 不支持，DMA
 无法剥离校验位。单次 TX stream 在 DMA 供数完成后再等 TC 报告完成；循环 TX stream 按 DMA
 缓冲区回绕报告完成。重新配置、切换轮询或关闭驱动前，先停止已启动的 stream。
+
+## SPI 与 I2C
+
+| Compatible | HardTree 属性 | 能力 |
+| --- | --- | --- |
+| `st,stm32-spi` | `st,spix`、`st,clken`、`st,sck`（必选）、`st,mosi`/`st,miso`（按需）及对应 `-af`、`st,cs`（`<<&gpio pin> ...>`），可选 `st,timeout-ms`（默认 100）、`st,rx-dma`、`st,tx-dma`、成对 `st,irqn`/`st,irq-handler` 及 `st,irq-priority`（缺省 0） | SPI master/slave，模式 0–3，8/16 位，MSB/LSB。主机按片选独立保存配置并在切换时惰性重配，缺少 TX 帧发送全 1。 |
+| `st,stm32-i2c` | `st,i2cx`、`st,clken`、`st,scl`、`st,sda` 及对应 `-af`，可选 `st,timing`、`st,timeout-ms`（默认 25）、`st,irqn`/`st,irq-handler`（单向量芯片）或 `st,ev-irqn`/`st,ev-irq-handler` + `st,er-irqn`/`st,er-irq-handler`（双向量芯片）及 `st,irq-priority`（缺省 0） | I2C master/slave，7/10 位地址，主机支持零长度写地址探测及 `Write(1–2B, NOSTOP) + Read` 硬件 Repeated START。 |
+
+SPI 后端自动兼容传统 `DR` 与新版 `TXDR/RXDR`（H5/H7/U5）SPI IP，总线时钟从 PCLK1/PCLK2 查询并按
+2–256 分频选取不超过目标速率的最快档位。启用 `MR_USE_DRIVER_SPI_STREAM` 与 DMA 后，可用
+`st,rx-dma`、`st,tx-dma` 启动单次或循环 DMA stream（仅接收流也需提供 `st,tx-dma` 以产生时钟）。
+SPI 从机模式仅使用 `cs = 0`，需提供成对的 `st,irqn`/`st,irq-handler` 且 `st,cs` 首项引脚支持双边沿
+GPIO EXTI，后端通过 EXTI 同步软件 NSS（`CR1.SSI`）并上报 `SELECT`/`DESELECT`/`RX_READY`/`TX_READY`/`ERROR`。
+从机收发 FIFO 深度可通过 `st,slave-rx-fifo`、`st,slave-tx-fifo` 按实例配置（单位：帧，缺省 16，支持 8/16 位；
+未声明从机中断的纯主机节点不分配 FIFO 内存）；将 `clock_rate` 配置为 0 可退出从机模式。
+
+I2C 后端自动将 SCL/SDA 配置为复用开漏+内部上拉，并自动兼容 v1（`ClockSpeed`）与 v2（`TIMINGR`）
+两代 I2C IP。v2 IP 未提供 `st,timing` 时按 PCLK1 自动估算标准/快速模式时序；如需精确时序可在
+HardTree 节点中通过 `st,timing` 指定 CubeMX 计算值。仲裁丢失返回 `-MR_EAGAIN`，NACK/总线错误返回
+`-MR_EIO`，超时返回 `-MR_ETIMEDOUT`。I2C 从机模式需提供对应的单/双 IRQ 属性，支持 7/10 位本机地址，
+收发 FIFO 大小可通过 `st,slave-rx-fifo`、`st,slave-tx-fifo` 按实例配置（单位：字节，缺省 32，纯主机节点不分配内存；
+TX 空时发送 `0xFF`，RX 满时丢弃并上报 `ERROR`），上报 `RX_START`/`RX_READY`/`TX_START`/`TX_READY`/`STOP`/`ERROR`；
+将 `clock_rate` 配置为 0 可退出从机模式。
 
 ## 定时器与 PWM
 
@@ -163,7 +200,8 @@ Stream 型要求源宿宽度一致（无 FIFO 打包），burst 仅支持单次�
 事件为 `MR_DMA_WAIT_HALF`、`MR_DMA_WAIT_DONE` 与 `MR_DMA_WAIT_ERROR`，错误中断不受事件
 订阅影响始终开启。`offset` 查询返回最后观测到的源侧字节进度。启用缓存端口时，后端在启动、
 停止与半/全传输边界自动 clean/invalidate 缓冲区，已完成范围的数据在事件上报前交还 CPU，
-应用不必再手工维护缓存。
+应用不必再手工维护缓存；但应用应确保 DMA 目标缓冲区起始地址、总字节长度以及启用 `HALF`
+事件时的半缓冲边界按 cache line 大小对齐，避免 invalidate 扩充对齐波及相邻数据。
 
 ## Flash
 

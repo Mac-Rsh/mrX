@@ -204,8 +204,9 @@ class CodecBuilder:
         if slot.size == 1:
             lines.append(f"{inner}*(mr_uint8_t *)&{access} = p[{src_expr}];")
         else:
-            lines.extend(self._memmove(f"&{access}", f"p + {src_expr}",
-                                       f"{slot.size}U", inner))
+            lines.extend(self._memmove(
+                f"p + {slot.scatter_offset}U", f"p + {src_expr}",
+                f"{slot.size}U", inner))
         lines.append(f"{indent}}}")
         return lines
 
@@ -259,8 +260,9 @@ class CodecBuilder:
                 lines.append(
                     f"{indent * 2}p[off] = *(const mr_uint8_t *)&{access};")
             else:
-                lines.extend(self._memmove("p + off", f"&{access}", length,
-                                           indent * 2))
+                lines.extend(self._memmove(
+                    "p + off", f"p + {slot.scatter_offset}U", length,
+                    indent * 2))
             lines.append(f"{indent}}}")
         lines.append(f"{indent}off += {length};")
         return lines

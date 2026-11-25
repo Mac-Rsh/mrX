@@ -51,8 +51,8 @@ mr_ssize_t eth_poll_rx(const char *name, void *buf, mr_size_t capacity) {
   `max(60, 14 + mtu)` 分配），不足返回 `-MR_ERANGE`；`mr_eth_write` 要求非零帧长在
   `14` 到 `14 + mtu` 之间，越界返回 `-MR_ERANGE`。
 - **配置与统计**：`mr_eth_config_t` 中的 `mac` 必须为 6 字节非零单播地址（最低位为
-  0），`mtu` 范围为 `1..1500`（`MR_ETH_MTU_MAX`）。`setup` 前调用 `mr_eth_configure`
-  仅保存配置，待 `setup` 时应用；`setup` 后调用则立即生效并清零 `stats`。
+  0），`mtu` 范围为 `1..1500`（`MR_ETH_MTU_MAX`）。`mr_eth_configure` 须在
+  `setup` 后调用，立即下发后端并清零 `stats`。
   `mr_eth_link` 返回物理链路通断、实际速率/双工/流控及累计收发统计（`-MR_EAGAIN`、
   `-MR_EBUSY`、`-MR_EPERM` 不计入错误统计）。
 - **直接收发 vs Stream 收发**：直接 `mr_eth_read` / `mr_eth_write`

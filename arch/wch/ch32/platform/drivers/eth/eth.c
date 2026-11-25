@@ -167,6 +167,7 @@ typedef struct eth_priv {
 #endif /* defined(MR_USE_DRIVER_ETH_STREAM) */
 #if defined(CH32_ETH_USE_DMA)
     mr_uint32_t mdio_div;
+    mr_uint32_t active_mdio_div;
     mr_uint32_t rx_index;
 #else
     mr_ssize_t rx_pending;
@@ -201,7 +202,7 @@ static mr_err_t eth_phy_read(const eth_priv_t *priv, mr_uint32_t reg,
     if (ret != 0) {
         return ret;
     }
-    ETH->MACMIIAR = priv->mdio_div | (priv->phy_addr << 11) | (reg << 6)
+    ETH->MACMIIAR = priv->active_mdio_div | (priv->phy_addr << 11) | (reg << 6)
                     | ETH_MACMIIAR_MB;
     ret = eth_wait_reg(&ETH->MACMIIAR, ETH_MACMIIAR_MB, 100U);
     if (ret != 0) {
@@ -227,7 +228,7 @@ static mr_err_t eth_phy_write(const eth_priv_t *priv, mr_uint32_t reg,
         return ret;
     }
     ETH->MACMIIDR = value;
-    ETH->MACMIIAR = priv->mdio_div | (priv->phy_addr << 11) | (reg << 6)
+    ETH->MACMIIAR = priv->active_mdio_div | (priv->phy_addr << 11) | (reg << 6)
                     | ETH_MACMIIAR_MB | ETH_MACMIIAR_MW;
     return eth_wait_reg(&ETH->MACMIIAR, ETH_MACMIIAR_MB, 100U);
 #else
@@ -503,6 +504,12 @@ static mr_err_t eth_link_refresh(eth_priv_t *priv, mr_eth_link_t *link) {
 
 #if defined(CH32_ETH_USE_DMA)
 #if defined(MR_USE_CH32V4X7)
+static mr_bool_t eth_mdio_div_valid(mr_uint32_t div) {
+    return (div == ETH_MACMIIAR_CR_Div16) || (div == ETH_MACMIIAR_CR_Div26)
+        || (div == ETH_MACMIIAR_CR_Div42) || (div == ETH_MACMIIAR_CR_Div62)
+        || (div == ETH_MACMIIAR_CR_Div74) || (div == ETH_MACMIIAR_CR_Div102);
+}
+
 static mr_uint32_t eth_mdio_div(mr_uint32_t hclk) {
     /* Use the MACMIIAR clock ranges to keep MDC within the PHY limit */
     if (hclk < 35000000U) {
@@ -563,10 +570,11 @@ static mr_err_t eth_hw_prepare(eth_priv_t *priv, const mr_eth_config_t *config) 
     RCC->HBRSTR &= ~RCC_HBPeriph_ETH_MAC;
     ETH->PHY_CR &= ~CH32_ETH_PHY_POWER_DOWN;
     ETH->PHY_CR |= CH32_ETH_PHY_RESET_N;
-    if (priv->mdio_div == CH32_ETH_DEFAULT_MDIO) {
-        priv->mdio_div = eth_mdio_div(SystemCoreClock);
-    }
+    priv->active_mdio_div = (priv->mdio_div == CH32_ETH_DEFAULT_MDIO)
+                                ? eth_mdio_div(SystemCoreClock)
+                                : priv->mdio_div;
 #else
+    priv->active_mdio_div = priv->mdio_div;
     RCC->AHBPCENR |= CH32_ETH_CLOCKS;
     MR_IGNORE(RCC->AHBPCENR);
     if (priv->internal_rmii_phy) {
@@ -1012,8 +1020,7 @@ static mr_err_t eth_configure(const mr_driver_t *drv,
         return -MR_ENOSYS;
     }
     if ((priv->mdio_div != CH32_ETH_DEFAULT_MDIO)
-        && (((priv->mdio_div & ~ETH_MACMIIAR_CR) != 0U)
-            || (priv->mdio_div > ETH_MACMIIAR_CR_Div74))) {
+        && !eth_mdio_div_valid(priv->mdio_div)) {
         return -MR_EINVAL;
     }
 #endif /* defined(MR_USE_CH32V4X7) */

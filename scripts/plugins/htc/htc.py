@@ -14,6 +14,8 @@ macro emission pipeline for one input source file.
 
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
+from tempfile import NamedTemporaryFile
+import os
 
 from framework.command import Command, CommandResult, CommandSpec
 from framework.completion import DIRECTORY_COMPLETION, FILE_COMPLETION
@@ -122,7 +124,17 @@ class HTCCommand(Command):
                 except OSError:
                     pass
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(header_text, encoding="utf-8")
+            with NamedTemporaryFile("w", encoding="utf-8", delete=False,
+                                    dir=output_path.parent,
+                                    prefix=f".{output_path.name}.",
+                                    suffix=".tmp") as tmp_file:
+                tmp_path = Path(tmp_file.name)
+                tmp_file.write(header_text)
+            try:
+                os.replace(tmp_path, output_path)
+            except OSError:
+                tmp_path.unlink(missing_ok=True)
+                raise
         except OSError as exc:
             diagnostics.error(
                 ErrorCode.FILE_WRITE_ERROR,

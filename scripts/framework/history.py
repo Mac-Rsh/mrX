@@ -14,7 +14,7 @@ the Git repository.
 
 from pathlib import Path
 
-from prompt_toolkit.history import FileHistory, History
+from prompt_toolkit.history import FileHistory, History, InMemoryHistory
 from platformdirs import user_state_dir
 
 APP_NAME = "mrX"
@@ -25,19 +25,26 @@ HISTORY_FILENAME = "cli.history"
 def history_path() -> Path:
     """Return the persistent CLI history file path."""
     directory = Path(user_state_dir(APP_NAME, APP_AUTHOR))
-    directory.mkdir(parents=True, exist_ok=True)
     return directory / HISTORY_FILENAME
 
 
 def create_file_history() -> History:
     """Create a prompt_toolkit history object backed by the state file."""
-    return FileHistory(str(history_path()))
+    path = history_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return FileHistory(str(path))
+    except OSError:
+        return InMemoryHistory()
 
 
 def load_history_lines() -> list[str]:
     """Load stored history strings, oldest first."""
     path = history_path()
-    if not path.is_file():
+    try:
+        if not path.is_file():
+            return []
+        history = FileHistory(str(path))
+        return list(reversed(list(history.load_history_strings())))
+    except OSError:
         return []
-    history = FileHistory(str(path))
-    return list(reversed(list(history.load_history_strings())))

@@ -112,14 +112,74 @@ class Preprocessor:
         """Scan source text and inline expanded lines with line mapping."""
         conditional_stack = ConditionalState(self.diagnostics)
         next_stack = [*active_stack, normalized_path]
+        in_block_comment = False
 
         for line_number, line in enumerate(raw_text.splitlines(keepends=True),
                                            start=1):
+            if in_block_comment:
+                if not conditional_stack.is_skipping():
+                    output_lines.append(line)
+                    line_map.append((normalized_path, line_number))
+                in_block_comment = self._update_block_comment_state(
+                    line, in_block_comment)
+                continue
             self._scan_line(line, line_number, normalized_path, current_dir,
                             output_lines, line_map, seen_paths,
                             conditional_stack, next_stack, macros)
+            if not conditional_stack.is_skipping():
+                in_block_comment = self._update_block_comment_state(
+                    line, in_block_comment)
 
         conditional_stack.report_unterminated()
+
+    @staticmethod
+    def _update_block_comment_state(line: str, in_block_comment: bool) -> bool:
+        """Track multi-line `/* ... */` comment state across physical lines."""
+        index = 0
+        length = len(line)
+        in_string = False
+        in_char = False
+        while index < length:
+            char = line[index]
+            if in_block_comment:
+                if char == "*" and index + 1 < length and line[index + 1] == "/":
+                    in_block_comment = False
+                    index += 2
+                    continue
+                index += 1
+                continue
+            if in_string:
+                if char == "\\":
+                    index += 2
+                    continue
+                if char == '"':
+                    in_string = False
+                index += 1
+                continue
+            if in_char:
+                if char == "\\":
+                    index += 2
+                    continue
+                if char == "'":
+                    in_char = False
+                index += 1
+                continue
+            if char == '"':
+                in_string = True
+                index += 1
+                continue
+            if char == "'":
+                in_char = True
+                index += 1
+                continue
+            if char == "/" and index + 1 < length and line[index + 1] == "/":
+                break
+            if char == "/" and index + 1 < length and line[index + 1] == "*":
+                in_block_comment = True
+                index += 2
+                continue
+            index += 1
+        return in_block_comment
 
     def _scan_line(
             self,

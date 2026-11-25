@@ -10,6 +10,7 @@
 | 头文件 | `<mrX/modules/xvm/mr_xvm.h>`（自动引入 `mr_xvm_isa.h`，调试开启时引入 `mr_xvm_debug.h`）                             |
 | 依赖   | [对象系统](../../kernel/object.md)、[内存分配](../../libc/malloc.md)（仅 `mr_xvm_create`）、[调试器](dbg.md)（可选） |
 | 测试   | `test/modules/xvm/xvm.c`                                                                                             |
+| 工具链 | [xvm-isa-riscv32](https://gitee.com/MacRsh/xvm-isa-riscv32)（RISC-V32 客户机固件模板与配套 GCC 工具链）              |
 
 ## 配置
 

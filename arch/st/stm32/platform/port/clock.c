@@ -34,6 +34,10 @@ static mr_uint32_t __clock_hires_fraction;
 static void clock_dwt_init(void) {
     /* Init DWT cycle counter */
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+#if defined(__CORTEX_M) && (__CORTEX_M == 7U)
+    /* Unlock DWT write access on Cortex-M7 */
+    *(volatile uint32_t *)0xE0001FB0UL = 0xC5ACCE55UL;
+#endif /* defined(__CORTEX_M) && (__CORTEX_M == 7U) */
     DWT->CYCCNT = 0U;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     __DSB();
@@ -78,6 +82,7 @@ static void clock_systick_busy_wait(mr_uint32_t us) {
 }
 
 void mr_stm32_platform_clock_init(mr_uint32_t per_second) {
+    mr_uint32_t priority;
     int mask;
 
     /* Check parameter */
@@ -97,12 +102,23 @@ void mr_stm32_platform_clock_init(mr_uint32_t per_second) {
 #if !defined(MR_CFG_STM32_CLOCK_IRQ_PRIORITY)
 #define MR_CFG_STM32_CLOCK_IRQ_PRIORITY (15U)
 #endif /* !defined(MR_CFG_STM32_CLOCK_IRQ_PRIORITY) */
-    HAL_NVIC_SetPriority(SysTick_IRQn, MR_CFG_STM32_CLOCK_IRQ_PRIORITY, 0U);
+    priority = MR_CFG_STM32_CLOCK_IRQ_PRIORITY;
+#if defined(__NVIC_PRIO_BITS)
+    if (priority > ((1UL << __NVIC_PRIO_BITS) - 1UL)) {
+        priority = (1UL << __NVIC_PRIO_BITS) - 1UL;
+    }
+#endif /* defined(__NVIC_PRIO_BITS) */
+    HAL_NVIC_SetPriority(SysTick_IRQn, priority, 0U);
 
 #if defined(MR_USE_CLOCK_HIRES)
-    /* Init high resolution clock */
-    clock_dwt_init();
-    mr_port_clock_hires_tick_set(0U);
+    /* Init or resync high resolution clock without resetting monotonic ticks */
+    if (!__clock_hires_ready) {
+        clock_dwt_init();
+        mr_port_clock_hires_tick_set(0U);
+    } else {
+        __clock_hires_cycle = DWT->CYCCNT;
+        __clock_hires_fraction = 0U;
+    }
 #endif /* defined(MR_USE_CLOCK_HIRES) */
 
     /* Mark clock ready */
@@ -150,7 +166,7 @@ mr_uint64_t mr_port_clock_hires_tick(void) {
     mask = mr_port_irq_disable();
 
     /* Check clock state */
-    if (!__clock_hires_ready) {
+    if (!__clock_hires_ready || (SystemCoreClock == 0U)) {
         mr_port_irq_enable(mask);
         return 0U;
     }

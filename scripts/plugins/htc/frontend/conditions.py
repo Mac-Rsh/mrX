@@ -213,7 +213,8 @@ class _ConditionParser:
                 rhs = self._parse_unary()
                 if rhs == 0:
                     raise ValueError("division by zero in condition")
-                value = int(value / rhs)
+                quotient = abs(value) // abs(rhs)
+                value = -quotient if (value < 0) ^ (rhs < 0) else quotient
                 continue
             if self._match(self.evaluator.OP_MOD):
                 rhs = self._parse_unary()
@@ -257,6 +258,9 @@ class _ConditionParser:
                                                 set(self.seen))
         self._advance()
         cleaned = self.evaluator.INT_SUFFIX_PATTERN.sub("", token)
+        if (cleaned.startswith("0") and len(cleaned) > 1
+                and cleaned[1] not in {"x", "X", "b", "B", "o", "O"}):
+            return int(cleaned, 8)
         return int(cleaned, 0)
 
     def _expect(self, expected: str) -> None:

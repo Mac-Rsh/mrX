@@ -125,7 +125,7 @@ static mr_ssize_t flash_read(const mr_driver_t *drv, mr_uint64_t offset,
     return (mr_ssize_t)size;
 }
 
-static mr_err_t flash_program_word(mr_uint32_t addr, const mr_uint32_t *data) {
+static mr_err_t flash_program_word(mr_uint32_t addr, const uint32_t *data) {
     /* Program one 128-bit quadword */
     return mr_stm32_hal_status(
         HAL_FLASH_Program(FLASH_TYPEPROGRAM_QUADWORD, addr, (uint32_t)data));
@@ -221,10 +221,20 @@ _lock:
     /* Lock FLASH, preserving the first programming error */
     if (ret != 0) {
         HAL_FLASH_Lock();
+#if defined(FLASH_USE_CACHE)
+        if (done != 0U) {
+            flash_cache_drop(base, done);
+        }
+#endif /* defined(FLASH_USE_CACHE) */
         return (mr_ssize_t)ret;
     }
     ret = mr_stm32_hal_status(HAL_FLASH_Lock());
     if (ret != 0) {
+#if defined(FLASH_USE_CACHE)
+        if (done != 0U) {
+            flash_cache_drop(base, done);
+        }
+#endif /* defined(FLASH_USE_CACHE) */
         return ret;
     }
 
@@ -239,9 +249,9 @@ static mr_err_t flash_erase(const mr_driver_t *drv, mr_uint64_t offset,
                             mr_uint64_t size) {
     uint32_t banks, sector, sector_error;
 #if defined(FLASH_USE_CACHE)
-    mr_uint32_t base, erase_size;
+    mr_uint32_t base, erased;
 #endif /* defined(FLASH_USE_CACHE) */
-    FLASH_EraseInitTypeDef init;
+    FLASH_EraseInitTypeDef init = {0};
     mr_err_t ret;
 
     MR_IGNORE(drv);
@@ -259,7 +269,7 @@ static mr_err_t flash_erase(const mr_driver_t *drv, mr_uint64_t offset,
 
 #if defined(FLASH_USE_CACHE)
     base = FLASH_BASE + (mr_uint32_t)offset;
-    erase_size = (mr_uint32_t)size;
+    erased = 0U;
 #endif /* defined(FLASH_USE_CACHE) */
 
     /* Unlock FLASH */
@@ -282,6 +292,9 @@ static mr_err_t flash_erase(const mr_driver_t *drv, mr_uint64_t offset,
         }
         offset += STM32_FLASH_SECTOR_SIZE;
         size -= STM32_FLASH_SECTOR_SIZE;
+#if defined(FLASH_USE_CACHE)
+        erased += STM32_FLASH_SECTOR_SIZE;
+#endif /* defined(FLASH_USE_CACHE) */
     }
 
     /* Lock FLASH, preserving the first erase error */
@@ -290,9 +303,9 @@ static mr_err_t flash_erase(const mr_driver_t *drv, mr_uint64_t offset,
     }
 
 #if defined(FLASH_USE_CACHE)
-    /* Invalidate cached FLASH contents after a successful erase */
-    if (ret == 0) {
-        flash_cache_drop(base, erase_size);
+    /* Invalidate cached FLASH contents for all erased sectors */
+    if (erased != 0U) {
+        flash_cache_drop(base, erased);
     }
 #endif /* defined(FLASH_USE_CACHE) */
     return ret;

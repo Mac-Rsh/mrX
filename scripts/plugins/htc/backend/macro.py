@@ -225,11 +225,25 @@ class MacroBuilder:
         escapes = {
             "\\": "\\\\",
             '"': '\\"',
+            "\0": "\\0",
+            "\a": "\\a",
+            "\b": "\\b",
+            "\f": "\\f",
             "\n": "\\n",
             "\r": "\\r",
             "\t": "\\t",
+            "\v": "\\v",
         }
-        return "".join(escapes.get(char, char) for char in value)
+        parts: list[str] = []
+        for char in value:
+            escaped = escapes.get(char)
+            if escaped is not None:
+                parts.append(escaped)
+            elif ord(char) < 0x20 or ord(char) == 0x7F:
+                parts.append(f"\\x{ord(char):02x}")
+            else:
+                parts.append(char)
+        return "".join(parts)
 
     @staticmethod
     def render(lines: list[str]) -> str:

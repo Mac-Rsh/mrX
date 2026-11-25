@@ -66,8 +66,9 @@ MR_UNUSED static const mr_gpio_ops_t __gpio_ops = {
 #define CH32_GPIO_CFG_MODE_MASK         0x3U
 #define CH32_GPIO_CFG_OPEN_DRAIN        0x4U
 #define CH32_GPIO_CFG_ALTERNATE         0x8U
-/* Output mode 1 is valid on all supported families */
+/* Output mode 1 (10 MHz) and mode 3 (30/50 MHz) are valid on all families */
 #define CH32_GPIO_CFG_OUTPUT            0x1U
+#define CH32_GPIO_CFG_OUTPUT_FAST       0x3U
 
 /* GPIO EXTI group mask definition */
 #define CH32_GPIO_EXTI_LOW              0x00ffU
@@ -121,9 +122,13 @@ static const gpio_exti_vector_t __gpio_exti_vectors[] = {
 static void gpio_clock_enable(mr_uint32_t clock_mask) {
 #if defined(MR_USE_CH32VM00X) || defined(MR_USE_CH32V205)                      \
     || defined(MR_USE_CH32V4X7)
-    RCC->PB2PCENR |= clock_mask;
+    if ((RCC->PB2PCENR & clock_mask) != clock_mask) {
+        RCC->PB2PCENR |= clock_mask;
+    }
 #else
-    RCC->APB2PCENR |= clock_mask;
+    if ((RCC->APB2PCENR & clock_mask) != clock_mask) {
+        RCC->APB2PCENR |= clock_mask;
+    }
 #endif /* defined(MR_USE_CH32VM00X) || defined(MR_USE_CH32V4X7) */
 }
 
@@ -591,7 +596,7 @@ mr_err_t mr_ch32_gpio_pin_alternate(const mr_ht_gpio_spec_t *spec,
 
     /* Init GPIO */
     if (output) {
-        mode = CH32_GPIO_CFG_ALTERNATE | CH32_GPIO_CFG_OUTPUT;
+        mode = CH32_GPIO_CFG_ALTERNATE | CH32_GPIO_CFG_OUTPUT_FAST;
         if (otype == MR_GPIO_OTYPE_OD) {
             mode |= CH32_GPIO_CFG_OPEN_DRAIN;
         }

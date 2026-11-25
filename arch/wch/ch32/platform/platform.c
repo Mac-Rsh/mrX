@@ -105,6 +105,47 @@ mr_err_t mr_ch32_timer_make_pulse(const mr_ch32_timer_base_t *base,
 }
 #endif /* defined(MR_USE_DRIVER_PWM) */
 
+mr_bool_t mr_ch32_timer_is_advanced(const TIM_TypeDef *tim) {
+    return (tim == TIM1)
+#if defined(TIM8)
+        || (tim == TIM8)
+#endif /* defined(TIM8) */
+#if defined(TIM9)
+        || (tim == TIM9)
+#endif /* defined(TIM9) */
+#if defined(TIM10)
+        || (tim == TIM10)
+#endif /* defined(TIM10) */
+        ;
+}
+
+mr_bool_t mr_ch32_timer_is_basic(const TIM_TypeDef *tim) {
+#if defined(TIM6) && defined(TIM7)
+    return (tim == TIM6) || (tim == TIM7);
+#else
+    MR_IGNORE(tim);
+    return MR_FALSE;
+#endif /* defined(TIM6) && defined(TIM7) */
+}
+
+mr_uint32_t mr_ch32_timer_clock(const TIM_TypeDef *tim) {
+#if defined(MR_USE_CH32V10X) || defined(MR_USE_CH32V20X)                       \
+    || defined(MR_USE_CH32V205) || defined(MR_USE_CH32V30X)                    \
+    || defined(MR_USE_CH32V4X7)
+    mr_uint32_t prescaler;
+
+    /* A divided APB clocks its timers at twice PCLK */
+    prescaler = mr_ch32_timer_is_advanced(tim)
+        ? ((RCC->CFGR0 >> 11) & 7U)
+        : ((RCC->CFGR0 >> 8) & 7U);
+    return (prescaler < 4U) ? SystemCoreClock
+                           : (SystemCoreClock >> (prescaler - 4U));
+#else
+    MR_IGNORE(tim);
+    return SystemCoreClock;
+#endif /* CH32 EVT SDK family */
+}
+
 void mr_ch32_timer_set_reload(TIM_TypeDef *tim, mr_uint32_t reload) {
 #if defined(MR_CH32_HAS_TIM5_32BIT)
     /* TIM5 requires a full-width write even when the high half is zero */

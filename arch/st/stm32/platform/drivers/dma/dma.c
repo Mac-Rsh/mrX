@@ -111,7 +111,11 @@ typedef struct dma_priv {
 
 /* DMA channel register layout definition */
 #if defined(STM32_DMA_GPDMA)
+#if defined(GPDMA1_Channel15)
+#define DMA_CHANNELS                    (16U)
+#else
 #define DMA_CHANNELS                    (8U)
+#endif /* defined(GPDMA1_Channel15) */
 #define DMA_CHANNEL_OFFSET              (0x50U)
 #define DMA_CHANNEL_STRIDE              (0x80U)
 #elif defined(STM32_DMA_STREAM)
@@ -207,6 +211,11 @@ static mr_err_t dma_default_irqn(const dma_priv_t *priv, mr_uint32_t channel,
         GPDMA1_Channel0_IRQn, GPDMA1_Channel1_IRQn, GPDMA1_Channel2_IRQn,
         GPDMA1_Channel3_IRQn, GPDMA1_Channel4_IRQn, GPDMA1_Channel5_IRQn,
         GPDMA1_Channel6_IRQn, GPDMA1_Channel7_IRQn,
+#if defined(GPDMA1_Channel15)
+        GPDMA1_Channel8_IRQn, GPDMA1_Channel9_IRQn, GPDMA1_Channel10_IRQn,
+        GPDMA1_Channel11_IRQn, GPDMA1_Channel12_IRQn, GPDMA1_Channel13_IRQn,
+        GPDMA1_Channel14_IRQn, GPDMA1_Channel15_IRQn,
+#endif /* defined(GPDMA1_Channel15) */
     };
 #if defined(GPDMA2)
     static const IRQn_Type gpdma2_irqs[] = {
@@ -217,15 +226,12 @@ static mr_err_t dma_default_irqn(const dma_priv_t *priv, mr_uint32_t channel,
 #endif /* defined(GPDMA2) */
 
     /* Resolve fixed GPDMA channel IRQ */
-    if (channel >= DMA_CHANNELS) {
-        return -MR_EINVAL;
-    }
-    if (priv->instance == GPDMA1) {
+    if ((priv->instance == GPDMA1) && (channel < MR_ARRAY_SIZE(gpdma1_irqs))) {
         *irqn = gpdma1_irqs[channel];
         return 0;
     }
 #if defined(GPDMA2)
-    if (priv->instance == GPDMA2) {
+    if ((priv->instance == GPDMA2) && (channel < MR_ARRAY_SIZE(gpdma2_irqs))) {
         *irqn = gpdma2_irqs[channel];
         return 0;
     }
@@ -1015,6 +1021,16 @@ static mr_err_t dma_set_mode(dma_channel_t *dma_channel, mr_bool_t circular,
                              const DMA_TriggerConfTypeDef *trigger) {
     mr_err_t ret;
 
+    /* Deinitialize previous HAL mode before switching */
+    if (HAL_DMA_GetState(&dma_channel->handle) != HAL_DMA_STATE_RESET) {
+        ret = mr_stm32_hal_status(
+            dma_channel->circular ? HAL_DMAEx_List_DeInit(&dma_channel->handle)
+                                  : HAL_DMA_DeInit(&dma_channel->handle));
+        if (ret != 0) {
+            return ret;
+        }
+    }
+
     /* Initialize requested HAL mode */
     if (circular) {
         /* Configure linked-list mode */
@@ -1038,7 +1054,8 @@ static mr_err_t dma_set_mode(dma_channel_t *dma_channel, mr_bool_t circular,
         return ret;
     }
 
-    /* Save active mode */
+    /* Restore callback context and active mode */
+    dma_channel->handle.Parent = dma_channel;
     dma_channel->circular = (circular != MR_FALSE);
     return 0;
 }
@@ -1391,14 +1408,24 @@ static mr_err_t dma_stop(const mr_driver_t *drv, mr_uint32_t channel) {
 
     /* Snapshot progress before abort */
     count = dma_current_count(dma_channel);
-    offset = dma_count_offset(dma_channel, count);
-    mr_atomic_store(&dma_channel->last_offset, (mr_atomic_t)offset);
 
     /* Abort hardware transfer */
     ret = mr_stm32_hal_status(HAL_DMA_Abort(&dma_channel->handle));
     if (ret != 0) {
+        offset = dma_count_offset(dma_channel, count);
+        mr_atomic_store(&dma_channel->last_offset, (mr_atomic_t)offset);
         return ret;
     }
+
+    /* Capture any transfer progress completed during abort */
+    {
+        mr_size_t after_count = dma_current_count(dma_channel);
+        if (after_count > count) {
+            count = after_count;
+        }
+    }
+    offset = dma_count_offset(dma_channel, count);
+    mr_atomic_store(&dma_channel->last_offset, (mr_atomic_t)offset);
 
 #if defined(DMA_USE_DCACHE)
     /* Return completed destination data to CPU */
@@ -1577,7 +1604,7 @@ static void dma_irq_handle(dma_channel_t *channels, mr_size_t channels_num,
         .clk_enable = MR_CAT(__dma_clk_enable_, _id),                          \
         .routes = MR_CAT(__dma_routes_, _id),                                  \
         .routes_num = MR_HT_DRIVER_PROP_ELEM_NUM(_id, st_requests),            \
-        .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),               \
+        .irq_priority = MR_HT_DRIVER_PROP_OR(_id, st_irq_priority, 0U),        \
         .channels = MR_CAT(__dma_channels_, _id),                              \
     };                                                                         \
     static mr_dma_data_t MR_CAT(__mr_dma_data_, _id)                           \
@@ -1592,6 +1619,14 @@ static void dma_irq_handle(dma_channel_t *channels, mr_size_t channels_num,
     ST_HT_DMA_IRQ(_id, 5)                                                      \
     ST_HT_DMA_IRQ(_id, 6)                                                      \
     ST_HT_DMA_IRQ(_id, 7)                                                      \
+    ST_HT_DMA_IRQ(_id, 8)                                                      \
+    ST_HT_DMA_IRQ(_id, 9)                                                      \
+    ST_HT_DMA_IRQ(_id, 10)                                                     \
+    ST_HT_DMA_IRQ(_id, 11)                                                     \
+    ST_HT_DMA_IRQ(_id, 12)                                                     \
+    ST_HT_DMA_IRQ(_id, 13)                                                     \
+    ST_HT_DMA_IRQ(_id, 14)                                                     \
+    ST_HT_DMA_IRQ(_id, 15)                                                     \
     MR_HT_DRIVER_INSTALL(_id, MR_DRIVER_CLAZZES_STATIK(dma),                   \
                          MR_DRIVER_TYPE_DMA, &MR_CAT(__mr_dma_data_, _id),     \
                          &MR_CAT(__dma_priv_, _id), _ops)

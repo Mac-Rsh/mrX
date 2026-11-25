@@ -119,7 +119,7 @@ static mr_err_t wdt_configuration(const mr_driver_t *drv,
     cycles = (mr_uint32_t)priv->ticks * (4U << priv->prescaler);
     mr_port_irq_enable(mask);
     if (cycles == 0U) {
-        return -MR_EINVAL;
+        return -MR_ENODEV;
     }
     config->feed_min = 0U;
     config->feed_max = cycles / WDT_LSI_KHZ;
@@ -153,7 +153,7 @@ static mr_err_t wdt_start(const mr_driver_t *drv) {
 
     /* Check WDT state */
     if (priv->running || (priv->ticks == 0U)) {
-        ret = priv->running ? -MR_EBUSY : -MR_EINVAL;
+        ret = priv->running ? -MR_EBUSY : -MR_ENODEV;
         mr_port_irq_enable(mask);
         return ret;
     }

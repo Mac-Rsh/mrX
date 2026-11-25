@@ -27,10 +27,10 @@ extern "C" {
 
 /* Printf definition */
 #if defined(MR_USE_SPRINTF_STD)
-#define mr_vsnprintf(_b, _s, _f, _a)    vsnprintf(_b, _s, _f, _a)
-#define mr_vsprintf(_b, _f, _a)         vsprintf(_b, _f, _a)
-#define mr_snprintf(_b, _s, _f, ...)    snprintf(_b, _s, _f, ##__VA_ARGS__)
-#define mr_sprintf(_b, _f, ...)         sprintf(_b, _f, ##__VA_ARGS__)
+#define mr_vsnprintf                    vsnprintf
+#define mr_vsprintf                     vsprintf
+#define mr_snprintf                     snprintf
+#define mr_sprintf                      sprintf
 #else
 /* Stream output callback type */
 typedef void (*mr_sprintf_out_t)(char c, void *ctx);

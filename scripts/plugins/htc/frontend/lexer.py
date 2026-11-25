@@ -21,7 +21,7 @@ class Lexer:
     """Tokenizes HTC source text into parser-ready lexical tokens."""
 
     _EOF_CHAR = "\0"
-    _PREFIXED_NUMBER_PATTERN = re.compile(r"0[bBoOxX][A-Za-z0-9_]*")
+    _PREFIXED_NUMBER_PATTERN = re.compile(r"0[bBoOxX][A-Za-z0-9]*")
     _FLOAT_PATTERN = re.compile(r"\d+\.\d+(?:[eE][+-]?\d+)?[fFlL]?")
     _DECIMAL_PATTERN = re.compile(r"\d+(?:[uUlL]{1,3})?")
     _IDENTIFIER_PATTERN = re.compile(

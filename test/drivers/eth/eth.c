@@ -240,6 +240,8 @@ MR_TEST(eth, direct_io_and_port_lifecycle) {
     mr_eth_link_t link;
 
     MR_TEST_ASSERT_EQ_INT(mr_eth_init(&drv, &data, &port, &ops), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_EXPECT_EQ_UINT(port.configurations, 0);
     MR_TEST_EXPECT_EQ_INT(config.speed, MR_ETH_SPEED_AUTO);
     MR_TEST_EXPECT_EQ_INT(config.loopback, MR_ETH_LOOPBACK_NONE);
     config.speed = 6U;
@@ -249,14 +251,11 @@ MR_TEST(eth, direct_io_and_port_lifecycle) {
     MR_TEST_EXPECT_EQ_INT(mr_eth_configure(&drv, &config), -MR_EINVAL);
     config.loopback = MR_ETH_LOOPBACK_NONE;
     config.speed = MR_ETH_SPEED_10M;
-    MR_TEST_ASSERT_EQ_INT(mr_eth_configure(&drv, &config), 0);
-    MR_TEST_EXPECT_EQ_UINT(port.configurations, 0);
-    MR_TEST_EXPECT_EQ_INT(mr_driver_setup(&drv), -MR_EIO);
-    MR_TEST_EXPECT_EQ_INT(mr_driver_is_ready(&drv), MR_FALSE);
+    MR_TEST_EXPECT_EQ_INT(mr_eth_configure(&drv, &config), -MR_EIO);
     MR_TEST_EXPECT_EQ_UINT(port.disables, 0);
 
     port.configure_result = 0;
-    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_eth_configure(&drv, &config), 0);
     MR_TEST_EXPECT_EQ_INT(port.speed, MR_ETH_SPEED_10M);
     MR_TEST_EXPECT_EQ_INT(mr_eth_link(&drv, &link), 0);
     MR_TEST_EXPECT_EQ_INT(link.up, MR_FALSE);
@@ -290,6 +289,7 @@ MR_TEST(eth, direct_io_and_port_lifecycle) {
     MR_TEST_EXPECT_EQ_INT(port.speed, MR_ETH_SPEED_OFF);
     MR_TEST_EXPECT_EQ_UINT(port.disables, 2);
     MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_eth_configure(&drv, &config), 0);
     MR_TEST_EXPECT_EQ_INT(port.speed, MR_ETH_SPEED_1000M);
     MR_TEST_EXPECT_EQ_INT(mr_driver_shutdown(&drv), 0);
     MR_TEST_EXPECT_EQ_INT(mr_eth_del(&drv), 0);
@@ -311,10 +311,11 @@ MR_TEST(eth, create_and_reject_invalid_config) {
         mr_free(data);
         MR_TEST_ASSERT_NE_PTR(drv, MR_NULL);
     }
-    MR_TEST_EXPECT_EQ_INT(mr_driver_setup(drv), -MR_EINVAL);
+    MR_TEST_ASSERT_EQ_INT(mr_driver_setup(drv), 0);
     MR_TEST_EXPECT_EQ_UINT(port.configurations, 0U);
 
     config = data->config;
+    MR_TEST_EXPECT_EQ_INT(mr_eth_configure(drv, &config), -MR_EINVAL);
     config.mac[0] = 3U;
     MR_TEST_EXPECT_EQ_INT(mr_eth_configure(drv, &config), -MR_EINVAL);
     config.mac[0] = 2U;
@@ -322,8 +323,6 @@ MR_TEST(eth, create_and_reject_invalid_config) {
     MR_TEST_EXPECT_EQ_INT(mr_eth_configure(drv, &config), -MR_ERANGE);
     config.mtu = MR_ETH_MTU_MAX;
     MR_TEST_EXPECT_EQ_INT(mr_eth_configure(drv, &config), 0);
-    MR_TEST_EXPECT_EQ_UINT(port.configurations, 0U);
-    MR_TEST_EXPECT_EQ_INT(mr_driver_setup(drv), 0);
     MR_TEST_EXPECT_EQ_UINT(port.configurations, 1U);
     MR_TEST_EXPECT_EQ_INT(mr_driver_shutdown(drv), 0);
     MR_TEST_EXPECT_EQ_UINT(port.disables, 1U);
@@ -378,6 +377,7 @@ MR_TEST(eth, optional_stream_directions) {
     ops.rx_stream_is_busy = MR_NULL;
     MR_TEST_ASSERT_EQ_INT(mr_eth_init(&drv, &data, &port, &ops), 0);
     MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_eth_configure(&drv, &data.config), 0);
     MR_TEST_EXPECT_EQ_INT(mr_eth_rx_stream_submit(&drv, &frame), -MR_ENOSYS);
     MR_TEST_EXPECT_EQ_INT(mr_eth_rx_stream_start(&drv), -MR_ENOSYS);
     MR_TEST_EXPECT_EQ_INT(mr_eth_rx_stream_stop(&drv), -MR_ENOSYS);
@@ -399,6 +399,7 @@ MR_TEST(eth, optional_stream_directions) {
     ops.tx_stream_stop = MR_NULL;
     ops.tx_stream_is_busy = MR_NULL;
     MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_eth_configure(&drv, &data.config), 0);
     MR_TEST_EXPECT_EQ_INT(mr_eth_tx_stream_submit(&drv, &frame), -MR_ENOSYS);
     MR_TEST_EXPECT_EQ_INT(mr_eth_tx_stream_start(&drv), -MR_ENOSYS);
     MR_TEST_EXPECT_EQ_INT(mr_eth_tx_stream_stop(&drv), -MR_ENOSYS);
@@ -435,6 +436,7 @@ MR_TEST(eth, consecutive_rx_completions) {
 
     MR_TEST_ASSERT_EQ_INT(mr_eth_init(&drv, &data, &port, &ops), 0);
     MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_eth_configure(&drv, &data.config), 0);
     MR_TEST_ASSERT_EQ_INT(
         mr_waiter_init(&waiter, eth_test_event, &events, MR_ETH_WAIT_RX_READY),
         0);
@@ -473,6 +475,7 @@ MR_TEST(eth, stream_ownership_and_shutdown_retry) {
     rx.owner = &port;
     MR_TEST_ASSERT_EQ_INT(mr_eth_init(&drv, &data, &port, &ops), 0);
     MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_eth_configure(&drv, &data.config), 0);
     MR_TEST_ASSERT_EQ_INT(
         mr_waiter_init(&waiter, eth_test_event, &events,
                        MR_ETH_WAIT_RX_READY | MR_ETH_WAIT_RX_ERROR
@@ -550,6 +553,7 @@ MR_TEST(eth, stream_ownership_and_shutdown_retry) {
     MR_TEST_EXPECT_EQ_PTR(waiter.able, MR_NULL);
     MR_TEST_EXPECT_EQ_INT(mr_waiter_del(&waiter), 0);
     MR_TEST_ASSERT_EQ_INT(mr_driver_setup(&drv), 0);
+    MR_TEST_ASSERT_EQ_INT(mr_eth_configure(&drv, &data.config), 0);
     MR_TEST_EXPECT_EQ_INT(mr_eth_write(&drv, tx_buf, sizeof(tx_buf)),
                           sizeof(tx_buf));
     MR_TEST_EXPECT_EQ_INT(mr_driver_shutdown(&drv), 0);

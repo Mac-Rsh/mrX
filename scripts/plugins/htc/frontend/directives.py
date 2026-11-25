@@ -96,7 +96,9 @@ class DirectiveParser:
         if not stripped.startswith(self.DIRECTIVE_PREFIX):
             return None
         payload = stripped[len(self.DIRECTIVE_PREFIX):].lstrip()
-        command, _, remainder = payload.partition(" ")
+        parts = payload.split(None, 1)
+        command = parts[0] if parts else ""
+        remainder = parts[1] if len(parts) > 1 else ""
         remainder = self._strip_trailing_comment(remainder).strip()
 
         if command == self.DIRECTIVE_INCLUDE:
@@ -175,6 +177,11 @@ class DirectiveParser:
         index = 0
         while index < len(text):
             char = text[index]
+            if in_string and char == "\\" and index + 1 < len(text):
+                result.append(char)
+                result.append(text[index + 1])
+                index += 2
+                continue
             if char == '"':
                 in_string = not in_string
                 result.append(char)

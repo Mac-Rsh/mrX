@@ -92,6 +92,23 @@ extern mr_err_t mr_stm32_gpio_pin_alternate(const mr_ht_gpio_spec_t *spec,
 extern mr_err_t mr_stm32_gpio_pin_release(const mr_ht_gpio_spec_t *spec);
 #endif /* defined(MR_USE_DRIVER_GPIO) */
 
+#if defined(MR_USE_TRACE) && defined(MR_USE_MODULE_XTRACE)
+/**
+ * @brief This function registers the STM32 RTT output transport for xtrace.
+ *
+ * @return 0 on success, or a negative error code.
+ *
+ * @note Uses one clock hook slot (mr_clock_hook_add) to drain the xtrace FIFO
+ * into the SEGGER RTT up buffer in the background.
+ */
+extern mr_err_t mr_stm32_xtrace_rtt_register(void);
+
+/**
+ * @brief This function drains pending xtrace bytes into the RTT buffer.
+ */
+extern void mr_stm32_xtrace_rtt_poll(void);
+#endif /* defined(MR_USE_TRACE) && defined(MR_USE_MODULE_XTRACE) */
+
 /** @} */
 
 #ifdef __cplusplus

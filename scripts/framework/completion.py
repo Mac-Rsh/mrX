@@ -197,6 +197,7 @@ def complete_parser(
     used: set[int] = set()
     positional_index = 0
     expecting: Action | None = None
+    end_of_options = False
 
     index = 0
     while index < len(consumed):
@@ -205,7 +206,11 @@ def complete_parser(
             expecting = None
             index += 1
             continue
-        option = _match_option(token, options)
+        if not end_of_options and token == "--":
+            end_of_options = True
+            index += 1
+            continue
+        option = None if end_of_options else _match_option(token, options)
         if option is not None:
             action = options[option]
             if not action_is_repeatable(action):
@@ -220,20 +225,21 @@ def complete_parser(
     if expecting is not None:
         return _complete_action_value(expecting, prefix, cwd)
 
-    inline_option = _split_inline_option(prefix, options)
-    if inline_option is not None:
-        flag, action, value_prefix = inline_option
-        return [
-            CompletionItem(
-                value=f"{flag}={item.value}",
-                description=item.description,
-                kind=item.kind,
-            )
-            for item in _complete_action_value(action, value_prefix, cwd)
-        ]
+    if not end_of_options:
+        inline_option = _split_inline_option(prefix, options)
+        if inline_option is not None:
+            flag, action, value_prefix = inline_option
+            return [
+                CompletionItem(
+                    value=f"{flag}={item.value}",
+                    description=item.description,
+                    kind=item.kind,
+                )
+                for item in _complete_action_value(action, value_prefix, cwd)
+            ]
 
     items: list[CompletionItem] = []
-    if prefix.startswith("-"):
+    if not end_of_options and prefix.startswith("-"):
         items.extend(_complete_options(parser, used, prefix))
         return items
 
@@ -322,33 +328,32 @@ def _split_path_prefix(prefix: str, cwd: Path) -> tuple[Path | None, str, str]:
     if not prefix:
         return cwd, "", ""
 
-    normalized = prefix.replace("/", os.sep).replace("\\", os.sep)
-    ends_with_sep = prefix.endswith(("/", "\\"))
-    path = Path(normalized)
+    if prefix in {".", ".."}:
+        directory = (cwd / prefix).resolve()
+        sep = _preferred_separator(prefix)
+        return directory, "", f"{prefix}{sep}"
 
-    if ends_with_sep:
+    sep_index = max(prefix.rfind("/"), prefix.rfind("\\"))
+    if sep_index >= 0:
+        dir_part = prefix[:sep_index + 1]
+        name = prefix[sep_index + 1:]
+        normalized_dir = dir_part.replace("/", os.sep).replace("\\", os.sep)
+        path = Path(normalized_dir)
         directory = path if path.is_absolute() else (cwd / path)
         try:
-            return directory.resolve(), "", prefix
+            return directory.resolve(), name, dir_part
         except OSError:
-            return None, "", prefix
+            return None, name, dir_part
 
-    parent = path.parent
-    name = path.name
-    if str(parent) == "." and not _has_parent_prefix(prefix):
-        return cwd, name, ""
+    if len(prefix) >= 2 and prefix[1] == ":" and prefix[0].isalpha():
+        drive_part = prefix[:2]
+        name = prefix[2:]
+        try:
+            return Path(drive_part + os.sep).resolve(), name, drive_part + os.sep
+        except OSError:
+            return None, name, drive_part
 
-    directory = parent if parent.is_absolute() else (cwd / parent)
-    display_dir = prefix[:-len(name)] if name else prefix
-    try:
-        return directory.resolve(), name, display_dir
-    except OSError:
-        return None, name, display_dir
-
-
-def _has_parent_prefix(prefix: str) -> bool:
-    """Return whether the typed prefix includes a directory component."""
-    return "/" in prefix or "\\" in prefix
+    return cwd, prefix, ""
 
 
 def _preferred_separator(prefix: str) -> str:

@@ -168,7 +168,7 @@ class SemanticBuilder:
             self._kinds.pop(decl.name, None)
             self._service_ids.pop(service_id, None)
             return
-        self._next_service_id = service_id + 1
+        self._next_service_id = max(self._next_service_id, service_id + 1)
         methods: list[Method] = []
         method_names: set[str] = set()
         method_ids: dict[int, str] = {}
@@ -185,7 +185,7 @@ class SemanticBuilder:
                 continue
             method_names.add(method.name)
             method_ids[method.method_id] = method.name
-            next_method_id = method.method_id + 1
+            next_method_id = max(next_method_id, method.method_id + 1)
             methods.append(method)
 
         # Drop a failed service and free its ID

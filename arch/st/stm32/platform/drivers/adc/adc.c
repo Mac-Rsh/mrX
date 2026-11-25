@@ -10,10 +10,13 @@
 #if defined(MR_USE_DRIVER_ADC)
 #include <mrX/drivers/adc/mr_adc.h>
 #include <mrX/drivers/gpio/mr_gpio.h>
-#if defined(MR_USE_DRIVER_ADC_STREAM) && defined(MR_USE_DRIVER_DMA)
-#include <mrX/drivers/dma/mr_dma.h>
+#if defined(MR_USE_DRIVER_ADC_STREAM)
 #define ADC_USE_STREAM
-#endif /* defined(MR_USE_DRIVER_ADC_STREAM) && defined(MR_USE_DRIVER_DMA) */
+#if defined(MR_USE_DRIVER_DMA)
+#include <mrX/drivers/dma/mr_dma.h>
+#define ADC_USE_DMA
+#endif /* defined(MR_USE_DRIVER_DMA) */
+#endif /* defined(MR_USE_DRIVER_ADC_STREAM) */
 
 /* HardTree compatible */
 #define MR_HT_COMPAT                    st_stm32_adc
@@ -71,12 +74,14 @@ typedef struct adc_channel {
 } adc_channel_t;
 
 #if defined(ADC_USE_STREAM)
+#if defined(ADC_USE_DMA)
 /* ADC DMA type */
 typedef struct adc_dma {
     mr_ht_dma_spec_t dma;
     mr_dma_transfer_t transfer;
     mr_waiter_t waiter;
 } adc_dma_t;
+#endif /* defined(ADC_USE_DMA) */
 
 /* ADC stream type */
 typedef struct adc_stream {
@@ -84,7 +89,9 @@ typedef struct adc_stream {
     uint32_t trigger_edge;
     IRQn_Type irqn;
     mr_uint32_t irq_priority;
+#if defined(ADC_USE_DMA)
     adc_dma_t *dma;
+#endif /* defined(ADC_USE_DMA) */
     mr_driver_t *driver;
     mr_uint8_t *buf;
     mr_size_t size;
@@ -107,7 +114,10 @@ typedef struct adc_priv {
     void (*clk_enable)(void);
     const adc_channel_t *channels;
     mr_uint32_t channels_num;
+    mr_uint32_t gpio_mask;
+    uint32_t poll_resolution;
     mr_uint8_t ref;
+    mr_uint8_t poll_ready: 1;
 #if defined(ADC_USE_STREAM)
     adc_stream_t stream;
 #endif /* defined(ADC_USE_STREAM) */
@@ -116,6 +126,11 @@ typedef struct adc_priv {
 /* ADC definition */
 #define ADC_POLL_TIMEOUT_MS             (100U)
 #define ADC_CHANNEL_BITS                (32U)
+#if defined(ADC_REGULAR_RANK_1)
+#define ADC_RANK_1                      ADC_REGULAR_RANK_1
+#else
+#define ADC_RANK_1                      (1U)
+#endif /* defined(ADC_REGULAR_RANK_1) */
 
 /* ADC trigger edge definition */
 #if defined(ADC_EXTERNALTRIGCONVEDGE_NONE)
@@ -332,14 +347,29 @@ static mr_err_t adc_init_mode(adc_priv_t *priv, uint32_t resolution,
 }
 
 static mr_err_t adc_init(adc_priv_t *priv, uint32_t resolution) {
-    return adc_init_mode(priv, resolution, DISABLE, DISABLE, 1U,
-                         ADC_SOFTWARE_START, ADC_TRIGGER_EDGE_NONE);
+    mr_err_t ret;
+
+    /* Reuse active polling configuration when resolution matches */
+    if (priv->poll_ready && (priv->poll_resolution == resolution)) {
+        return 0;
+    }
+
+    ret = adc_init_mode(priv, resolution, DISABLE, DISABLE, 1U,
+                        ADC_SOFTWARE_START, ADC_TRIGGER_EDGE_NONE);
+    if (ret == 0) {
+        priv->poll_resolution = resolution;
+        priv->poll_ready = 1U;
+    } else {
+        priv->poll_ready = 0U;
+    }
+    return ret;
 }
 
 static mr_err_t adc_configure_hw_channel(adc_priv_t *priv,
-                                         const adc_channel_t *channel,
+                                         mr_uint32_t channel_idx,
                                          mr_uint32_t sample_time,
                                          uint32_t rank) {
+    const adc_channel_t *channel = &priv->channels[channel_idx];
     ADC_ChannelConfTypeDef adc_config;
     mr_gpio_config_t gpio_config;
     mr_err_t ret;
@@ -350,13 +380,17 @@ static mr_err_t adc_configure_hw_channel(adc_priv_t *priv,
         return -MR_EINVAL;
     }
 
-    /* Configure GPIO */
-    gpio_config = (mr_gpio_config_t){0};
-    gpio_config.mode = MR_GPIO_MODE_ANALOG;
-    gpio_config.pull = MR_GPIO_PULL_NONE;
-    ret = mr_gpio_configure(channel->gpio.drv, channel->gpio.pin, &gpio_config);
-    if (ret != 0) {
-        return ret;
+    /* Configure GPIO once per channel */
+    if ((priv->gpio_mask & (1UL << channel_idx)) == 0U) {
+        gpio_config = (mr_gpio_config_t){0};
+        gpio_config.mode = MR_GPIO_MODE_ANALOG;
+        gpio_config.pull = MR_GPIO_PULL_NONE;
+        ret = mr_gpio_configure(channel->gpio.drv, channel->gpio.pin,
+                                &gpio_config);
+        if (ret != 0) {
+            return ret;
+        }
+        priv->gpio_mask |= (1UL << channel_idx);
     }
 
     /* Configure ADC channel */
@@ -378,14 +412,13 @@ static mr_err_t adc_configure_hw_channel(adc_priv_t *priv,
         HAL_ADC_ConfigChannel(&priv->handle, &adc_config));
 }
 
-static mr_err_t adc_convert(adc_priv_t *priv, const adc_channel_t *channel,
+static mr_err_t adc_convert(adc_priv_t *priv, mr_uint32_t channel_idx,
                             mr_uint32_t sample_time, mr_uint16_t *value) {
     mr_uint16_t sample;
     mr_err_t ret;
 
     /* Configure channel */
-    ret = adc_configure_hw_channel(priv, channel, sample_time,
-                                   ADC_REGULAR_RANK_1);
+    ret = adc_configure_hw_channel(priv, channel_idx, sample_time, ADC_RANK_1);
     if (ret != 0) {
         return ret;
     }
@@ -457,9 +490,9 @@ static mr_err_t adc_channel_configure(const mr_driver_t *drv,
     if (ret != 0) {
         return ret;
     }
-    return adc_configure_hw_channel(priv, &priv->channels[channel],
+    return adc_configure_hw_channel(priv, channel,
                                     MR_ARRAY_SIZE(__adc_sample_time) - 1U,
-                                    ADC_REGULAR_RANK_1);
+                                    ADC_RANK_1);
 }
 
 static mr_err_t adc_channel_configuration(const mr_driver_t *drv,
@@ -536,8 +569,7 @@ static mr_ssize_t adc_read(const mr_driver_t *drv, mr_adc_seq_t *seq) {
             if (channel >= priv->channels_num) {
                 return (count != 0U) ? (mr_ssize_t)count : -MR_EINVAL;
             }
-            ret = adc_convert(priv, &priv->channels[channel], seq->oversample,
-                              &sample);
+            ret = adc_convert(priv, channel, seq->oversample, &sample);
             if (ret != 0) {
                 return (count != 0U) ? (mr_ssize_t)count : ret;
             }
@@ -571,6 +603,9 @@ static mr_err_t adc_init_stream(adc_priv_t *priv, uint32_t resolution,
     }
     /* Configure DMA request */
     dma_requests = use_dma ? ENABLE : DISABLE;
+
+    /* Stream mode invalidates cached polling init */
+    priv->poll_ready = 0U;
 
     /* Init ADC stream */
     return adc_init_mode(priv, resolution, continuous_conv, dma_requests,
@@ -646,6 +681,7 @@ static void adc_stream_halt(adc_priv_t *priv) {
     priv->stream.complete = MR_TRUE;
 }
 
+#if defined(ADC_USE_DMA)
 static void adc_dma_event(mr_waiter_t *waiter, void *param,
                           mr_wait_event_t event, const void *data) {
     adc_priv_t *priv = (adc_priv_t *)param;
@@ -753,6 +789,7 @@ _exit:
     mr_waiter_del(&dma->waiter);
     return ret;
 }
+#endif /* defined(ADC_USE_DMA) */
 
 static mr_err_t adc_seq_ranks(const adc_priv_t *priv, mr_uint32_t channels,
                               mr_uint8_t *index, mr_uint32_t *count) {
@@ -803,9 +840,11 @@ static mr_err_t adc_stream_start(const mr_driver_t *drv, mr_adc_seq_t *seq,
 
     /* Check stream resources */
     use_dma = MR_FALSE;
+#if defined(ADC_USE_DMA)
     if ((stream->dma != MR_NULL) && (stream->dma->dma.drv != MR_NULL)) {
         use_dma = MR_TRUE;
     }
+#endif /* defined(ADC_USE_DMA) */
     if (!use_dma && !stream->irq_valid) {
         return -MR_ENODEV;
     }
@@ -861,8 +900,7 @@ static mr_err_t adc_stream_start(const mr_driver_t *drv, mr_adc_seq_t *seq,
 
     /* Configure ADC channels */
     for (rank = 0U; rank < channels_num; rank++) {
-        ret = adc_configure_hw_channel(priv, &priv->channels[ranks[rank]],
-                                       seq->oversample,
+        ret = adc_configure_hw_channel(priv, ranks[rank], seq->oversample,
                                        __adc_regular_rank[rank]);
         if (ret != 0) {
             return ret;
@@ -886,11 +924,13 @@ static mr_err_t adc_stream_start(const mr_driver_t *drv, mr_adc_seq_t *seq,
 
     /* Start data path */
     if (use_dma) {
+#if defined(ADC_USE_DMA)
         ret = adc_stream_start_dma(priv);
         if (ret != 0) {
             stream->driver = MR_NULL;
             return ret;
         }
+#endif /* defined(ADC_USE_DMA) */
     } else {
         HAL_NVIC_SetPriority(stream->irqn, stream->irq_priority, 0U);
         HAL_NVIC_EnableIRQ(stream->irqn);
@@ -912,8 +952,10 @@ static mr_err_t adc_stream_start(const mr_driver_t *drv, mr_adc_seq_t *seq,
 static mr_err_t adc_stream_stop(const mr_driver_t *drv) {
     adc_priv_t *priv = MR_DRIVER_PRIV(drv);
     adc_stream_t *stream = &priv->stream;
+#if defined(ADC_USE_DMA)
     adc_dma_t *dma = stream->dma;
     mr_wait_event_t events;
+#endif /* defined(ADC_USE_DMA) */
     mr_err_t ret;
 
     /* Check stream state */
@@ -937,6 +979,7 @@ static mr_err_t adc_stream_stop(const mr_driver_t *drv) {
         stream->adc_started = 0U;
     }
 
+#if defined(ADC_USE_DMA)
     /* Check DMA */
     if (stream->use_dma && (dma != MR_NULL)) {
         /* Get DMA events */
@@ -957,6 +1000,7 @@ static mr_err_t adc_stream_stop(const mr_driver_t *drv) {
         /* Release waiter */
         mr_waiter_del(&dma->waiter);
     }
+#endif /* defined(ADC_USE_DMA) */
 
     /* Release stream */
     stream->driver = MR_NULL;
@@ -966,7 +1010,9 @@ static mr_err_t adc_stream_stop(const mr_driver_t *drv) {
 static mr_err_t adc_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
     adc_priv_t *priv = MR_DRIVER_PRIV(drv);
     adc_stream_t *stream = &priv->stream;
+#if defined(ADC_USE_DMA)
     mr_bool_t dma_busy;
+#endif /* defined(ADC_USE_DMA) */
     mr_err_t ret;
 
     /* Check stream state */
@@ -989,6 +1035,7 @@ static mr_err_t adc_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
         return 0;
     }
 
+#if defined(ADC_USE_DMA)
     /* Check DMA state */
     ret = mr_ht_dma_is_busy(&stream->dma->dma, &dma_busy);
     if (ret != 0) {
@@ -1007,16 +1054,21 @@ static mr_err_t adc_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
     }
     *busy = MR_FALSE;
     return 0;
+#else
+    return -MR_ENODEV;
+#endif /* defined(ADC_USE_DMA) */
 }
 
 static mr_err_t adc_stream_offset(const mr_driver_t *drv, mr_size_t *offset) {
     adc_priv_t *priv = MR_DRIVER_PRIV(drv);
     adc_stream_t *stream = &priv->stream;
 
+#if defined(ADC_USE_DMA)
     /* Get DMA stream offset */
     if (stream->use_dma) {
         return mr_ht_dma_offset(&stream->dma->dma, offset);
     }
+#endif /* defined(ADC_USE_DMA) */
 
     /* Get IRQ stream offset */
     *offset = stream->offset;
@@ -1025,7 +1077,7 @@ static mr_err_t adc_stream_offset(const mr_driver_t *drv, mr_size_t *offset) {
 
 static mr_err_t adc_event_control(const mr_driver_t *drv, mr_uint32_t events,
                                   mr_bool_t enable) {
-    const adc_priv_t *priv = MR_DRIVER_PRIV(drv);
+    adc_priv_t *priv = MR_DRIVER_PRIV(drv);
     adc_stream_t *stream = &priv->stream;
 
     /* Check parameter */
@@ -1147,6 +1199,7 @@ MR_UNUSED static void adc_irq(adc_priv_t *priv) {
         },                                                                     \
     }
 #if defined(ADC_USE_STREAM)
+#if defined(ADC_USE_DMA)
 #define __ST_HT_ADC_HAS_DMA(_id) MR_HT_DRIVER_HAS_PROP(_id, st_dma)
 #define __ST_HT_ADC_DMA_INSTALL(_id)                                           \
     MR_MACRO_IF(__ST_HT_ADC_HAS_DMA(_id),                                      \
@@ -1157,6 +1210,10 @@ MR_UNUSED static void adc_irq(adc_priv_t *priv) {
 #define __ST_HT_ADC_DMA(_id)                                                   \
     MR_MACRO_IF(__ST_HT_ADC_HAS_DMA(_id),                                      \
                 (.dma = &MR_CAT(__adc_dma_, _id),), ())
+#else
+#define __ST_HT_ADC_DMA_INSTALL(_id)
+#define __ST_HT_ADC_DMA(_id)
+#endif /* defined(ADC_USE_DMA) */
 #define __ST_HT_ADC_HAS_IRQ(_id)                                               \
     MR_MACRO_AND(MR_HT_DRIVER_HAS_PROP(_id, st_irqn),                          \
                  MR_HT_DRIVER_HAS_PROP(_id, st_irq_handler))

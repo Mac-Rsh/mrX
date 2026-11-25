@@ -65,5 +65,5 @@ class CommandRunner:
         if result.message:
             if result.exit_code == 0:
                 context.console.write(result.message)
-            elif not result.diagnostics:
+            else:
                 context.console.error(result.message)

@@ -114,29 +114,6 @@ typedef struct pwm_priv {
     mr_bool_t grouped, period_signal, period_event, fault_event;
 } pwm_priv_t;
 
-static mr_bool_t pwm_timer_advanced(const TIM_TypeDef *tim) {
-    return (tim == TIM1)
-#if defined(TIM8)
-        || (tim == TIM8)
-#endif /* defined(TIM8) */
-#if defined(TIM9)
-        || (tim == TIM9)
-#endif /* defined(TIM9) */
-#if defined(TIM10)
-        || (tim == TIM10)
-#endif /* defined(TIM10) */
-        ;
-}
-
-static mr_bool_t pwm_timer_basic(const TIM_TypeDef *tim) {
-#if defined(TIM6) && defined(TIM7)
-    return (tim == TIM6) || (tim == TIM7);
-#else
-    MR_IGNORE(tim);
-    return MR_FALSE;
-#endif /* defined(TIM6) && defined(TIM7) */
-}
-
 static mr_uint32_t pwm_fault_mask(const pwm_priv_t *priv) {
     return (priv->fault.enable && ((priv->tim->INTFR & TIM_BIF) != 0U))
         ? PWM_BREAK_FAULT : 0U;
@@ -161,24 +138,6 @@ static mr_err_t pwm_break_inactive(const pwm_priv_t *priv) {
         ? -MR_EBUSY : 0;
 }
 
-static mr_uint32_t pwm_timer_clock(const TIM_TypeDef *tim) {
-#if defined(MR_USE_CH32V10X) || defined(MR_USE_CH32V20X)                       \
-    || defined(MR_USE_CH32V205) || defined(MR_USE_CH32V30X)                    \
-    || defined(MR_USE_CH32V4X7)
-    mr_uint32_t prescaler;
-
-    /* A divided APB clocks its timers at twice PCLK */
-    prescaler = pwm_timer_advanced(tim)
-        ? ((RCC->CFGR0 >> 11) & 7U)
-        : ((RCC->CFGR0 >> 8) & 7U);
-    return (prescaler < 4U) ? SystemCoreClock
-                           : (SystemCoreClock >> (prescaler - 4U));
-#else
-    MR_IGNORE(tim);
-    return SystemCoreClock;
-#endif /* CH32 EVT SDK family */
-}
-
 static mr_err_t pwm_make_period(const TIM_TypeDef *tim, mr_uint64_t period,
                                 mr_bool_t center, mr_ch32_timer_base_t *base) {
     mr_uint64_t max_counts;
@@ -195,7 +154,7 @@ static mr_err_t pwm_make_period(const TIM_TypeDef *tim, mr_uint64_t period,
     }
 #endif /* CH32 timer with 32-bit compare */
     /* In center-aligned mode full duty requires a compare greater than ARR */
-    return mr_ch32_timer_make_period(pwm_timer_clock(tim), period,
+    return mr_ch32_timer_make_period(mr_ch32_timer_clock(tim), period,
                                      max_counts - center, center ? 2U : 1U,
                                      base);
 }
@@ -299,7 +258,16 @@ static void pwm_compare(const pwm_priv_t *priv, mr_uint32_t ch,
         }
         return;
     }
-#endif /* defined(MR_CH32_HAS_TIM5_32BIT) */
+#elif defined(MR_USE_CH32V205)
+    if (tim == TIM4) {
+        typedef uint32_t pwm_cvr32_t __attribute__((may_alias));
+        volatile pwm_cvr32_t *cvr = (volatile pwm_cvr32_t *)&tim->CH1CVR;
+
+        /* TIM4 compare registers are 32-bit at 4-byte stride from CH1CVR */
+        cvr[ch] = compare;
+        return;
+    }
+#endif /* CH32 timer with 32-bit compare */
 
     /* The period limit bounds compare to the instance's register width */
     switch (ch) {
@@ -335,9 +303,9 @@ static mr_err_t pwm_configure(const mr_driver_t *drv,
     /* Check configuration */
     data = MR_DRIVER_DATA(drv);
     center = config->alignment == MR_PWM_ALIGN_CENTER;
-    if (pwm_timer_basic(priv->tim)
+    if (mr_ch32_timer_is_basic(priv->tim)
         || ((center || ((data->comp_mask | data->fault_mask) != 0U))
-            && !pwm_timer_advanced(priv->tim))
+            && !mr_ch32_timer_is_advanced(priv->tim))
         || (config->cycles != 0U)
         || (!center && (config->alignment != MR_PWM_ALIGN_EDGE_UP))
         || (config->update_mode != MR_PWM_UPDATE_PERIOD)) {
@@ -384,7 +352,7 @@ static mr_err_t pwm_configure(const mr_driver_t *drv,
     priv->tim->SMCFGR = 0U;
     priv->tim->DMAINTENR = 0U;
     priv->tim->CCER = 0U;
-    if (pwm_timer_advanced(priv->tim)) {
+    if (mr_ch32_timer_is_advanced(priv->tim)) {
         priv->tim->BDTR = priv->grouped ? TIM_OSSI : 0U;
         /* Update once per full period rather than on both counter turns */
         priv->tim->RPTCR = center ? 1U : 0U;
@@ -525,7 +493,7 @@ static mr_err_t pwm_channel_configure(const mr_driver_t *drv,
                  (config->idle == MR_PWM_IDLE_ACTIVE) ? PWM_MODE_ACTIVE
                                                       : PWM_MODE_INACTIVE);
         priv->tim->CCER = ccer | (TIM_CC1E << shift);
-        if (!priv->grouped && pwm_timer_advanced(priv->tim)) {
+        if (!priv->grouped && mr_ch32_timer_is_advanced(priv->tim)) {
             priv->tim->BDTR |= TIM_MOE;
         }
         priv->channels[channel] = *config;

@@ -43,7 +43,8 @@ extern "C" {
  * @return The node.
  */
 #define MR_HT_PATH(...)                                                        \
-    MR_CAT(__MR_HT_N, MR_CAT_SEP(_S_, ##__VA_ARGS__))
+    MR_MACRO_IF(__MR_VA_ARGS_IS_EMPTY(__VA_ARGS__), (__MR_HT_N),               \
+                (MR_CAT(__MR_HT_N, MR_CAT_SEP(_S_, __VA_ARGS__))))
 
 /**
  * @brief This macro function checks if the label exists.
@@ -114,10 +115,10 @@ extern "C" {
  * @param _fn The function to be called, like: fn(i, ...), where i is the index.
  * @param ... The arguments to be passed to the function.
  */
-#define MR_HT_INST_FOREACH(_compat, _fn, ...)                                  \
+#define MR_HT_INST_FOREACH(_compat, ...)                                       \
     MR_MACRO_IF(                                                               \
         MR_HT_HAS_INST(_compat),                                               \
-        (MR_LISTIFY(MR_HT_INST_NUM(_compat), (;), _fn, ##__VA_ARGS__)), ())
+        (MR_LISTIFY(MR_HT_INST_NUM(_compat), (;), __VA_ARGS__)), ())
 
 /**
  * @brief This macro function checks if the property exists.
@@ -225,9 +226,16 @@ extern "C" {
  * @param _fn The function to be called, like: fn(i, node, prop, ...).
  * @param ... The arguments to be passed to the function.
  */
-#define MR_HT_NODE_PROP_ELEM_FOREACH_SEP(_node, _prop, _sep, _fn, ...)         \
+#define MR_HT_NODE_PROP_ELEM_FOREACH_SEP(_node, _prop, _sep, ...)              \
+    __MR_CAT(__MR_HT_NODE_PROP_ELEM_FOREACH_,                                  \
+             __MR_VA_ARGS_HAS_COMMA(__VA_ARGS__))(_node, _prop, _sep,          \
+                                                  __VA_ARGS__)
+#define __MR_HT_NODE_PROP_ELEM_FOREACH_0(_node, _prop, _sep, _fn)              \
     MR_LISTIFY_NEST(MR_HT_NODE_PROP_ELEM_NUM(_node, _prop), _sep, _fn, _node,  \
-                    _prop, ##__VA_ARGS__)
+                    _prop)
+#define __MR_HT_NODE_PROP_ELEM_FOREACH_1(_node, _prop, _sep, _fn, ...)         \
+    MR_LISTIFY_NEST(MR_HT_NODE_PROP_ELEM_NUM(_node, _prop), _sep, _fn, _node,  \
+                    _prop, __VA_ARGS__)
 
 /**
  * @brief This macro function iterates over all indexed elements of a property
@@ -238,8 +246,8 @@ extern "C" {
  * @param _fn The function to be called, like: fn(i, ...), where i is the index.
  * @param ... The arguments to be passed to the function.
  */
-#define MR_HT_NODE_PROP_ELEM_FOREACH(_node, _prop, _fn, ...)                   \
-    MR_HT_NODE_PROP_ELEM_FOREACH_SEP(_node, _prop, (, ), _fn, ##__VA_ARGS__)
+#define MR_HT_NODE_PROP_ELEM_FOREACH(_node, _prop, ...)                        \
+    MR_HT_NODE_PROP_ELEM_FOREACH_SEP(_node, _prop, (, ), __VA_ARGS__)
 
 /**
  * @brief This macro function gets the node name.

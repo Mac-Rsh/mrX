@@ -161,5 +161,5 @@ def split_for_completion(line: str) -> CompletionLine:
         finished=tuple(token.value for token in result.tokens[:-1]),
         prefix=current.value,
         current_start=current.start,
-        quote=current.quote if result.unclosed_quote else current.quote,
+        quote=current.quote,
     )

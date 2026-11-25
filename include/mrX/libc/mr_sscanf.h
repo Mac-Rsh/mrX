@@ -25,7 +25,7 @@ extern "C" {
 
 /* Scanf definition */
 #if defined(MR_USE_SSCANF_STD)
-#define mr_sscanf(_b, _fmt, ...)        sscanf(_b, _fmt, ##__VA_ARGS__)
+#define mr_sscanf                       sscanf
 #else
 /**
  * @brief This function scans a formatted string.

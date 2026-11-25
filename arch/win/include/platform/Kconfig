@@ -1,9 +1,12 @@
-menu "Platform: Platform abstraction"
+menu "Platform: Windows"
 
 # ==================================
 # PLATFORM
 # ==================================
 config MR_USE_PLATFORM
+    def_bool y
+
+config MR_USE_WIN
     def_bool y
 
 # ==================================
@@ -16,5 +19,26 @@ config MR_USE_WIN_IRQ_DEFER_HOOK
     help
         Wake a host thread to run deferred IRQ work.
         wakeup releases a semaphore; the thread calls mr_irq_defer_execute.
+
+# ==================================
+# UART
+# ==================================
+config MR_USE_WIN_UART_TCP
+    bool "Use Windows TCP server backend for UART"
+    depends on MR_USE_DRIVER_UART
+    default y
+    help
+        Enable Winsock2 TCP listener support for Windows UART simulation.
+        Host-side RPC and trace tools can connect directly to the configured
+        TCP port. Requires linking ws2_32 (-lws2_32 on MinGW, ws2_32.lib on
+        MSVC).
+
+config MR_CFG_WIN_UART_RX_BUF_SIZE
+    int "Windows UART RX ring buffer size (bytes)"
+    depends on MR_USE_DRIVER_UART
+    default 4096
+    range 64 65536
+    help
+        Internal RX ring buffer size in bytes for each Windows UART instance.
 
 endmenu

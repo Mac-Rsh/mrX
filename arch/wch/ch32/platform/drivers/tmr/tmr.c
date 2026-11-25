@@ -57,47 +57,6 @@ typedef struct tmr_priv {
     mr_bool_t configured, signal, events;
 } tmr_priv_t;
 
-static mr_bool_t tmr_timer_advanced(const TIM_TypeDef *tim) {
-    return (tim == TIM1)
-#if defined(TIM8)
-        || (tim == TIM8)
-#endif /* defined(TIM8) */
-#if defined(TIM9)
-        || (tim == TIM9)
-#endif /* defined(TIM9) */
-#if defined(TIM10)
-        || (tim == TIM10)
-#endif /* defined(TIM10) */
-        ;
-}
-
-static mr_bool_t tmr_timer_basic(const TIM_TypeDef *tim) {
-#if defined(TIM6) && defined(TIM7)
-    return (tim == TIM6) || (tim == TIM7);
-#else
-    MR_IGNORE(tim);
-    return MR_FALSE;
-#endif /* defined(TIM6) && defined(TIM7) */
-}
-
-static mr_uint32_t tmr_timer_clock(const TIM_TypeDef *tim) {
-#if defined(MR_USE_CH32V10X) || defined(MR_USE_CH32V20X)                       \
-    || defined(MR_USE_CH32V205) || defined(MR_USE_CH32V30X)                    \
-    || defined(MR_USE_CH32V4X7)
-    mr_uint32_t prescaler;
-
-    /* A divided APB clocks its timers at twice PCLK */
-    prescaler = tmr_timer_advanced(tim)
-        ? ((RCC->CFGR0 >> 11) & 7U)
-        : ((RCC->CFGR0 >> 8) & 7U);
-    return (prescaler < 4U) ? SystemCoreClock
-                           : (SystemCoreClock >> (prescaler - 4U));
-#else
-    MR_IGNORE(tim);
-    return SystemCoreClock;
-#endif /* CH32 EVT SDK family */
-}
-
 static mr_err_t tmr_make_period(const tmr_priv_t *priv, mr_uint64_t period,
                                 mr_ch32_timer_base_t *base) {
     mr_uint64_t max_counts;
@@ -115,7 +74,7 @@ static mr_err_t tmr_make_period(const tmr_priv_t *priv, mr_uint64_t period,
     }
 #endif /* CH32 timer with 32-bit reload */
     hz = (priv->tim3_input_hz != 0U) ? priv->tim3_input_hz
-                                    : tmr_timer_clock(priv->tim);
+                                    : mr_ch32_timer_clock(priv->tim);
     return mr_ch32_timer_make_period(hz, period, max_counts, 1U, base);
 }
 
@@ -180,11 +139,11 @@ static void tmr_program(const tmr_priv_t *priv, const mr_tmr_config_t *config,
     priv->tim->DMAINTENR = 0U;
     /* Select counter enable as TRGO while issuing the software update */
     priv->tim->CTLR2 = TIM_MMS_0;
-    if (!tmr_timer_basic(priv->tim)) {
+    if (!mr_ch32_timer_is_basic(priv->tim)) {
         priv->tim->SMCFGR = 0U;
         priv->tim->CCER = 0U;
     }
-    if (tmr_timer_advanced(priv->tim)) {
+    if (mr_ch32_timer_is_advanced(priv->tim)) {
         priv->tim->RPTCR = 0U;
     }
     priv->tim->CTLR1 = (config->mode == MR_TMR_MODE_ONESHOT) ? TIM_OPM : 0U;

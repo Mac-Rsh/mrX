@@ -10,10 +10,13 @@
 #if defined(MR_USE_DRIVER_DAC)
 #include <mrX/drivers/dac/mr_dac.h>
 #include <mrX/drivers/gpio/mr_gpio.h>
-#if defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA)
-#include <mrX/drivers/dma/mr_dma.h>
+#if defined(MR_USE_DRIVER_DAC_STREAM)
 #define DAC_USE_STREAM
-#endif /* defined(MR_USE_DRIVER_DAC_STREAM) && defined(MR_USE_DRIVER_DMA) */
+#if defined(MR_USE_DRIVER_DMA)
+#include <mrX/drivers/dma/mr_dma.h>
+#define DAC_USE_DMA
+#endif /* defined(MR_USE_DRIVER_DMA) */
+#endif /* defined(MR_USE_DRIVER_DAC_STREAM) */
 
 /* HardTree compatible */
 #define MR_HT_COMPAT                    st_stm32_dac
@@ -77,12 +80,14 @@ typedef struct dac_sample_format {
 } dac_sample_format_t;
 
 #if defined(DAC_USE_STREAM)
+#if defined(DAC_USE_DMA)
 /* DAC DMA type */
 typedef struct dac_dma {
     mr_ht_dma_spec_t dma;
     mr_dma_transfer_t transfer;
     mr_waiter_t waiter;
 } dac_dma_t;
+#endif /* defined(DAC_USE_DMA) */
 
 /* DAC stream channel type */
 typedef struct dac_stream_channel {
@@ -97,7 +102,9 @@ typedef struct dac_stream {
     uint32_t trigger;
     IRQn_Type irqn;
     mr_uint32_t irq_priority;
+#if defined(DAC_USE_DMA)
     dac_dma_t *dma;
+#endif /* defined(DAC_USE_DMA) */
     mr_driver_t *driver;
     mr_size_t size;
     volatile mr_size_t offset;
@@ -123,6 +130,8 @@ typedef struct dac_priv {
     mr_size_t channels_num;
     mr_uint8_t ref;
     mr_uint8_t started_mask;
+    mr_uint8_t poll_mask;
+    mr_uint8_t initialized: 1;
 #if defined(DAC_USE_STREAM)
     dac_stream_t stream;
 #endif /* defined(DAC_USE_STREAM) */
@@ -196,6 +205,12 @@ static dac_stream_channel_t dac_stream_channel(const dac_priv_t *priv,
 
 static mr_err_t dac_init(dac_priv_t *priv) {
     mr_size_t i, j;
+    mr_err_t ret;
+
+    /* Skip redundant DAC peripheral init */
+    if (priv->initialized) {
+        return 0;
+    }
 
     /* Check DAC resources */
     if ((priv->handle.Instance == MR_NULL) || (priv->clk_enable == MR_NULL)
@@ -223,7 +238,11 @@ static mr_err_t dac_init(dac_priv_t *priv) {
     priv->clk_enable();
 
     /* Init DAC */
-    return mr_stm32_hal_status(HAL_DAC_Init(&priv->handle));
+    ret = mr_stm32_hal_status(HAL_DAC_Init(&priv->handle));
+    if (ret == 0) {
+        priv->initialized = 1U;
+    }
+    return ret;
 }
 
 static mr_err_t dac_gpio_configure(dac_priv_t *priv, mr_uint32_t channel) {
@@ -416,7 +435,11 @@ static mr_err_t dac_channel_configure(const mr_driver_t *drv,
     }
 
     /* Configure DAC channel */
-    return dac_configure_hw_channel(priv, channel, DAC_TRIGGER_NONE);
+    ret = dac_configure_hw_channel(priv, channel, DAC_TRIGGER_NONE);
+    if (ret == 0) {
+        priv->poll_mask |= (mr_uint8_t)(1U << channel);
+    }
+    return ret;
 }
 
 static mr_err_t dac_channel_configuration(const mr_driver_t *drv,
@@ -503,12 +526,17 @@ static mr_ssize_t dac_write(const mr_driver_t *drv, mr_dac_seq_t *seq) {
         return ret;
     }
 
-    /* Configure DAC channels */
+    /* Configure DAC channels that are not yet in polling mode */
     for (rank = 0U; rank < channel_count; rank++) {
+        mr_uint8_t bit = (mr_uint8_t)(1U << ranks[rank]);
+        if ((priv->poll_mask & bit) != 0U) {
+            continue;
+        }
         ret = dac_configure_hw_channel(priv, ranks[rank], DAC_TRIGGER_NONE);
         if (ret != 0) {
             return ret;
         }
+        priv->poll_mask |= bit;
     }
 
     /* Write samples */
@@ -524,6 +552,7 @@ static mr_ssize_t dac_write(const mr_driver_t *drv, mr_dac_seq_t *seq) {
 }
 
 #if defined(DAC_USE_STREAM)
+#if defined(DAC_USE_DMA)
 static volatile uint32_t *dac_dhr(DAC_TypeDef *instance, uint32_t channel,
                                   uint32_t alignment) {
     /* Get data register */
@@ -552,6 +581,7 @@ static volatile uint32_t *dac_dhr(DAC_TypeDef *instance, uint32_t channel,
     }
     return MR_NULL;
 }
+#endif /* defined(DAC_USE_DMA) */
 
 static void dac_stream_notify(dac_stream_t *stream, mr_wait_event_t events) {
     if (events == 0U) {
@@ -586,6 +616,7 @@ static void dac_stream_halt(dac_priv_t *priv) {
     priv->stream.complete = MR_TRUE;
 }
 
+#if defined(DAC_USE_DMA)
 static void dac_dma_event(mr_waiter_t *waiter, void *param,
                           mr_wait_event_t event, const void *data) {
     dac_priv_t *priv = (dac_priv_t *)param;
@@ -642,12 +673,12 @@ static mr_err_t dac_stream_start_dma(dac_priv_t *priv,
     width = (format->sample_size == sizeof(mr_uint8_t)) ? MR_DMA_WIDTH_8
                                                         : MR_DMA_WIDTH_16;
     config.src_width = width;
-#if defined(STM32H5)
-    /* Use word writes to the H5 DAC data holding register */
+#if defined(GPDMA1)
+    /* Use word writes to GPDMA-connected DAC data holding registers */
     config.dst_width = MR_DMA_WIDTH_32;
 #else
     config.dst_width = width;
-#endif /* defined(STM32H5) */
+#endif /* defined(GPDMA1) */
     config.src_adj = MR_DMA_ADJ_INC;
     config.dst_adj = MR_DMA_ADJ_CONST;
     config.src_burst = MR_DMA_BURST_1;
@@ -708,6 +739,7 @@ _exit:
     mr_waiter_del(&dma->waiter);
     return ret;
 }
+#endif /* defined(DAC_USE_DMA) */
 
 static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
                                  const mr_dac_stream_config_t *config) {
@@ -728,9 +760,11 @@ static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
 
     /* Check stream resources */
     use_dma = MR_FALSE;
+#if defined(DAC_USE_DMA)
     if ((stream->dma != MR_NULL) && (stream->dma->dma.drv != MR_NULL)) {
         use_dma = MR_TRUE;
     }
+#endif /* defined(DAC_USE_DMA) */
     if (!stream->trigger_valid) {
         return -MR_ENODEV;
     }
@@ -804,6 +838,7 @@ static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
     }
 
     /* Configure stream channel */
+    priv->poll_mask &= (mr_uint8_t)~(1U << channel);
     ret = dac_configure_hw_channel(priv, channel, stream->trigger);
     if (ret != 0) {
         return ret;
@@ -833,6 +868,7 @@ static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
         }
     }
 
+#if defined(DAC_USE_DMA)
     /* Start DMA */
     if (use_dma) {
         ret = dac_stream_start_dma(priv, seq, &format);
@@ -840,6 +876,7 @@ static mr_err_t dac_stream_start(const mr_driver_t *drv, mr_dac_seq_t *seq,
             goto _stop;
         }
     }
+#endif /* defined(DAC_USE_DMA) */
 
     /* Enable stream requests */
     __HAL_DAC_CLEAR_FLAG(&priv->handle, stream_channel.underrun_flag);
@@ -867,8 +904,10 @@ static mr_err_t dac_stream_stop(const mr_driver_t *drv) {
     dac_priv_t *priv = MR_DRIVER_PRIV(drv);
     dac_stream_t *stream = &priv->stream;
     dac_stream_channel_t channel;
+#if defined(DAC_USE_DMA)
     mr_wait_event_t events;
     dac_dma_t *dma;
+#endif /* defined(DAC_USE_DMA) */
     mr_uint8_t bit;
     mr_err_t ret;
 
@@ -897,6 +936,7 @@ static mr_err_t dac_stream_stop(const mr_driver_t *drv) {
         priv->started_mask &= (mr_uint8_t)~bit;
     }
 
+#if defined(DAC_USE_DMA)
     /* Check DMA */
     dma = stream->dma;
     if (stream->use_dma && stream->dma_started && (dma != MR_NULL)) {
@@ -919,6 +959,7 @@ static mr_err_t dac_stream_stop(const mr_driver_t *drv) {
         mr_waiter_del(&dma->waiter);
         stream->dma_started = MR_FALSE;
     }
+#endif /* defined(DAC_USE_DMA) */
 
     /* Release stream */
     stream->driver = MR_NULL;
@@ -928,7 +969,9 @@ static mr_err_t dac_stream_stop(const mr_driver_t *drv) {
 static mr_err_t dac_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
     dac_priv_t *priv = MR_DRIVER_PRIV(drv);
     dac_stream_t *stream = &priv->stream;
+#if defined(DAC_USE_DMA)
     mr_bool_t dma_busy;
+#endif /* defined(DAC_USE_DMA) */
     mr_err_t ret;
 
     /* Check stream state */
@@ -950,6 +993,7 @@ static mr_err_t dac_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
         *busy = MR_TRUE;
         return 0;
     }
+#if defined(DAC_USE_DMA)
     if (!stream->use_dma || (stream->dma == MR_NULL)) {
         return -MR_ENODEV;
     }
@@ -972,11 +1016,15 @@ static mr_err_t dac_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
     }
     *busy = MR_FALSE;
     return 0;
+#else
+    return -MR_ENODEV;
+#endif /* defined(DAC_USE_DMA) */
 }
 
 static mr_err_t dac_stream_offset(const mr_driver_t *drv, mr_size_t *offset) {
     dac_priv_t *priv = MR_DRIVER_PRIV(drv);
     dac_stream_t *stream = &priv->stream;
+#if defined(DAC_USE_DMA)
     mr_err_t ret;
 
     /* Get DMA stream offset */
@@ -992,6 +1040,7 @@ static mr_err_t dac_stream_offset(const mr_driver_t *drv, mr_size_t *offset) {
         *offset += stream->prefill;
         return 0;
     }
+#endif /* defined(DAC_USE_DMA) */
 
     /* Get IRQ stream offset */
     *offset = stream->offset;
@@ -1103,6 +1152,7 @@ MR_UNUSED static void dac_irq(dac_priv_t *priv) {
         },                                                                     \
     }
 #if defined(DAC_USE_STREAM)
+#if defined(DAC_USE_DMA)
 #define __ST_HT_DAC_HAS_DMA(_id) MR_HT_DRIVER_HAS_PROP(_id, st_dma)
 #define __ST_HT_DAC_DMA_INSTALL(_id)                                           \
     MR_MACRO_IF(__ST_HT_DAC_HAS_DMA(_id),                                      \
@@ -1113,6 +1163,10 @@ MR_UNUSED static void dac_irq(dac_priv_t *priv) {
 #define __ST_HT_DAC_DMA(_id)                                                   \
     MR_MACRO_IF(__ST_HT_DAC_HAS_DMA(_id),                                      \
                 (.dma = &MR_CAT(__dac_dma_, _id),), ())
+#else
+#define __ST_HT_DAC_DMA_INSTALL(_id)
+#define __ST_HT_DAC_DMA(_id)
+#endif /* defined(DAC_USE_DMA) */
 #define __ST_HT_DAC_HAS_IRQ(_id)                                               \
     MR_MACRO_AND(MR_HT_DRIVER_HAS_PROP(_id, st_irqn),                          \
                  MR_HT_DRIVER_HAS_PROP(_id, st_irq_handler))

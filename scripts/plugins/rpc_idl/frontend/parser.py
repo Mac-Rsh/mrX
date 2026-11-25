@@ -205,6 +205,10 @@ class Parser:
         # Parse fields until the closing brace
         fields: list[FieldDecl] = []
         while not self._check(TokenType.RBRACE, TokenType.EOF):
+            token = self._peek()
+            if (token is not None and token.type == TokenType.IDENTIFIER
+                    and token.value in self.DECL_KEYWORDS):
+                break
             field = self._parse_field()
             if field is None:
                 self._sync()
@@ -253,6 +257,10 @@ class Parser:
         # Parse methods until the closing brace
         methods: list[MethodDecl] = []
         while not self._check(TokenType.RBRACE, TokenType.EOF):
+            token = self._peek()
+            if (token is not None and token.type == TokenType.IDENTIFIER
+                    and token.value in self.DECL_KEYWORDS):
+                break
             method = self._parse_method()
             if method is None:
                 self._sync()

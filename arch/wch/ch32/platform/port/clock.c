@@ -144,6 +144,17 @@ void mr_ch32_platform_clock_init(mr_uint32_t per_second) {
     /* Lock */
     mask = mr_port_irq_disable();
 
+#if defined(MR_USE_CLOCK_HIRES)
+    /* Preserve monotonic high-resolution ticks across re-initialization */
+    if (__clock_frequency != 0U) {
+        __hires_tick += clock_scale(clock_count() - __hires_sample,
+                                    MR_CFG_HIRES_TICK_PER_SECOND,
+                                    &__hires_fraction);
+    }
+    __hires_sample = 0U;
+    __hires_fraction = 0U;
+#endif /* defined(MR_USE_CLOCK_HIRES) */
+
     /* Reset SysTick */
     SysTick->CTLR = 0U;
 #if defined(MR_USE_CH32V10X)
@@ -160,12 +171,6 @@ void mr_ch32_platform_clock_init(mr_uint32_t per_second) {
     __clock_rate = per_second;
     __clock_fraction = 0U;
     __clock_sample = 0U;
-#if defined(MR_USE_CLOCK_HIRES)
-    /* Reset high resolution clock */
-    __hires_sample = 0U;
-    __hires_tick = 0U;
-    __hires_fraction = 0U;
-#endif /* defined(MR_USE_CLOCK_HIRES) */
 
     /* Batch kernel ticks if the configured rate exceeds the IRQ rate limit */
     interrupt_rate = per_second;

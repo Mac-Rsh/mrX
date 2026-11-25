@@ -123,6 +123,11 @@ static mr_err_t dcache_prepare(void) {
         return 0;
     }
 
+#if defined(__HAL_RCC_DCACHE1_CLK_ENABLE)
+    /* Enable peripheral D-Cache clock */
+    __HAL_RCC_DCACHE1_CLK_ENABLE();
+#endif /* defined(__HAL_RCC_DCACHE1_CLK_ENABLE) */
+
     /* Initialize peripheral D-Cache */
     ret = dcache_status(HAL_DCACHE_Init(&__dcache));
     if (ret != 0) {

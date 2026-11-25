@@ -52,7 +52,7 @@ MR_UNUSED static const mr_i2c_ops_t __i2c_ops = {
 #define I2C_SLAVE_IRQS                                                         \
     (I2C_CTLR2_ITERREN | I2C_CTLR2_ITEVTEN | I2C_CTLR2_ITBUFEN)
 
-/* I2C slave FIFO size definition */
+/* I2C slave default FIFO size definition */
 #define I2C_SLAVE_FIFO_SIZE             (32U)
 
 /* I2C IRQ definition */
@@ -63,6 +63,15 @@ MR_UNUSED static const mr_i2c_ops_t __i2c_ops = {
     || defined(MR_USE_CH32V4X7)
 #define CH32_I2C_HAS_RTR
 #endif /* CH32 EVT SDK family */
+
+/* I2C slave type */
+typedef struct i2c_slave {
+    mr_fifo_t rx, tx;
+    mr_uint8_t *rx_buffer, *tx_buffer;
+    mr_size_t rx_size, tx_size;
+    mr_uint32_t events;
+    mr_bool_t sending;
+} i2c_slave_t;
 
 /* I2C private data type */
 typedef struct i2c_priv {
@@ -76,10 +85,7 @@ typedef struct i2c_priv {
 #endif /* defined(CH32_I2C_HAS_RTR) */
     int ev_irq, er_irq;
     mr_uint8_t irq_priority;
-    mr_uint32_t events;
-    mr_fifo_t rx, tx;
-    mr_uint8_t rx_buffer[I2C_SLAVE_FIFO_SIZE], tx_buffer[I2C_SLAVE_FIFO_SIZE];
-    mr_bool_t sending;
+    i2c_slave_t *slave;
     mr_atomic_t busy;
 } i2c_priv_t;
 
@@ -91,7 +97,9 @@ static void i2c_slave_disable(i2c_priv_t *priv) {
     NVIC_DisableIRQ((IRQn_Type)priv->er_irq);
     NVIC_ClearPendingIRQ((IRQn_Type)priv->ev_irq);
     NVIC_ClearPendingIRQ((IRQn_Type)priv->er_irq);
-    priv->sending = MR_FALSE;
+    if (priv->slave != MR_NULL) {
+        priv->slave->sending = MR_FALSE;
+    }
 }
 
 static void i2c_slave_enable(i2c_priv_t *priv) {
@@ -143,7 +151,7 @@ static mr_err_t i2c_configure(const mr_driver_t *drv,
     }
     if ((config->clock_rate > 400000U)
         || ((config->clock_rate != 0U) && (config->role == MR_I2C_ROLE_SLAVE)
-            && (!mr_ch32_irq_valid(priv->ev_irq)
+            && ((priv->slave == MR_NULL) || !mr_ch32_irq_valid(priv->ev_irq)
                 || !mr_ch32_irq_valid(priv->er_irq)))) {
         return -MR_ENOSYS;
     }
@@ -164,7 +172,6 @@ static mr_err_t i2c_configure(const mr_driver_t *drv,
                 priv->instance->CTLR1 = 0U;
             }
         }
-        priv->events = 0U;
         priv->config = *config;
         mr_port_irq_enable(mask);
         goto _exit;
@@ -225,11 +232,12 @@ static mr_err_t i2c_configure(const mr_driver_t *drv,
 
     /* Init I2C */
     i2c_restore(priv);
-    priv->events = 0U;
     if (config->role == MR_I2C_ROLE_SLAVE) {
         /* Enable slave */
-        mr_fifo_init(&priv->rx, priv->rx_buffer, sizeof(priv->rx_buffer), 1U);
-        mr_fifo_init(&priv->tx, priv->tx_buffer, sizeof(priv->tx_buffer), 1U);
+        mr_fifo_init(&priv->slave->rx, priv->slave->rx_buffer,
+                     priv->slave->rx_size, 1U);
+        mr_fifo_init(&priv->slave->tx, priv->slave->tx_buffer,
+                     priv->slave->tx_size, 1U);
         i2c_slave_enable(priv);
     }
     mr_port_irq_enable(mask);
@@ -243,17 +251,16 @@ _exit:
 static mr_err_t i2c_configuration(const mr_driver_t *drv,
                                   mr_i2c_config_t *config) {
     i2c_priv_t *priv = MR_DRIVER_PRIV(drv);
+    int mask;
 
     /* Lock */
-    if (mr_atomic_exchange(&priv->busy, 1)) {
-        return -MR_EBUSY;
-    }
+    mask = mr_port_irq_disable();
 
     /* Get I2C configuration */
     *config = priv->config;
 
     /* Unlock */
-    mr_atomic_store(&priv->busy, 0);
+    mr_port_irq_enable(mask);
     return 0;
 }
 
@@ -538,7 +545,7 @@ _exit:
 
 static mr_bool_t i2c_slave_active(const i2c_priv_t *priv) {
     /* Check slave state */
-    return (priv->config.clock_rate != 0U)
+    return (priv->slave != MR_NULL) && (priv->config.clock_rate != 0U)
            && (priv->config.role == MR_I2C_ROLE_SLAVE)
            && ((priv->instance->CTLR1 & I2C_CTLR1_PE) != 0U);
 }
@@ -557,7 +564,8 @@ static mr_ssize_t i2c_slave_read(const mr_driver_t *drv, void *buf,
     /* Read slave FIFO */
     mask = mr_port_irq_disable();
     count = i2c_slave_active(priv)
-            ? (mr_ssize_t)mr_fifo_read(&priv->rx, buf, size) : -MR_ENODEV;
+            ? (mr_ssize_t)mr_fifo_read(&priv->slave->rx, buf, size)
+            : -MR_ENODEV;
     mr_port_irq_enable(mask);
     return count;
 }
@@ -576,7 +584,8 @@ static mr_ssize_t i2c_slave_write(const mr_driver_t *drv, const void *buf,
     /* Write slave FIFO */
     mask = mr_port_irq_disable();
     count = i2c_slave_active(priv)
-            ? (mr_ssize_t)mr_fifo_write(&priv->tx, buf, size) : -MR_ENODEV;
+            ? (mr_ssize_t)mr_fifo_write(&priv->slave->tx, buf, size)
+            : -MR_ENODEV;
     mr_port_irq_enable(mask);
     return count;
 }
@@ -591,20 +600,19 @@ static mr_err_t i2c_event_control(const mr_driver_t *drv, mr_uint32_t events,
         return -MR_EINVAL;
     }
 
-    /* Lock */
-    mask = mr_port_irq_disable();
-
-    /* Check slave state */
-    if (!i2c_slave_active(priv)) {
-        mr_port_irq_enable(mask);
+    /* Check slave capability */
+    if (priv->slave == MR_NULL) {
         return -MR_ENOSYS;
     }
 
+    /* Lock */
+    mask = mr_port_irq_disable();
+
     /* Update event mask */
     if (enable) {
-        priv->events |= events;
+        priv->slave->events |= events;
     } else {
-        priv->events &= ~events;
+        priv->slave->events &= ~events;
     }
 
     /* Unlock */
@@ -617,6 +625,7 @@ MR_UNUSED static void i2c_slave_irq(mr_driver_t *drv) {
     const mr_i2c_data_t *data;
     mr_uint16_t status, clear;
     mr_uint32_t events;
+    i2c_slave_t *slave;
     I2C_TypeDef *bus;
     mr_uint8_t byte;
     int mask;
@@ -637,6 +646,7 @@ MR_UNUSED static void i2c_slave_irq(mr_driver_t *drv) {
     }
 
     /* Handle slave IRQ */
+    slave = priv->slave;
     bus = priv->instance;
     status = bus->STAR1;
     clear = status & I2C_ERRORS;
@@ -648,13 +658,13 @@ MR_UNUSED static void i2c_slave_irq(mr_driver_t *drv) {
             events |= MR_I2C_WAIT_ERROR;
         }
         if ((clear & I2C_STAR1_AF) != 0U) {
-            priv->sending = MR_FALSE;
+            slave->sending = MR_FALSE;
             bus->CTLR2 &= ~I2C_CTLR2_ITBUFEN;
         }
     }
     if ((status & I2C_STAR1_RXNE) != 0U) {
         byte = (mr_uint8_t)bus->DATAR;
-        if (mr_fifo_push(&priv->rx, &byte) == 0U) {
+        if (mr_fifo_push(&slave->rx, &byte) == 0U) {
             events |= MR_I2C_WAIT_ERROR;
         } else {
             events |= MR_I2C_WAIT_RX_READY;
@@ -663,30 +673,30 @@ MR_UNUSED static void i2c_slave_irq(mr_driver_t *drv) {
     if ((status & I2C_STAR1_STOPF) != 0U) {
         /* A read of STAR1 followed by a write to CTLR1 releases STOPF */
         bus->CTLR1 = I2C_CTLR1_PE | I2C_CTLR1_ACK;
-        priv->sending = MR_FALSE;
+        slave->sending = MR_FALSE;
         events |= MR_I2C_WAIT_STOP;
     }
     if ((status & I2C_STAR1_ADDR) != 0U) {
         /* STAR2 clears the address match and identifies the new direction */
-        priv->sending = (bus->STAR2 & I2C_STAR2_TRA) != 0U;
+        slave->sending = (bus->STAR2 & I2C_STAR2_TRA) != 0U;
         bus->CTLR2 |= I2C_CTLR2_ITBUFEN;
-        events |= priv->sending ? MR_I2C_WAIT_TX_START : MR_I2C_WAIT_RX_START;
+        events |= slave->sending ? MR_I2C_WAIT_TX_START : MR_I2C_WAIT_RX_START;
     }
-    if (priv->sending && ((bus->STAR1 & I2C_STAR1_TXE) != 0U)) {
+    if (slave->sending && ((bus->STAR1 & I2C_STAR1_TXE) != 0U)) {
         events |= MR_I2C_WAIT_TX_READY;
     }
 
     /* Raise I2C event */
-    if ((events & priv->events) != 0U) {
-        mr_i2c_event_raise(drv, events & priv->events);
+    if ((events & slave->events) != 0U) {
+        mr_i2c_event_raise(drv, events & slave->events);
     }
 
     /* TX callbacks can supply a response before the hardware needs the byte */
     if (!mr_driver_is_ready(drv)) {
         i2c_slave_disable(priv);
-    } else if (i2c_slave_active(priv) && priv->sending
+    } else if (i2c_slave_active(priv) && slave->sending
         && ((bus->STAR1 & I2C_STAR1_TXE) != 0U)) {
-        if (mr_fifo_pop(&priv->tx, &byte) == 0U) {
+        if (mr_fifo_pop(&slave->tx, &byte) == 0U) {
             byte = 0xffU;
         }
         bus->DATAR = byte;
@@ -697,8 +707,36 @@ MR_UNUSED static void i2c_slave_irq(mr_driver_t *drv) {
 }
 
 /* Instance install */
+#define __CH32_HT_I2C_SLAVE_RX_FIFO(_id)                                       \
+    MR_HT_DRIVER_PROP_OR(_id, wch_slave_rx_fifo, I2C_SLAVE_FIFO_SIZE)
+#define __CH32_HT_I2C_SLAVE_TX_FIFO(_id)                                       \
+    MR_HT_DRIVER_PROP_OR(_id, wch_slave_tx_fifo, I2C_SLAVE_FIFO_SIZE)
+#define __CH32_HT_I2C_SLAVE_DEFINE(_id)                                        \
+    MR_MACRO_IF(                                                               \
+        MR_HT_DRIVER_HAS_PROP(_id, wch_ev_irq_handler),                        \
+        (MR_MACRO_IF(                                                          \
+            MR_HT_DRIVER_HAS_PROP(_id, wch_er_irq_handler),                    \
+            (static mr_uint8_t MR_CAT(__i2c_slave_rx_, _id)                    \
+                 [__CH32_HT_I2C_SLAVE_RX_FIFO(_id)];                           \
+             static mr_uint8_t MR_CAT(__i2c_slave_tx_, _id)                    \
+                 [__CH32_HT_I2C_SLAVE_TX_FIFO(_id)];                           \
+             static i2c_slave_t MR_CAT(__i2c_slave_, _id) = {                  \
+                 .rx_buffer = MR_CAT(__i2c_slave_rx_, _id),                    \
+                 .tx_buffer = MR_CAT(__i2c_slave_tx_, _id),                    \
+                 .rx_size = sizeof(MR_CAT(__i2c_slave_rx_, _id)),              \
+                 .tx_size = sizeof(MR_CAT(__i2c_slave_tx_, _id)),              \
+             };),                                                              \
+            ())),                                                              \
+        ())
+#define __CH32_HT_I2C_SLAVE_PTR(_id)                                           \
+    MR_MACRO_IF(                                                               \
+        MR_HT_DRIVER_HAS_PROP(_id, wch_ev_irq_handler),                        \
+        (MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, wch_er_irq_handler),           \
+                     (&MR_CAT(__i2c_slave_, _id)), (MR_NULL))),                \
+        (MR_NULL))
 #define CH32_HT_I2C_INSTALL(_id, _ops)                                         \
     extern void MR_HT_DRIVER_PROP(_id, wch_prepare)(void);                     \
+    __CH32_HT_I2C_SLAVE_DEFINE(_id)                                            \
     static i2c_priv_t MR_CAT(__i2c_priv_, _id) = {                             \
         .instance = MR_HT_DRIVER_PROP(_id, wch_i2cx),                          \
         .prepare = MR_HT_DRIVER_PROP(_id, wch_prepare),                        \
@@ -706,6 +744,7 @@ MR_UNUSED static void i2c_slave_irq(mr_driver_t *drv) {
         .ev_irq = __CH32_HT_I2C_IRQ_NUMBER(_id, wch_ev_irqn),                  \
         .er_irq = __CH32_HT_I2C_IRQ_NUMBER(_id, wch_er_irqn),                  \
         .irq_priority = MR_HT_DRIVER_PROP_OR(_id, wch_irq_priority, 0U),       \
+        .slave = __CH32_HT_I2C_SLAVE_PTR(_id),                                 \
         .busy = MR_ATOMIC_INIT(0),                                             \
     };                                                                         \
     __CH32_HT_I2C_IRQ(_id, wch_ev_irq_handler)                                 \

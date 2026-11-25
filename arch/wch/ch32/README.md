@@ -172,11 +172,11 @@ uart1: serial-1 {
 
 SPI 和 I2C 的 `wch,prepare` 指向板级 `void function(void)`，负责使能控制器时钟、选择重映射并配置总线引脚。SPI 主机后端管理低有效 GPIO 片选，GPIO 节点需先完成 setup。启用 `MR_USE_DRIVER_SPI_STREAM` 并声明成对的 `wch,irqn`、`wch,irq-handler` 后，SPI 主机可使用中断驱动的单次或循环 stream，可选配置 `wch,irq-priority`。
 
-SPI 从机声明 `wch,slave` 和同一组 SPI 向量属性。`cs` 只列出一个硬件 NSS 输入，该引脚应支持双边沿 GPIO EXTI，以报告片选和释放。收发各有 16 帧队列，支持 8 位和 16 位帧。主机须在 NSS 拉低到首帧之间以及帧间留出足够的中断处理时间。关闭驱动前应在 NSS 释放时将 `clock_rate` 配置为 0。
+SPI 从机声明 `wch,slave` 和同一组 SPI 向量属性。使用软件 NSS（`SSM`），`cs` 列出任意一个支持双边沿 GPIO EXTI 的片选输入引脚，由 EXTI 中断同步内部 `SSI` 并报告片选和释放。收发 FIFO 深度默认各 16 帧，可通过 `wch,slave-rx-fifo` 和 `wch,slave-tx-fifo` 按实例配置（纯主机节点不分配从机缓冲），支持 8 位和 16 位帧。主机须在 CS 拉低到首帧之间以及帧间留出足够的中断处理时间。关闭驱动前应在 CS 释放时将 `clock_rate` 配置为 0。
 
 I2C 的 SCL、SDA 应配置为复用开漏并接外部上拉。I2C 仲裁丢失返回 `-MR_EAGAIN`，总线忙返回 `-MR_EBUSY`，NACK/总线错误返回 `-MR_EIO`，等待超时返回 `-MR_ETIMEDOUT`。控制器可复位自身状态机；外部设备持续拉低总线时，由板级处理总线恢复。I2C 主机末消息仍须发送 STOP。
 
-I2C 从机需同时声明 `wch,ev-irqn`、`wch,ev-irq-handler`、`wch,er-irqn` 和 `wch,er-irq-handler`，可选 `wch,irq-priority`。读写使用各 32 字节的 FIFO，调用可返回短计数。RX 满时丢弃新到字节并上报错误。TX 无待发数据时发送 `0xff`。关闭驱动前，先将时钟配置为 0 退出从机模式。
+I2C 从机需同时声明 `wch,ev-irqn`、`wch,ev-irq-handler`、`wch,er-irqn` 和 `wch,er-irq-handler`，可选 `wch,irq-priority`。读写 FIFO 默认各 32 字节，可通过 `wch,slave-rx-fifo` 和 `wch,slave-tx-fifo` 按实例配置（纯主机节点省略中断属性时不分配从机缓冲），调用可返回短计数。RX 满时丢弃新到字节并上报错误。TX 无待发数据时发送 `0xff`。关闭驱动前，先将时钟配置为 0 退出从机模式。
 
 V4x7 使用 `I2C1`，配置驱动前须将 PCLK1 设为 4–60 MHz。`wch,ch32-spi` 使用 SPI 模式，
 SPI1 取 PCLK2，SPI2/3 取 PCLK1。按封装选择可用的 SPI 实例和引脚。

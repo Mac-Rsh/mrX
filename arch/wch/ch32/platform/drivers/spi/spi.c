@@ -75,15 +75,15 @@ MR_UNUSED static const mr_spi_ops_t __spi_ops = {
     (MR_SPI_WAIT_SELECT | MR_SPI_WAIT_RX_READY | MR_SPI_WAIT_TX_READY          \
      | MR_SPI_WAIT_DESELECT | MR_SPI_WAIT_ERROR)
 
-/* SPI slave FIFO frame count definition */
+/* SPI slave default FIFO frame count definition */
 #define SPI_SLAVE_FIFO_FRAMES           (16U)
 
 /* SPI slave type */
 typedef struct spi_slave {
     mr_waiter_t nss;
     mr_fifo_t rx, tx;
-    mr_uint16_t rx_buffer[SPI_SLAVE_FIFO_FRAMES];
-    mr_uint16_t tx_buffer[SPI_SLAVE_FIFO_FRAMES];
+    mr_uint16_t *rx_buffer, *tx_buffer;
+    mr_size_t rx_size, tx_size;
     mr_uint16_t events, mode;
     mr_bool_t enabled, selected;
 } spi_slave_t;
@@ -246,6 +246,7 @@ _exit:
 static mr_err_t spi_configuration(const mr_driver_t *drv, mr_uint32_t cs,
                                   mr_spi_config_t *config) {
     spi_priv_t *priv = MR_DRIVER_PRIV(drv);
+    int mask;
 
     /* Check parameter */
     if (cs >= priv->count) {
@@ -253,15 +254,13 @@ static mr_err_t spi_configuration(const mr_driver_t *drv, mr_uint32_t cs,
     }
 
     /* Lock */
-    if (mr_atomic_exchange(&priv->busy, 1)) {
-        return -MR_EBUSY;
-    }
+    mask = mr_port_irq_disable();
 
     /* Get SPI configuration */
     *config = priv->configs[cs];
 
     /* Unlock */
-    mr_atomic_store(&priv->busy, 0);
+    mr_port_irq_enable(mask);
     return 0;
 }
 
@@ -501,12 +500,19 @@ static void spi_slave_nss(mr_waiter_t *waiter, void *param,
 
     /* Handle NSS level */
     if ((level == MR_GPIO_LEVEL_LOW) && !slave->selected) {
+        /* Assert internal software NSS before notifying waiters */
+        priv->instance->CTLR1 &= ~SPI_CTLR1_SSI;
         slave->selected = MR_TRUE;
         spi_slave_notify(drv, MR_SPI_WAIT_SELECT | MR_SPI_WAIT_TX_READY);
         if (slave->enabled && slave->selected) {
+            if ((priv->instance->STATR & SPI_STATR_TXE) != 0U) {
+                spi_slave_send(priv);
+            }
             priv->instance->CTLR2 |= SPI_CTLR2_TXEIE;
         }
     } else if ((level == MR_GPIO_LEVEL_HIGH) && slave->selected) {
+        /* Deassert internal software NSS to release MISO */
+        priv->instance->CTLR1 |= SPI_CTLR1_SSI;
         slave->selected = MR_FALSE;
         priv->instance->CTLR2 &= ~SPI_CTLR2_TXEIE;
         spi_slave_notify(drv, MR_SPI_WAIT_DESELECT
@@ -623,18 +629,17 @@ static mr_err_t spi_slave_configure(const mr_driver_t *drv,
 #endif /* defined(MR_USE_CH32V4X7) */
 
     /* Enable slave */
-    mr_fifo_init(&slave->rx, slave->rx_buffer, sizeof(slave->rx_buffer),
+    mr_fifo_init(&slave->rx, slave->rx_buffer, slave->rx_size,
                  sizeof(mr_uint16_t));
-    mr_fifo_init(&slave->tx, slave->tx_buffer, sizeof(slave->tx_buffer),
+    mr_fifo_init(&slave->tx, slave->tx_buffer, slave->tx_size,
                  sizeof(mr_uint16_t));
-    slave->mode = spi_frame_mode(config);
-    slave->events = 0U;
+    slave->mode = spi_frame_mode(config) | SPI_CTLR1_SSM;
     priv->configs[0] = *config;
     slave->enabled = MR_TRUE;
     NVIC_ClearPendingIRQ((IRQn_Type)priv->irq);
     NVIC_SetPriority((IRQn_Type)priv->irq, priv->irq_priority);
     NVIC_EnableIRQ((IRQn_Type)priv->irq);
-    priv->instance->CTLR1 = slave->mode | SPI_CTLR1_SPE;
+    priv->instance->CTLR1 = slave->mode | SPI_CTLR1_SSI | SPI_CTLR1_SPE;
     priv->instance->CTLR2 = SPI_CTLR2_RXNEIE | SPI_CTLR2_ERRIE;
     goto _exit;
 
@@ -735,7 +740,9 @@ static void spi_slave_irq(mr_driver_t *drv, spi_priv_t *priv) {
     status = priv->instance->STATR;
     events = spi_slave_drain(priv, status);
     if ((status & SPI_STATR_MODF) != 0U) {
-        priv->instance->CTLR1 = priv->slave->mode | SPI_CTLR1_SPE;
+        priv->instance->CTLR1 = priv->slave->mode
+                                | (priv->slave->selected ? 0U : SPI_CTLR1_SSI)
+                                | SPI_CTLR1_SPE;
     }
     if (priv->slave->selected && ((status & SPI_STATR_TXE) != 0U)) {
         events |= MR_SPI_WAIT_TX_READY;
@@ -866,7 +873,7 @@ _exit:
 
 static mr_err_t spi_stream_stop(const mr_driver_t *drv) {
     spi_priv_t *priv = MR_DRIVER_PRIV(drv);
-    mr_err_t ret;
+    mr_err_t ret, rel;
     int mask;
 
     /* Lock */
@@ -877,15 +884,21 @@ static mr_err_t spi_stream_stop(const mr_driver_t *drv) {
         mr_port_irq_enable(mask);
         return 0;
     }
+
+    /* Stop further IRQ-driven frames before waiting for the in-flight shift */
+    priv->instance->CTLR2 = 0U;
+    NVIC_DisableIRQ((IRQn_Type)priv->irq);
+    NVIC_ClearPendingIRQ((IRQn_Type)priv->irq);
+    mr_port_irq_enable(mask);
+
     /* One frame can remain in flight because TX advances from RXNE */
     ret = spi_wait(priv, SPI_STATR_TXE | SPI_STATR_BSY, SPI_STATR_TXE);
-    if (ret != -MR_ETIMEDOUT) {
-        ret = spi_stream_release(priv);
-    }
 
-    /* Unlock */
+    /* Always release CS and busy state even if the bus timed out */
+    mask = mr_port_irq_disable();
+    rel = spi_stream_release(priv);
     mr_port_irq_enable(mask);
-    return ret;
+    return (ret == -MR_ETIMEDOUT) ? ret : rel;
 }
 
 static mr_err_t spi_stream_is_busy(const mr_driver_t *drv, mr_bool_t *busy) {
@@ -1127,13 +1140,30 @@ MR_UNUSED static void spi_irq(mr_driver_t *drv) {
 }
 
 /* Instance install */
+#define __CH32_HT_SPI_SLAVE_RX_FIFO(_id)                                       \
+    MR_HT_DRIVER_PROP_OR(_id, wch_slave_rx_fifo, SPI_SLAVE_FIFO_FRAMES)
+#define __CH32_HT_SPI_SLAVE_TX_FIFO(_id)                                       \
+    MR_HT_DRIVER_PROP_OR(_id, wch_slave_tx_fifo, SPI_SLAVE_FIFO_FRAMES)
+#define __CH32_HT_SPI_SLAVE_DEFINE(_id)                                        \
+    MR_MACRO_IF(                                                               \
+        MR_HT_DRIVER_HAS_PROP(_id, wch_slave),                                 \
+        (static mr_uint16_t MR_CAT(__spi_slave_rx_, _id)                       \
+             [__CH32_HT_SPI_SLAVE_RX_FIFO(_id)];                               \
+         static mr_uint16_t MR_CAT(__spi_slave_tx_, _id)                       \
+             [__CH32_HT_SPI_SLAVE_TX_FIFO(_id)];                               \
+         static spi_slave_t MR_CAT(__spi_slave_, _id) = {                      \
+             .rx_buffer = MR_CAT(__spi_slave_rx_, _id),                        \
+             .tx_buffer = MR_CAT(__spi_slave_tx_, _id),                        \
+             .rx_size = sizeof(MR_CAT(__spi_slave_rx_, _id)),                  \
+             .tx_size = sizeof(MR_CAT(__spi_slave_tx_, _id)),                  \
+         };),                                                                  \
+        ())
 #define CH32_HT_SPI_INSTALL(_id, _ops)                                         \
     extern void MR_HT_DRIVER_PROP(_id, wch_prepare)(void);                     \
     static mr_ht_gpio_spec_t MR_CAT(__spi_cs_, _id)[] = {                      \
         MR_HT_GPIO_SPEC_FOREACH(_id, cs),                                      \
     };                                                                         \
-    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, wch_slave),                         \
-                (static spi_slave_t MR_CAT(__spi_slave_, _id);), ())           \
+    __CH32_HT_SPI_SLAVE_DEFINE(_id)                                            \
     static mr_spi_config_t MR_CAT(__spi_configs_, _id)                         \
         [MR_HT_DRIVER_PROP_ELEM_NUM(_id, cs)];                                 \
     static mr_uint16_t MR_CAT(__spi_dividers_, _id)                            \

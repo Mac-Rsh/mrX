@@ -103,12 +103,21 @@ class HelpCommand(Command):
 
     def complete(self, context: CommandContext,
                  request: CompletionRequest) -> list[CompletionItem]:
-        """Complete registered root commands for `help`."""
+        """Complete registered commands and subcommands for `help`."""
         del context
         if request.tokens:
-            return []
+            parent = self.registry.find(request.tokens)
+            if parent is None:
+                return []
+            nodes = sorted(
+                (child for child in parent.children.values()
+                 if not child.command.spec.hidden),
+                key=lambda child: child.command.spec.name,
+            )
+        else:
+            nodes = list(self.registry.roots())
         items: list[CompletionItem] = []
-        for node in self.registry.roots():
+        for node in nodes:
             spec = node.command.spec
             items.append(CompletionItem(
                 value=spec.name,

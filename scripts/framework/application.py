@@ -63,7 +63,10 @@ class Application:
             input_stream: TextIO = sys.stdin,
     ) -> int:
         """Run one CLI invocation and return its process exit code."""
-        argv, verbose, early_exit = self._parse_global_options(list(arguments))
+        argv, verbose, no_color, early_exit = self._parse_global_options(
+            list(arguments))
+        if no_color:
+            self.console.set_color(False)
         if early_exit is not None:
             return early_exit
 
@@ -85,7 +88,7 @@ class Application:
             interactive: bool | None = None,
     ) -> int:
         """Resolve, parse, and execute one command invocation."""
-        argv, extra_verbose, early_exit = self._parse_global_options(
+        argv, extra_verbose, no_color, early_exit = self._parse_global_options(
             list(arguments))
         if early_exit is not None:
             return early_exit
@@ -95,9 +98,20 @@ class Application:
         if not argv:
             return 0
 
+        console = self.console
+        if no_color:
+            if interactive:
+                console = Console(
+                    stdout=self.console.stdout,
+                    stderr=self.console.stderr,
+                    color=False,
+                )
+            else:
+                self.console.set_color(False)
+
         resolved = self.registry.resolve(argv)
         if resolved is None:
-            self.console.diagnostic(Diagnostic(
+            console.diagnostic(Diagnostic(
                 level=DiagnosticLevel.ERROR,
                 code="COMMAND_NOT_FOUND",
                 message=f"Unknown command: {argv[0]}",
@@ -109,10 +123,10 @@ class Application:
         outcome = self.parser.parse(node, remaining)
         if outcome.exit_code is not None:
             for message, error in outcome.output:
-                self.console.write(message, error=error, end="")
+                console.write(message, error=error, end="")
             return outcome.exit_code
         if outcome.arguments is None:
-            self.console.diagnostic(Diagnostic(
+            console.diagnostic(Diagnostic(
                 level=DiagnosticLevel.ERROR,
                 code="PARSER_STATE_INVALID",
                 message="Command parser returned no arguments",
@@ -123,7 +137,7 @@ class Application:
             project_root=self.project_root,
             session=self.session,
             environment=current_environment(),
-            console=self.console,
+            console=console,
             verbose=verbose,
             interactive=interactive,
         )
@@ -148,13 +162,14 @@ class Application:
     def _parse_global_options(
             self,
             arguments: list[str],
-    ) -> tuple[list[str], bool, int | None]:
+    ) -> tuple[list[str], bool, bool, int | None]:
         """Consume framework options that precede the command path."""
         verbose = False
+        no_color = False
         while arguments:
             option = arguments[0]
             if option == "--no-color":
-                self.console.set_color(False)
+                no_color = True
                 arguments.pop(0)
             elif option == "--verbose":
                 verbose = True
@@ -164,11 +179,11 @@ class Application:
 
         if arguments and arguments[0] in {"--help", "-h"}:
             self._print_general_help()
-            return [], verbose, 0
+            return [], verbose, no_color, 0
         if arguments and arguments[0] == "--version":
             self.console.write(f"{self.name} {self.version}")
-            return [], verbose, 0
-        return arguments, verbose, None
+            return [], verbose, no_color, 0
+        return arguments, verbose, no_color, None
 
     def _print_general_help(self) -> None:
         """Render application usage and visible root commands."""

@@ -120,7 +120,6 @@ class CommandRegistry:
             raise
         self._roots.update(primary)
         self._root_lookup.update(lookup)
-        self._instances.add(ident)
         return node
 
     def roots(self, include_hidden: bool = False) -> tuple[CommandNode, ...]:
@@ -188,7 +187,7 @@ class CommandRegistry:
                 )
 
         ident = id(command)
-        if parent_path and ident in self._instances:
+        if ident in self._instances:
             raise CommandRegistrationError(
                 f"Command '{spec.name}' is already registered as an instance"
             )
@@ -197,8 +196,7 @@ class CommandRegistry:
         primary[spec.name] = node
         for identifier in identifiers:
             lookup[identifier] = node
-        if parent_path:
-            self._instances.add(ident)
+        self._instances.add(ident)
 
         for child in command.subcommands():
             self._register_node(
@@ -219,8 +217,9 @@ class CommandRegistry:
         children = sorted(node.children.values(),
                           key=lambda child: child.command.spec.name)
         for child in children:
-            if include_hidden or not child.command.spec.hidden:
-                yield child
+            if not include_hidden and child.command.spec.hidden:
+                continue
+            yield child
             yield from cls._iter_children(child, include_hidden)
 
     @staticmethod

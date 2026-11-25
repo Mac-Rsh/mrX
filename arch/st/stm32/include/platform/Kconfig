@@ -51,4 +51,26 @@ config MR_CFG_STM32_CLOCK_IRQ_PRIORITY
         tick below application interrupts. Boards without DWT CYCCNT support
         must disable MR_USE_CLOCK_HIRES.
 
+# ==================================
+# TRACE (RTT)
+# ==================================
+config MR_CFG_STM32_XTRACE_RTT_UP_SIZE
+    int "XTrace RTT up buffer size (bytes)"
+    depends on MR_USE_MODULE_XTRACE
+    default 1024
+    range 64 16384
+    help
+        Target-to-host SEGGER RTT ring buffer size in bytes for XTrace.
+        Compatible with J-Link, ST-Link and CMSIS-DAP (via OpenOCD, probe-rs
+        or pyOCD). Background draining attaches one clock hook slot.
+
+config MR_CFG_STM32_XTRACE_RTT_DOWN_SIZE
+    int "XTrace RTT down buffer size (bytes)"
+    depends on MR_USE_MODULE_XTRACE
+    default 32
+    range 16 1024
+    help
+        Host-to-target SEGGER RTT ring buffer size in bytes for XTrace
+        control commands (e.g. SEGGER SystemView start/stop handshake).
+
 endmenu

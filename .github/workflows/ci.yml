@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  scripts-test:
+    name: Host CLI Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: python -m pip install -r scripts/requirements.txt
+
+      - name: Run scripts unit tests
+        run: python ci/run.py --only-scripts
+
+  win-sim-test:
+    name: Windows Full Simulation & Unit Tests
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup MSYS2 MinGW-w64 GCC
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-binutils
+
+      - name: Install Python dependencies
+        run: python -m pip install -r scripts/requirements.txt
+
+      - name: Build and run full mrX C test suite
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\msys64\ucrt64\bin;" + $env:PATH
+          python ci/run.py --skip-scripts

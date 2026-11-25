@@ -129,32 +129,28 @@ class Console:
         rich = self._stderr_console if error else self._stdout_console
         text = Text()
         text.append(level.value.upper(),
-                    style=self._style(_LEVEL_STYLES[level]))
+                    style=self._style(_LEVEL_STYLES[level], stream=rich.file))
         text.append(f" {message}")
         rich.print(text, overflow="fold", highlight=False)
 
-    def _style(self, style: str) -> str:
+    def _style(self, style: str, stream: TextIO | None = None) -> str:
         """Return a Rich style name when color is enabled."""
-        if not self._color_enabled():
+        if not self._color_enabled(stream):
             return ""
         return style
 
-    def _color_enabled(self) -> bool:
-        """Check whether colored output is enabled."""
+    def _color_enabled(self, stream: TextIO | None = None) -> bool:
+        """Check whether colored output is enabled for the target stream."""
         if self._color_override is not None:
             return self._color_override
-        if "NO_COLOR" in os.environ:
+        if os.environ.get("NO_COLOR", "") != "":
             return False
-        return bool(getattr(self.stdout, "isatty", lambda: False)())
+        target = self.stdout if stream is None else stream
+        return bool(getattr(target, "isatty", lambda: False)())
 
     def _make_rich(self, stream: TextIO) -> RichConsole:
         """Build one Rich console bound to a stream."""
-        if self._color_override is not None:
-            no_color = not self._color_override
-        elif "NO_COLOR" in os.environ:
-            no_color = True
-        else:
-            no_color = not bool(getattr(stream, "isatty", lambda: False)())
+        no_color = not self._color_enabled(stream)
         return RichConsole(
             file=stream,
             no_color=no_color,

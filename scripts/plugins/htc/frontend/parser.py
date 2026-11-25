@@ -1064,6 +1064,9 @@ class Parser:
             return False
         if token.type not in {TokenType.NUMBER, TokenType.IDENTIFIER}:
             return False
+        next_token = self._peek(1)
+        if next_token is not None and next_token.type == TokenType.COMMA:
+            return False
         return self._is_hex_byte(token.value)
 
     @staticmethod

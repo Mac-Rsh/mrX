@@ -46,7 +46,7 @@ mr_err_t mr_eth_configure(mr_driver_t *drv, const mr_eth_config_t *config) {
     mr_err_t ret;
 
     /* Check parameter */
-    MR_DRIVER_ASSERT_TYPE(drv, MR_DRIVER_TYPE_ETH);
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_ETH);
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
     MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
     MR_ASSERT(config != MR_NULL);
@@ -78,7 +78,7 @@ mr_err_t mr_eth_configuration(mr_driver_t *drv, mr_eth_config_t *config) {
     mr_eth_data_t *eth_data;
 
     /* Check parameter */
-    MR_DRIVER_ASSERT_TYPE(drv, MR_DRIVER_TYPE_ETH);
+    MR_DRIVER_ASSERT(drv, MR_DRIVER_TYPE_ETH);
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
     MR_ASSERT(config != MR_NULL);
 
@@ -164,35 +164,18 @@ mr_ssize_t mr_eth_write(mr_driver_t *drv, const void *buf, mr_size_t size) {
 }
 
 static mr_err_t eth_init(const mr_driver_t *drv) {
-    const mr_eth_ops_t *eth_ops;
     mr_eth_data_t *eth_data;
     mr_err_t ret;
 
     /* Check parameter */
     MR_ASSERT(MR_DRIVER_DATA(drv) != MR_NULL);
-    MR_ASSERT(MR_DRIVER_OPS(drv) != MR_NULL);
 
-    /* Get ETH operations and data */
-    eth_ops = (const mr_eth_ops_t *)MR_DRIVER_OPS(drv);
+    /* Get ETH data */
     eth_data = (mr_eth_data_t *)MR_DRIVER_DATA(drv);
-    MR_ASSERT(eth_ops->configure != MR_NULL);
-
-    /* Check ETH configuration */
-    ret = eth_check_config(&eth_data->config);
-    if (ret != 0) {
-        return ret;
-    }
 
     /* Init ETH event */
     ret = mr_waitable_init(&eth_data->event);
     if (ret != 0) {
-        return ret;
-    }
-
-    /* Apply ETH configuration */
-    ret = eth_ops->configure(drv, &eth_data->config);
-    if (ret != 0) {
-        mr_waitable_del(&eth_data->event);
         return ret;
     }
     mr_memset(&eth_data->stats, 0, sizeof(eth_data->stats));

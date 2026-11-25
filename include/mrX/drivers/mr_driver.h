@@ -534,8 +534,8 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
  *
  * @param _fn The function to be called, like: fn(i, ...), where i is the index.
  */
-#define MR_HT_DRIVER_FOREACH(_fn, ...)                                         \
-    MR_HT_INST_FOREACH(MR_HT_COMPAT, _fn, ##__VA_ARGS__)
+#define MR_HT_DRIVER_FOREACH(...)                                              \
+    MR_HT_INST_FOREACH(MR_HT_COMPAT, __VA_ARGS__)
 
 /**
  * @brief This macro function checks if the driver property exists.
@@ -641,9 +641,9 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
  * @param _fn The function to be called, like: fn(i, node, prop, ...).
  * @param ... The arguments to be passed to the function.
  */
-#define MR_HT_DRIVER_PROP_ELEM_FOREACH_SEP(_id, _prop, _sep, _fn, ...)         \
-    MR_HT_NODE_PROP_ELEM_FOREACH_SEP(MR_HT_DRIVER(_id), _prop, _sep, _fn,      \
-                                     ##__VA_ARGS__)
+#define MR_HT_DRIVER_PROP_ELEM_FOREACH_SEP(_id, _prop, _sep, ...)              \
+    MR_HT_NODE_PROP_ELEM_FOREACH_SEP(MR_HT_DRIVER(_id), _prop, _sep,           \
+                                     __VA_ARGS__)
 
 /**
  * @brief This macro function iterates over all indexed elements of a driver
@@ -654,8 +654,8 @@ MR_INLINE mr_bool_t mr_driver_put(mr_driver_t *drv) {
  * @param _fn The function to be called, like: fn(i, ...), where i is the index.
  * @param ... The arguments to be passed to the function.
  */
-#define MR_HT_DRIVER_PROP_ELEM_FOREACH(_id, _prop, _fn, ...)                   \
-    MR_HT_NODE_PROP_ELEM_FOREACH(MR_HT_DRIVER(_id), _prop, _fn, ##__VA_ARGS__)
+#define MR_HT_DRIVER_PROP_ELEM_FOREACH(_id, _prop, ...)                        \
+    MR_HT_NODE_PROP_ELEM_FOREACH(MR_HT_DRIVER(_id), _prop, __VA_ARGS__)
 
 /**
  * @brief This macro function gets the driver instance name.

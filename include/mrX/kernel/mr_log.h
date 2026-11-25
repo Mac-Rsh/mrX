@@ -11,7 +11,7 @@
 
 #include <mrX/mr_config.h>
 #if defined(MR_USE_LOG)
-#include <mrX/libc/mr_types.h>
+#include <mrX/kernel/mr_service.h>
 #endif /* defined(MR_USE_LOG) */
 
 #ifdef __cplusplus
@@ -65,37 +65,39 @@ mr_uint32_t mr_log_mask(void);
 /* Log format macro definition */
 #define __MR_LOG_FORMAT(_level, _fmt)                                          \
     (" [" _level "/" MR_LOG_TAG "] " _fmt "\r\n")
+#define __MR_LOG_0(_level, _level_str, _fmt)                                   \
+    mr_log((_level), __MR_LOG_FORMAT(_level_str, _fmt))
+#define __MR_LOG_1(_level, _level_str, _fmt, ...)                              \
+    mr_log((_level), __MR_LOG_FORMAT(_level_str, _fmt), __VA_ARGS__)
+#define __MR_LOG(_level, _level_str, ...)                                      \
+    __MR_CAT(__MR_LOG_, __MR_VA_ARGS_HAS_COMMA(__VA_ARGS__))(                  \
+        (_level), _level_str, __VA_ARGS__)
 
 /* Log macro definition */
 #if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_TRC)
-#define MR_LOG_TRC(_fmt, ...)                                                  \
-    mr_log(MR_LOG_LEVEL_TRC, __MR_LOG_FORMAT("TRC", _fmt), ##__VA_ARGS__)
+#define MR_LOG_TRC(...)                 __MR_LOG(MR_LOG_LEVEL_TRC, "TRC", __VA_ARGS__)
 #else
-#define MR_LOG_TRC(_fmt, ...)           ((void)0)
+#define MR_LOG_TRC(...)                 ((void)0)
 #endif /* defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_TRC) */
 #if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_DBG)
-#define MR_LOG_DBG(_fmt, ...)                                                  \
-    mr_log(MR_LOG_LEVEL_DBG, __MR_LOG_FORMAT("DBG", _fmt), ##__VA_ARGS__)
+#define MR_LOG_DBG(...)                 __MR_LOG(MR_LOG_LEVEL_DBG, "DBG", __VA_ARGS__)
 #else
-#define MR_LOG_DBG(_fmt, ...)           ((void)0)
+#define MR_LOG_DBG(...)                 ((void)0)
 #endif /* defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_DBG) */
 #if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_INF)
-#define MR_LOG_INF(_fmt, ...)                                                  \
-    mr_log(MR_LOG_LEVEL_INF, __MR_LOG_FORMAT("INF", _fmt), ##__VA_ARGS__)
+#define MR_LOG_INF(...)                 __MR_LOG(MR_LOG_LEVEL_INF, "INF", __VA_ARGS__)
 #else
-#define MR_LOG_INF(_fmt, ...)           ((void)0)
+#define MR_LOG_INF(...)                 ((void)0)
 #endif /* (MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_INF) */
 #if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_WRN)
-#define MR_LOG_WRN(_fmt, ...)                                                  \
-    mr_log(MR_LOG_LEVEL_WRN, __MR_LOG_FORMAT("WRN", _fmt), ##__VA_ARGS__)
+#define MR_LOG_WRN(...)                 __MR_LOG(MR_LOG_LEVEL_WRN, "WRN", __VA_ARGS__)
 #else
-#define MR_LOG_WRN(_fmt, ...)           ((void)0)
+#define MR_LOG_WRN(...)                 ((void)0)
 #endif /* (MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_WRN) */
 #if defined(MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_ERR)
-#define MR_LOG_ERR(_fmt, ...)                                                  \
-    mr_log(MR_LOG_LEVEL_ERR, __MR_LOG_FORMAT("ERR", _fmt), ##__VA_ARGS__)
+#define MR_LOG_ERR(...)                 __MR_LOG(MR_LOG_LEVEL_ERR, "ERR", __VA_ARGS__)
 #else
-#define MR_LOG_ERR(_fmt, ...)           ((void)0)
+#define MR_LOG_ERR(...)                 ((void)0)
 #endif /* (MR_LOG_TAG) && (MR_CFG_LOG_LEVEL >= MR_LOG_LEVEL_ERR) */
 #endif /* defined(MR_USE_LOG) */
 

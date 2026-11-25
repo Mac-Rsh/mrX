@@ -172,6 +172,30 @@ extern mr_err_t mr_ch32_timer_make_pulse(const mr_ch32_timer_base_t *base,
 #endif /* defined(MR_USE_DRIVER_PWM) */
 
 /**
+ * @brief Checks whether a timer instance is an advanced-control timer.
+ *
+ * @param tim The timer instance.
+ * @return MR_TRUE for TIM1/TIM8/TIM9/TIM10 where present.
+ */
+extern mr_bool_t mr_ch32_timer_is_advanced(const TIM_TypeDef *tim);
+
+/**
+ * @brief Checks whether a timer instance is a basic timer (TIM6/TIM7).
+ *
+ * @param tim The timer instance.
+ * @return MR_TRUE for TIM6/TIM7 where present.
+ */
+extern mr_bool_t mr_ch32_timer_is_basic(const TIM_TypeDef *tim);
+
+/**
+ * @brief Returns the input clock frequency in Hz for a hardware timer.
+ *
+ * @param tim The timer instance.
+ * @return The timer clock frequency in Hz.
+ */
+extern mr_uint32_t mr_ch32_timer_clock(const TIM_TypeDef *tim);
+
+/**
  * @brief Writes the reload value using the timer's hardware register width.
  *
  * @param tim The timer instance, with its peripheral clock enabled.

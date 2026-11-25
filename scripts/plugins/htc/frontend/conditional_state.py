@@ -69,8 +69,11 @@ class ConditionalState:
                        file_path, line_number, expression_column)
             return
         if directive.kind == self.DIRECTIVE_IF:
-            matched = self._evaluate(expression, macros, file_path,
-                                     line_number, expression_column)
+            matched = (
+                self._evaluate(expression, macros, file_path,
+                               line_number, expression_column)
+                if parent_active else False
+            )
             self._push(parent_active, matched, file_path, line_number,
                        expression_column)
             return
@@ -90,13 +93,11 @@ class ConditionalState:
                                     line_number, directive_column)
 
     def report_unterminated(self) -> None:
-        """Report an unterminated conditional block when nesting remains."""
-        if not self.frames:
-            return
-        frame = self.frames[-1]
-        self._report_line_error(ErrorCode.INCLUDE_ERROR,
-                                "unterminated conditional directive block",
-                                frame.file_path, frame.line, frame.column)
+        """Report all unterminated conditional blocks when nesting remains."""
+        for frame in reversed(self.frames):
+            self._report_line_error(ErrorCode.INCLUDE_ERROR,
+                                    "unterminated conditional directive block",
+                                    frame.file_path, frame.line, frame.column)
 
     def _handle_elif(self, expression: str, macros: dict[str, str],
                      file_path: str, line_number: int, directive_column: int,
@@ -117,8 +118,11 @@ class ConditionalState:
                 directive_column,
             )
             return
-        matched = self._evaluate(expression, macros, file_path, line_number,
-                                 expression_column)
+        matched = (
+            self._evaluate(expression, macros, file_path, line_number,
+                           expression_column)
+            if frame.parent_active and not frame.branch_taken else False
+        )
         frame.current_active = frame.parent_active and (
             not frame.branch_taken) and matched
         frame.branch_taken = frame.branch_taken or matched

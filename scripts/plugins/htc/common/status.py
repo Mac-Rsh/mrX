@@ -35,4 +35,7 @@ def parse_priority_status(status: str) -> int | None:
         return None
     if not status.endswith(STATUS_PRIO_SUFFIX):
         return None
-    return int(status[len(STATUS_PRIO_PREFIX):-len(STATUS_PRIO_SUFFIX)])
+    inner = status[len(STATUS_PRIO_PREFIX):-len(STATUS_PRIO_SUFFIX)]
+    if not inner or not inner.isascii() or not inner.isdigit():
+        raise ValueError(f"invalid priority status: {status}")
+    return int(inner)

@@ -2,7 +2,7 @@
 
 mrX 是一套面向嵌入式系统的模块化 C 框架与主机端工具链。它不接管你的应用构建系统，也不强绑定特定
 RTOS 调度器，而是以源码依赖的形式嵌入已有工程，按需提供内核基础服务、独立 C
-库、统一设备驱动、虚拟文件系统以及 Boot / Crypto / RPC / XVM 等上层组件。
+库、统一设备驱动、虚拟文件系统以及 Boot / Crypto / RPC / XTrace / XVM 等上层组件。
 
 ## 架构概览
 
@@ -15,10 +15,10 @@ RTOS 调度器，而是以源码依赖的形式嵌入已有工程，按需提供
   ┌─────────────────────────────────────────────────────────────┴─────────────┐
   │                                mrX 框架                                   │
   │                                                                           │
-  │  ┌───────────┬───────────────┬──────────────┬──────────────────────────┐  │
-  │  │   Boot    │    Crypto     │     RPC      │      XVM                 │  │
-  │  │ A/B+Recov │ SHA256/ECDSA  │ 异步会话/IDL │ RV32 + GDB桩             │  │
-  │  └───────────┴───────────────┴──────────────┴──────────────────────────┘  │
+  │  ┌───────────┬───────────────┬──────────────┬──────────┬───────────────┐  │
+  │  │   Boot    │    Crypto     │     RPC      │  XTrace  │      XVM      │  │
+  │  │ A/B+Recov │ SHA256/ECDSA  │ 异步会话/IDL │ 运行跟踪 │ RV32 + GDB桩  │  │
+  │  └───────────┴───────────────┴──────────────┴──────────┴───────────────┘  │
   │                             上层组件 modules/                             │
   │  ┌───────────────────────────────────────┬─────────────────────────────┐  │
   │  │ 设备驱动 drivers/                     │ 文件系统 fs/                │  │
@@ -46,7 +46,7 @@ RTOS 调度器，而是以源码依赖的形式嵌入已有工程，按需提供
 
 - **按需裁剪与低侵入接入**：所有功能通过 Kconfig（`MR_USE_*` / `MR_CFG_*`
   ）控制开关与资源预算；应用工程保留原有目录、SDK 与构建方式，仅需加入头文件路径和框架
-  `.c` 文件并在入口调用 `mr_user_init()`。
+  `.c` 文件，并在入口调用 `mr_user_init()`。
 - **统一对象模型与注册段机制**：基于 `mr_object_t`
   提供引用计数、类继承以及静态/动态双生命周期；Initcall、驱动、RPC 服务与单元测试用例均通过链接器段（
   `sections.toml`）自动收集注册。
@@ -59,8 +59,8 @@ RTOS 调度器，而是以源码依赖的形式嵌入已有工程，按需提供
   NOR Flash，以及 GPIO 模拟 I2C/SPI）。
 - **高阶嵌入式组件**：自带轻量级虚拟文件系统（VFS + RootFS +
   RamFS）、无硬件依赖密码学库（SHA-256 / HMAC-SHA-256 / NIST P-256 / ECDSA
-  验签）、A/B + Recovery 固件引导模块、带 IDL 代码生成的 RPC，以及支持 GDB 远程调试的
-  RISC-V32 虚拟机（XVM）。
+  验签）、A/B + Recovery 固件引导模块、带 IDL 代码生成的 RPC、系统跟踪组件（XTrace），以及支持
+  GDB 远程调试的 RISC-V32 虚拟机（XVM）。
 - **完整测试与文档体系**：内置 gtest 风格轻量单元测试框架与覆盖全子系统的测试用例，配套结构化中文文档（快速上手、API
   速查与外设 `porting.md` 移植契约）。
 
@@ -72,7 +72,7 @@ mrX/
 ├── libc/           # 独立 C 库：内存分配、字符串、格式化输入输出
 ├── drivers/        # 设备驱动框架、标准外设类与外扩芯片驱动
 ├── fs/             # 虚拟文件系统 VFS、RootFS 与 RamFS
-├── modules/        # 上层组件：Boot、Crypto、RPC、XVM
+├── modules/        # 上层组件：Boot、Crypto、RPC、XTrace、XVM
 ├── include/        # 公共头文件与各子系统 Kconfig
 ├── arch/           # 可安装的平台适配仓库（不直接参与编译）
 ├── platform/       # 当前已安装平台的工作副本（参与编译）
@@ -89,7 +89,7 @@ mrX/
 `platform/`：
 
 | 平台                | 路径            | 说明                                                                   | 文档                                         |
-|---------------------|-----------------|------------------------------------------------------------------------|----------------------------------------------|
+|:--------------------|:----------------|:-----------------------------------------------------------------------|:---------------------------------------------|
 | **STM32（通用）**   | `arch/st/stm32` | 基于 HAL/Cube 工程，编译期自动探测不同系列外设寄存器与缓存差异         | [STM32 平台适配](arch/st/stm32/README.md)    |
 | **WCH CH32**        | `arch/wch/ch32` | 基于 EVT SDK，覆盖 CH32V00x / VM00X / V10x / V20x / V205 / V30x / V4x7 | [WCH CH32 平台适配](arch/wch/ch32/README.md) |
 | **Windows（宿主）** | `arch/win`      | 用于主机端仿真开发与单元测试运行                                       | [平台移植层](document/platform/platform.md)  |
@@ -161,7 +161,7 @@ int main(void) {
 统一入口为 `scripts/cli.py`，不带参数运行可进入交互式 Shell：
 
 | 命令                                                         | 用途                                       |
-|--------------------------------------------------------------|--------------------------------------------|
+|:-------------------------------------------------------------|:-------------------------------------------|
 | `python ./scripts/cli.py platform install -i <install.toml>` | 安装指定平台适配到 `platform/`             |
 | `python ./scripts/cli.py kconfig [--no-ui]`                  | 打开 menuconfig 或非交互生成 `mr_config.h` |
 | `python ./scripts/cli.py htc -i <board>.hts`                 | 将 `.hts` / `.htsi` 编译为 `mr_hardgen.h`  |
@@ -172,15 +172,14 @@ int main(void) {
 
 ## 文档导航
 
-- [文档总入口与完整索引](document/README.md)
-- [框架使用指南（Usage）](document/usage.md)
-- [平台移植层（Platform）](document/platform/platform.md)
-- [内核服务（Kernel）](document/kernel/README.md) · [设备驱动（Drivers）](document/drivers/driver.md) · [文件系统（FS）](document/fs/fs.md)
 -
-
-上层组件：[Boot](document/modules/boot/boot.md) · [Crypto](document/modules/crypto/crypto.md) · [RPC](document/modules/rpc/rpc.md) · [XVM](document/modules/xvm/xvm.md)
-
-- [主机脚本教程（Scripts）](document/scripts/README.md) · [测试框架（Test）](document/test/test.md)
+**总览与接入**：[文档总入口与完整索引](document/README.md) · [框架使用指南（Usage）](document/usage.md) · [平台移植层（Platform）](document/platform/platform.md)
+-
+**核心子系统**：[内核服务（Kernel）](document/kernel/README.md) · [设备驱动（Drivers）](document/drivers/driver.md) · [文件系统（FS）](document/fs/fs.md)
+-
+**上层组件**：[Boot](document/modules/boot/boot.md) · [Crypto](document/modules/crypto/crypto.md) · [RPC](document/modules/rpc/rpc.md) · [XTrace](document/modules/xtrace/xtrace.md) · [XVM](document/modules/xvm/xvm.md)
+-
+**工具与测试**：[主机脚本教程（Scripts）](document/scripts/README.md) · [测试框架（Test）](document/test/test.md)
 
 ## 许可证
 

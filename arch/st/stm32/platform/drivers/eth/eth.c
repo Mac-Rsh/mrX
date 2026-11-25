@@ -1308,6 +1308,11 @@ static mr_ssize_t eth_write(const mr_driver_t *drv, const void *buf,
     eth_priv_t *priv = MR_DRIVER_PRIV(drv);
     mr_err_t ret;
 
+    /* Check frame size against internal polling buffer */
+    if (size > ETH_BUFFER_SIZE) {
+        return -MR_ERANGE;
+    }
+
     /* Reserve polling and check TX availability */
     ret = eth_poll_begin(drv);
     if (ret != 0) {
@@ -1695,7 +1700,7 @@ static void eth_irq_handle(const mr_driver_t *drv) {
         MR_HT_DRIVER_PROP_ELEM_FOREACH(_id, st_pins, __ST_HT_ETH_PIN),         \
     };                                                                         \
     MR_ALIGN(ETH_DMA_ALIGN)                                                    \
-    MR_SECTION(MR_HT_DRIVER_PROP(_id, st_dma_section))                         \
+    __ST_HT_ETH_DMA_SECTION(_id)                                               \
     static eth_dma_t MR_CAT(__eth_dma_, _id);                                  \
     __ST_HT_ETH_CALLBACK_DECLARE(_id)                                          \
     static eth_priv_t MR_CAT(__eth_priv_, _id) = {                             \
@@ -1718,6 +1723,9 @@ static void eth_irq_handle(const mr_driver_t *drv) {
     __ST_HT_ETH_CALLBACK_DEFINE(_id)                                           \
     __ST_HT_ETH_STREAM_IRQ(_id)                                                \
     MR_HT_ETH_INSTALL(_id, &MR_CAT(__eth_priv_, _id), _ops)
+#define __ST_HT_ETH_DMA_SECTION(_id)                                           \
+    MR_MACRO_IF(MR_HT_DRIVER_HAS_PROP(_id, st_dma_section),                    \
+                (MR_SECTION(MR_HT_DRIVER_PROP(_id, st_dma_section))), ())
 #define __ST_HT_ETH_PIN(_elem, _node, _prop)                                   \
     {                                                                          \
         .spec = {                                                              \

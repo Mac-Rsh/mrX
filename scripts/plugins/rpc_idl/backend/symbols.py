@@ -49,6 +49,7 @@ class CSymbolChecker:
             for method in service.methods:
                 self._register_method(service, method, schema, layouts)
         self._register_unions()
+        self._register_self_desc()
 
     def _register_variable_arrays(self, schema: Schema) -> None:
         """Register interned variable-array tags and typedefs."""
@@ -132,6 +133,18 @@ class CSymbolChecker:
         self._add("mr_rpc_idl_request_t", "request union")
         self._add("mr_rpc_idl_response", "response union")
         self._add("mr_rpc_idl_response_t", "response union")
+
+    def _register_self_desc(self) -> None:
+        """Register generated self-description symbols."""
+        origin = "self-description runtime"
+        for name in (
+            "__mr_rpc_self_desc",
+            "rpc_decode_self_desc",
+            "rpc_self_desc_size",
+            "rpc_invoke_self_desc",
+            "rpc_encode_self_desc",
+        ):
+            self._add(name, origin)
 
     def _add(self, ident: str, origin: str,
              span: SourceSpan | None = None) -> None:

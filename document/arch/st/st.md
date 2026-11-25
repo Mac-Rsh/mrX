@@ -4,12 +4,12 @@
 变体探测原则；具体芯片外设的运行期行为与能力限制见 [STM32 平台适配](../../../arch/st/stm32/README.md)
 ，内核通用 `port` 契约见 [平台移植层](../../platform/platform.md)。
 
-| 项目         | 说明                                                                                                           |
-|--------------|----------------------------------------------------------------------------------------------------------------|
-| 源码目录     | `mrX/arch/st/stm32/`                                                                                           |
-| 平台名称     | `st,stm32`                                                                                                     |
-| 平台 Kconfig | `MR_USE_STM32`、`MR_CFG_STM32_HAL_HEADER`、`MR_USE_DCACHE`、`MR_USE_ICACHE`、`MR_CFG_STM32_CLOCK_IRQ_PRIORITY` |
-| 运行期文档   | [STM32 平台适配](../../../arch/st/stm32/README.md)                                                             |
+| 项目         | 说明                                                                                                                                                                                   |
+|--------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 源码目录     | `mrX/arch/st/stm32/`                                                                                                                                                                   |
+| 平台名称     | `st,stm32`                                                                                                                                                                             |
+| 平台 Kconfig | `MR_USE_STM32`、`MR_CFG_STM32_HAL_HEADER`、`MR_USE_DCACHE`、`MR_USE_ICACHE`、`MR_CFG_STM32_CLOCK_IRQ_PRIORITY`、`MR_CFG_STM32_XTRACE_RTT_UP_SIZE`、`MR_CFG_STM32_XTRACE_RTT_DOWN_SIZE` |
+| 运行期文档   | [STM32 平台适配](../../../arch/st/stm32/README.md)                                                                                                                                     |
 
 ## 目录结构与接入
 
@@ -18,10 +18,11 @@ mrX/arch/st/stm32/
 ├── install.toml                    # 平台名 st,stm32 与复制规则
 ├── include/platform/
 │   ├── Kconfig                     # 平台配置项
-│   └── mr_platform.h               # mr_platform_init 与 ST 专属辅助接口
+│   ├── mr_platform.h               # mr_platform_init 与 ST 专属辅助接口
+│   └── mr_stm32_tim.h              # TMR 与 PWM 共用的定时器辅助内联接口
 └── platform/
     ├── platform.c                  # mr_platform_init：初始化时钟端口
-    ├── port/                       # clock、irq、output、assert、cache 端口实现
+    ├── port/                       # clock、irq、output、assert、cache、trace 端口实现
     └── drivers/                    # 片上外设 backend
 ```
 
@@ -70,6 +71,8 @@ HardTree 只提供引脚与 AF 编号。
 |------------------|-------|---------------------------------------------------------------|
 | `st,stm32-gpio`  | GPIO  | [GPIO](../../../arch/st/stm32/README.md#gpio)                 |
 | `st,stm32-uart`  | UART  | [UART](../../../arch/st/stm32/README.md#uart)                 |
+| `st,stm32-spi`   | SPI   | [SPI 与 I2C](../../../arch/st/stm32/README.md#spi-与-i2c)     |
+| `st,stm32-i2c`   | I2C   | [SPI 与 I2C](../../../arch/st/stm32/README.md#spi-与-i2c)     |
 | `st,stm32-tmr`   | TMR   | [定时器与 PWM](../../../arch/st/stm32/README.md#定时器与-pwm) |
 | `st,stm32-pwm`   | PWM   | [定时器与 PWM](../../../arch/st/stm32/README.md#定时器与-pwm) |
 | `st,stm32-adc`   | ADC   | [ADC 与 DAC](../../../arch/st/stm32/README.md#adc-与-dac)     |

@@ -9,6 +9,7 @@
 #include <mrX/platform/mr_platform.h>
 #if defined(MR_USE_DRIVER_TMR)
 #include <mrX/drivers/tmr/mr_tmr.h>
+#include <mrX/platform/mr_stm32_tim.h>
 
 /* HardTree compatible */
 #define MR_HT_COMPAT                    st_stm32_tmr
@@ -53,170 +54,6 @@ typedef struct tmr_priv {
     mr_uint8_t event_enabled: 1;
 } tmr_priv_t;
 
-/* TMR time conversion definition */
-#define TMR_NANOSECONDS                 (1000000000ULL)
-
-/* TMR prescaler definition */
-#define TMR_PRESCALER_MAX               (65536ULL)
-#define TMR_PSC_SEARCH_LIMIT            (64ULL)
-
-#if defined(RCC_CLOCKTYPE_PCLK2)
-static mr_bool_t tmr_is_apb2(const TIM_TypeDef *instance) {
-#if defined(TIM1)
-    if (instance == TIM1) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM1) */
-#if defined(TIM8)
-    if (instance == TIM8) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM8) */
-#if defined(TIM9)
-    if (instance == TIM9) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM9) */
-#if defined(TIM10)
-    if (instance == TIM10) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM10) */
-#if defined(TIM11)
-    if (instance == TIM11) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM11) */
-#if defined(TIM15)
-    if (instance == TIM15) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM15) */
-#if defined(TIM16)
-    if (instance == TIM16) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM16) */
-#if defined(TIM17)
-    if (instance == TIM17) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM17) */
-#if defined(TIM19)
-    if (instance == TIM19) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM19) */
-#if defined(TIM20)
-    if (instance == TIM20) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM20) */
-#if defined(TIM21)
-    if (instance == TIM21) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM21) */
-#if defined(TIM22)
-    if (instance == TIM22) {
-        return MR_TRUE;
-    }
-#endif /* defined(TIM22) */
-    return MR_FALSE;
-}
-#endif /* defined(RCC_CLOCKTYPE_PCLK2) */
-
-static mr_uint32_t tmr_apb_divider(mr_uint32_t divider) {
-#if defined(RCC_HCLK_DIV1)
-    if (divider == RCC_HCLK_DIV1) {
-        return 1U;
-    }
-#endif /* defined(RCC_HCLK_DIV1) */
-#if defined(RCC_HCLK_DIV2)
-    if (divider == RCC_HCLK_DIV2) {
-        return 2U;
-    }
-#endif /* defined(RCC_HCLK_DIV2) */
-#if defined(RCC_HCLK_DIV4)
-    if (divider == RCC_HCLK_DIV4) {
-        return 4U;
-    }
-#endif /* defined(RCC_HCLK_DIV4) */
-#if defined(RCC_HCLK_DIV8)
-    if (divider == RCC_HCLK_DIV8) {
-        return 8U;
-    }
-#endif /* defined(RCC_HCLK_DIV8) */
-#if defined(RCC_HCLK_DIV16)
-    if (divider == RCC_HCLK_DIV16) {
-        return 16U;
-    }
-#endif /* defined(RCC_HCLK_DIV16) */
-    return 0U;
-}
-
-static mr_bool_t tmr_timpre_enabled(void) {
-#if defined(RCC_CFGR1_TIMPRE)
-    return ((RCC->CFGR1 & RCC_CFGR1_TIMPRE) != 0U);
-#elif defined(RCC_DCKCFGR_TIMPRE)
-    return ((RCC->DCKCFGR & RCC_DCKCFGR_TIMPRE) != 0U);
-#elif defined(RCC_DCKCFGR1_TIMPRE)
-    return ((RCC->DCKCFGR1 & RCC_DCKCFGR1_TIMPRE) != 0U);
-#elif defined(RCC_CFGR_TIMPRE)
-    return ((RCC->CFGR & RCC_CFGR_TIMPRE) != 0U);
-#else
-    return MR_FALSE;
-#endif
-}
-
-static mr_uint64_t tmr_apb_clock(const TIM_TypeDef *instance,
-                                 mr_uint32_t *divider) {
-    RCC_ClkInitTypeDef clock;
-    uint32_t latency;
-
-    /* Get clock configuration */
-    HAL_RCC_GetClockConfig(&clock, &latency);
-
-#if defined(RCC_CLOCKTYPE_PCLK2)
-    /* Get APB2 clock */
-    if (tmr_is_apb2(instance)) {
-        *divider = tmr_apb_divider(clock.APB2CLKDivider);
-        return HAL_RCC_GetPCLK2Freq();
-    }
-#endif /* defined(RCC_CLOCKTYPE_PCLK2) */
-
-    /* Get APB1 clock */
-    *divider = tmr_apb_divider(clock.APB1CLKDivider);
-    return HAL_RCC_GetPCLK1Freq();
-}
-
-static mr_uint64_t tmr_clock(const TIM_TypeDef *instance) {
-    mr_uint64_t pclk;
-    mr_uint32_t divider;
-
-    /* Get APB clock */
-    pclk = tmr_apb_clock(instance, &divider);
-    if ((pclk == 0ULL) || (divider == 0U)) {
-        return 0ULL;
-    }
-
-    /* Check APB divider */
-    if (divider == 1U) {
-        return pclk;
-    }
-
-    /* Check TIMPRE */
-    if (!tmr_timpre_enabled()) {
-        return pclk * 2ULL;
-    }
-
-    /* Calculate TMR clock */
-    if (divider <= 4U) {
-        return HAL_RCC_GetHCLKFreq();
-    }
-    return pclk * 4ULL;
-}
-
 static mr_uint64_t tmr_counter_max(const TIM_TypeDef *instance) {
 #if defined(IS_TIM_32B_COUNTER_INSTANCE)
     if (IS_TIM_32B_COUNTER_INSTANCE(instance)) {
@@ -246,110 +83,6 @@ static mr_bool_t tmr_hw_busy(tmr_priv_t *priv) {
     return MR_FALSE;
 }
 
-static mr_err_t tmr_period_ticks(mr_uint64_t clock, mr_uint64_t period,
-                                 mr_uint64_t *ticks) {
-    mr_uint64_t seconds, remainder, value;
-
-    /* Split period */
-    remainder = period % TMR_NANOSECONDS;
-    seconds = period / TMR_NANOSECONDS;
-    if (seconds > (MR_UINT64_MAX / clock)) {
-        return -MR_ERANGE;
-    }
-
-    /* Calculate whole-second ticks */
-    value = seconds * clock;
-
-    /* Calculate sub-second ticks */
-    remainder *= clock;
-    remainder += TMR_NANOSECONDS / 2ULL;
-    remainder /= TMR_NANOSECONDS;
-    if (value > (MR_UINT64_MAX - remainder)) {
-        return -MR_ERANGE;
-    }
-
-    /* Calculate target ticks */
-    *ticks = value + remainder;
-    if (*ticks == 0ULL) {
-        return -MR_ERANGE;
-    }
-    return 0;
-}
-
-static mr_uint64_t tmr_ticks_period(mr_uint64_t clock, mr_uint64_t ticks) {
-    mr_uint64_t seconds, remainder, period;
-
-    /* Split ticks */
-    seconds = ticks / clock;
-    remainder = ticks % clock;
-
-    /* Calculate whole-second period */
-    period = seconds * TMR_NANOSECONDS;
-
-    /* Calculate sub-second period */
-    remainder *= TMR_NANOSECONDS;
-    remainder += clock / 2ULL;
-    remainder /= clock;
-
-    /* Calculate period */
-    return period + remainder;
-}
-
-static mr_uint64_t tmr_tick_error(mr_uint64_t target, mr_uint64_t actual) {
-    /* Calculate tick error */
-    if (actual >= target) {
-        return actual - target;
-    }
-    return target - actual;
-}
-
-static mr_err_t tmr_find_period(mr_uint64_t ticks, mr_uint64_t counter_max,
-                                mr_uint64_t *prescaler, mr_uint64_t *counts) {
-    mr_uint64_t best_error, search_end, psc_min;
-    mr_uint64_t actual_ticks, error, psc;
-    mr_uint64_t value;
-
-    /* Calculate prescaler range */
-    psc_min = (ticks + counter_max - 1ULL) / counter_max;
-    search_end = psc_min + TMR_PSC_SEARCH_LIMIT - 1ULL;
-    if (search_end > TMR_PRESCALER_MAX) {
-        search_end = TMR_PRESCALER_MAX;
-    }
-
-    /* Find best period */
-    *prescaler = 0ULL;
-    *counts = 0ULL;
-    best_error = MR_UINT64_MAX;
-    for (psc = psc_min; psc <= search_end; psc++) {
-        /* Calculate candidate counts */
-        value = (ticks + (psc / 2ULL)) / psc;
-        if ((value == 0ULL) || (value > counter_max)) {
-            continue;
-        }
-
-        /* Calculate candidate error */
-        actual_ticks = value * psc;
-        error = tmr_tick_error(ticks, actual_ticks);
-        if (error >= best_error) {
-            continue;
-        }
-
-        /* Update best period */
-        best_error = error;
-        *prescaler = psc;
-        *counts = value;
-        if (error == 0ULL) {
-            break;
-        }
-    }
-
-    /* Check result */
-    if (*counts == 0ULL) {
-        return -MR_ERANGE;
-    }
-    return 0;
-}
-
 static mr_err_t tmr_make_period(const TIM_TypeDef *instance, mr_uint64_t period,
                                 uint32_t *prescaler, uint32_t *arr,
                                 mr_uint64_t *actual) {
@@ -358,23 +91,23 @@ static mr_err_t tmr_make_period(const TIM_TypeDef *instance, mr_uint64_t period,
     mr_err_t ret;
 
     /* Get TMR limits */
-    timer_clock = tmr_clock(instance);
+    timer_clock = stm32_tim_clock(instance);
     counter_max = tmr_counter_max(instance);
     if (timer_clock == 0ULL) {
         return -MR_ERANGE;
     }
 
     /* Calculate target ticks */
-    ret = tmr_period_ticks(timer_clock, period, &ticks);
+    ret = stm32_tim_period_ticks(timer_clock, period, &ticks);
     if (ret != 0) {
         return ret;
     }
-    if (ticks > (counter_max * TMR_PRESCALER_MAX)) {
+    if (ticks > (counter_max * STM32_TIM_PRESCALER_MAX)) {
         return -MR_ERANGE;
     }
 
     /* Find TMR period */
-    ret = tmr_find_period(ticks, counter_max, &psc, &counts);
+    ret = stm32_tim_find_period(ticks, counter_max, 1ULL, &psc, &counts);
     if (ret != 0) {
         return ret;
     }
@@ -385,7 +118,7 @@ static mr_err_t tmr_make_period(const TIM_TypeDef *instance, mr_uint64_t period,
 
     /* Calculate actual period */
     actual_ticks = counts * psc;
-    *actual = tmr_ticks_period(timer_clock, actual_ticks);
+    *actual = stm32_tim_ticks_period(timer_clock, actual_ticks);
     return 0;
 }
 
@@ -619,7 +352,7 @@ static void tmr_irq(tmr_priv_t *priv) {
         },                                                                     \
         .clk_enable = MR_CAT(__tmr_clk_enable_, _id),                          \
         .irqn = MR_HT_DRIVER_PROP(_id, st_irqn),                               \
-        .irq_priority = MR_HT_DRIVER_PROP(_id, st_irq_priority),               \
+        .irq_priority = MR_HT_DRIVER_PROP_OR(_id, st_irq_priority, 0U),        \
     };                                                                         \
     void MR_HT_DRIVER_PROP(_id, st_irq_handler)(void) {                        \
         tmr_irq(&MR_CAT(__tmr_priv_, _id));                                    \

@@ -207,6 +207,14 @@ class SemanticBuilder:
             )
         else:
             hard_node = tree.nodes_by_path["/"]
+            deleted_names = {
+                deletion.name for deletion in root.deleted_properties
+            }
+            if deleted_names:
+                hard_node.properties = [
+                    existing for existing in hard_node.properties
+                    if existing.name not in deleted_names
+                ]
             for prop in root.properties:
                 hard_node.properties = [
                     existing for existing in hard_node.properties
@@ -216,7 +224,8 @@ class SemanticBuilder:
                     NodeProperty(prop.name, prop.value, prop.span))
             self._refresh_node_metadata(tree, "/")
 
-        self._queue_deletions("/", root)
+        self._pending_deleted_nodes.extend(
+            ("/", deletion) for deletion in root.deleted_nodes)
 
     def _add_node(
             self,
@@ -273,7 +282,8 @@ class SemanticBuilder:
             else:
                 tree.labels[label] = path
 
-        self._queue_deletions(path, node)
+        self._pending_deleted_nodes.extend(
+            (path, deletion) for deletion in node.deleted_nodes)
 
         for child in node.children:
             self._add_node(child, tree, parent_path=hard_node.path,
@@ -364,6 +374,9 @@ class SemanticBuilder:
                 override.span,
             )
             return
+        self._verify_unique_properties(
+            NodeDecl(name=target_path, properties=override.properties,
+                     span=override.span))
         self._merge_node_contents(
             tree,
             target_path,
@@ -550,7 +563,7 @@ class SemanticBuilder:
                                f"priority out of range in status: '{value}'",
                                prop.value.span or prop.span)
                 return self.STATUS_OKAY
-            return value
+            return f"prio({priority})"
 
         # Unknown DTS status values are accepted with a warning
         self._warn_at(
