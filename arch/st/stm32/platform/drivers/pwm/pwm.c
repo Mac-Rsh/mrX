@@ -710,7 +710,7 @@ static mr_err_t pwm_stop(const mr_driver_t *drv, mr_uint32_t channels) {
     SET_BIT(priv->handle.Instance->CCER, enable_mask);
     priv->running_mask &= ~channels;
     if (priv->running_mask == 0U) {
-        __HAL_TIM_DISABLE(&priv->handle);
+        CLEAR_BIT(priv->handle.Instance->CR1, TIM_CR1_CEN);
     }
 
     /* Unlock */
