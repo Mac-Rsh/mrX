@@ -1,5 +1,5 @@
 # Requires Python 3.11 or later (tomllib, StrEnum).
-windows-curses
+windows-curses; sys_platform == "win32"
 kconfiglib
 prompt-toolkit
 rich
