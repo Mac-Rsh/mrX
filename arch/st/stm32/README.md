@@ -231,8 +231,8 @@ HAL 提供 `__HAL_RCC_ETHTX_CLK_ENABLE()` 或 `__HAL_RCC_ETHRX_CLK_ENABLE()` 时
 板级须将这两处内存配置为不可缓存，分别覆盖描述符和轮询缓冲区，以及所有提交的 Stream 帧缓冲区。
 
 PHY 使用 Clause 22 标准寄存器，支持 10/100 Mbit/s、自协商或固定速率，双工与 pause
-流控按 BMSR/ANAR/ANLPAR 协商。回环模式中，`MR_ETH_LOOPBACK_MAC` 在 MAC 内部回送数据，
-`MR_ETH_LOOPBACK_PHY` 使用 PHY 本地回环，两者都要求固定速率；回环建立时 `link.up`
+流控按 BMSR/ANAR/ANLPAR 协商。`MR_ETH_LOOPBACK_MAC` 在 MAC 内部回送数据，跳过 PHY 配置，
+但板级仍须提供 MAC 接口参考时钟。`MR_ETH_LOOPBACK_PHY` 使用 PHY 本地回环。两者都要求固定速率；回环建立时 `link.up`
 表示本地回环数据路径已建立，而不是外部网线链路。
 
 轮询模式单缓冲收发：TX 复制到内部缓冲并阻塞等待完成（超时 20 ms），无链路返回

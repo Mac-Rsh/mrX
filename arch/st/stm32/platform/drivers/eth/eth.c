@@ -408,6 +408,12 @@ static mr_err_t eth_phy_configure(eth_priv_t *priv,
     mr_uint32_t status, advertisement, control, mode;
     mr_err_t ret;
 
+    /* MAC loopback uses the configured mode without accessing a PHY. */
+    if (config->loopback == MR_ETH_LOOPBACK_MAC) {
+        priv->phy_advertisement = 0U;
+        return 0;
+    }
+
     /* Select capabilities before writing PHY controls */
     ret = eth_phy_read_status(priv, &status);
     if (ret != 0) {
