@@ -121,6 +121,129 @@ typedef struct clint_control {
     mr_uint64_t mtimecmp;
 } clint_control_t;
 
+#if defined(MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL)
+#define CORE_LOOP_MISS_FILTER_SIZE      (8U)
+#if !defined(MR_CFG_XVM_RISCV32_LOOP_CACHE_SIZE)
+#define MR_CFG_XVM_RISCV32_LOOP_CACHE_SIZE (32U)
+#endif /* !defined(MR_CFG_XVM_RISCV32_LOOP_CACHE_SIZE) */
+#if !defined(MR_CFG_XVM_RISCV32_LOOP_MISS_SIZE)
+#define MR_CFG_XVM_RISCV32_LOOP_MISS_SIZE  (4U)
+#endif /* !defined(MR_CFG_XVM_RISCV32_LOOP_MISS_SIZE) */
+#if defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED)
+#if !defined(MR_CFG_XVM_RISCV32_LOOP_POOL_SIZE)
+#define MR_CFG_XVM_RISCV32_LOOP_POOL_SIZE  (32U)
+#endif /* !defined(MR_CFG_XVM_RISCV32_LOOP_POOL_SIZE) */
+#if !defined(MR_CFG_XVM_RISCV32_LOOP_ARENA_SIZE)
+#define MR_CFG_XVM_RISCV32_LOOP_ARENA_SIZE (256U)
+#endif /* !defined(MR_CFG_XVM_RISCV32_LOOP_ARENA_SIZE) */
+#else
+#if !defined(MR_CFG_XVM_RISCV32_LOOP_PRIVATE_SLOTS)
+#define MR_CFG_XVM_RISCV32_LOOP_PRIVATE_SLOTS (1U)
+#endif /* !defined(MR_CFG_XVM_RISCV32_LOOP_PRIVATE_SLOTS) */
+#endif /* defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED) */
+
+/* Recognized tight loop kinds */
+typedef enum loop_kind {
+    LOOP_KIND_NONE,
+    LOOP_KIND_DELAY,
+    LOOP_KIND_FILL,
+    LOOP_KIND_SUM,
+    LOOP_KIND_COPY,
+    LOOP_KIND_DECODED,
+} loop_kind_t;
+
+/* Pre-decoded loop micro-opcodes */
+typedef enum loop_uop_op {
+    UOP_NOP,
+    UOP_ADD,
+    UOP_SUB,
+    UOP_SLL,
+    UOP_SLT,
+    UOP_SLTU,
+    UOP_XOR,
+    UOP_SRL,
+    UOP_SRA,
+    UOP_OR,
+    UOP_AND,
+    UOP_MUL,
+    UOP_MULH,
+    UOP_MULHSU,
+    UOP_MULHU,
+    UOP_DIV,
+    UOP_DIVU,
+    UOP_REM,
+    UOP_REMU,
+    UOP_ADDI,
+    UOP_SLLI,
+    UOP_SLTI,
+    UOP_SLTIU,
+    UOP_XORI,
+    UOP_SRLI,
+    UOP_SRAI,
+    UOP_ORI,
+    UOP_ANDI,
+    UOP_LW,
+    UOP_LOAD,
+    UOP_SW,
+    UOP_STORE,
+    UOP_LUI,
+    UOP_BR,
+} loop_uop_op_t;
+
+/* Pre-decoded loop micro-op (8 bytes, zero padding) */
+typedef struct loop_uop {
+    mr_uint32_t imm;
+    mr_uint8_t op;
+    mr_uint8_t rd;
+    mr_uint8_t rs1;
+    mr_uint8_t rs2;
+} loop_uop_t;
+
+/* Compact decoded loop descriptor (36 bytes) */
+typedef struct loop_desc {
+    mr_uint32_t branch_pc;
+    mr_uint32_t loop_start;
+    mr_uint32_t branch_next;
+    union {
+        struct {
+            mr_int32_t off0;
+            mr_int32_t off1;
+            mr_uint8_t width_shift;
+            mr_uint8_t load_funct3;
+            mr_uint8_t r2;
+            mr_uint8_t r3;
+            mr_uint8_t cmp_reg;
+        } idiom;
+        struct {
+            mr_uint32_t callee_pc;
+            mr_uint16_t uop_start;
+            mr_uint8_t body_count;
+            mr_uint8_t callee_start;
+            mr_uint8_t callee_end;
+            mr_uint8_t elided_call;
+            mr_uint8_t elided_ret;
+#if defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED)
+            mr_uint8_t has_exit;
+#endif /* defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED) */
+        } dec;
+    } u;
+    mr_uint8_t kind;
+    mr_uint8_t instr_count;
+    mr_uint8_t branch_funct3;
+    mr_uint8_t r0;
+    mr_uint8_t r1;
+} loop_desc_t;
+
+#if !defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED)
+/* Private decoded loop cache slot */
+typedef struct loop_private_slot {
+    loop_desc_t desc;
+    loop_uop_t uops[MR_CFG_XVM_RISCV32_LOOP_CACHE_SIZE - 1U];
+    mr_uint8_t offs[MR_CFG_XVM_RISCV32_LOOP_CACHE_SIZE - 1U];
+} loop_private_slot_t;
+#endif /* !defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED) */
+#endif /* defined(MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL) */
+
 /* RISCV32 core type */
 typedef struct core {
 #if defined(MR_USE_MODULE_XVM_MMIO)
@@ -129,9 +252,27 @@ typedef struct core {
     const mr_xvm_binary_t *bin;
     syscall_shadow_t syscall;
     mr_uint32_t trap_mtval;
+    volatile mr_uint32_t irq_dirty;
+    mr_uint32_t mem_base;
     plic_control_t plic;
     clint_control_t clint;
     core_regs_t regs;
+#if defined(MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL)
+    mr_uint32_t miss_pc[CORE_LOOP_MISS_FILTER_SIZE];
+#if defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED)
+    mr_uint32_t image_hash;
+    mr_uint32_t low_yield_pc;
+    mr_uint8_t low_yield_cnt;
+    mr_uint8_t low_yield_skip;
+#else
+    loop_private_slot_t loop_slots[MR_CFG_XVM_RISCV32_LOOP_PRIVATE_SLOTS];
+    mr_uint32_t loop_miss_pc[MR_CFG_XVM_RISCV32_LOOP_MISS_SIZE];
+    mr_uint8_t loop_miss_idx;
+#if (MR_CFG_XVM_RISCV32_LOOP_PRIVATE_SLOTS > 1U)
+    mr_uint8_t loop_slot_next;
+#endif /* (MR_CFG_XVM_RISCV32_LOOP_PRIVATE_SLOTS > 1U) */
+#endif /* defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED) */
+#endif /* defined(MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL) */
     mr_size_t mem_size;
     mr_uint8_t mem[];
 } core_t;
@@ -165,8 +306,7 @@ typedef struct core {
 #define CORE_ADDR_IS_ALIGN(_addr, _size)                                       \
     (((_addr) & ((_size) - 1)) == 0)
 #define CORE_ADDR_BIN(_core, _addr)     (_addr)
-#define CORE_ADDR_MEM(_core, _addr)                                            \
-    ((_addr) - (mr_uint32_t)(_core)->bin->entry)
+#define CORE_ADDR_MEM(_core, _addr)     ((_addr) - (_core)->mem_base)
 #define CORE_ADDR_IS_IN_BIN(_core, _addr, _size)                               \
     (((_core)->bin->size >= (_size))                                           \
      && ((_addr) <= ((_core)->bin->size - (_size))))
@@ -177,29 +317,105 @@ typedef struct core {
     ((CORE_MMIO_SIZE >= (_size)) && ((_addr) >= CORE_MMIO_BASE)                \
      && ((_addr) <= (CORE_MMIO_END - (_size))))
 
+/* Native little-endian unaligned memcpy builtin detection */
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_memcpy)
+#define CORE_USE_BUILTIN_MEMCPY         (1)
+#endif /* __has_builtin(__builtin_memcpy) */
+#elif defined(__GNUC__)
+#define CORE_USE_BUILTIN_MEMCPY         (1)
+#endif /* defined(__has_builtin) */
+#endif /* defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) */
+
 /**
- * @brief This function loads an unaligned 32-bit value from memory.
+ * @brief This function loads an 8-bit value from memory.
  *
  * @param memory The source memory pointer.
- * @param size The access width in bytes(1, 2, or 4).
  * @return The loaded value.
  */
-MR_INLINE mr_uint32_t core_load(const void *memory, mr_size_t size) {
-    mr_uint32_t value = 0;
-
-    mr_memcpy(&value, memory, size);
-    return value;
+MR_INLINE mr_uint8_t core_load8(const mr_uint8_t *memory) {
+    return memory[0];
 }
 
 /**
- * @brief This function stores an unaligned 32-bit value to memory.
+ * @brief This function loads an unaligned little-endian 16-bit value.
+ *
+ * @param memory The source memory pointer.
+ * @return The loaded value.
+ */
+MR_INLINE mr_uint16_t core_load16(const mr_uint8_t *memory) {
+#if defined(CORE_USE_BUILTIN_MEMCPY)
+    mr_uint16_t value;
+
+    __builtin_memcpy(&value, memory, sizeof(value));
+    return value;
+#else
+    return (mr_uint16_t)memory[0] | ((mr_uint16_t)memory[1] << 8);
+#endif /* defined(CORE_USE_BUILTIN_MEMCPY) */
+}
+
+/**
+ * @brief This function loads an unaligned little-endian 32-bit value.
+ *
+ * @param memory The source memory pointer.
+ * @return The loaded value.
+ */
+MR_INLINE mr_uint32_t core_load32(const mr_uint8_t *memory) {
+#if defined(CORE_USE_BUILTIN_MEMCPY)
+    mr_uint32_t value;
+
+    __builtin_memcpy(&value, memory, sizeof(value));
+    return value;
+#else
+    return (mr_uint32_t)memory[0] | ((mr_uint32_t)memory[1] << 8)
+         | ((mr_uint32_t)memory[2] << 16) | ((mr_uint32_t)memory[3] << 24);
+#endif /* defined(CORE_USE_BUILTIN_MEMCPY) */
+}
+
+/**
+ * @brief This function stores an 8-bit value to memory.
  *
  * @param memory The destination memory pointer.
  * @param value The value to store.
- * @param size The access width in bytes(1, 2, or 4).
  */
-MR_INLINE void core_store(void *memory, mr_uint32_t value, mr_size_t size) {
-    mr_memcpy(memory, &value, size);
+MR_INLINE void core_store8(mr_uint8_t *memory, mr_uint32_t value) {
+    memory[0] = (mr_uint8_t)value;
+}
+
+/**
+ * @brief This function stores an unaligned little-endian 16-bit value.
+ *
+ * @param memory The destination memory pointer.
+ * @param value The value to store.
+ */
+MR_INLINE void core_store16(mr_uint8_t *memory, mr_uint32_t value) {
+#if defined(CORE_USE_BUILTIN_MEMCPY)
+    mr_uint16_t raw;
+
+    raw = (mr_uint16_t)value;
+    __builtin_memcpy(memory, &raw, sizeof(raw));
+#else
+    memory[0] = (mr_uint8_t)value;
+    memory[1] = (mr_uint8_t)(value >> 8);
+#endif /* defined(CORE_USE_BUILTIN_MEMCPY) */
+}
+
+/**
+ * @brief This function stores an unaligned little-endian 32-bit value.
+ *
+ * @param memory The destination memory pointer.
+ * @param value The value to store.
+ */
+MR_INLINE void core_store32(mr_uint8_t *memory, mr_uint32_t value) {
+#if defined(CORE_USE_BUILTIN_MEMCPY)
+    __builtin_memcpy(memory, &value, sizeof(value));
+#else
+    memory[0] = (mr_uint8_t)value;
+    memory[1] = (mr_uint8_t)(value >> 8);
+    memory[2] = (mr_uint8_t)(value >> 16);
+    memory[3] = (mr_uint8_t)(value >> 24);
+#endif /* defined(CORE_USE_BUILTIN_MEMCPY) */
 }
 
 /**

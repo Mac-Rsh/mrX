@@ -99,6 +99,14 @@ static mr_err_t xvm_riscv32_load(mr_xvm_t *xvm) {
     mr_xvm_datamem_t *datamem;
     mr_size_t align_pad;
     mr_size_t mem_size;
+#if defined(MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL)
+#if defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED)
+    mr_uint32_t hash;
+    mr_size_t i;
+#else
+    mr_uint32_t i;
+#endif /* defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED) */
+#endif /* defined(MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL) */
     core_t *core;
 
     /* Get XVM data memory and aligned RISCV32 core */
@@ -130,17 +138,50 @@ static mr_err_t xvm_riscv32_load(mr_xvm_t *xvm) {
 #if defined(MR_USE_MODULE_XVM_MMIO)
     core->xvm = xvm;
 #endif /* defined(MR_USE_MODULE_XVM_MMIO) */
+    core->mem_base = (mr_uint32_t)bin->entry;
     core->mem_size = mem_size;
 
     /* Init PLIC latches and timer compare */
     mr_atomic_init(&core->plic.level, 0);
     mr_atomic_init(&core->plic.pending, 0);
     core->clint.mtimecmp = MR_UINT64_MAX;
+    core->irq_dirty = 0U;
 
     /* Init core registers and binary */
     core->regs.misa = CORE_MISA_DEFAULT;
     core->bin = bin;
     core->trap_mtval = 0U;
+#if defined(MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL)
+    /* Reset per-core fast miss filter */
+    for (i = 0U; i < CORE_LOOP_MISS_FILTER_SIZE; i++) {
+        core->miss_pc[i] = MR_UINT32_MAX;
+    }
+#if defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED)
+    core->low_yield_pc = MR_UINT32_MAX;
+    core->low_yield_cnt = 0U;
+    core->low_yield_skip = 0U;
+    /* Compute FNV-1a fingerprint of the immutable binary image */
+    hash = 2166136261U;
+    for (i = 0U; i < bin->size; i++) {
+        hash ^= (mr_uint32_t)bin->image[i];
+        hash *= 16777619U;
+    }
+    core->image_hash = hash;
+#else
+    /* Reset private loop cache slots and negative miss ring */
+    for (i = 0U; i < MR_CFG_XVM_RISCV32_LOOP_PRIVATE_SLOTS; i++) {
+        core->loop_slots[i].desc.branch_pc = MR_UINT32_MAX;
+        core->loop_slots[i].desc.kind = LOOP_KIND_NONE;
+    }
+#if (MR_CFG_XVM_RISCV32_LOOP_PRIVATE_SLOTS > 1U)
+    core->loop_slot_next = 0U;
+#endif /* (MR_CFG_XVM_RISCV32_LOOP_PRIVATE_SLOTS > 1U) */
+    core->loop_miss_idx = 0U;
+    for (i = 0U; i < MR_CFG_XVM_RISCV32_LOOP_MISS_SIZE; i++) {
+        core->loop_miss_pc[i] = MR_UINT32_MAX;
+    }
+#endif /* defined(MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED) */
+#endif /* defined(MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL) */
     return 0;
 }
 
@@ -267,10 +308,12 @@ static mr_err_t xvm_riscv32_interrupt(mr_xvm_t *xvm, mr_uint32_t irq,
         /* Latch the IRQ unless it is already claimed */
         if ((core->plic.claimed & mask) == 0U) {
             mr_atomic_fetch_or(&core->plic.pending, mask);
+            core->irq_dirty = 1U;
         }
     } else {
         mr_atomic_fetch_and(&core->plic.level, ~mask);
         mr_atomic_fetch_and(&core->plic.pending, ~mask);
+        core->irq_dirty = 1U;
     }
     return 0;
 }

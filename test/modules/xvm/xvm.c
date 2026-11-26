@@ -15,7 +15,7 @@
 
 /* Constants */
 
-#define TEST_XVM_DATA_SIZE (512U)
+#define TEST_XVM_DATA_SIZE (2048U)
 #define TEST_XVM_ENTRY     (0x100U)
 
 static void test_xvm_image_word(mr_uint8_t *image, mr_uint32_t index,

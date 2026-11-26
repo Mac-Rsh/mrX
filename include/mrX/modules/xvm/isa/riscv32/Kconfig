@@ -24,4 +24,79 @@ config MR_USE_MODULE_XVM_RISCV32_C
         compressed instructions mixed with 32-bit instructions on 2-byte
         aligned program counters and advertises the C extension in MISA.
 
+config MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL
+    depends on MR_USE_MODULE_XVM_RISCV32
+    bool "Use RISC-V32 loop acceleration"
+    default y
+    help
+        Enable backward-branch tight-loop acceleration in the RISC-V32
+        interpreter. Recognizes common loop idioms (delay, fill, sum, copy)
+        and caches a pre-decoded micro-op block (including inlined leaf calls)
+        in core_t for general tight loops. Disable to minimize core_t RAM and
+        code size.
+
+config MR_CFG_XVM_RISCV32_LOOP_CACHE_SIZE
+    depends on MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL
+    int "Loop cache max instructions"
+    default 32
+    range 5 64
+    help
+        Maximum number of instructions (including the closing backward branch
+        and any inlined leaf callee) in a pre-decoded tight-loop block. Each
+        slot uses 9 bytes (8-byte micro-op plus 1-byte PC offset). Larger
+        values accelerate longer loops and inlined calls at the cost of more
+        RAM.
+
+config MR_CFG_XVM_RISCV32_LOOP_MISS_SIZE
+    depends on MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL
+    int "Loop negative cache size"
+    default 4
+    range 1 16
+    help
+        Number of recently rejected backward-branch PCs remembered to avoid
+        repeated pre-check and build attempts on non-accelerable loops such
+        as outer loops or dynamic indirect-call loops.
+
+config MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED
+    depends on MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL
+    bool "Use shared decoded loop pool"
+    default y
+    help
+        Store pre-decoded tight-loop blocks in a fixed-size shared Clock pool
+        keyed by read-only binary image identity and branch PC instead of
+        embedding a private loop cache in every core_t instance. Reduces
+        per-instance RAM and accelerates multi-hotspot and multi-instance
+        workloads.
+
+config MR_CFG_XVM_RISCV32_LOOP_POOL_SIZE
+    depends on MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED
+    int "Shared loop pool header count"
+    default 32
+    range 4 64
+    help
+        Number of fully-associative decoded-loop headers in the shared Clock
+        pool. Each header tracks one cached loop block whose micro-ops live in
+        the shared circular arena.
+
+config MR_CFG_XVM_RISCV32_LOOP_ARENA_SIZE
+    depends on MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED
+    int "Shared loop pool micro-op arena slots"
+    default 256
+    range 64 1024
+    help
+        Total number of variable-length micro-op slots in the shared circular
+        arena. Each slot uses 9 bytes (8-byte micro-op plus 1-byte PC offset).
+        Short loops only consume their actual instruction count, packing far
+        more blocks into the same RAM budget than fixed-size slots.
+
+config MR_CFG_XVM_RISCV32_LOOP_PRIVATE_SLOTS
+    depends on MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL && !MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED
+    int "Private loop cache slots per instance"
+    default 1
+    range 1 2
+    help
+        Number of private decoded-loop cache slots embedded in each core_t
+        instance when the shared pool is disabled. Use 1 for minimum RAM, or 2
+        to avoid ping-pong rebuilds across two alternating hot loops.
+
 endmenu

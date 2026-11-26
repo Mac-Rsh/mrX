@@ -1,0 +1,68 @@
+menu "XBus: Domain-scoped event bus"
+
+# ==================================
+# XBUS
+# ==================================
+config MR_USE_MODULE_XBUS
+    depends on MR_USE_MODULE
+    bool "Use XBus"
+    default n
+    help
+        Enable the domain-scoped event bus module (XBus). Provides carrier-agnostic
+        publish/subscribe messaging with domain namespaces, ACL isolation, wildcard
+        matching, STATE/QUEUE pull semantics, and dentry-style inline/dynamic storage.
+
+config MR_USE_MODULE_XBUS_MULTIUSER
+    depends on MR_USE_MODULE_XBUS
+    bool "Use XBus multi-user context"
+    default n
+    help
+        Enable per-caller current domain resolution via the platform-supplied
+        mr_xbus_domain_current() hook. When disabled, XBus provides a built-in
+        current domain context defaulting to the host domain.
+
+config MR_CFG_XBUS_DOMAIN_MAX
+    depends on MR_USE_MODULE_XBUS
+    int "XBus maximum domain count"
+    default 32
+    range 1 32
+    help
+        Maximum number of registered domains (IDs 0 to N-1, including the built-in
+        host domain at ID 0).
+
+config MR_CFG_XBUS_INLINE_NAME_LEN
+    depends on MR_USE_MODULE_XBUS
+    int "XBus inline name buffer length"
+    default 16
+    range 0 128
+    help
+        Inline short name buffer size in bytes for domain, topic, and subscription
+        names (0 disables inline storage). Longer names spill transparently to
+        dynamic allocation.
+
+config MR_CFG_XBUS_INLINE_DATA_LEN
+    depends on MR_USE_MODULE_XBUS
+    int "XBus inline payload buffer length"
+    default 16
+    range 0 256
+    help
+        Inline small payload buffer size in bytes for topic state (0 disables
+        inline storage). Larger payloads spill transparently to dynamic allocation.
+
+config MR_CFG_XBUS_TOPIC_BUCKETS
+    depends on MR_USE_MODULE_XBUS
+    int "XBus topic hashmap bucket count"
+    default 8
+    range 4 256
+    help
+        Number of hash buckets used by the global XBus topic registry.
+
+config MR_USE_MODULE_XBUS_TRACE
+    depends on MR_USE_MODULE_XBUS && MR_USE_TRACE
+    bool "Use XBus trace"
+    default n
+    help
+        Emit kernel trace events for XBus publish, read, drop, stale, and domain
+        reset operations.
+
+endmenu

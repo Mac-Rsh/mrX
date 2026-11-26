@@ -14,7 +14,7 @@
 #include <mrX/libc/mr_string.h>
 #include <mrX/modules/xvm/mr_xvm_gdb.h>
 
-#define TEST_GDB_DATA_SIZE (512U)
+#define TEST_GDB_DATA_SIZE (2048U)
 #define TEST_GDB_ENTRY     (0x100U)
 #define TEST_GDB_PC_NR     (32U)
 #define TEST_GDB_ADDI_X1   (0x00100093U)

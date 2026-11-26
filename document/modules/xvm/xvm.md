@@ -14,11 +14,19 @@
 
 ## 配置
 
-| 配置项                         | 类型 | 默认值 | 说明                                                 |
-|--------------------------------|------|--------|------------------------------------------------------|
-| `MR_USE_MODULE_XVM`            | bool | n      | 启用 XVM 核心                                        |
-| `MR_CFG_XVM_SYSCALL_PARAM_NUM` | int  | 7      | 系统调用事件的参数指针槽数，范围 1~64                |
-| `MR_USE_MODULE_XVM_RISCV32`    | bool | n      | 启用 RISCV32（RV32IM）ISA 后端，注册名为 `"riscv32"` |
+| 配置项                                    | 类型 | 默认值 | 说明                                                                             |
+|-------------------------------------------|------|--------|----------------------------------------------------------------------------------|
+| `MR_USE_MODULE_XVM`                       | bool | n      | 启用 XVM 核心                                                                    |
+| `MR_CFG_XVM_SYSCALL_PARAM_NUM`            | int  | 7      | 系统调用事件的参数指针槽数，范围 1~64                                            |
+| `MR_USE_MODULE_XVM_RISCV32`               | bool | n      | 启用 RISCV32（RV32IM）ISA 后端，注册名为 `"riscv32"`                             |
+| `MR_USE_MODULE_XVM_RISCV32_C`             | bool | n      | 启用 RV32C 压缩指令扩展（16/32 位混合取指）                                      |
+| `MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL`    | bool | y      | 启用 RISCV32 紧循环预解码加速（模板识别、通用热循环预解码与静态叶函数内联）      |
+| `MR_CFG_XVM_RISCV32_LOOP_CACHE_SIZE`      | int  | 32     | 单个预解码循环块最大指令数（含闭合回边与内联叶函数），范围 5~64                  |
+| `MR_CFG_XVM_RISCV32_LOOP_MISS_SIZE`       | int  | 4      | 二级负缓存条目数（记录不可加速回边 PC），范围 1~16                               |
+| `MR_USE_MODULE_XVM_RISCV32_LOOP_SHARED`   | bool | y      | 使用全局共享循环池（全相联 Clock + 变长环形 Arena），关闭时改用每实例私有槽      |
+| `MR_CFG_XVM_RISCV32_LOOP_POOL_SIZE`       | int  | 32     | 共享池循环头槽位数（全相联，配套开放寻址哈希索引），范围 4~64                    |
+| `MR_CFG_XVM_RISCV32_LOOP_ARENA_SIZE`      | int  | 256    | 共享池变长微操作环形 Arena 容量（每槽 9 B），范围 64~1024                        |
+| `MR_CFG_XVM_RISCV32_LOOP_PRIVATE_SLOTS`   | int  | 1      | 关闭共享池时每实例私有循环槽数（1 省 RAM；2 消除双热循环交替重建），范围 1~2     |
 
 ## 快速上手
 
@@ -151,6 +159,12 @@ sequenceDiagram
   注册表（`modules/xvm/isa/isa.c`）用自旋锁 `__xvm_isa_lock` 维护已注册
   ISA；RISCV32 后端（`modules/xvm/isa/riscv32/riscv32.c`）实现取指/译码/执行主循环、CSR、trap
   与 MMIO（`0x40000000` 起）。
+- **RISCV32 循环加速（`MR_USE_MODULE_XVM_RISCV32_LOOP_ACCEL`）**：
+  - **识别与预解码**：在向后条件分支（`Bxx`）和向后无条件跳转（`JAL x0`）处触发，单遍解码热循环体为 8 B 微操作序列（支持 `DELAY`/`FILL`/`SUM`/`COPY` 零 Arena 模板、单个静态叶函数内联、死 `AUIPC`/`ret` 消去、`LUI+ADDI` 折叠、块内前向跳转与循环外早退），严格拒绝含内层回边的嵌套外层循环以保护热点内循环；异常、MMIO 或预算耗尽时按原始 PC 映射表与块计步精确回退，保证 32 寄存器、PC 与 `mcycle`/`minstret` 逐条一致。
+  - **缓存模式选型**：
+    - **关闭加速（`LOOP_ACCEL=n`）**：最小 Flash 与 RAM 占用，适合极小资源场景；
+    - **私有单槽 / 双槽（`LOOP_SHARED=n`）**：无锁访问、每实例隔离；单槽（默认）适合单热点或小 RAM 场景，双槽（`PRIVATE_SLOTS=2`）适合数据包解析等双热循环交替场景；
+    - **共享池（`LOOP_SHARED=y`，默认）**：多实例共用全相联 Clock 头表 + 变长环形微操作 Arena（以 `image` 指针、长度与 FNV-1a 镜像指纹区分只读镜像，同地址重载自动刷新），每实例 `core_t` 增量极小；自旋锁采用 `mr_spinlock_lock_irqsave`，配合实例级 4 组 × 2 路无锁负过滤表和低收益早退冷却机制，避免反复加锁查池。
 - **自定义 ISA 扩展**：实现 `mr_xvm_isa_ops_t`（至少提供 `load`、`execute`、
   `mem_map`，调试需要 `reg_load`/`reg_store`，`interrupt` 可选），通过
   `MR_XVM_ISA_INIT()` 初始化并调用 `mr_xvm_isa_register()` 注册；若需接入调试器与
